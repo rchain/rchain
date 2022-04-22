@@ -354,7 +354,7 @@ in {
           }
         } |
         // Returns the current map
-        contract @(*TreeHashMap, "extractState")(ret) = {
+        contract @(bundle+{*TreeHashMap}, "extractState")(ret) = {
           for (@map <<- _registryStore) {
             ret!(map)
           }
@@ -744,9 +744,9 @@ in {
                           if (agreementMap.getOrElse((uri, con, meth), Set()).size() >= quorumSize) {
                             // sufficiently many keys agree to update
                             // consume data on location channel in order to replace contract data
-                            for (@oldData <- @loc) {
+                            for (oldData <- @loc) {
                               new tmp, newRet in {
-                                @(oldData, "extractState")!(*tmp) |
+                                @(*oldData, "extractState")!(*tmp) |
                                 for (@oldState <- tmp) {
                                   // launch new contract instance with initial state extracted from the old instance
                                   @con!(oldState, *newRet) |
@@ -783,7 +783,7 @@ in {
             // "agreement" - agreement map
             // "propose"   - proposals map
             // --------------------------------------------
-            contract @(*multisig, "extractState")(ret) = {
+            contract @(bundle+{*multisig}, "extractState")(ret) = {
               for (@agreementMap <<- agreementMapCh;
                     @blessedMap   <<- blessedContractLocMapCh;
                     @proposalMap  <<- proposalMapCh) {

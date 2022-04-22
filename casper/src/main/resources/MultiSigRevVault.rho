@@ -264,7 +264,7 @@ in {
     } |
     // No internal state to return.
     // Method required for updates.
-    contract @(*MultiSigRevVault, "extractState")(ret) = {
+    contract @(bundle+{*MultiSigRevVault}, "extractState")(ret) = {
       ret!([])
     }
   } |

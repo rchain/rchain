@@ -69,7 +69,7 @@ in {
   } |
   // No internal state to return.
   // Method required for updates.
-  contract @(*NonNegativeNumber, "extractState")(ret) = {
+  contract @(bundle+{*NonNegativeNumber}, "extractState")(ret) = {
     ret!([])
   } |
   // Insert the contract location in the registry location map

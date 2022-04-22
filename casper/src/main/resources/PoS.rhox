@@ -94,7 +94,8 @@ new
   treeHashMapCh,
   revVaultCh,
   multiSigRevVaultCh,
-  listOpsCh
+  listOpsCh,
+  currentDeployerData
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -105,7 +106,7 @@ in {
        @(_, ListOps)          <- listOpsCh &
        TreeHashMap            <- treeHashMapCh &
        @(_, MultiSigRevVault) <- multiSigRevVaultCh) {
-    new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh, 
+    new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh,
         initialActiveCh, pendingRewardsMapCh, createUnfVault, moveInitialBondCh
     in {
       // Creates the auth key and Rev vault associated with the PoS contract.
@@ -310,7 +311,7 @@ in {
                 @humanControlHandle!("transfer", targetAddress, amount, deployerID, transferRet)
               } |
               // Returns current state elements on `ret`.
-              contract @(*PoS, "extractState")(ret) = {
+              contract @(bundle+{*PoS}, "extractState")(ret) = {
                 for (@state <<- stateCh) {
                   ret!({
                     "state"     : state
@@ -383,67 +384,65 @@ in {
               // Private method which charges a deployer for a deploy.
               // Deployer's funds are deposited into the block sender's vault.
               // Return expects (Boolean, Either[Nil, String])
-              new currentDeployerData in {
-                contract PoS(@"chargeDeploy", @deployerId, @amount, @sysAuthToken, return) = {
-                  new isValidTokenCh in {
-                    sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
-                    for (@isValid <- isValidTokenCh) {
-                      if (isValid) {
-                        new depositCh in {
-                          deposit!(deployerId, amount, posVaultAddr, *depositCh) |
-                          for (@depositResult <- depositCh){
-                            match depositResult {
-                              (true, _) => {
-                                currentDeployerData!((deployerId, amount)) |
-                                return!(depositResult)
-                              }
-                              (_, errorMessage) => {
-                                return!((false, "Deploy payment failed: " ++ errorMessage))
-                              }
+              contract PoS(@"chargeDeploy", @deployerId, @amount, @sysAuthToken, return) = {
+                new isValidTokenCh in {
+                  sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
+                  for (@isValid <- isValidTokenCh) {
+                    if (isValid) {
+                      new depositCh in {
+                        deposit!(deployerId, amount, posVaultAddr, *depositCh) |
+                        for (@depositResult <- depositCh){
+                          match depositResult {
+                            (true, _) => {
+                              currentDeployerData!((deployerId, amount)) |
+                              return!(depositResult)
+                            }
+                            (_, errorMessage) => {
+                              return!((false, "Deploy payment failed: " ++ errorMessage))
                             }
                           }
                         }
-                      } else {
-                        return!((false, "Invalid system auth token"))
                       }
+                    } else {
+                      return!((false, "Invalid system auth token"))
                     }
                   }
-                } |
-                // Private method which refunds a deployer if too much was charged in chargeDeploy.
-                // Funds are transferred from the block sender's vault to the deployer.
-                // Return expects (Boolean, Either[Nil, String])
-                contract PoS(@"refundDeploy", @refundAmount, @sysAuthToken, return) = {
-                  new isValidTokenCh, posAuthKeyCh in {
-                    sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
-                    for (@isValid <- isValidTokenCh) {
-                      if (isValid) {
-                        for (@(deployerId, initialPaymentAmount) <- currentDeployerData){
-                          if (refundAmount > 0) {
-                            new revAddressCh, transferCh in {
-                              revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
-                              @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
-                              for (@deployerRevAddress <- revAddressCh ; @posAuthKey <- posAuthKeyCh) {
-                                // Transfer (from sender to deployer) called in refundDeploy.
-                                @posVault!("transfer", deployerRevAddress, refundAmount, posAuthKey, *transferCh) |
-                                for (@transferResult <- transferCh) {
-                                  match transferResult {
-                                    (true, _) => {
-                                      return!((true, Nil))
-                                    }
-                                    (_, errorMessage) => {
-                                      return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
-                                    }
+                }
+              } |
+              // Private method which refunds a deployer if too much was charged in chargeDeploy.
+              // Funds are transferred from the block sender's vault to the deployer.
+              // Return expects (Boolean, Either[Nil, String])
+              contract PoS(@"refundDeploy", @refundAmount, @sysAuthToken, return) = {
+                new isValidTokenCh, posAuthKeyCh in {
+                  sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
+                  for (@isValid <- isValidTokenCh) {
+                    if (isValid) {
+                      for (@(deployerId, initialPaymentAmount) <- currentDeployerData){
+                        if (refundAmount > 0) {
+                          new revAddressCh, transferCh in {
+                            revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
+                            @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
+                            for (@deployerRevAddress <- revAddressCh ; @posAuthKey <- posAuthKeyCh) {
+                              // Transfer (from sender to deployer) called in refundDeploy.
+                              @posVault!("transfer", deployerRevAddress, refundAmount, posAuthKey, *transferCh) |
+                              for (@transferResult <- transferCh) {
+                                match transferResult {
+                                  (true, _) => {
+                                    return!((true, Nil))
+                                  }
+                                  (_, errorMessage) => {
+                                    return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
                                   }
                                 }
                               }
                             }
-                          } else {
-                            return!((true, Nil))
                           }
+                        } else {
+                          return!((true, Nil))
                         }
-                      } else {
-                        return!((false, "Invalid system auth token"))
                       }
+                    } else {
+                      return!((false, "Invalid system auth token"))
                     }
                   }
                 }
