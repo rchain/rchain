@@ -181,8 +181,6 @@ object Validate {
       _ <- EitherT(Validate.futureTransaction(block))
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
-      _ <- EitherT.liftF(Span[F].mark("before-justification-follows-validation"))
-      _ <- EitherT(Validate.justificationFollows(block))
       _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
       _ <- EitherT(Validate.sequenceNumber(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
@@ -463,34 +461,6 @@ object Validate {
             )
       } yield BlockStatus.invalidBlockHash.asLeft[ValidBlock]
     }
-  }
-
-  /*
-   * This check must come before Validate.parents
-   */
-  def justificationFollows[F[_]: Sync: Log: BlockStore](
-      b: BlockMessage
-  ): F[ValidBlockProcessing] = {
-    val justifiedValidators = b.justifications.map(_.validator).toSet
-    val mainParentHash      = ProtoUtil.parentHashes(b).head
-    for {
-      mainParent       <- BlockStore[F].getUnsafe(mainParentHash)
-      bondedValidators = ProtoUtil.bonds(mainParent).map(_.validator).toSet
-      status <- if (bondedValidators == justifiedValidators) {
-                 BlockStatus.valid.asRight[BlockError].pure
-               } else {
-                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString)
-                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString)
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(
-                           b,
-                           s"the justified validators, ${justifiedValidatorsPP}, do not match the bonded validators, ${bondedValidatorsPP}."
-                         )
-                       )
-                 } yield BlockStatus.invalidFollows.asLeft[ValidBlock]
-               }
-    } yield status
   }
 
   /**
