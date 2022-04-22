@@ -3,8 +3,6 @@ package coop.rchain.casper
 sealed trait BlockStatus
 object BlockStatus {
   def valid: ValidBlock                    = ValidBlock.Valid
-  def processed: BlockError                = BlockError.Processed
-  def casperIsBusy: BlockError             = BlockError.CasperIsBusy
   def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
   def missingBlocks: BlockError            = BlockError.MissingBlocks
   def admissibleEquivocation: BlockError   = InvalidBlock.AdmissibleEquivocation
@@ -14,7 +12,6 @@ object BlockStatus {
   def invalidSender: BlockError            = InvalidBlock.InvalidSender
   def invalidVersion: BlockError           = InvalidBlock.InvalidVersion
   def invalidTimestamp: BlockError         = InvalidBlock.InvalidTimestamp
-  def deployNotSigned: BlockError          = InvalidBlock.DeployNotSigned
   def invalidBlockNumber: BlockError       = InvalidBlock.InvalidBlockNumber
   def invalidRepeatDeploy: BlockError      = InvalidBlock.InvalidRepeatDeploy
   def invalidParents: BlockError           = InvalidBlock.InvalidParents
@@ -47,8 +44,6 @@ object ValidBlock {
 
 sealed trait BlockError extends BlockStatus
 object BlockError {
-  case object Processed                          extends BlockError
-  case object CasperIsBusy                       extends BlockError
   case object MissingBlocks                      extends BlockError
   final case class BlockException(ex: Throwable) extends BlockError
 }
@@ -70,7 +65,6 @@ object InvalidBlock {
   case object InvalidVersion   extends InvalidBlock
   case object InvalidTimestamp extends InvalidBlock
 
-  case object DeployNotSigned         extends InvalidBlock
   case object InvalidBlockNumber      extends InvalidBlock
   case object InvalidRepeatDeploy     extends InvalidBlock
   case object InvalidParents          extends InvalidBlock
@@ -92,7 +86,6 @@ object InvalidBlock {
   val slashableOffenses: Set[InvalidBlock] =
     Set(
       AdmissibleEquivocation,
-      DeployNotSigned,
       InvalidBlockNumber,
       InvalidRepeatDeploy,
       InvalidParents,
