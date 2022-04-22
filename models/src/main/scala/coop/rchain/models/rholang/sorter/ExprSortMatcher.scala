@@ -187,27 +187,14 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score)
         )
       case EMapBody(parMap) =>
-        def sortKeyValuePair(key: Par, value: Par): F[ScoredTerm[(Par, Par)]] =
-          for {
-            sortedKey   <- Sortable.sortMatch(key)
-            sortedValue <- Sortable.sortMatch(value)
-          } yield ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
-
         for {
-          sortedPars          <- parMap.ps.sortedList.traverse(kv => sortKeyValuePair(kv._1, kv._2))
           remainderScore      <- remainderScore(parMap.remainder)
           connectiveUsedScore = if (parMap.connectiveUsed) 1L else 0L
         } yield constructExpr(
-          EMapBody(
-            ParMap(
-              sortedPars.map(_.term),
-              parMap.connectiveUsed,
-              parMap.locallyFree,
-              parMap.remainder
-            )
-          ),
+          e.exprInstance,
+          // TODO: Scores in ParMap unsorted! Need new algorithm of sorting Seq(ParMap1, ParMap2, ...)
           Node(
-            Seq(Leaf(Score.EMAP), remainderScore) ++ sortedPars.map(_.score) ++ Seq(
+            Seq(Leaf(Score.EMAP), remainderScore) ++ parMap.ps.sortedScoreList ++ Seq(
               Leaf(connectiveUsedScore)
             )
           )

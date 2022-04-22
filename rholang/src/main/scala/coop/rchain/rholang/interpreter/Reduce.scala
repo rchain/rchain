@@ -680,7 +680,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
                        case (GString(lhs), EMapBody(ParMap(rhs, _, _, _))) =>
                          if (lhs.nonEmpty || rhs.nonEmpty) {
                            for {
-                             result <- rhs.toList
+                             result <- rhs.sortedList
                                         .traverse {
                                           case (k, v) =>
                                             for {
@@ -789,15 +789,17 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           } yield set.copy(ps = SortedParHashSet(updatedPs))
 
         case EMapBody(map) =>
-          for {
-            evaledPs <- map.ps.sortedList.traverse {
-                         case (key, value) =>
-                           for {
-                             eKey   <- evalExpr(key).map(updateLocallyFree)
-                             eValue <- evalExpr(value).map(updateLocallyFree)
-                           } yield (eKey, eValue)
-                       }
-          } yield map.copy(ps = SortedParMap(evaledPs))
+          if (map.ps.isComplex)
+            for {
+              evaledPs <- map.ps.sortedList.traverse {
+                           case (key, value) =>
+                             for {
+                               eKey   <- evalExpr(key).map(updateLocallyFree)
+                               eValue <- evalExpr(value).map(updateLocallyFree)
+                             } yield (eKey, eValue)
+                         }
+            } yield map.copy(ps = SortedParMap(evaledPs))
+          else expr.pure
 
         case EMethodBody(EMethod(method, target, arguments, _, _)) =>
           for {
@@ -980,7 +982,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             Expr(
               EMapBody(
                 ParMap(
-                  (baseMap ++ otherMap).toSeq,
+                  baseMap ++ otherMap,
                   base.connectiveUsed || other.connectiveUsed,
                   locallyFreeUnion(base.locallyFree, other.locallyFree),
                   None
@@ -1014,7 +1016,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
               .pure[M]
         case (EMapBody(ParMap(basePs, _, _, _)), EMapBody(ParMap(otherPs, _, _, _))) =>
           charge[M](diffCost(otherPs.size)) >>
-            Expr(EMapBody(ParMap(basePs -- otherPs.keys))).pure[M]
+            Expr(EMapBody(ParMap(basePs -- otherPs))).pure[M]
         case (other, _) =>
           MethodNotDefined("diff", other.typ).raiseError[M, Expr]
       }
@@ -1172,8 +1174,14 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     def set(baseExpr: Expr, key: Par, value: Par): M[Par] =
       baseExpr.exprInstance match {
-        case EMapBody(ParMap(basePs, _, _, _)) =>
-          (ParMap(basePs + (key -> value)): Par).pure[M]
+        case EMapBody(base @ ParMap(basePs, _, _, _)) =>
+          (ParMap(
+            basePs + (key -> value),
+            base.connectiveUsed || key.connectiveUsed || value.connectiveUsed,
+            base.locallyFree.map(x => x | key.locallyFree | value.locallyFree),
+            None
+          ): Par)
+            .pure[M]
         case other => MethodNotDefined("set", other.typ).raiseError[M, Par]
       }
 
@@ -1195,7 +1203,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     def keys(baseExpr: Expr): M[Par] =
       baseExpr.exprInstance match {
         case EMapBody(ParMap(basePs, _, _, _)) =>
-          (ParSet(basePs.keys.toSeq): Par).pure[M]
+          (ParSet(basePs.sortedKeys.toSeq): Par).pure[M]
         case other =>
           MethodNotDefined("keys", other.typ).raiseError[M, Par]
       }
@@ -1324,7 +1332,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         case EMapBody(ParMap(ps, _, _, _)) =>
           charge[M](toListCost(ps.size)) >>
             (EList(
-              ps.toSeq.map {
+              ps.sortedList.map {
                 case (k, v) =>
                   Par().withExprs(Seq(Expr(ETupleBody(ETuple(Seq(k, v))))))
               }
@@ -1354,7 +1362,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         case EMapBody(ParMap(basePs, connectiveUsed, locallyFree, remainder)) =>
           (ESetBody(
             ParSet(
-              basePs.toSeq.map(t => ETupleBody(ETuple(Seq(t._1, t._2))): Par),
+              basePs.unsortedList.map(t => ETupleBody(ETuple(Seq(t._1, t._2))): Par),
               connectiveUsed,
               locallyFree,
               remainder

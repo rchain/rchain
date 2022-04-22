@@ -336,13 +336,20 @@ object Substitute {
             )
 
           case EMapBody(ParMap(spm, connectiveUsed, locallyFree, remainder)) =>
-            for {
-              kvps <- spm.sortedList.traverse(_.bimap(s1, s1).bisequence)
-            } yield Expr(
-              exprInstance = EMapBody(
-                ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
+            if (spm.isComplex)
+              for {
+                kvps <- spm.sortedList.traverse(_.bimap(s1, s1).bisequence)
+              } yield Expr(
+                EMapBody(
+                  ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
+                )
               )
-            )
+            else
+              Expr(
+                EMapBody(
+                  ParMap(spm, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
+                )
+              ).pure
           case EMethodBody(EMethod(mtd, target, arguments, locallyFree, connectiveUsed)) =>
             for {
               subTarget    <- s1(target)
