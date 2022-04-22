@@ -14,7 +14,6 @@ object BlockStatus {
   def invalidTimestamp: BlockError         = InvalidBlock.InvalidTimestamp
   def invalidBlockNumber: BlockError       = InvalidBlock.InvalidBlockNumber
   def invalidRepeatDeploy: BlockError      = InvalidBlock.InvalidRepeatDeploy
-  def invalidParents: BlockError           = InvalidBlock.InvalidParents
   def invalidFollows: BlockError           = InvalidBlock.InvalidFollows
   def invalidSequenceNumber: BlockError    = InvalidBlock.InvalidSequenceNumber
   def invalidShardId: BlockError           = InvalidBlock.InvalidShardId
@@ -67,7 +66,6 @@ object InvalidBlock {
 
   case object InvalidBlockNumber      extends InvalidBlock
   case object InvalidRepeatDeploy     extends InvalidBlock
-  case object InvalidParents          extends InvalidBlock
   case object InvalidFollows          extends InvalidBlock
   case object InvalidSequenceNumber   extends InvalidBlock
   case object InvalidShardId          extends InvalidBlock
@@ -88,7 +86,6 @@ object InvalidBlock {
       AdmissibleEquivocation,
       InvalidBlockNumber,
       InvalidRepeatDeploy,
-      InvalidParents,
       InvalidFollows,
       InvalidSequenceNumber,
       InvalidShardId,

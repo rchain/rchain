@@ -183,8 +183,6 @@ object Validate {
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-justification-follows-validation"))
       _ <- EitherT(Validate.justificationFollows(block))
-      _ <- EitherT.liftF(Span[F].mark("before-parents-validation"))
-      _ <- EitherT(Validate.parents(block, genesis, s))
       _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
       _ <- EitherT(Validate.sequenceNumber(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
@@ -467,16 +465,6 @@ object Validate {
     }
   }
 
-  /**
-    * Works only with fully explicit justifications.
-    */
-  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span](
-      b: BlockMessage,
-      genesis: BlockMessage,
-      s: CasperSnapshot
-  ): F[ValidBlockProcessing] =
-    // TODO reimplement this under multiparent or remove completely?
-    BlockStatus.valid.asRight[BlockError].pure
   /*
    * This check must come before Validate.parents
    */
