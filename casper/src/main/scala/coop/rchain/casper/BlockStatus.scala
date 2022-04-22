@@ -5,10 +5,7 @@ object BlockStatus {
   def valid: ValidBlock                    = ValidBlock.Valid
   def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
   def missingBlocks: BlockError            = BlockError.MissingBlocks
-  def admissibleEquivocation: BlockError   = InvalidBlock.AdmissibleEquivocation
-  def ignorableEquivocation: BlockError    = InvalidBlock.IgnorableEquivocation
   def invalidFormat: BlockError            = InvalidBlock.InvalidFormat
-  def invalidSignature: BlockError         = InvalidBlock.InvalidSignature
   def invalidSender: BlockError            = InvalidBlock.InvalidSender
   def invalidVersion: BlockError           = InvalidBlock.InvalidVersion
   def invalidTimestamp: BlockError         = InvalidBlock.InvalidTimestamp
@@ -47,17 +44,7 @@ object BlockError {
 
 sealed trait InvalidBlock extends BlockError
 object InvalidBlock {
-  // AdmissibleEquivocation are blocks that would create an equivocation but are
-  // pulled in through a justification of another block
-  case object AdmissibleEquivocation extends InvalidBlock
-  // TODO: Make IgnorableEquivocation slashable again and remember to add an entry to the equivocation record.
-  // For now we won't eagerly slash equivocations that we can just ignore,
-  // as we aren't forced to add it to our view as a dependency.
-  // TODO: The above will become a DOS vector if we don't fix.
-  case object IgnorableEquivocation extends InvalidBlock
-
   case object InvalidFormat    extends InvalidBlock
-  case object InvalidSignature extends InvalidBlock
   case object InvalidSender    extends InvalidBlock
   case object InvalidVersion   extends InvalidBlock
   case object InvalidTimestamp extends InvalidBlock
@@ -79,7 +66,6 @@ object InvalidBlock {
 
   val slashableOffenses: Set[InvalidBlock] =
     Set(
-      AdmissibleEquivocation,
       InvalidBlockNumber,
       InvalidRepeatDeploy,
       InvalidSequenceNumber,

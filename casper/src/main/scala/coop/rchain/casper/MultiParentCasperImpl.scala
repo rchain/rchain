@@ -336,44 +336,6 @@ class MultiParentCasperImpl[F[_]
       } yield r
 
     status match {
-      case InvalidBlock.AdmissibleEquivocation =>
-//        val baseEquivocationBlockSeqNum = block.seqNum - 1
-        for {
-//          _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
-//                for {
-//                  equivocations <- tracker.equivocationRecords
-//                  _ <- Sync[F].unlessA(equivocations.exists {
-//                        case EquivocationRecord(validator, seqNum, _) =>
-//                          block.sender == validator && baseEquivocationBlockSeqNum == seqNum
-//                        // More than 2 equivocating children from base equivocation block and base block has already been recorded
-//                      }) {
-//                        val newEquivocationRecord =
-//                          EquivocationRecord(
-//                            block.sender,
-//                            baseEquivocationBlockSeqNum,
-//                            Set.empty[BlockHash]
-//                          )
-//                        tracker.insertEquivocationRecord(newEquivocationRecord)
-//                      }
-//                } yield ()
-//              }
-          // We can only treat admissible equivocations as invalid blocks if
-          // casper is single threaded.
-          updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
-        } yield updatedDag
-
-      case InvalidBlock.IgnorableEquivocation =>
-        /*
-         * We don't have to include these blocks to the equivocation tracker because if any validator
-         * will build off this side of the equivocation, we will get another attempt to add this block
-         * through the admissible equivocations.
-         */
-        Log[F]
-          .info(
-            s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
-          )
-          .as(dag)
-
       case ib: InvalidBlock if InvalidBlock.isSlashable(ib) =>
         handleInvalidBlockEffect(ib, block)
 

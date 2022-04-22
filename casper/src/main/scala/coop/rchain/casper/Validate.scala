@@ -154,9 +154,6 @@ object Validate {
     }
   }
 
-  /*
-   * TODO: Double check ordering of validity checks
-   */
   def blockSummary[F[_]: Sync: Log: Time: BlockStore: BlockDagStorage: Metrics: Span](
       block: BlockMessage,
       genesis: BlockMessage,
