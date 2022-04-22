@@ -59,8 +59,8 @@ object CompiledRholangTemplate {
       case (content, (name, value)) => content.replace(s"""$$$$$name$$$$""", value.toString)
     }
 
-    s"""$finalContent
-       # //Loaded from resource file <<$classpath>>
+    s"""//Loaded from resource file <<$classpath>>
+       #$finalContent
        #""".stripMargin('#')
   }
 }

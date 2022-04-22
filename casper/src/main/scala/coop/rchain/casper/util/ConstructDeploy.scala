@@ -25,7 +25,7 @@ object ConstructDeploy {
   def sourceDeploy(
       source: String,
       timestamp: Long,
-      phloLimit: Long = 90000,
+      phloLimit: Long = 90000000,
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec,
       vabn: Long = 0,
