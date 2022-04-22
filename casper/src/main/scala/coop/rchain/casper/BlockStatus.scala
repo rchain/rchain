@@ -18,7 +18,6 @@ object BlockStatus {
   def invalidShardId: BlockError           = InvalidBlock.InvalidShardId
   def justificationRegression: BlockError  = InvalidBlock.JustificationRegression
   def neglectedInvalidBlock: BlockError    = InvalidBlock.NeglectedInvalidBlock
-  def neglectedEquivocation: BlockError    = InvalidBlock.NeglectedEquivocation
   def invalidTransaction: BlockError       = InvalidBlock.InvalidTransaction
   def invalidBondsCache: BlockError        = InvalidBlock.InvalidBondsCache
   def invalidBlockHash: BlockError         = InvalidBlock.InvalidBlockHash
@@ -69,7 +68,6 @@ object InvalidBlock {
   case object InvalidShardId          extends InvalidBlock
   case object JustificationRegression extends InvalidBlock
   case object NeglectedInvalidBlock   extends InvalidBlock
-  case object NeglectedEquivocation   extends InvalidBlock
   case object InvalidTransaction      extends InvalidBlock
   case object InvalidBondsCache       extends InvalidBlock
   case object InvalidBlockHash        extends InvalidBlock
@@ -88,7 +86,6 @@ object InvalidBlock {
       InvalidShardId,
       JustificationRegression,
       NeglectedInvalidBlock,
-      NeglectedEquivocation,
       InvalidTransaction,
       InvalidBondsCache,
       InvalidBlockHash,
