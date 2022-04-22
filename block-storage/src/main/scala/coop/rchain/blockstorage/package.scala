@@ -1,6 +1,6 @@
 package coop.rchain
 
-import coop.rchain.blockstorage.dag.BlockDagRepresentationSyntax
+import coop.rchain.blockstorage.dag.{BlockDagStorageSyntax, DagRepresentationSyntax}
 import coop.rchain.blockstorage.{ApprovedStoreSyntax, BlockStoreSyntax, ByteStringKVStoreSyntax}
 import coop.rchain.metrics.Metrics
 
@@ -16,5 +16,6 @@ package object blockstorage {
 trait AllSyntaxBlockStorage
     extends ApprovedStoreSyntax
     with BlockStoreSyntax
-    with BlockDagRepresentationSyntax
+    with DagRepresentationSyntax
+    with BlockDagStorageSyntax
     with ByteStringKVStoreSyntax
