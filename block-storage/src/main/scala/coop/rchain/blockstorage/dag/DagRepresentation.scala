@@ -104,7 +104,7 @@ object DagRepresentation {
       dr: DagRepresentation,
       validator: Validator
   ): F[Option[BlockHash]] =
-    dr.latestMessagesHashes.find(_._1 == validator).map(_._2).pure
+    dr.latestMessagesHashes.get(validator).pure
 
   def latestMessageHashes[F[_]: Sync: BlockDagStorage](
       dr: DagRepresentation

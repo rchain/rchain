@@ -37,7 +37,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
   "unseenBlockHashes" should "return empty for a single block dag" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       import node.blockStore
-      implicit val bds = node.blockDagStorage
+      import node.blockDagStorage
       for {
         signedBlock <- ConstructDeploy.basicDeployData[Effect](
                         0,

@@ -189,8 +189,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
   it should "be able to restore invalid blocks on startup" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
-      withDagStorage { storage =>
-        implicit val bds = storage
+      withDagStorage { implicit storage =>
         for {
           _             <- blockElements.traverse_(storage.insert(_, true))
           dag           <- storage.getRepresentation
@@ -228,8 +227,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
   }
 
   "recording of new directly finalized block" should "record finalized all non finalized ancestors of LFB" in
-    withDagStorage { storage =>
-      implicit val bds = storage
+    withDagStorage { implicit storage =>
       for {
         _ <- storage.insert(genesis, false, true)
         b1 = getRandomBlock(

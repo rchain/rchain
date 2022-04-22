@@ -30,9 +30,8 @@ trait BlockDagStorageTest
 
   "DAG Storage" should "be able to lookup a stored block" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
-      withDagStorage { dagStorage =>
-        implicit val bds = dagStorage
-        implicit val s   = Sync[Task]
+      withDagStorage { implicit dagStorage =>
+        implicit val s = Sync[Task]
         for {
           _   <- blockElements.traverse(dagStorage.insert(_, false))
           dag <- dagStorage.getRepresentation
