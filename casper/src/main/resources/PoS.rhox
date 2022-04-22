@@ -314,10 +314,10 @@ in {
               contract @(bundle+{*PoS}, "extractState")(ret) = {
                 for (@state <<- stateCh) {
                   ret!({
-                    "state"     : state
-                    // "coopVault" : coopVault,
-                    // "posVault"  : posVault,
-                    // "pending"   : pendingRewardsMap
+                    "state"     : state,
+                    "coopVault" : (coopMultiVault, coopMultiVaultAddr, coopVaultHd),
+                    "posVault"  : (posVaultUnf, posVaultAddr, posVault, humanControlHandle),
+                    "currentDeployerData"   : *currentDeployerData
                   })
                 }
               } |

@@ -19,7 +19,7 @@ in {
       rl!(`rho:rchain:multiSigRevVault`, *multiSigRevVaultCh) |
       let @(posVaultUnf, posVaultAddr, posVault, humanControlHandle), 
           @(coopMultiVault, coopMultiVaultAddr, coopVaultHd),
-          @state, @currentDeployerData <- oldData.get("posVault"), oldData.get("coopVault"), oldData.get("state"), oldData.get("currentDeploy") in {
+          @state, @currentDeployerData <- oldData.get("posVault"), oldData.get("coopVault"), oldData.get("state"), oldData.get("currentDeployerData") in {
         for (@(_, RevVault)<- revVaultCh ; @(_, ListOps)<- listOpsCh ; TreeHashMap<- treeHashMapCh ;@(_, MultiSigRevVault) <- multiSigRevVaultCh) {
           // Initializes PoS state structure.
           stateCh!({
