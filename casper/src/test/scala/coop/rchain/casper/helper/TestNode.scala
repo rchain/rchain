@@ -63,7 +63,7 @@ case class TestNode[F[_]: Timer](
     logicalTime: LogicalTime[F],
     synchronyConstraintThreshold: Double,
     dataDir: Path,
-    maxNumberOfParents: Int = Estimator.UnlimitedParents,
+    maxNumberOfParents: Int = Int.MaxValue,
     maxParentDepth: Option[Int] = Int.MaxValue.some,
     shardId: String = "root",
     finalizationRate: Int = 1,
@@ -396,7 +396,7 @@ object TestNode {
       genesis: GenesisContext,
       networkSize: Int,
       synchronyConstraintThreshold: Double = 0d,
-      maxNumberOfParents: Int = Estimator.UnlimitedParents,
+      maxNumberOfParents: Int = Int.MaxValue,
       maxParentDepth: Option[Int] = None,
       withReadOnlySize: Int = 0
   )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[TestNode[Effect]]] = {

@@ -114,10 +114,6 @@ object Setup {
       // Deploy storage
       deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
 
-      estimator = {
-        implicit val sp = span
-        Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
-      }
       synchronyConstraintChecker = {
         implicit val bs = blockStore
         SynchronyConstraintChecker[F]
