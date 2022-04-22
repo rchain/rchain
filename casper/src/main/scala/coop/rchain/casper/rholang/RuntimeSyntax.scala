@@ -292,7 +292,6 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
         checkpoint <- runtime.createSoftCheckpoint
 
         evalSucceeded = evaluateResult.errors.isEmpty
-        _             = println(("error", evaluateResult))
         deployResult = ProcessedDeploy(
           deploy,
           Cost.toProto(evaluateResult.cost),
@@ -430,7 +429,6 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       }
 
       // Get Rholang evaluation result
-      _ = println(systemDeploy)
       r <- OptionT(consumeResultDiag).semiflatMap {
             // All other user errors are considered fatal
             case (_, Seq(ListParWithRandom(Seq(par), _))) =>

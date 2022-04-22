@@ -98,10 +98,7 @@ class MultiParentCasperImpl[F[_]
     InterpreterUtil
       .mkTerm(d.data.term, NormalizerEnv(d))
       .bitraverse(
-        err => {
-          println(s"!!!!!!!!!!!!!!!!!!!!!${err}")
-          DeployError.parsingError(s"Error in parsing term: \n$err").pure[F]
-        },
+        err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
         _ => addDeploy(d)
       )
   }
