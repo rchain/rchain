@@ -315,7 +315,7 @@ class Running[F[_]
       handleForkChoiceTipRequest(peer)(casper)
     case abr: ApprovedBlockRequest =>
       for {
-        lfBlockHash <- BlockDagStorage[F].getRepresentation.flatMap(_.lastFinalizedBlock)
+        lfBlockHash <- BlockDagStorage[F].getRepresentation.flatMap(_.lastFinalizedBlockUnsafe)
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {

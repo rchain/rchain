@@ -214,7 +214,7 @@ object TransactionBalances {
 
     import coop.rchain.blockstorage.syntax._
     for {
-      blocks    <- dag.topoSort(blockNumber.toLong, Some(blockNumber.toLong))
+      blocks    <- dag.topoSortUnsafe(blockNumber.toLong, Some(blockNumber.toLong))
       blockHash = blocks.flatten.head
       block     <- blockStore.get1(blockHash)
       blockMes  = block.get
@@ -289,7 +289,7 @@ object TransactionBalances {
             blockMeta <- blockMetaOpt.liftTo(
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
-            isFinalized         <- dagRepresantation.isFinalized(blockHash)
+            isFinalized         = dagRepresantation.isFinalized(blockHash)
             isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.body.state.blockNumber
           } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
         }

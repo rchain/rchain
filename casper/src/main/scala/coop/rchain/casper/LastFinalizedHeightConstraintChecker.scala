@@ -23,7 +23,7 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: Log: BlockDagStorag
     val validator                 = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
     val heightConstraintThreshold = s.onChainState.shardConf.heightConstraintThreshold
     for {
-      lastFinalizedBlockHash <- s.dag.lastFinalizedBlock
+      lastFinalizedBlockHash <- s.dag.lastFinalizedBlockUnsafe
       lastFinalizedBlock     <- s.dag.lookupUnsafe(lastFinalizedBlockHash)
       latestMessageOpt       <- s.dag.latestMessage(validator)
       result <- latestMessageOpt match {

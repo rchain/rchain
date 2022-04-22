@@ -45,11 +45,11 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         _      <- TestNode.propagate(nodes)
 
         _ <- nodes(0).blockDagStorage.getRepresentation
-              .flatMap(_.isFinalized(genesis.genesisBlock.blockHash)) shouldBeF true
+              .map(_.isFinalized(genesis.genesisBlock.blockHash)) shouldBeF true
         _ <- nodes(0).blockDagStorage.getRepresentation
-              .flatMap(_.isFinalized(block0.blockHash)) shouldBeF false
+              .map(_.isFinalized(block0.blockHash)) shouldBeF false
         _ <- nodes(0).blockDagStorage.getRepresentation
-              .flatMap(_.isFinalized(block1.blockHash)) shouldBeF false
+              .map(_.isFinalized(block1.blockHash)) shouldBeF false
 
         //multiparent block joining block0 and block1 since they do not conflict
         multiparentBlock <- nodes(0).propagateBlock(deploys(2))(nodes: _*)

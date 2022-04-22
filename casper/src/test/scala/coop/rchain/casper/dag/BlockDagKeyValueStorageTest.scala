@@ -62,14 +62,14 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
                  blockMetadata     <- dag.lookup(b.blockHash)
                  latestMessageHash <- dag.latestMessageHash(b.sender)
                  latestMessage     <- dag.latestMessage(b.sender)
-                 children          <- dag.children(b.blockHash)
-                 contains          <- dag.contains(b.blockHash)
+                 children          = dag.children(b.blockHash)
+                 contains          = dag.contains(b.blockHash)
                } yield (blockMetadata, latestMessageHash, latestMessage, children, contains)
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
-      topoSort            <- dag.topoSort(topoSortStartBlockNumber, none)
-      latestBlockNumber   <- dag.latestBlockNumber
+      topoSort            <- dag.topoSortUnsafe(topoSortStartBlockNumber, none)
+      latestBlockNumber   = dag.latestBlockNumber
     } yield (list, latestMessageHashes, latestMessages, topoSort, latestBlockNumber)
   }
 
@@ -244,14 +244,14 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
         // only genesis is finalized
         _ <- dag.lookupUnsafe(genesis.blockHash).map(_.finalized shouldBe true)
-        _ <- dag.isFinalized(genesis.blockHash).map(_ shouldBe true)
-        _ <- dag.isFinalized(b1.blockHash).map(_ shouldBe false)
+        _ = dag.isFinalized(genesis.blockHash) shouldBe true
+        _ = dag.isFinalized(b1.blockHash) shouldBe false
         _ <- dag.lookupUnsafe(b1.blockHash).map(_.finalized shouldBe false)
-        _ <- dag.isFinalized(b2.blockHash).map(_ shouldBe false)
+        _ = dag.isFinalized(b2.blockHash) shouldBe false
         _ <- dag.lookupUnsafe(b2.blockHash).map(_.finalized shouldBe false)
-        _ <- dag.isFinalized(b3.blockHash).map(_ shouldBe false)
+        _ = dag.isFinalized(b3.blockHash) shouldBe false
         _ <- dag.lookupUnsafe(b3.blockHash).map(_.finalized shouldBe false)
-        _ <- dag.isFinalized(b4.blockHash).map(_ shouldBe false)
+        _ = dag.isFinalized(b4.blockHash) shouldBe false
         _ <- dag.lookupUnsafe(b4.blockHash).map(_.finalized shouldBe false)
 
         // record directly finalized block
@@ -260,11 +260,11 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         dag        <- storage.getRepresentation
 
         // in mem DAG state should be correct
-        _ = dag.lastFinalizedBlock shouldBe b3.blockHash
-        _ <- dag.isFinalized(b1.blockHash).map(_ shouldBe true)
-        _ <- dag.isFinalized(b2.blockHash).map(_ shouldBe true)
-        _ <- dag.isFinalized(b3.blockHash).map(_ shouldBe true)
-        _ <- dag.isFinalized(b4.blockHash).map(_ shouldBe false)
+        _ = dag.lastFinalizedBlockUnsafe shouldBe b3.blockHash
+        _ = dag.isFinalized(b1.blockHash) shouldBe true
+        _ = dag.isFinalized(b2.blockHash) shouldBe true
+        _ = dag.isFinalized(b3.blockHash) shouldBe true
+        _ = dag.isFinalized(b4.blockHash) shouldBe false
 
         // persisted state should be correct
         _ <- dag

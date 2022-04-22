@@ -81,7 +81,7 @@ class MultiParentCasperImpl[F[_]
     } yield r
   }
 
-  def dagContains(hash: BlockHash): F[Boolean] = blockDag.flatMap(_.contains(hash))
+  def dagContains(hash: BlockHash): F[Boolean] = blockDag.map(_.contains(hash))
 
   def bufferContains(hash: BlockHash): F[Boolean] = CasperBufferStorage[F].contains(hash)
 
@@ -107,7 +107,7 @@ class MultiParentCasperImpl[F[_]
   def lastFinalizedBlock: F[BlockMessage] =
     for {
       dag          <- blockDag
-      blockMessage <- dag.lastFinalizedBlock.flatMap(BlockStore[F].getUnsafe)
+      blockMessage <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
     } yield blockMessage
 
   def blockDag: F[DagRepresentation] =
@@ -209,7 +209,7 @@ class MultiParentCasperImpl[F[_]
                      }
         } yield result
       }
-      lfb <- dag.lastFinalizedBlock
+      lfb <- dag.lastFinalizedBlockUnsafe
     } yield CasperSnapshot(
       dag,
       lfb,

@@ -1,9 +1,9 @@
 package coop.rchain.blockstorage.dag
 
-import cats.Applicative
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
+import coop.rchain.blockstorage.TopoSortFragmentParameterError
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.Justification
@@ -13,8 +13,6 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.shared.syntax._
 import fs2.Stream
-
-import scala.collection.immutable.SortedMap
 
 trait DagRepresentationSyntax {
   implicit final def blockStorageSyntaxDagRepresentation[F[_]](
@@ -30,32 +28,8 @@ final class DagRepresentationOps[F[_]](
     private val dag: DagRepresentation
 ) extends AnyVal {
 
-  def contains(blockHash: BlockHash)(implicit a: Applicative[F]): F[Boolean] =
-    DagRepresentation.contains(dag, blockHash)
-
-  def children(blockHash: BlockHash)(implicit a: Applicative[F]): F[Option[Set[BlockHash]]] =
-    DagRepresentation.children(dag, blockHash)
-
-  def lastFinalizedBlock(implicit s: Sync[F]): F[BlockHash] =
-    DagRepresentation.lastFinalizedBlock(dag)
-
-  def isFinalized(blockHash: BlockHash)(implicit a: Applicative[F]): F[Boolean] =
-    DagRepresentation.isFinalized(dag, blockHash)
-
-  def getHeightMap(implicit a: Applicative[F]): F[SortedMap[Long, Set[BlockHash]]] =
-    DagRepresentation.getHeightMap(dag)
-
-  def latestBlockNumber(implicit a: Applicative[F]): F[Long] =
-    DagRepresentation.latestBlockNumber(dag)
-
-  def topoSort(
-      startBlockNumber: Long,
-      maybeEndBlockNumber: Option[Long]
-  )(implicit s: Sync[F]): F[Vector[Vector[BlockHash]]] =
-    DagRepresentation.topoSort(dag, startBlockNumber, maybeEndBlockNumber)
-
-  def find(truncatedHash: String)(implicit s: Sync[F]): F[Option[BlockHash]] =
-    DagRepresentation.find(dag, truncatedHash)
+  def lastFinalizedBlockUnsafe(implicit s: Sync[F]): F[BlockHash] =
+    DagRepresentation.lastFinalizedBlockUnsafe(dag)
 
   def invalidBlocks(implicit s: Sync[F], bds: BlockDagStorage[F]): F[Set[BlockMetadata]] =
     DagRepresentation.invalidBlocks(dag)
@@ -187,7 +161,7 @@ final class DagRepresentationOps[F[_]](
     Stream
       .unfoldLoopEval(dag.latestMessagesHashes.valuesIterator.toList) { lvl =>
         for {
-          out  <- lvl.filterA(dag.isFinalized(_).not)
+          out  <- lvl.filterNot(dag.isFinalized).pure
           next <- out.traverse(bds.lookup(_).map(_.map(_.parents))).map(_.flatten.flatten)
         } yield (out, next.nonEmpty.guard[Option].as(next))
       }
@@ -195,15 +169,12 @@ final class DagRepresentationOps[F[_]](
       .compile
       .to(Set)
 
-  def descendants(
-      blockHash: BlockHash
-  )(implicit sync: Sync[F]): F[Set[BlockHash]] =
+  def descendants(blockHash: BlockHash): Set[BlockHash] =
     Stream
-      .unfoldLoopEval(List(blockHash)) { lvl =>
-        for {
-          out  <- lvl.traverse(dag.children(_)(sync)).map(_.flatten.flatten)
-          next = out
-        } yield (out, next.nonEmpty.guard[Option].as(next))
+      .unfoldLoop(List(blockHash)) { lvl =>
+        val out  = lvl.flatMap(dag.children).flatten
+        val next = out
+        (out, next.nonEmpty.guard[Option].as(next))
       }
       .flatMap(Stream.emits)
       .compile
@@ -229,6 +200,14 @@ final class DagRepresentationOps[F[_]](
       bds: BlockDagStorage[F]
   ): F[Set[BlockHash]] =
     ancestors(blockHash, filterF).map(_ + blockHash)
+
+  def topoSortUnsafe(
+      startBlockNumber: Long,
+      maybeEndBlockNumber: Option[Long]
+  )(implicit sync: Sync[F]): F[Vector[Vector[BlockHash]]] =
+    dag
+      .topoSort(startBlockNumber, maybeEndBlockNumber)
+      .liftTo(TopoSortFragmentParameterError(startBlockNumber, Long.MaxValue))
 
   // TODO replace all calls with direct calls for BlockDagStorage
   def lookup(blockHash: BlockHash)(implicit bds: BlockDagStorage[F]) = bds.lookup(blockHash)

@@ -170,9 +170,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       for {
         dag    <- getRepresentation
         errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
-        _      <- dag.contains(directlyFinalizedHash).ifM(().pure, new Exception(errMsg).raiseError)
+        _      <- new Exception(errMsg).raiseError.unlessA(dag.contains(directlyFinalizedHash))
         // all non finalized ancestors should be finalized as well (indirectly)
-        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).not)
+        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).pure.not)
         // invoke effects
         _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
         // persist finalization

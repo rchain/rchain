@@ -22,7 +22,7 @@ object BlockStateManagerImpl {
     override def isEmpty: F[Boolean] =
       for {
         dag       <- blockDagStorage.getRepresentation
-        firstHash <- dag.topoSort(0, 1L.some)
+        firstHash = dag.topoSort(0, 1L.some)
       } yield firstHash.isEmpty
   }
 }

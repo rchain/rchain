@@ -33,7 +33,7 @@ object DagMerger {
       // all not finalized blocks (conflict set)
       nonFinalisedBlocks <- dag.nonFinalizedBlocks
       // blocks that see last finalized state
-      actualBlocks <- dag.descendants(lfb)
+      actualBlocks = dag.descendants(lfb)
       // blocks that does not see last finalized state
       lateBlocks = nonFinalisedBlocks diff actualBlocks
 
