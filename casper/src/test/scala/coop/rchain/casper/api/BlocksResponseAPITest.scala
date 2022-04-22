@@ -28,6 +28,7 @@ class BlocksResponseAPITest
     with BlockGenerator
     with BlockDagStorageFixture {
   implicit val log: Log[Task] = new Log.NOPLog[Task]()
+  implicit val s              = Sync[Task]
 
   val v1     = generateValidator("Validator One")
   val v2     = generateValidator("Validator Two")

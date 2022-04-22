@@ -3,7 +3,7 @@ package coop.rchain.casper.merging
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
@@ -21,8 +21,8 @@ object DagMerger {
   def costOptimalRejectionAlg: DeployChainIndex => Long =
     (r: DeployChainIndex) => r.deploysWithCost.map(_.cost).sum
 
-  def merge[F[_]: Concurrent: Log](
-      dag: BlockDagRepresentation[F],
+  def merge[F[_]: Concurrent: BlockDagStorage: Log](
+      dag: DagRepresentation,
       lfb: BlockHash,
       lfbPostState: Blake2b256Hash,
       index: BlockHash => F[Vector[DeployChainIndex]],

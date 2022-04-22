@@ -21,6 +21,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.syntax._
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -34,7 +35,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
-
+  implicit val s       = Sync[Task]
   val genesis          = buildGenesis()
   private val SHARD_ID = genesis.genesisBlock.shardId
 
@@ -209,6 +210,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   it should "reject blocks not from bonded validators" ignore effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
+      implicit val bds     = node.blockDagStorage
 
       for {
         basicDeployData  <- ConstructDeploy.basicDeployData[Effect](0)
@@ -538,7 +540,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         shardId = "root"
       )
     nodes(1).casperEff.blockDag.flatMap { dag =>
-      val sender = blockThatPointsToInvalidBlock.sender
+      val sender       = blockThatPointsToInvalidBlock.sender
+      implicit val bds = nodes(1).blockDagStorage
       for {
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1

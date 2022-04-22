@@ -115,11 +115,13 @@ object Setup {
       deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
 
       synchronyConstraintChecker = {
-        implicit val bs = blockStore
+        implicit val bs  = blockStore
+        implicit val bds = blockDagStorage
         SynchronyConstraintChecker[F]
       }
       lastFinalizedHeightConstraintChecker = {
-        implicit val bs = blockStore
+        implicit val bs  = blockStore
+        implicit val bds = blockDagStorage
         LastFinalizedHeightConstraintChecker[F]
       }
 
@@ -285,7 +287,7 @@ object Setup {
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
       updateForkChoiceLoop = {
-        implicit val (ec, bs, cu) = (engineCell, blockStore, commUtil)
+        implicit val (ec, bs, cu, bds) = (engineCell, blockStore, commUtil, blockDagStorage)
         for {
           _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
           _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)

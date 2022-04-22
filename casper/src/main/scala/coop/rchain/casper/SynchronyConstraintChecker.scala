@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper.blocks.proposer.{CheckProposeConstraintsResult, NotEnoughNewBlocks}
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.syntax._
@@ -15,10 +15,10 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 
-final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
+final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: Log] {
   private def calculateSeenSendersSince(
       lastProposed: BlockMetadata,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation
   ): F[Set[Validator]] =
     for {
       latestMessages <- dag.latestMessageHashes
@@ -35,7 +35,7 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
     } yield seenSendersSince
 
   def check(
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       runtimeManager: RuntimeManager[F],
       // TODO having genesis here is a weird way to check, remove
       approvedBlock: BlockMessage,
@@ -104,6 +104,6 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
 }
 
 object SynchronyConstraintChecker {
-  def apply[F[_]: Sync: BlockStore: Log]: SynchronyConstraintChecker[F] =
+  def apply[F[_]: Sync: BlockStore: BlockDagStorage: Log]: SynchronyConstraintChecker[F] =
     new SynchronyConstraintChecker[F]
 }

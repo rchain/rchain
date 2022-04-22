@@ -7,7 +7,7 @@ import cats.{Applicative, Show}
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.engine.{BlockRetriever, Running}
 import coop.rchain.casper.protocol._
@@ -48,7 +48,7 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def getSnapshot: F[CasperSnapshot[F]]
+  def getSnapshot: F[CasperSnapshot]
   def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
@@ -57,18 +57,18 @@ trait Casper[F[_]] {
   def getValidator: F[Option[ValidatorIdentity]]
   def getVersion: F[Long]
 
-  def validate(b: BlockMessage, s: CasperSnapshot[F]): F[Either[BlockError, ValidBlock]]
-  def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]]
+  def validate(b: BlockMessage, s: CasperSnapshot): F[Either[BlockError, ValidBlock]]
+  def handleValidBlock(block: BlockMessage): F[DagRepresentation]
   def handleInvalidBlock(
       block: BlockMessage,
       status: InvalidBlock,
-      dag: BlockDagRepresentation[F]
-  ): F[BlockDagRepresentation[F]]
+      dag: DagRepresentation
+  ): F[DagRepresentation]
   def getDependencyFreeFromBuffer: F[List[BlockMessage]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
-  def blockDag: F[BlockDagRepresentation[F]]
+  def blockDag: F[DagRepresentation]
   def fetchDependencies: F[Unit]
   def lastFinalizedBlock: F[BlockMessage]
   def getRuntimeManager: F[RuntimeManager[F]]
@@ -85,8 +85,8 @@ object MultiParentCasper extends MultiParentCasperInstances {
   * This class represents full information about the state. It is required for creating new blocks
   * as well as for validating blocks.
   */
-final case class CasperSnapshot[F[_]](
-    dag: BlockDagRepresentation[F],
+final case class CasperSnapshot(
+    dag: DagRepresentation,
     lastFinalizedBlock: BlockHash,
     lca: BlockHash,
     tips: IndexedSeq[BlockHash],

@@ -325,7 +325,7 @@ object BlockAPI {
     }
   }
 
-  private def toposortDag[F[_]: Monad: BlockDagStorage: Log: BlockStore, A](
+  private def toposortDag[F[_]: Sync: BlockDagStorage: Log: BlockStore, A](
       depth: Int,
       maxDepthLimit: Int
   )(doIt: Vector[Vector[BlockHash]] => F[ApiErr[A]]): F[ApiErr[A]] = {
@@ -390,7 +390,8 @@ object BlockAPI {
                       startBlockNum - depth,
                       Some(startBlockNum)
                     )
-      _      <- visualizer(topoSortDag, PrettyPrinter.buildString(dag.lastFinalizedBlock))
+      lfb    <- dag.lastFinalizedBlock
+      _      <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb))
       result <- serialize
     } yield result.asRight[Error]
 
@@ -429,8 +430,7 @@ object BlockAPI {
       id: DeployId
   ): F[ApiErr[LightBlockInfo]] =
     for {
-      dag            <- BlockDagStorage[F].getRepresentation
-      maybeBlockHash <- dag.lookupByDeployId(id)
+      maybeBlockHash <- BlockDagStorage[F].lookupByDeployId(id)
       maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
       response       <- maybeBlock.traverse(getLightBlockInfo[F])
     } yield response.fold(
@@ -537,7 +537,7 @@ object BlockAPI {
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
-  private def findBlockFromStore[F[_]: Monad: BlockDagStorage: BlockStore](
+  private def findBlockFromStore[F[_]: Sync: BlockDagStorage: BlockStore](
       hash: String
   ): F[Option[BlockMessage]] =
     for {
@@ -560,7 +560,7 @@ object BlockAPI {
   def lastFinalizedBlock[F[_]: Sync: BlockDagStorage: BlockStore: Log]: F[ApiErr[BlockInfo]] =
     for {
       dag                <- BlockDagStorage[F].getRepresentation
-      lastFinalizedBlock <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
+      lastFinalizedBlock <- dag.lastFinalizedBlock.flatMap(BlockStore[F].getUnsafe)
       blockInfo          <- getFullBlockInfo[F](lastFinalizedBlock)
     } yield blockInfo.asRight
 
@@ -579,7 +579,7 @@ object BlockAPI {
   ): F[ApiErr[Boolean]] =
     for {
       dag                <- BlockDagStorage[F].getRepresentation
-      lastFinalizedBlock <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
+      lastFinalizedBlock <- dag.lastFinalizedBlock.flatMap(BlockStore[F].getUnsafe)
       postStateHash      = ProtoUtil.postStateHash(targetBlock.getOrElse(lastFinalizedBlock))
       bonds              <- RuntimeManager[F].computeBonds(postStateHash)
       validatorBondOpt   = bonds.find(_.validator == publicKey)
@@ -651,7 +651,7 @@ object BlockAPI {
   final case object ValidatorReadOnlyError extends LatestBlockMessageError
   final case object NoBlockMessageError    extends LatestBlockMessageError
 
-  def getLatestMessage[F[_]: Sync: EngineCell: Log]: F[ApiErr[BlockMetadata]] = {
+  def getLatestMessage[F[_]: Sync: EngineCell: BlockDagStorage: Log]: F[ApiErr[BlockMetadata]] = {
     val errorMessage =
       "Could not execute exploratory deploy, casper instance was not available yet."
     EngineCell[F].read >>= (

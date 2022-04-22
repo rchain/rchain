@@ -1,5 +1,7 @@
 package coop.rchain.casper.dag
 
+import cats.Applicative
+import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -18,6 +20,7 @@ import monix.eval.Task
 
 class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
+  implicit val s = Sync[Task]
   private def createDagStorage: Task[BlockDagStorage[Task]] = {
     implicit val log     = new shared.Log.NOPLog[Task]()
     implicit val metrics = new Metrics.MetricsNOP[Task]
@@ -51,7 +54,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
       storage: BlockDagStorage[Task],
       topoSortStartBlockNumber: Long = 0
   ): Task[LookupResult] = {
-    import cats.instances.list._
+    implicit val bds = storage
     for {
       dag <- storage.getRepresentation
       list <- blockElements.traverse { b =>
@@ -187,6 +190,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
   it should "be able to restore invalid blocks on startup" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { storage =>
+        implicit val bds = storage
         for {
           _             <- blockElements.traverse_(storage.insert(_, true))
           dag           <- storage.getRepresentation
@@ -205,7 +209,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
           (deploys, blockHashes) = blockElements
             .flatMap(b => b.body.deploys.map(_ -> b.blockHash))
             .unzip
-          deployLookups <- deploys.traverse(d => dag.lookupByDeployId(d.deploy.sig))
+          deployLookups <- deploys.traverse(d => storage.lookupByDeployId(d.deploy.sig))
         } yield deployLookups shouldBe blockHashes.map(_.some)
       }
     }
@@ -225,6 +229,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
   "recording of new directly finalized block" should "record finalized all non finalized ancestors of LFB" in
     withDagStorage { storage =>
+      implicit val bds = storage
       for {
         _ <- storage.insert(genesis, false, true)
         b1 = getRandomBlock(

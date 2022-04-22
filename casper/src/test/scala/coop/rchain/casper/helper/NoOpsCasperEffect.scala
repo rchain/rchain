@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{BlockStatus, DeployError, MultiParentCasper, _}
@@ -33,9 +33,9 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def bufferContains(blockHash: BlockHash): F[Boolean] = false.pure[F]
   def deploy(r: Signed[DeployData]): F[Either[DeployError, DeployId]] =
     Applicative[F].pure(Right(ByteString.EMPTY))
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
+  def estimator(dag: DagRepresentation): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]
-  def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
+  def blockDag: F[DagRepresentation]                                  = BlockDagStorage[F].getRepresentation
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
   def lastFinalizedBlock: F[BlockMessage]                             = getRandomBlock().pure[F]
   def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
@@ -51,17 +51,17 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
       _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
     } yield BlockStatus.valid.asRight
 
-  override def getSnapshot: F[CasperSnapshot[F]] = ???
+  override def getSnapshot: F[CasperSnapshot] = ???
   override def validate(
       b: BlockMessage,
-      s: CasperSnapshot[F]
-  ): F[Either[BlockError, ValidBlock]]                                             = ???
-  override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] = ???
+      s: CasperSnapshot
+  ): F[Either[BlockError, ValidBlock]]                                     = ???
+  override def handleValidBlock(block: BlockMessage): F[DagRepresentation] = ???
   override def handleInvalidBlock(
       block: BlockMessage,
       status: InvalidBlock,
-      dag: BlockDagRepresentation[F]
-  ): F[BlockDagRepresentation[F]]                                 = ???
+      dag: DagRepresentation
+  ): F[DagRepresentation]                                         = ???
   override def getDependencyFreeFromBuffer: F[List[BlockMessage]] = ???
 }
 

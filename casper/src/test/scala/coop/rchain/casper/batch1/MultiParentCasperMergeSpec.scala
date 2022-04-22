@@ -1,5 +1,6 @@
 package coop.rchain.casper.batch1
 
+import cats.effect.Sync
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
@@ -7,6 +8,8 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import coop.rchain.blockstorage.syntax._
+import monix.eval.Task
 
 class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors {
 
@@ -21,6 +24,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
+      implicit val s  = Sync[Task]
       val shardId     = genesis.genesisBlock.shardId
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](

@@ -1,5 +1,6 @@
 package coop.rchain.casper.util
 
+import cats.effect.Sync
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -15,6 +16,7 @@ class CasperUtilTest
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {
+  implicit val s = Sync[Task]
 
   "isInMainChain" should "classify appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>

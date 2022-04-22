@@ -5,12 +5,14 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStorageMetricsSource
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 
 final class IndexedBlockDagStorage[F[_]: Sync](
     lock: Semaphore[F],
@@ -21,7 +23,11 @@ final class IndexedBlockDagStorage[F[_]: Sync](
     finalizedBlockHashRef: Ref[F, Set[BlockHash]]
 ) extends BlockDagStorage[F] {
 
-  def getRepresentation: F[BlockDagRepresentation[F]] =
+  override def lookup(
+      blockHash: BlockHash
+  ): F[Option[BlockMetadata]] = underlying.lookup(blockHash)
+
+  def getRepresentation: F[DagRepresentation] =
     lock.withPermit(
       underlying.getRepresentation
     )
@@ -30,31 +36,34 @@ final class IndexedBlockDagStorage[F[_]: Sync](
       block: BlockMessage,
       invalid: Boolean,
       approved: Boolean
-  ): F[BlockDagRepresentation[F]] =
+  ): F[DagRepresentation] =
     lock.withPermit(
       underlying.insert(block, invalid, approved)
     )
 
   def insertIndexed(block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[BlockMessage] =
-    lock.withPermit(for {
-      _         <- underlying.insert(genesis, invalid = false, approved = true)
-      currentId <- currentIdRef.get
-      dag       <- underlying.getRepresentation
-      nextCreatorSeqNum <- if (block.seqNum == 0)
-                            dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
-                          else block.seqNum.pure[F]
-      nextId           = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
-      newPostState     = block.body.state.copy(blockNumber = nextId)
-      newPostStateHash = Blake2b256.hash(newPostState.toProto.toByteArray)
-      modifiedBlock = block
-        .copy(
-          body = block.body.copy(state = newPostState),
-          seqNum = nextCreatorSeqNum
-        )
-      _ <- underlying.insert(modifiedBlock, invalid)
-      _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
-      _ <- currentIdRef.set(nextId)
-    } yield modifiedBlock)
+    lock.withPermit {
+      implicit val bds = underlying
+      for {
+        _         <- underlying.insert(genesis, invalid = false, approved = true)
+        currentId <- currentIdRef.get
+        dag       <- underlying.getRepresentation
+        nextCreatorSeqNum <- if (block.seqNum == 0)
+                              dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
+                            else block.seqNum.pure[F]
+        nextId           = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
+        newPostState     = block.body.state.copy(blockNumber = nextId)
+        newPostStateHash = Blake2b256.hash(newPostState.toProto.toByteArray)
+        modifiedBlock = block
+          .copy(
+            body = block.body.copy(state = newPostState),
+            seqNum = nextCreatorSeqNum
+          )
+        _ <- underlying.insert(modifiedBlock, invalid)
+        _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
+        _ <- currentIdRef.set(nextId)
+      } yield modifiedBlock
+    }
 
   def inject(index: Int, block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[Unit] =
     lock
@@ -75,6 +84,10 @@ final class IndexedBlockDagStorage[F[_]: Sync](
 
   def lookupByIdUnsafe(id: Int): F[BlockMessage] =
     idToBlocksRef.get.map(_(id.toLong))
+
+  override def lookupByDeployId(
+      blockHash: DeployId
+  ): F[Option[BlockHash]] = underlying.lookupByDeployId(blockHash)
 }
 
 object IndexedBlockDagStorage {
