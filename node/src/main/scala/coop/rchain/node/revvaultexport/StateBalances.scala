@@ -6,18 +6,17 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 import scala.concurrent.ExecutionContext
 
 object StateBalances {
@@ -28,15 +27,13 @@ object StateBalances {
       vaultChannel: Par,
       dataDir: Path
   )(implicit scheduler: ExecutionContext): F[List[(ByteString, Long)]] = {
-    val oldRSpacePath = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     import coop.rchain.rholang.interpreter.storage._
     implicit val span                                        = NoopSpan[F]()
     implicit val log: Log[F]                                 = Log.log
     implicit val metrics                                     = new Metrics.MetricsNOP[F]()
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-    val legacyRSpaceDirSupport                               = Files.exists(oldRSpacePath)
     for {
-      rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir)
       blockStore        <- blockStore.create(rnodeStoreManager)
       blockOpt          <- blockStore.get1(blockHash.unsafeHexToByteString)
       block             = blockOpt.get

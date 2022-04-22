@@ -18,7 +18,6 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.discovery.NodeDiscovery
@@ -88,9 +87,7 @@ object Setup {
       else Span.noop[F]
 
       // RNode key-value store manager / manages LMDB databases
-      oldRSpacePath          = conf.storage.dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
-      legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
-      rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
 
       // TODO: Old BlockStore migration message, remove after couple of releases from v0.11.0.
       oldBlockStoreExists = conf.storage.dataDir.resolve("blockstore/storage").toFile.exists
