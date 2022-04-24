@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
 sealed trait BlockStatus
+
 object BlockStatus {
   def valid: ValidBlock                    = ValidBlock.Valid
   def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
@@ -22,13 +23,6 @@ object BlockStatus {
   def containsFutureDeploy: BlockError     = InvalidBlock.ContainsFutureDeploy
   def notOfInterest: BlockError            = InvalidBlock.NotOfInterest
   def lowDeployCost: BlockError            = InvalidBlock.LowDeployCost
-
-  def isInDag(blockStatus: BlockStatus): Boolean =
-    blockStatus match {
-      case _: ValidBlock   => true
-      case _: InvalidBlock => true
-      case _               => false
-    }
 }
 
 sealed trait ValidBlock extends BlockStatus
