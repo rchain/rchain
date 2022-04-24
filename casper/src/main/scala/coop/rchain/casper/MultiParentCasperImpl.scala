@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.blockStore.BlockStore
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.merging.BlockIndex
@@ -81,7 +81,7 @@ class MultiParentCasperImpl[F[_]
     } yield r
   }
 
-  def dagContains(hash: BlockHash): F[Boolean] = blockDag.flatMap(_.contains(hash))
+  def dagContains(hash: BlockHash): F[Boolean] = blockDag.map(_.contains(hash))
 
   def bufferContains(hash: BlockHash): F[Boolean] = CasperBufferStorage[F].contains(hash)
 
@@ -107,10 +107,10 @@ class MultiParentCasperImpl[F[_]
   def lastFinalizedBlock: F[BlockMessage] =
     for {
       dag          <- blockDag
-      blockMessage <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
+      blockMessage <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
     } yield blockMessage
 
-  def blockDag: F[BlockDagRepresentation[F]] =
+  def blockDag: F[DagRepresentation] =
     BlockDagStorage[F].getRepresentation
 
   def getRuntimeManager: F[RuntimeManager[F]] = Sync[F].delay(RuntimeManager[F])
@@ -135,7 +135,7 @@ class MultiParentCasperImpl[F[_]
     } yield ()
   }
 
-  override def getSnapshot: F[CasperSnapshot[F]] = {
+  override def getSnapshot: F[CasperSnapshot] = {
     import cats.instances.list._
 
     def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
@@ -209,7 +209,7 @@ class MultiParentCasperImpl[F[_]
                      }
         } yield result
       }
-      lfb = dag.lastFinalizedBlock
+      lfb <- dag.lastFinalizedBlockUnsafe
     } yield CasperSnapshot(
       dag,
       lfb,
@@ -227,7 +227,7 @@ class MultiParentCasperImpl[F[_]
 
   override def validate(
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[Either[BlockError, ValidBlock]] = {
     val validationProcess: EitherT[F, BlockError, ValidBlock] =
       for {
@@ -309,7 +309,7 @@ class MultiParentCasperImpl[F[_]
     Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
   }
 
-  override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =
+  override def handleValidBlock(block: BlockMessage): F[DagRepresentation] =
     for {
       updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
       _          <- CasperBufferStorage[F].remove(block.blockHash)
@@ -319,13 +319,13 @@ class MultiParentCasperImpl[F[_]
   override def handleInvalidBlock(
       block: BlockMessage,
       status: InvalidBlock,
-      dag: BlockDagRepresentation[F]
-  ): F[BlockDagRepresentation[F]] = {
+      dag: DagRepresentation
+  ): F[DagRepresentation] = {
     // TODO: Slash block for status except InvalidUnslashableBlock
     def handleInvalidBlockEffect(
         status: BlockError,
         block: BlockMessage
-    ): F[BlockDagRepresentation[F]] =
+    ): F[DagRepresentation] =
       for {
         _ <- Log[F].warn(
               s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."

@@ -4,7 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.blockstorage.blockStore
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
@@ -208,15 +208,18 @@ object TransactionBalances {
 
   def getBlockHashByHeight[F[_]: Sync](
       blockNumber: Long,
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation,
       blockStore: BlockStore[F]
-  ): F[BlockMessage] =
+  ): F[BlockMessage] = {
+
+    import coop.rchain.blockstorage.syntax._
     for {
-      blocks    <- dag.topoSort(blockNumber.toLong, Some(blockNumber.toLong))
+      blocks    <- dag.topoSortUnsafe(blockNumber.toLong, Some(blockNumber.toLong))
       blockHash = blocks.flatten.head
       block     <- blockStore.get1(blockHash)
       blockMes  = block.get
     } yield blockMes
+  }
 
   def main[F[_]: Concurrent: Parallel: ContextShift](
       dataDir: Path,
@@ -262,15 +265,15 @@ object TransactionBalances {
         def findTransaction(transaction: TransactionInfo): F[ByteString] =
           transaction.transactionType match {
             case PreCharge(deployId) =>
-              dagRepresantation
+              blockDagStorage
                 .lookupByDeployId(deployId.unsafeHexToByteString)
                 .flatMap(_.liftTo(DeployNotFound(transaction)))
             case Refund(deployId) =>
-              dagRepresantation
+              blockDagStorage
                 .lookupByDeployId(deployId.unsafeHexToByteString)
                 .flatMap(_.liftTo(DeployNotFound(transaction)))
             case UserDeploy(deployId) =>
-              dagRepresantation
+              blockDagStorage
                 .lookupByDeployId(deployId.unsafeHexToByteString)
                 .flatMap(_.liftTo(DeployNotFound(transaction)))
             case CloseBlock(blockHash) =>
@@ -279,13 +282,14 @@ object TransactionBalances {
               blockHash.unsafeHexToByteString.pure[F]
           }
         allTransactions.toList.traverse { t =>
+          implicit val bds = blockDagStorage
           for {
             blockHash    <- findTransaction(t)
             blockMetaOpt <- dagRepresantation.lookup(blockHash)
             blockMeta <- blockMetaOpt.liftTo(
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
-            isFinalized         <- dagRepresantation.isFinalized(blockHash)
+            isFinalized         = dagRepresantation.isFinalized(blockHash)
             isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.body.state.blockNumber
           } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
         }

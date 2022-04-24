@@ -5,6 +5,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.TopoSortFragmentParameterError
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
@@ -207,7 +208,7 @@ object BlockAPI {
   ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] = {
     val response: F[Either[Error, (Seq[DataWithBlockInfo], Int)]] = for {
       dag                 <- BlockDagStorage[F].getRepresentation
-      heightMap           <- dag.getHeightMap
+      heightMap           = dag.heightMap
       depthWithLimit      = Math.min(depth, maxBlocksLimit).toLong
       sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
       blockDataStream = getFromBlocks(heightMap) { block =>
@@ -237,7 +238,7 @@ object BlockAPI {
   ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] = {
     val response: F[Either[Error, (Seq[ContinuationsWithBlockInfo], Int)]] = for {
       dag            <- BlockDagStorage[F].getRepresentation
-      heightMap      <- dag.getHeightMap
+      heightMap      = dag.heightMap
       depthWithLimit = Math.min(depth, maxBlocksLimit).toLong
       sortedListeningNames <- listeningNames.toList
                                .traverse(parSortable.sortMatch[F](_).map(_.term))
@@ -325,15 +326,16 @@ object BlockAPI {
     }
   }
 
-  private def toposortDag[F[_]: Monad: BlockDagStorage: Log: BlockStore, A](
+  private def toposortDag[F[_]: Sync: BlockDagStorage: Log: BlockStore, A](
       depth: Int,
       maxDepthLimit: Int
   )(doIt: Vector[Vector[BlockHash]] => F[ApiErr[A]]): F[ApiErr[A]] = {
     def response: F[ApiErr[A]] =
       for {
         dag               <- BlockDagStorage[F].getRepresentation
-        latestBlockNumber <- dag.latestBlockNumber
-        topoSort          <- dag.topoSort((latestBlockNumber - depth), none)
+        latestBlockNumber = dag.latestBlockNumber
+        start             = latestBlockNumber - depth
+        topoSort          <- dag.topoSortUnsafe(start, none)
         result            <- doIt(topoSort)
       } yield result
 
@@ -351,7 +353,7 @@ object BlockAPI {
     def response: F[ApiErr[List[LightBlockInfo]]] =
       for {
         dag         <- BlockDagStorage[F].getRepresentation
-        topoSortDag <- dag.topoSort(startBlockNumber, Some(endBlockNumber))
+        topoSortDag <- dag.topoSortUnsafe(startBlockNumber, Some(endBlockNumber))
         result <- topoSortDag
                    .foldM(List.empty[LightBlockInfo]) {
                      case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
@@ -384,13 +386,13 @@ object BlockAPI {
       dag <- BlockDagStorage[F].getRepresentation
       // the default startBlockNumber is 0
       // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
-      startBlockNum <- if (startBlockNumber == 0) dag.latestBlockNumber
-                      else Sync[F].delay(startBlockNumber.toLong)
-      topoSortDag <- dag.topoSort(
+      startBlockNum = if (startBlockNumber == 0) dag.latestBlockNumber else startBlockNumber.toLong
+      topoSortDag <- dag.topoSortUnsafe(
                       startBlockNum - depth,
                       Some(startBlockNum)
                     )
-      _      <- visualizer(topoSortDag, PrettyPrinter.buildString(dag.lastFinalizedBlock))
+      lfb    <- dag.lastFinalizedBlockUnsafe
+      _      <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb))
       result <- serialize
     } yield result.asRight[Error]
 
@@ -429,8 +431,7 @@ object BlockAPI {
       id: DeployId
   ): F[ApiErr[LightBlockInfo]] =
     for {
-      dag            <- BlockDagStorage[F].getRepresentation
-      maybeBlockHash <- dag.lookupByDeployId(id)
+      maybeBlockHash <- BlockDagStorage[F].lookupByDeployId(id)
       maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
       response       <- maybeBlock.traverse(getLightBlockInfo[F])
     } yield response.fold(
@@ -465,14 +466,10 @@ object BlockAPI {
               )
       // Check if the block is added to the dag and convert it to block info
       dag <- BlockDagStorage[F].getRepresentation
-      blockInfo <- dag
-                    .contains(block.blockHash)
-                    .ifM(
-                      getFullBlockInfo[F](block),
-                      BlockRetrievalError(
-                        s"Error: Block with hash $hash received but not added yet"
-                      ).raiseError
-                    )
+      blockInfo <- if (dag.contains(block.blockHash)) getFullBlockInfo[F](block)
+                  else
+                    BlockRetrievalError(s"Error: Block with hash $hash received but not added yet")
+                      .raiseError[F, BlockInfo]
     } yield blockInfo
 
     response.map(_.asRight[String]).handleError {
@@ -537,12 +534,12 @@ object BlockAPI {
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
-  private def findBlockFromStore[F[_]: Monad: BlockDagStorage: BlockStore](
+  private def findBlockFromStore[F[_]: Sync: BlockDagStorage: BlockStore](
       hash: String
   ): F[Option[BlockMessage]] =
     for {
       dag          <- BlockDagStorage[F].getRepresentation
-      blockHashOpt <- dag.find(hash)
+      blockHashOpt = dag.find(hash)
       message      <- blockHashOpt.flatTraverse(BlockStore[F].get1)
     } yield message
 
@@ -560,7 +557,7 @@ object BlockAPI {
   def lastFinalizedBlock[F[_]: Sync: BlockDagStorage: BlockStore: Log]: F[ApiErr[BlockInfo]] =
     for {
       dag                <- BlockDagStorage[F].getRepresentation
-      lastFinalizedBlock <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
+      lastFinalizedBlock <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
       blockInfo          <- getFullBlockInfo[F](lastFinalizedBlock)
     } yield blockInfo.asRight
 
@@ -570,7 +567,7 @@ object BlockAPI {
     for {
       dag            <- BlockDagStorage[F].getRepresentation
       givenBlockHash = hash.unsafeHexToByteString
-      result         <- dag.isFinalized(givenBlockHash)
+      result         = dag.isFinalized(givenBlockHash)
     } yield result.asRight[Error]
 
   def bondStatus[F[_]: Sync: RuntimeManager: BlockDagStorage: BlockStore: Log](
@@ -579,7 +576,7 @@ object BlockAPI {
   ): F[ApiErr[Boolean]] =
     for {
       dag                <- BlockDagStorage[F].getRepresentation
-      lastFinalizedBlock <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
+      lastFinalizedBlock <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
       postStateHash      = ProtoUtil.postStateHash(targetBlock.getOrElse(lastFinalizedBlock))
       bonds              <- RuntimeManager[F].computeBonds(postStateHash)
       validatorBondOpt   = bonds.find(_.validator == publicKey)
@@ -651,7 +648,7 @@ object BlockAPI {
   final case object ValidatorReadOnlyError extends LatestBlockMessageError
   final case object NoBlockMessageError    extends LatestBlockMessageError
 
-  def getLatestMessage[F[_]: Sync: EngineCell: Log]: F[ApiErr[BlockMetadata]] = {
+  def getLatestMessage[F[_]: Sync: EngineCell: BlockDagStorage: Log]: F[ApiErr[BlockMetadata]] = {
     val errorMessage =
       "Could not execute exploratory deploy, casper instance was not available yet."
     EngineCell[F].read >>= (

@@ -1,5 +1,7 @@
 package coop.rchain.casper.dag
 
+import cats.Applicative
+import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -18,6 +20,7 @@ import monix.eval.Task
 
 class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
+  implicit val s = Sync[Task]
   private def createDagStorage: Task[BlockDagStorage[Task]] = {
     implicit val log     = new shared.Log.NOPLog[Task]()
     implicit val metrics = new Metrics.MetricsNOP[Task]
@@ -51,7 +54,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
       storage: BlockDagStorage[Task],
       topoSortStartBlockNumber: Long = 0
   ): Task[LookupResult] = {
-    import cats.instances.list._
+    implicit val bds = storage
     for {
       dag <- storage.getRepresentation
       list <- blockElements.traverse { b =>
@@ -59,14 +62,14 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
                  blockMetadata     <- dag.lookup(b.blockHash)
                  latestMessageHash <- dag.latestMessageHash(b.sender)
                  latestMessage     <- dag.latestMessage(b.sender)
-                 children          <- dag.children(b.blockHash)
-                 contains          <- dag.contains(b.blockHash)
+                 children          = dag.children(b.blockHash)
+                 contains          = dag.contains(b.blockHash)
                } yield (blockMetadata, latestMessageHash, latestMessage, children, contains)
              }
       latestMessageHashes <- dag.latestMessageHashes
       latestMessages      <- dag.latestMessages
-      topoSort            <- dag.topoSort(topoSortStartBlockNumber, none)
-      latestBlockNumber   <- dag.latestBlockNumber
+      topoSort            <- dag.topoSortUnsafe(topoSortStartBlockNumber, none)
+      latestBlockNumber   = dag.latestBlockNumber
     } yield (list, latestMessageHashes, latestMessages, topoSort, latestBlockNumber)
   }
 
@@ -186,7 +189,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
   it should "be able to restore invalid blocks on startup" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
-      withDagStorage { storage =>
+      withDagStorage { implicit storage =>
         for {
           _             <- blockElements.traverse_(storage.insert(_, true))
           dag           <- storage.getRepresentation
@@ -205,7 +208,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
           (deploys, blockHashes) = blockElements
             .flatMap(b => b.body.deploys.map(_ -> b.blockHash))
             .unzip
-          deployLookups <- deploys.traverse(d => dag.lookupByDeployId(d.deploy.sig))
+          deployLookups <- deploys.traverse(d => storage.lookupByDeployId(d.deploy.sig))
         } yield deployLookups shouldBe blockHashes.map(_.some)
       }
     }
@@ -224,7 +227,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
   }
 
   "recording of new directly finalized block" should "record finalized all non finalized ancestors of LFB" in
-    withDagStorage { storage =>
+    withDagStorage { implicit storage =>
       for {
         _ <- storage.insert(genesis, false, true)
         b1 = getRandomBlock(
@@ -241,14 +244,14 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
         // only genesis is finalized
         _ <- dag.lookupUnsafe(genesis.blockHash).map(_.finalized shouldBe true)
-        _ <- dag.isFinalized(genesis.blockHash).map(_ shouldBe true)
-        _ <- dag.isFinalized(b1.blockHash).map(_ shouldBe false)
+        _ = dag.isFinalized(genesis.blockHash) shouldBe true
+        _ = dag.isFinalized(b1.blockHash) shouldBe false
         _ <- dag.lookupUnsafe(b1.blockHash).map(_.finalized shouldBe false)
-        _ <- dag.isFinalized(b2.blockHash).map(_ shouldBe false)
+        _ = dag.isFinalized(b2.blockHash) shouldBe false
         _ <- dag.lookupUnsafe(b2.blockHash).map(_.finalized shouldBe false)
-        _ <- dag.isFinalized(b3.blockHash).map(_ shouldBe false)
+        _ = dag.isFinalized(b3.blockHash) shouldBe false
         _ <- dag.lookupUnsafe(b3.blockHash).map(_.finalized shouldBe false)
-        _ <- dag.isFinalized(b4.blockHash).map(_ shouldBe false)
+        _ = dag.isFinalized(b4.blockHash) shouldBe false
         _ <- dag.lookupUnsafe(b4.blockHash).map(_.finalized shouldBe false)
 
         // record directly finalized block
@@ -257,11 +260,11 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         dag        <- storage.getRepresentation
 
         // in mem DAG state should be correct
-        _ = dag.lastFinalizedBlock shouldBe b3.blockHash
-        _ <- dag.isFinalized(b1.blockHash).map(_ shouldBe true)
-        _ <- dag.isFinalized(b2.blockHash).map(_ shouldBe true)
-        _ <- dag.isFinalized(b3.blockHash).map(_ shouldBe true)
-        _ <- dag.isFinalized(b4.blockHash).map(_ shouldBe false)
+        _ = dag.lastFinalizedBlockUnsafe shouldBe b3.blockHash
+        _ = dag.isFinalized(b1.blockHash) shouldBe true
+        _ = dag.isFinalized(b2.blockHash) shouldBe true
+        _ = dag.isFinalized(b3.blockHash) shouldBe true
+        _ = dag.isFinalized(b4.blockHash) shouldBe false
 
         // persisted state should be correct
         _ <- dag

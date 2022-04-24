@@ -6,7 +6,7 @@ import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil.bonds
@@ -157,10 +157,10 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore: BlockDagStorage: Metrics: Span](
       block: BlockMessage,
       genesis: BlockMessage,
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       shardId: String,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
@@ -196,9 +196,9 @@ object Validate {
     *
     * Agnostic of non-parent justifications
     */
-  def repeatDeploy[F[_]: Sync: Log: BlockStore: Span](
+  def repeatDeploy[F[_]: Sync: Log: BlockStore: BlockDagStorage: Span](
       block: BlockMessage,
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
@@ -296,9 +296,9 @@ object Validate {
   }
 
   // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Sync: Log](
+  def blockNumber[F[_]: Sync: BlockDagStorage: Log](
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
 
@@ -385,9 +385,9 @@ object Validate {
     * B's creator justification is the genesis block.
     */
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def sequenceNumber[F[_]: Monad: Log](
+  def sequenceNumber[F[_]: Monad: BlockDagStorage: Log](
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
@@ -473,7 +473,7 @@ object Validate {
   def parents[F[_]: Sync: Log: BlockStore: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] =
     // TODO reimplement this under multiparent or remove completely?
     BlockStatus.valid.asRight[BlockError].pure
@@ -517,9 +517,9 @@ object Validate {
     * Hence, we ignore justification regressions involving the block's sender and
     * let checkEquivocations handle it instead.
     */
-  def justificationRegressions[F[_]: Sync: Log](
+  def justificationRegressions[F[_]: Sync: BlockDagStorage: Log](
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] =
     s.dag.latestMessage(b.sender).flatMap {
       // `b` is first message from sender of `b`, so regression is not possible
@@ -576,9 +576,9 @@ object Validate {
     * If block contains an invalid justification block B and the creator of B is still bonded,
     * return a RejectableBlock. Otherwise return an IncludeableBlock.
     */
-  def neglectedInvalidBlock[F[_]: Applicative](
+  def neglectedInvalidBlock[F[_]: Applicative: BlockDagStorage](
       block: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
 

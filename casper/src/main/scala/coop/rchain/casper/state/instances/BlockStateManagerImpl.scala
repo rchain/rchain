@@ -3,6 +3,7 @@ package coop.rchain.casper.state.instances
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.state.BlockStateManager
 
@@ -21,7 +22,7 @@ object BlockStateManagerImpl {
     override def isEmpty: F[Boolean] =
       for {
         dag       <- blockDagStorage.getRepresentation
-        firstHash <- dag.topoSort(0, 1L.some)
+        firstHash = dag.topoSort(0, 1L.some)
       } yield firstHash.isEmpty
   }
 }

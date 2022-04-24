@@ -1,13 +1,12 @@
 package coop.rchain.casper.util
 
-import cats.{Eval, Monad}
+import cats.Monad
 import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.models.BlockMetadata
-import coop.rchain.shared.StreamT
+import coop.rchain.blockstorage.syntax._
 
-import scala.collection.immutable.{BitSet, HashSet, Queue, SortedSet}
+import scala.collection.immutable.{BitSet, HashSet, SortedSet}
 import scala.collection.mutable
 
 object DagOperations {
@@ -23,9 +22,9 @@ object DagOperations {
     * @return A map from uncommon ancestor blocks to BitSets, where a block B is
     *         and ancestor of starting block with index i if B's BitSet contains i.
     */
-  def uncommonAncestors[F[_]: Monad](
+  def uncommonAncestors[F[_]: Monad: BlockDagStorage](
       blocks: IndexedSeq[BlockMetadata],
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation
   ): F[Map[BlockMetadata, BitSet]] = {
     val commonSet = BitSet(0 until blocks.length: _*)
     def parents(b: BlockMetadata): F[List[BlockMetadata]] =
@@ -75,13 +74,13 @@ object DagOperations {
     * We compute by finding the first block that is the "lowest" (has highest blocknum) block common
     * for both blocks' ancestors.
     */
-  def lowestUniversalCommonAncestorF[F[_]: Monad](
+  def lowestUniversalCommonAncestorF[F[_]: Monad: BlockDagStorage](
       b1: BlockMetadata,
       b2: BlockMetadata,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation
   ): F[BlockMetadata] = {
     def getParents(p: BlockMetadata): F[Set[BlockMetadata]] =
-      p.parents.traverse(dag.lookup).map(_.toSet.flatten)
+      p.parents.traverse(dag.lookup(_)).map(_.toSet.flatten)
 
     def extractParentsFromHighestNumBlock(
         blocks: SortedSet[BlockMetadata]

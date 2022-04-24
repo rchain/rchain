@@ -1,10 +1,11 @@
 package coop.rchain.casper.batch2
 
 import cats.Monad
+import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.dag.{DagRepresentation, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -48,8 +49,9 @@ class ValidateTest
   private val SHARD_ID                = "root-shard"
   implicit val span: Span[Task]       = NoopSpan[Task]()
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]()
+  implicit val s                      = Sync[Task]
 
-  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+  def mkCasperSnapshot[F[_]](dag: DagRepresentation) =
     CasperSnapshot(
       dag,
       ByteString.EMPTY,

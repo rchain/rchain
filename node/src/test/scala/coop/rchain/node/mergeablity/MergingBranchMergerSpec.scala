@@ -408,6 +408,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             dagStore: BlockDagStorage[Task]
         ): Task[BlockMessage] = {
 
+          implicit val bds     = dagStore
           val baseState        = baseBlock.body.state.postStateHash
           val seqNum           = baseBlock.seqNum + 1
           val mergingBlocksNum = (baseBlock.seqNum * 2 + 1).toLong

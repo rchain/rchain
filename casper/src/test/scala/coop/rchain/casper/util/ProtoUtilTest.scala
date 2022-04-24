@@ -37,6 +37,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
   "unseenBlockHashes" should "return empty for a single block dag" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       import node.blockStore
+      import node.blockDagStorage
       for {
         signedBlock <- ConstructDeploy.basicDeployData[Effect](
                         0,
@@ -51,9 +52,9 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
 
   it should "return all but the first block when passed the first block in a chain" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      import node._
-      implicit val timeEff = new LogicalTime[Effect]
-      val shardId          = this.genesis.genesisBlock.shardId
+      import node.blockDagStorage
+      import node.blockStore
+      val shardId = this.genesis.genesisBlock.shardId
 
       for {
         block0 <- ConstructDeploy

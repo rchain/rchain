@@ -1,5 +1,6 @@
 package coop.rchain.casper.engine
 
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{NoOpsCasperEffect, RSpaceStateManagerTestImpl}
@@ -13,12 +14,14 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
+import coop.rchain.blockstorage.syntax._
 
 import scala.concurrent.duration.FiniteDuration
 
 class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
 
-  val fixture = Setup()
+  val fixture    = Setup()
+  implicit val s = Sync[Task]
   import fixture._
 
   override def beforeEach(): Unit =

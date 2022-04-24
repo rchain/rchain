@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
@@ -30,15 +30,15 @@ class BlockProcessor[F[_]: Concurrent](
     requestMissingDependencies: Set[BlockHash] => F[Unit],
     ackProcessed: (BlockMessage) => F[Unit],
     // Casper state to validate block against
-    getCasperSnapshot: Casper[F] => F[CasperSnapshot[F]],
-    validateBlock: (Casper[F], CasperSnapshot[F], BlockMessage) => F[ValidBlockProcessing],
-    effValidBlock: (Casper[F], BlockMessage) => F[BlockDagRepresentation[F]],
+    getCasperSnapshot: Casper[F] => F[CasperSnapshot],
+    validateBlock: (Casper[F], CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
+    effValidBlock: (Casper[F], BlockMessage) => F[DagRepresentation],
     effInvalidVBlock: (
         Casper[F],
         BlockMessage,
         InvalidBlock,
-        CasperSnapshot[F]
-    ) => F[BlockDagRepresentation[F]]
+        CasperSnapshot
+    ) => F[DagRepresentation]
 ) {
 
   // check if block should be processed
@@ -91,7 +91,7 @@ class BlockProcessor[F[_]: Concurrent](
       b: BlockMessage,
       // this option is required for tests, as sometimes block without parents available are added, so
       // CasperSnapshot cannot be constructed
-      s: Option[CasperSnapshot[F]] = None
+      s: Option[CasperSnapshot] = None
   ): F[ValidBlockProcessing] =
     for {
       cs     <- if (s.isDefined) s.get.pure[F] else getCasperSnapshot(c)
@@ -175,13 +175,13 @@ object BlockProcessor {
       )
     }
 
-    val validateBlock = (c: Casper[F], s: CasperSnapshot[F], b: BlockMessage) => c.validate(b, s)
+    val validateBlock = (c: Casper[F], s: CasperSnapshot, b: BlockMessage) => c.validate(b, s)
 
     def ackProcessed =
       (b: BlockMessage) => BlockRetriever[F].ackInCasper(b.blockHash)
 
     val effectsForInvalidBlock =
-      (c: Casper[F], b: BlockMessage, r: InvalidBlock, s: CasperSnapshot[F]) =>
+      (c: Casper[F], b: BlockMessage, r: InvalidBlock, s: CasperSnapshot) =>
         for {
           r <- c.handleInvalidBlock(b, r, s.dag)
           _ <- CommUtil[F].sendBlockHash(b.blockHash, b.sender)

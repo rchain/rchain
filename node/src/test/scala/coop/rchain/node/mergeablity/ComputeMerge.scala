@@ -157,14 +157,17 @@ trait ComputeMerge {
                     s"${rejectRight}, ${deployIds}, ${rightDeployIds}, ${leftDeployIds}"
                 )
             }
-            mergedState <- DagMerger.merge[F](
-                            dag,
-                            bBlock.blockHash,
-                            baseCheckpoint.root,
-                            indices(_).deployChains.pure[F],
-                            historyRepo,
-                            rejectAlg
-                          )
+            mergedState <- {
+              implicit val bds = dagStore
+              DagMerger.merge[F](
+                dag,
+                bBlock.blockHash,
+                baseCheckpoint.root,
+                indices(_).deployChains.pure[F],
+                historyRepo,
+                rejectAlg
+              )
+            }
             result <- checkFunction(runtime, historyRepo, mergedState)
           } yield result
       }

@@ -136,13 +136,10 @@ object BlockMetadataStore {
     def heightMap: F[SortedMap[Long, Set[BlockHash]]] =
       dagState.get.map(_.heightMap)
 
-    def lastFinalizedBlock(implicit sync: Sync[F]): F[BlockHash] = {
-      val errMsg =
-        "DagState does not contain lastFinalizedBlock. Are you calling this on empty BlockDagStorage? Otherwise there is a bug."
-      dagState.get.flatMap(_.lastFinalizedBlock.liftTo[F](new Exception(errMsg)).map {
-        case (hash, _) => hash
-      })
-    }
+    // This is Option because method is called on BlockDagStorage initialization which is before
+    // the first finalized block (genesis) is inserted.
+    def lastFinalizedBlock(implicit sync: Sync[F]): F[Option[BlockHash]] =
+      dagState.get.map(_.lastFinalizedBlock.map(_._1))
 
     def finalizedBlockSet: F[Set[BlockHash]] = dagState.get.map(_.finalizedBlockSet)
   }

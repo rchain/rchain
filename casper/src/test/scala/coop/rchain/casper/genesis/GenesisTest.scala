@@ -5,7 +5,7 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
@@ -34,7 +34,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = NoopSpan[Task]()
 
-  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+  def mkCasperSnapshot(dag: DagRepresentation) =
     CasperSnapshot(
       dag,
       ByteString.EMPTY,

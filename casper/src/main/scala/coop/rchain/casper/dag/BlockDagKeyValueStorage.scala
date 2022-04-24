@@ -1,14 +1,14 @@
 package coop.rchain.casper.dag
 
-import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.codecs._
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, BlockMetadataStore}
+import coop.rchain.blockstorage.dag.{BlockDagStorage, BlockMetadataStore, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
@@ -17,15 +17,13 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
-import scala.collection.immutable.SortedMap
-
 final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
+    representationState: Ref[F, DagRepresentation],
     lock: Semaphore[F],
     latestMessagesIndex: KeyValueTypedStore[F, Validator, BlockHash],
     blockMetadataIndex: BlockMetadataStore[F],
@@ -34,116 +32,13 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagKeyValueStorage.getClass)
 
-  private case class KeyValueDagRepresentation(
-      dagSet: Set[BlockHash],
-      latestMessagesMap: Map[Validator, BlockHash],
-      childMap: Map[BlockHash, Set[BlockHash]],
-      heightMap: SortedMap[Long, Set[BlockHash]],
-      invalidBlocksSet: Set[BlockMetadata],
-      lastFinalizedBlockHash: BlockHash,
-      finalizedBlocksSet: Set[BlockHash]
-  ) extends BlockDagRepresentation[F] {
-
-    def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      if (dagSet.contains(blockHash)) blockMetadataIndex.get(blockHash)
-      else none[BlockMetadata].pure[F]
-
-    def contains(blockHash: BlockHash): F[Boolean] =
-      (blockHash.size == BlockHash.Length && dagSet.contains(blockHash)).pure[F]
-
-    def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      childMap.get(blockHash).pure[F]
-
-    def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
-      latestMessagesMap.get(validator).pure[F]
-
-    def latestMessageHashes: F[Map[Validator, BlockHash]] = latestMessagesMap.pure[F]
-
-    def invalidBlocks: F[Set[BlockMetadata]] = invalidBlocksSet.pure[F]
-
-    override def lastFinalizedBlock: BlockHash = lastFinalizedBlockHash
-
-    // latestBlockNumber, topoSort and lookupByDeployId are only used in BlockAPI.
-    // Do they need to be part of the DAG current state or they can be moved to DAG storage directly?
-
-    private def getMaxHeight = if (heightMap.nonEmpty) heightMap.last._1 + 1L else 0L
-
-    def latestBlockNumber: F[Long] =
-      getMaxHeight.pure[F]
-
-    def isFinalized(blockHash: BlockHash): F[Boolean] =
-      finalizedBlocksSet.contains(blockHash).pure[F]
-
-    override def find(truncatedHash: String): F[Option[BlockHash]] = Sync[F].delay {
-      if (truncatedHash.length % 2 == 0) {
-        val truncatedByteString = truncatedHash.unsafeHexToByteString
-        dagSet.find(hash => hash.startsWith(truncatedByteString))
-      } else {
-        // if truncatedHash is odd length string we cannot convert it to ByteString with 8 bit resolution
-        // because each symbol has 4 bit resolution. Need to make a string of even length by removing the last symbol,
-        // then find all the matching hashes and choose one that matches the full truncatedHash string
-        val truncatedByteString = truncatedHash.dropRight(1).unsafeHexToByteString
-        dagSet
-          .filter(_.startsWith(truncatedByteString))
-          .find(_.toHexString.startsWith(truncatedHash))
-      }
-    }
-
-    override def getHeightMap: F[SortedMap[Long, Set[BlockHash]]] = heightMap.pure[F]
-
-    def topoSort(
-        startBlockNumber: Long,
-        maybeEndBlockNumber: Option[Long]
-    ): F[Vector[Vector[BlockHash]]] = {
-      val maxNumber   = getMaxHeight
-      val startNumber = Math.max(0, startBlockNumber)
-      val endNumber   = maybeEndBlockNumber.map(Math.min(maxNumber, _)).getOrElse(maxNumber)
-      if (startNumber >= 0 && startNumber <= endNumber) {
-        Sync[F].delay(
-          heightMap
-            .filterKeys(h => h >= startNumber && h <= endNumber)
-            .map { case (_, v) => v.toVector }
-            .toVector
-        )
-      } else {
-        Sync[F].raiseError(
-          TopoSortFragmentParameterError(startNumber, endNumber)
-        )
-      }
-    }
-
-    def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
-      deployIndex.get1(deployId)
-  }
-
-  private def representation: F[BlockDagRepresentation[F]] =
-    for {
-      // Take current DAG state / view of the DAG
-      latestMessages     <- latestMessagesIndex.toMap
-      dagSet             <- blockMetadataIndex.dagSet
-      childMap           <- blockMetadataIndex.childMapData
-      heightMap          <- blockMetadataIndex.heightMap
-      invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
-      lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
-      finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
-    } yield KeyValueDagRepresentation(
-      dagSet,
-      latestMessages,
-      childMap,
-      heightMap,
-      invalidBlocks,
-      lastFinalizedBlock,
-      finalizedBlocksSet
-    )
-
-  def getRepresentation: F[BlockDagRepresentation[F]] =
-    lock.withPermit(representation)
+  def getRepresentation: F[DagRepresentation] = representationState.get
 
   def insert(
       block: BlockMessage,
       invalid: Boolean,
       approved: Boolean
-  ): F[BlockDagRepresentation[F]] = {
+  ): F[DagRepresentation] = {
     import cats.instances.list._
     import cats.instances.option._
     import coop.rchain.catscontrib.Catscontrib.ToBooleanF
@@ -235,7 +130,31 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     lock.withPermit(
       blockMetadataIndex
         .contains(block.blockHash)
-        .ifM(logAlreadyStored, doInsert) >> representation
+        .ifM(logAlreadyStored, doInsert) >> {
+        // TODO BlockDagStore inset method should be rewritten to only save to disk,
+        //  all logic should be done on the state.
+        //  This update of the state as a result of insert method should be removed.
+        val representation =
+          for {
+            // Take current DAG state / view of the DAG
+            latestMessages     <- latestMessagesIndex.toMap
+            dagSet             <- blockMetadataIndex.dagSet
+            childMap           <- blockMetadataIndex.childMapData
+            heightMap          <- blockMetadataIndex.heightMap
+            invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
+            lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
+            finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
+          } yield DagRepresentation(
+            dagSet,
+            latestMessages,
+            childMap,
+            heightMap,
+            invalidBlocks.map(_.blockHash),
+            lastFinalizedBlock,
+            finalizedBlocksSet
+          )
+        representation.flatTap(representationState.set)
+      }
     )
   }
 
@@ -243,22 +162,31 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   def recordDirectlyFinalized(
       directlyFinalizedHash: BlockHash,
       finalizationEffect: Set[BlockHash] => F[Unit]
-  ): F[Unit] =
+  ): F[Unit] = {
+    implicit val bds = this
     // Lock here is a safeguard for persisting changes in BlockMetadataIndex which can happen concurrently when
     // blocks are replayed in parallel
     lock.withPermit(
       for {
-        dag    <- representation
+        dag    <- getRepresentation
         errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
-        _      <- dag.contains(directlyFinalizedHash).ifM(().pure, new Exception(errMsg).raiseError)
+        _      <- new Exception(errMsg).raiseError.unlessA(dag.contains(directlyFinalizedHash))
         // all non finalized ancestors should be finalized as well (indirectly)
-        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).not)
+        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).pure.not)
         // invoke effects
         _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
         // persist finalization
         _ <- blockMetadataIndex.recordFinalized(directlyFinalizedHash, indirectlyFinalized)
       } yield ()
     )
+  }
+
+  override def lookup(
+      blockHash: BlockHash
+  ): F[Option[BlockMetadata]] = blockMetadataIndex.get(blockHash)
+
+  override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
+    deployIndex.get1(deployId)
 }
 
 object BlockDagKeyValueStorage {
@@ -315,7 +243,30 @@ object BlockDagKeyValueStorage {
     for {
       lock   <- MetricsSemaphore.single[F]
       stores <- createStores(kvm)
+      initST <- {
+        import stores._
+        for {
+          // Take current DAG state / view of the DAG
+          latestMessages     <- latestMessages.toMap
+          dagSet             <- metadata.dagSet
+          childMap           <- metadata.childMapData
+          heightMap          <- metadata.heightMap
+          invalidBlocks      <- invalidBlocks.toMap.map(_.toSeq.map(_._2).toSet)
+          lastFinalizedBlock <- metadata.lastFinalizedBlock
+          finalizedBlocksSet <- metadata.finalizedBlockSet
+        } yield DagRepresentation(
+          dagSet,
+          latestMessages,
+          childMap,
+          heightMap,
+          invalidBlocks.map(_.blockHash),
+          lastFinalizedBlock,
+          finalizedBlocksSet
+        )
+      }
+      stRef <- Ref.of[F, DagRepresentation](initST)
     } yield new BlockDagKeyValueStorage[F](
+      stRef,
       lock,
       stores.latestMessages,
       stores.metadata,

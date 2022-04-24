@@ -25,37 +25,36 @@ import scala.collection.immutable.HashMap
 class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   /** declarations of input functions for proposer */
-  def getCasperSnapshotF[F[_]: Applicative]: Casper[F] => F[CasperSnapshot[F]] =
+  def getCasperSnapshotF[F[_]: Applicative]: Casper[F] => F[CasperSnapshot] =
     _ => Resources.mkDummyCasperSnapshot
 
   def alwaysNotActiveF[F[_]: Applicative]
-      : (CasperSnapshot[F], ValidatorIdentity) => CheckProposeConstraintsResult =
-    (_: CasperSnapshot[F], _: ValidatorIdentity) => CheckProposeConstraintsResult.notBonded
+      : (CasperSnapshot, ValidatorIdentity) => CheckProposeConstraintsResult =
+    (_: CasperSnapshot, _: ValidatorIdentity) => CheckProposeConstraintsResult.notBonded
 
   def alwaysActiveF[F[_]: Applicative]
-      : (CasperSnapshot[F], ValidatorIdentity) => CheckProposeConstraintsResult =
-    (_: CasperSnapshot[F], _: ValidatorIdentity) => CheckProposeConstraintsResult.success
+      : (CasperSnapshot, ValidatorIdentity) => CheckProposeConstraintsResult =
+    (_: CasperSnapshot, _: ValidatorIdentity) => CheckProposeConstraintsResult.success
 
   def alwaysNotEnoughBlocksF[F[_]: Applicative]
-      : (BlockMessage, CasperSnapshot[F]) => F[CheckProposeConstraintsResult] =
-    (_: BlockMessage, _: CasperSnapshot[F]) =>
-      CheckProposeConstraintsResult.notEnoughNewBlock.pure[F]
+      : (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult] =
+    (_: BlockMessage, _: CasperSnapshot) => CheckProposeConstraintsResult.notEnoughNewBlock.pure[F]
 
   def alwaysTooFarAheadF[F[_]: Applicative]
-      : (BlockMessage, CasperSnapshot[F]) => F[CheckProposeConstraintsResult] =
-    (_: BlockMessage, _: CasperSnapshot[F]) =>
+      : (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult] =
+    (_: BlockMessage, _: CasperSnapshot) =>
       CheckProposeConstraintsResult.tooFarAheadOfLastFinalized.pure[F]
 
   def okProposeConstraint[F[_]: Applicative]
-      : (BlockMessage, CasperSnapshot[F]) => F[CheckProposeConstraintsResult] =
-    (_: BlockMessage, _: CasperSnapshot[F]) => CheckProposeConstraintsResult.success.pure[F]
+      : (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult] =
+    (_: BlockMessage, _: CasperSnapshot) => CheckProposeConstraintsResult.success.pure[F]
 
   def alwaysSuccesfullValidation[F[_]: Applicative] =
-    (_: Casper[F], _: CasperSnapshot[F], _: BlockMessage) =>
+    (_: Casper[F], _: CasperSnapshot, _: BlockMessage) =>
       BlockStatus.valid.asRight[BlockError].pure[F]
 
   def alwaysUnsuccesfullValidation[F[_]: Applicative] =
-    (_: Casper[F], _: CasperSnapshot[F], _: BlockMessage) =>
+    (_: Casper[F], _: CasperSnapshot, _: BlockMessage) =>
       BlockStatus.invalidFormat.asLeft[ValidBlock].pure[F]
 
   // var to estimate result of executing of propose effect
@@ -65,7 +64,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
     (_: Casper[F], _: BlockMessage) => (proposeEffectVar = v).pure[F]
 
   def createBlockF[F[_]: Applicative] =
-    (_: CasperSnapshot[F], _: ValidatorIdentity) =>
+    (_: CasperSnapshot, _: ValidatorIdentity) =>
       BlockCreatorResult.created(getRandomBlock()).pure[F]
 
   val dummyValidatorIdentity = ValidatorIdentity(defaultValidatorSks(1))
@@ -87,13 +86,13 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
             val casper =
               NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
             val p = new Proposer[Task](
-              checkActiveValidator = alwaysNotActiveF,
+              checkActiveValidator = alwaysNotActiveF[Task],
               // other params are permissive
-              checkEnoughBaseStake = okProposeConstraint,
-              getCasperSnapshot = getCasperSnapshotF,
-              checkFinalizedHeight = okProposeConstraint,
-              createBlock = createBlockF,
-              validateBlock = alwaysSuccesfullValidation,
+              checkEnoughBaseStake = okProposeConstraint[Task],
+              getCasperSnapshot = getCasperSnapshotF[Task],
+              checkFinalizedHeight = okProposeConstraint[Task],
+              createBlock = createBlockF[Task],
+              validateBlock = alwaysSuccesfullValidation[Task],
               proposeEffect = proposeEffect(0),
               validator = dummyValidatorIdentity
             )
@@ -117,13 +116,13 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
               NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
 
             val p = new Proposer[Task](
-              checkEnoughBaseStake = alwaysNotEnoughBlocksF, // synchrony constraint is not met
+              checkEnoughBaseStake = alwaysNotEnoughBlocksF[Task], // synchrony constraint is not met
               // other params are permissive
-              getCasperSnapshot = getCasperSnapshotF,
-              checkActiveValidator = alwaysActiveF,
-              checkFinalizedHeight = okProposeConstraint,
-              createBlock = createBlockF,
-              validateBlock = alwaysSuccesfullValidation,
+              getCasperSnapshot = getCasperSnapshotF[Task],
+              checkActiveValidator = alwaysActiveF[Task],
+              checkFinalizedHeight = okProposeConstraint[Task],
+              createBlock = createBlockF[Task],
+              validateBlock = alwaysSuccesfullValidation[Task],
               proposeEffect = proposeEffect(0),
               validator = dummyValidatorIdentity
             )
@@ -146,13 +145,13 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
             val casper =
               NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
             val p = new Proposer[Task](
-              checkFinalizedHeight = alwaysTooFarAheadF,
+              checkFinalizedHeight = alwaysTooFarAheadF[Task],
               // other params are permissive
-              checkActiveValidator = alwaysActiveF,
-              checkEnoughBaseStake = okProposeConstraint,
-              getCasperSnapshot = getCasperSnapshotF,
-              createBlock = createBlockF,
-              validateBlock = alwaysSuccesfullValidation,
+              checkActiveValidator = alwaysActiveF[Task],
+              checkEnoughBaseStake = okProposeConstraint[Task],
+              getCasperSnapshot = getCasperSnapshotF[Task],
+              createBlock = createBlockF[Task],
+              validateBlock = alwaysSuccesfullValidation[Task],
               proposeEffect = proposeEffect(0),
               validator = dummyValidatorIdentity
             )
@@ -174,13 +173,13 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
               val casper =
                 NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
               val p = new Proposer[Task](
-                validateBlock = alwaysUnsuccesfullValidation,
+                validateBlock = alwaysUnsuccesfullValidation[Task],
                 // other params are permissive
-                checkFinalizedHeight = okProposeConstraint,
-                checkActiveValidator = alwaysActiveF,
-                checkEnoughBaseStake = okProposeConstraint,
-                getCasperSnapshot = getCasperSnapshotF,
-                createBlock = createBlockF,
+                checkFinalizedHeight = okProposeConstraint[Task],
+                checkActiveValidator = alwaysActiveF[Task],
+                checkEnoughBaseStake = okProposeConstraint[Task],
+                getCasperSnapshot = getCasperSnapshotF[Task],
+                createBlock = createBlockF[Task],
                 proposeEffect = proposeEffect(0),
                 validator = dummyValidatorIdentity
               )
@@ -204,12 +203,12 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
             val casper =
               NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
             val p = new Proposer[Task](
-              validateBlock = alwaysSuccesfullValidation,
-              checkFinalizedHeight = okProposeConstraint,
-              checkActiveValidator = alwaysActiveF,
-              checkEnoughBaseStake = okProposeConstraint,
-              getCasperSnapshot = getCasperSnapshotF,
-              createBlock = createBlockF,
+              validateBlock = alwaysSuccesfullValidation[Task],
+              checkFinalizedHeight = okProposeConstraint[Task],
+              checkActiveValidator = alwaysActiveF[Task],
+              checkEnoughBaseStake = okProposeConstraint[Task],
+              getCasperSnapshot = getCasperSnapshotF[Task],
+              createBlock = createBlockF[Task],
               proposeEffect = proposeEffect(10),
               validator = dummyValidatorIdentity
             )

@@ -51,7 +51,7 @@ object Running {
     * To mitigate this issue we can update fork choice tips if current fork-choice tip has old timestamp,
     * which means node does not propose new blocks and no new blocks were received recently.
     */
-  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: EngineCell](
+  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: BlockDagStorage: EngineCell](
       delayThreshold: FiniteDuration
   ): F[Unit] =
     for {
@@ -183,7 +183,7 @@ object Running {
     * Peer asks for fork-choice tip
     */
   // TODO name for this message is misleading, as its a request for all tips, not just fork choice.
-  def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: Log](
+  def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: BlockDagStorage: Log](
       peer: PeerNode
   )(casper: MultiParentCasper[F]): F[Unit] = {
     val logRequest = Log[F].info(s"Received ForkChoiceTipRequest from ${peer.endpoint.host}")
@@ -315,7 +315,7 @@ class Running[F[_]
       handleForkChoiceTipRequest(peer)(casper)
     case abr: ApprovedBlockRequest =>
       for {
-        lfBlockHash <- BlockDagStorage[F].getRepresentation.map(_.lastFinalizedBlock)
+        lfBlockHash <- BlockDagStorage[F].getRepresentation.flatMap(_.lastFinalizedBlockUnsafe)
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {
