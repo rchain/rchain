@@ -62,7 +62,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     * @param data  The par objects holding the processes being sent.
     * @param persistent  True if the write should remain in the tuplespace indefinitely.
     */
-  private def produce(
+  private[rholang] def produce(
       chan: Par,
       data: ListParWithRandom,
       persistent: Boolean
