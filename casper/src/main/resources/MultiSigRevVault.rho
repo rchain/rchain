@@ -265,7 +265,7 @@ in {
     // No internal state to return.
     // Method required for updates.
     contract @(bundle+{*MultiSigRevVault}, "extractState")(ret) = {
-      ret!([])
+      ret!({"multiSigVaultUnf": *_multiSigRevVault})
     }
   } |
   // Insert location channel into the registry location map
