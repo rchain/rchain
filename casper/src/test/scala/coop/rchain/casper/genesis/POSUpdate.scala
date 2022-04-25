@@ -99,25 +99,19 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
 
     val transferAmount = 100000
 
+    val pub1RevAddr = RevAddress.fromPublicKey(pub1).get.toBase58
+    val pub2RevAddr = RevAddress.fromPublicKey(pub2).get.toBase58
+
     val transferTerm =
       s"""
          #new rl(`rho:registry:lookup`), RevVaultCh, vaultCh, toVaultCh, deployerId(`rho:rchain:deployerId`), stdout(`rho:io:stdout`),revVaultKeyCh, resultCh in {
          #  rl!(`rho:rchain:revVault`, *RevVaultCh) |
          #  for (@(_, RevVault) <- RevVaultCh) {
-         #    @RevVault!("findOrCreate", "${RevAddress
-           .fromPublicKey(pub1)
-           .get
-           .toBase58}", *vaultCh) |
-         #    @RevVault!("findOrCreate", "${RevAddress
-           .fromPublicKey(pub2)
-           .get
-           .toBase58}", *toVaultCh) |
+         #    @RevVault!("findOrCreate", "${pub1RevAddr}", *vaultCh) |
+         #    @RevVault!("findOrCreate", "${pub2RevAddr}", *toVaultCh) |
          #    @RevVault!("deployerAuthKey", *deployerId, *revVaultKeyCh) |
          #    for (@(true, vault) <- vaultCh; key <- revVaultKeyCh; @(true, toVault) <- toVaultCh) {
-         #      @vault!("transfer", "${RevAddress
-           .fromPublicKey(pub2)
-           .get
-           .toBase58}", $transferAmount, *key, *resultCh) |
+         #      @vault!("transfer", "${pub2RevAddr}", $transferAmount, *key, *resultCh) |
          #      for (@res <- resultCh) { stdout!(("outcome", res)) }
          #    }
          #  }
@@ -127,10 +121,7 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
       s"""new return, rl(`rho:registry:lookup`), RevVaultCh, vaultCh, balanceCh in {
          #  rl!(`rho:rchain:revVault`, *RevVaultCh) |
          #  for (@(_, RevVault) <- RevVaultCh) {
-         #    @RevVault!("findOrCreate", "${RevAddress
-           .fromPublicKey(pub2)
-           .get
-           .toBase58}", *vaultCh) |
+         #    @RevVault!("findOrCreate", "${pub2RevAddr}", *vaultCh) |
          #    for (@(true, vault) <- vaultCh) {
          #      @vault!("balance", *balanceCh) |
          #      for (@balance <- balanceCh) {
@@ -144,24 +135,27 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
       val rm = node.runtimeManager
       for {
         b2      <- node.addBlock(proposeDeploy)
-        _       = println(b2.body.deploys.head.cost)
-        _       = println(b2.body.deploys.head.systemDeployError)
-        _       = println(b2.body.deploys.head.isFailed)
+        _       = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _       = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _       = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
         b3      <- node.addBlock(agreeDeploy)
-        _       = println(b3.body.deploys.head.cost)
-        _       = println(b3.body.deploys.head.systemDeployError)
-        _       = println(b3.body.deploys.head.isFailed)
+        _       = assert(b3.body.deploys.head.cost.cost > 0L, s"$b3 deploy cost is 0L")
+        _       = assert(b3.body.deploys.head.systemDeployError.isEmpty, s"$b3 system deploy failed")
+        _       = assert(!b3.body.deploys.head.isFailed, s"$b3 deploy failed")
         b4      <- node.addBlock(updateDeploy)
-        _       = println(b4.body.deploys.head.cost)
-        _       = println(b4.body.deploys.head.systemDeployError)
-        _       = println(b4.body.deploys.head.isFailed)
+        _       = assert(b4.body.deploys.head.cost.cost > 0L, s"$b4 deploy cost is 0L")
+        _       = assert(b4.body.deploys.head.systemDeployError.isEmpty, s"$b4 system deploy failed")
+        _       = assert(!b4.body.deploys.head.isFailed, s"$b4 deploy failed")
         ret     <- rm.playExploratoryDeploy(getBalanceTerm, b4.body.state.postStateHash)
         balance = ret.head.exprs.head.getGInt
         b5 <- node
-               .addBlock(ConstructDeploy.sourceDeployNow(transferTerm, sec = p1, shardId = shardId))
-        _    = println(b5.body.deploys.head.cost)
-        _    = println(b5.body.deploys.head.systemDeployError)
-        _    = println(b5.body.deploys.head.isFailed)
+               .addBlock(
+                 ConstructDeploy
+                   .sourceDeployNow(transferTerm, sec = p1, shardId = shardId, phloLimit = 900000L)
+               )
+        _    = assert(b5.body.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
+        _    = assert(b5.body.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
+        _    = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
         ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b5.body.state.postStateHash)
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
       } yield ()
