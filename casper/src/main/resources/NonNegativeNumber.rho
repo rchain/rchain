@@ -70,7 +70,7 @@ in {
   // No internal state to return.
   // Method required for updates.
   contract @(bundle+{*NonNegativeNumber}, "extractState")(ret) = {
-    ret!([])
+    ret!({"mergeableTag": *MergeableTag})
   } |
   // Insert the contract location in the registry location map
   rb!(`rho:lang:nonNegativeNumber`, bundle+{*NonNegativeNumber}, *NonNegativeNumberDispatcher) |
