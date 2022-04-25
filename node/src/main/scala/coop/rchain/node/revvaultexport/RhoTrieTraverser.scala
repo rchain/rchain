@@ -9,6 +9,7 @@ import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.storage.serializePar
 import coop.rchain.rholang.interpreter.{RhoRuntime, RhoType}
 import coop.rchain.shared.Serialize
@@ -73,14 +74,11 @@ object RhoTrieTraverser {
   private def nodeMapStore(mapWithNyb: Par) =
     Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenUnforgeable))))))
 
-  private val storeTokenUnforgeable = {
-    val rand =
-      Tools.unforgeableNameRng(StandardDeploys.registryPubKey, StandardDeploys.registryTimestamp)
-    (0 to 5).foreach(_ => rand.next())
-    val newRand = rand.splitShort(6)
-    (0 to 6).foreach(_ => newRand.next())
-    val target = newRand.next()
-    Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target))))))
+  private val storeTokenUnforgeable: Par = {
+    import coop.rchain.models.rholang.implicits._
+    GPrivate(
+      "ccd27cf1166fb851019be60c4d756bc53c40f8907ab22a4978864966a528930a".unsafeHexToByteString
+    )
   }
 
   private def TreeHashMapGetter[F[_]: Sync](
