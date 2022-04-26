@@ -41,7 +41,6 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
   def getValidator: F[Option[ValidatorIdentity]]                      = none[ValidatorIdentity].pure[F]
-  def getVersion: F[Long]                                             = 1L.pure[F]
   def getDeployLifespan: F[Int]                                       = Int.MaxValue.pure[F]
   def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
   def addBlockFromStore(bh: BlockHash, allowFromStore: Boolean): F[ValidBlockProcessing] =

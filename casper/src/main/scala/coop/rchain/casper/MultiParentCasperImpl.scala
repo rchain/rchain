@@ -44,12 +44,7 @@ class MultiParentCasperImpl[F[_]
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  // TODO: Extract hardcoded version from shard config
-  private val version = 1L
-
   def getValidator: F[Option[ValidatorIdentity]] = validatorId.pure[F]
-
-  def getVersion: F[Long] = version.pure[F]
 
   /**
     * Check if there are blocks in CasperBuffer available with all dependencies met.

@@ -53,7 +53,6 @@ trait Casper[F[_]] {
   def bufferContains(hash: BlockHash): F[Boolean]
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def getValidator: F[Option[ValidatorIdentity]]
-  def getVersion: F[Long]
 
   def validate(b: BlockMessage, s: CasperSnapshot): F[Either[BlockError, ValidBlock]]
   def handleValidBlock(block: BlockMessage): F[DagRepresentation]
