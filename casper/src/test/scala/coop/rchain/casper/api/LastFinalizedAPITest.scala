@@ -80,7 +80,7 @@ class LastFinalizedAPITest
           b6 <- n1.propagateBlock(produceDeploys(5))(nodes: _*)
           b7 <- n2.propagateBlock(produceDeploys(6))(nodes: _*)
 
-          lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock
+          lastFinalizedBlock <- n1.lastFinalizedBlock
           _                  = lastFinalizedBlock shouldBe b5
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
@@ -133,7 +133,7 @@ class LastFinalizedAPITest
           b6 <- n3.propagateBlock(produceDeploys(5))(nodes: _*)
           b7 <- n3.propagateBlock(produceDeploys(6))(nodes: _*)
 
-          lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock
+          lastFinalizedBlock <- n1.lastFinalizedBlock
           _                  = lastFinalizedBlock shouldBe b3
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)

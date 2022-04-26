@@ -52,16 +52,13 @@ class Proposer[F[_]: Concurrent: Log: Span](
         ValidatorIdentity
     ) => F[BlockCreatorResult],
     validateBlock: (CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
-    proposeEffect: (Casper[F], BlockMessage) => F[Unit],
+    proposeEffect: BlockMessage => F[Unit],
     validator: ValidatorIdentity
 ) {
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "proposer")
   // This is the whole logic of propose
-  private def doPropose(
-      s: CasperSnapshot,
-      casper: Casper[F]
-  ): F[(ProposeResult, Option[BlockMessage])] =
+  private def doPropose(s: CasperSnapshot): F[(ProposeResult, Option[BlockMessage])] =
     Span[F].traceI("do-propose") {
       for {
         // check if node is allowed to propose a block
@@ -78,7 +75,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
                         case Created(b) =>
                           validateBlock(s, b).flatMap {
                             case Right(v) =>
-                              proposeEffect(casper, b) >>
+                              proposeEffect(b) >>
                                 (ProposeResult.success(v), b.some).pure[F]
                             case Left(v) =>
                               Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
@@ -115,7 +112,6 @@ class Proposer[F[_]: Concurrent: Log: Span](
     }
 
   def propose(
-      c: Casper[F],
       isAsync: Boolean,
       proposeIdDef: Deferred[F, ProposerResult]
   ): F[(ProposeResult, Option[BlockMessage])] = {
@@ -131,12 +127,12 @@ class Proposer[F[_]: Concurrent: Log: Span](
                  _       <- proposeIdDef.complete(ProposerResult.started(nextSeq))
 
                  // propose
-                 r <- doPropose(s, c)
+                 r <- doPropose(s)
                } yield r
                else
                  for {
                    // propose
-                   r <- doPropose(s, c)
+                   r <- doPropose(s)
 
                    (result, blockHashOpt) = r
                    proposerResult = blockHashOpt.fold {
@@ -192,11 +188,11 @@ object Proposer {
         validatorIdentity
       )
 
-    val proposeEffect = (c: Casper[F], b: BlockMessage) =>
+    val proposeEffect = (b: BlockMessage) =>
       // store block
       BlockStore[F].put(b) >>
         // save changes to Casper
-        c.handleValidBlock(b) >>
+        MultiParentCasperImpl.handleValidBlock(b) >>
         // inform block retriever about block
         BlockRetriever[F].ackInCasper(b.blockHash) >>
         // broadcast hash to peers

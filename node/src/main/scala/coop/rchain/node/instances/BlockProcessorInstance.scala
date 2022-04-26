@@ -72,7 +72,7 @@ object BlockProcessorInstance {
             )
             .evalMap(
               _ =>
-                blockProcessor.validateWithEffects(c, b) >>= { r =>
+                blockProcessor.validateWithEffects(b) >>= { r =>
                   logResult(r).as(c, b, r)
                 }
             )

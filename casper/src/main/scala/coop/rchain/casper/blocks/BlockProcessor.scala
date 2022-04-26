@@ -34,13 +34,8 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBuffer
     // Casper state to validate block against
     getCasperSnapshot: F[CasperSnapshot],
     validateBlock: (CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
-    effValidBlock: (Casper[F], BlockMessage) => F[DagRepresentation],
-    effInvalidVBlock: (
-        Casper[F],
-        BlockMessage,
-        InvalidBlock,
-        CasperSnapshot
-    ) => F[DagRepresentation]
+    effValidBlock: BlockMessage => F[DagRepresentation],
+    effInvalidVBlock: (BlockMessage, InvalidBlock, CasperSnapshot) => F[DagRepresentation]
 ) {
 
   // check if block should be processed
@@ -86,19 +81,16 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBuffer
     } yield (isReady)
 
   // validate block and invoke all effects required
-  def validateWithEffects(
-      c: Casper[F],
-      b: BlockMessage
-  ): F[ValidBlockProcessing] =
+  def validateWithEffects(b: BlockMessage): F[ValidBlockProcessing] =
     for {
       cs     <- getCasperSnapshot
       status <- validateBlock(cs, b)
       _ <- status
-            .map(s => effValidBlock(c, b))
+            .map(s => effValidBlock(b))
             .leftMap {
               // this is to maintain backward compatibility with casper validate method.
               // as it returns not only InvalidBlock or ValidBlock
-              case i: InvalidBlock => effInvalidVBlock(c, b, i, cs)
+              case i: InvalidBlock => effInvalidVBlock(b, i, cs)
               case _               => cs.dag.pure[F] // this should never happen
             }
             .merge
@@ -177,15 +169,15 @@ object BlockProcessor {
       (b: BlockMessage) => BlockRetriever[F].ackInCasper(b.blockHash)
 
     val effectsForInvalidBlock =
-      (c: Casper[F], b: BlockMessage, r: InvalidBlock, s: CasperSnapshot) =>
+      (b: BlockMessage, r: InvalidBlock, s: CasperSnapshot) =>
         for {
-          r <- c.handleInvalidBlock(b, r, s.dag)
+          r <- MultiParentCasperImpl.handleInvalidBlock(b, r, s.dag)
           _ <- CommUtil[F].sendBlockHash(b.blockHash, b.sender)
         } yield r
 
-    val effectsForValidBlock = (c: Casper[F], b: BlockMessage) =>
+    val effectsForValidBlock = (b: BlockMessage) =>
       for {
-        r <- c.handleValidBlock(b)
+        r <- MultiParentCasperImpl.handleValidBlock(b)
         _ <- CommUtil[F].sendBlockHash(b.blockHash, b.sender)
       } yield r
 

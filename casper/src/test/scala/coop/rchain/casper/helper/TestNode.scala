@@ -359,6 +359,8 @@ case class TestNode[F[_]: Timer](
             println(s"DAG @ $name: https://dreampuf.github.io/GraphvizOnline/#" + urlEncoded)
           }
     } yield ()
+
+  val lastFinalizedBlock = MultiParentCasperImpl.lastFinalizedBlock
 }
 
 object TestNode {
@@ -548,7 +550,7 @@ object TestNode {
                      (casper: Casper[F], _: Boolean) =>
                        for {
                          d <- Deferred[F, ProposerResult]
-                         r <- p.propose(casper, false, d)
+                         r <- p.propose(false, d)
                          r <- d.get
                        } yield r
                  )
@@ -568,7 +570,7 @@ object TestNode {
                                blockProcessor
                                  .checkDependenciesWithEffects(c, b)
                                  .ifM(
-                                   blockProcessor.validateWithEffects(c, b),
+                                   blockProcessor.validateWithEffects(b),
                                    BlockStatus.missingBlocks.asLeft[ValidBlock].pure[F]
                                  ),
                                BlockStatus.invalidFormat.asLeft[ValidBlock].pure[F]

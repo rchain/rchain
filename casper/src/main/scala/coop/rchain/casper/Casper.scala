@@ -51,19 +51,12 @@ trait Casper[F[_]] {
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def getValidator: F[Option[ValidatorIdentity]]
 
-  def handleValidBlock(block: BlockMessage): F[DagRepresentation]
-  def handleInvalidBlock(
-      block: BlockMessage,
-      status: InvalidBlock,
-      dag: DagRepresentation
-  ): F[DagRepresentation]
   def getDependencyFreeFromBuffer: F[List[BlockMessage]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
   def blockDag: F[DagRepresentation]
   def fetchDependencies: F[Unit]
-  def lastFinalizedBlock: F[BlockMessage]
   def getRuntimeManager: F[RuntimeManager[F]]
 }
 

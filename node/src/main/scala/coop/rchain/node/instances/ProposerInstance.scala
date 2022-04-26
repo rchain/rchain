@@ -56,7 +56,7 @@ object ProposerInstance {
                           .update { s =>
                             s.copy(currProposeResult = rDef.some)
                           }
-                    r <- proposer.propose(c, isAsync, proposeIDDef)
+                    r <- proposer.propose(isAsync, proposeIDDef)
                     // complete deferred with propose result, update state
                     _ <- rDef.complete(r)
                     _ <- state

@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, TestNode}
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.shared.scalatestcontrib.effectTest
@@ -34,11 +35,13 @@ class ExploratoryDeployAPITest
 
   def exploratoryDeploy(term: String, block: BlockHash)(engineCell: Cell[Task, Engine[Task]])(
       implicit blockStore: BlockStore[Task],
+      blockDagStorage: BlockDagStorage[Task],
       log: Log[Task]
   ) =
     BlockAPI
       .exploratoryDeploy(term, blockHash = block.toHexString.some)(
         Sync[Task],
+        blockDagStorage,
         engineCell,
         log,
         blockStore
@@ -57,7 +60,7 @@ class ExploratoryDeployAPITest
   it should "exploratoryDeploy get data from the read only node" in effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3, withReadOnlySize = 1).use {
       case nodes @ n1 +: n2 +: _ +: readOnly +: Seq() =>
-        import readOnly.{blockStore, logEff}
+        import readOnly.{blockDagStorage, blockStore, logEff}
         val engine     = new EngineWithCasper[Task](readOnly.casperEff)
         val storedData = "data"
         for {
@@ -100,7 +103,7 @@ class ExploratoryDeployAPITest
   it should "exploratoryDeploy return error on bonded validator" in effectTest {
     TestNode.networkEff(genesisContext, networkSize = 1).use {
       case nodes @ n1 +: Seq() =>
-        import n1.{blockStore, logEff}
+        import n1.{blockDagStorage, blockStore, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
           produceDeploys <- (0 until 1).toList.traverse(

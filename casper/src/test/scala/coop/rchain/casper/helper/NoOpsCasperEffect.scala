@@ -38,12 +38,6 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def getValidator: F[Option[ValidatorIdentity]]                      = none[ValidatorIdentity].pure[F]
   def getDeployLifespan: F[Int]                                       = Int.MaxValue.pure[F]
 
-  override def handleValidBlock(block: BlockMessage): F[DagRepresentation] = ???
-  override def handleInvalidBlock(
-      block: BlockMessage,
-      status: InvalidBlock,
-      dag: DagRepresentation
-  ): F[DagRepresentation]                                         = ???
   override def getDependencyFreeFromBuffer: F[List[BlockMessage]] = ???
 }
 

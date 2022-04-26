@@ -590,7 +590,7 @@ object BlockAPI {
     * @param usePreStateHash: Each block has preStateHash and postStateHash. If usePreStateHash is true, the explore
     *                       would try to execute on preState.
     * */
-  def exploratoryDeploy[F[_]: Sync: EngineCell: Log: BlockStore](
+  def exploratoryDeploy[F[_]: Sync: BlockDagStorage: EngineCell: Log: BlockStore](
       term: String,
       blockHash: Option[String] = none,
       usePreStateHash: Boolean = false,
@@ -606,7 +606,7 @@ object BlockAPI {
             result <- if (isReadOnly || devMode) {
                        for {
                          targetBlock <- if (blockHash.isEmpty)
-                                         casper.lastFinalizedBlock.map(_.some)
+                                         MultiParentCasperImpl.lastFinalizedBlock.map(_.some)
                                        else
                                          for {
                                            hashByteString <- blockHash

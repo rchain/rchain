@@ -40,8 +40,6 @@ class MultiParentCasperImpl[F[_]
     minPhloPrice: Long,
     maxNumberOfParents: Int
 ) extends MultiParentCasper[F] {
-  import MultiParentCasperImpl._
-
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def getValidator: F[Option[ValidatorIdentity]] = validatorId.pure[F]
@@ -87,12 +85,6 @@ class MultiParentCasperImpl[F[_]
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield deploy.sig
 
-  def lastFinalizedBlock: F[BlockMessage] =
-    for {
-      dag          <- blockDag
-      blockMessage <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
-    } yield blockMessage
-
   def blockDag: F[DagRepresentation] =
     BlockDagStorage[F].getRepresentation
 
@@ -116,45 +108,6 @@ class MultiParentCasperImpl[F[_]
                   )
             )
     } yield ()
-  }
-
-  override def handleValidBlock(block: BlockMessage): F[DagRepresentation] =
-    for {
-      updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
-      _          <- CasperBufferStorage[F].remove(block.blockHash)
-      _          <- lastFinalizedBlock
-    } yield updatedDag
-
-  override def handleInvalidBlock(
-      block: BlockMessage,
-      status: InvalidBlock,
-      dag: DagRepresentation
-  ): F[DagRepresentation] = {
-    // TODO: Slash block for status except InvalidUnslashableBlock
-    def handleInvalidBlockEffect(
-        status: BlockError,
-        block: BlockMessage
-    ): F[DagRepresentation] =
-      for {
-        _ <- Log[F].warn(
-              s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
-            )
-        // TODO should be nice to have this transition of a block from casper buffer to dag storage atomic
-        r <- BlockDagStorage[F].insert(block, invalid = true)
-        _ <- CasperBufferStorage[F].remove(block.blockHash)
-      } yield r
-
-    status match {
-      case ib: InvalidBlock if InvalidBlock.isSlashable(ib) =>
-        handleInvalidBlockEffect(ib, block)
-
-      case ib: InvalidBlock =>
-        CasperBufferStorage[F].remove(block.blockHash) >> Log[F]
-          .warn(
-            s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for $ib."
-          )
-          .as(dag)
-    }
   }
 }
 
@@ -384,5 +337,52 @@ object MultiParentCasperImpl {
     } yield valResult
 
     Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
+  }
+
+  def lastFinalizedBlock[F[_]: Sync: BlockDagStorage: BlockStore]: F[BlockMessage] =
+    for {
+      dag          <- BlockDagStorage[F].getRepresentation
+      blockMessage <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
+    } yield blockMessage
+
+  def handleValidBlock[F[_]: Sync: BlockDagStorage: BlockStore: CasperBufferStorage](
+      block: BlockMessage
+  ): F[DagRepresentation] =
+    for {
+      updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
+      _          <- CasperBufferStorage[F].remove(block.blockHash)
+      _          <- lastFinalizedBlock
+    } yield updatedDag
+
+  def handleInvalidBlock[F[_]: Sync: BlockDagStorage: CasperBufferStorage: Log](
+      block: BlockMessage,
+      status: InvalidBlock,
+      dag: DagRepresentation
+  ): F[DagRepresentation] = {
+    // TODO: Slash block for status except InvalidUnslashableBlock
+    def handleInvalidBlockEffect(
+        status: BlockError,
+        block: BlockMessage
+    ): F[DagRepresentation] =
+      for {
+        _ <- Log[F].warn(
+              s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
+            )
+        // TODO should be nice to have this transition of a block from casper buffer to dag storage atomic
+        r <- BlockDagStorage[F].insert(block, invalid = true)
+        _ <- CasperBufferStorage[F].remove(block.blockHash)
+      } yield r
+
+    status match {
+      case ib: InvalidBlock if InvalidBlock.isSlashable(ib) =>
+        handleInvalidBlockEffect(ib, block)
+
+      case ib: InvalidBlock =>
+        CasperBufferStorage[F].remove(block.blockHash) >> Log[F]
+          .warn(
+            s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for $ib."
+          )
+          .as(dag)
+    }
   }
 }
