@@ -65,8 +65,6 @@ case class TestNode[F[_]: Timer](
     dataDir: Path,
     maxNumberOfParents: Int = Int.MaxValue,
     maxParentDepth: Option[Int] = Int.MaxValue.some,
-    shardId: String = "root",
-    finalizationRate: Int = 1,
     isReadOnly: Boolean = false,
     triggerProposeFOpt: Option[ProposeFunction[F]],
     blockProcessorQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -95,7 +93,8 @@ case class TestNode[F[_]: Timer](
     transportLayerEffect: TransportLayerTestImpl[F],
     connectionsCellEffect: Cell[F, Connections],
     rpConfAskEffect: RPConfAsk[F],
-    eventPublisherEffect: EventPublisher[F]
+    eventPublisherEffect: EventPublisher[F],
+    casperShardConf: CasperShardConf
 )(implicit concurrentF: Concurrent[F]) {
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...
@@ -135,30 +134,11 @@ case class TestNode[F[_]: Timer](
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
-  val shardConf = CasperShardConf(
-    faultToleranceThreshold = 0,
-    shardName = shardId,
-    parentShardId = "",
-    finalizationRate = finalizationRate,
-    maxNumberOfParents = maxNumberOfParents,
-    maxParentDepth = maxParentDepth.getOrElse(Int.MaxValue),
-    synchronyConstraintThreshold = synchronyConstraintThreshold.toFloat,
-    heightConstraintThreshold = Long.MaxValue,
-    // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
-    // Required to enable protection from re-submitting duplicate deploys
-    deployLifespan = 50,
-    casperVersion = 1,
-    configVersion = 1,
-    bondMinimum = 0,
-    bondMaximum = Long.MaxValue,
-    epochLength = 10000,
-    quarantineLength = 20000,
-    minPhloPrice = 1
-  )
-
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorIdOpt,
-    shardConf,
+    casperShardConf.shardName,
+    casperShardConf.minPhloPrice,
+    casperShardConf.maxNumberOfParents,
     genesis
   )
 
@@ -232,7 +212,7 @@ case class TestNode[F[_]: Timer](
   def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
     for {
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
-      cs                <- casperEff.getSnapshot
+      cs                <- MultiParentCasperImpl.getSnapshot[F](casperShardConf)
       vid               <- casperEff.getValidator
       createBlockResult <- BlockCreator.create(cs, vid.get)
     } yield createBlockResult
@@ -241,7 +221,7 @@ case class TestNode[F[_]: Timer](
   def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
-      cs                <- casperEff.getSnapshot
+      cs                <- MultiParentCasperImpl.getSnapshot[F](casperShardConf)
       vid               <- casperEff.getValidator
       createBlockResult <- BlockCreator.create(cs, vid.get)
       block <- createBlockResult match {
@@ -270,7 +250,7 @@ case class TestNode[F[_]: Timer](
                     .fold(
                       err =>
                         Log[F]
-                          .warn(s"Could not extract casper message from packet")
+                          .warn(s"Could not extract casper message shardConffrom packet")
                           .as(CommunicationResponse.notHandled(UnknownCommError(""))),
                       message =>
                         message match {
@@ -506,6 +486,27 @@ object TestNode {
                          RuntimeManager(rSpaceStore, mStore, Genesis.NonNegativeMergeableTagName)
                        )
 
+      shardConf = CasperShardConf(
+        faultToleranceThreshold = 0,
+        shardName = genesis.shardId,
+        parentShardId = "",
+        finalizationRate = 1,
+        maxNumberOfParents = maxNumberOfParents,
+        maxParentDepth = maxParentDepth.getOrElse(Int.MaxValue),
+        synchronyConstraintThreshold = synchronyConstraintThreshold.toFloat,
+        heightConstraintThreshold = Long.MaxValue,
+        // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
+        // Required to enable protection from re-submitting duplicate deploys
+        deployLifespan = 50,
+        casperVersion = 1,
+        configVersion = 1,
+        bondMinimum = 0,
+        bondMaximum = Long.MaxValue,
+        epochLength = 10000,
+        quarantineLength = 20000,
+        minPhloPrice = 1
+      )
+
       node <- Resource.eval({
                implicit val bs                         = blockStore
                implicit val as                         = approvedStore
@@ -538,7 +539,7 @@ object TestNode {
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
                  proposer = validatorId match {
-                   case Some(vi) => Proposer[F](vi).some
+                   case Some(vi) => Proposer[F](vi, shardConf).some
                    case None     => None
                  }
                  // propose function in casper tests is always synchronous
@@ -552,7 +553,7 @@ object TestNode {
                        } yield r
                  )
                  // Block processor
-                 blockProcessor = BlockProcessor[F]
+                 blockProcessor = BlockProcessor[F](shardConf)
 
                  blockProcessingPipe = {
                    in: fs2.Stream[F, (Casper[F], BlockMessage)] =>
@@ -615,7 +616,8 @@ object TestNode {
                    commUtilEffect = commUtil,
                    requestedBlocksEffect = requestedBlocks,
                    blockRetrieverEffect = blockRetriever,
-                   metricEffect = metricEff
+                   metricEffect = metricEff,
+                   casperShardConf = shardConf
                  )
                } yield node
              })

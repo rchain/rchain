@@ -11,6 +11,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
@@ -19,7 +20,7 @@ import coop.rchain.shared.Log
   * Logic for processing incoming blocks
   * Blocks created by node itself are not held here, but in Proposer.
   */
-class BlockProcessor[F[_]: Concurrent: BlockDagStorage: CasperBufferStorage](
+class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBufferStorage](
     storeBlock: BlockMessage => F[Unit],
     getDependenciesStatus: (
         Casper[F],
@@ -30,7 +31,7 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: CasperBufferStorage](
     requestMissingDependencies: Set[BlockHash] => F[Unit],
     ackProcessed: (BlockMessage) => F[Unit],
     // Casper state to validate block against
-    getCasperSnapshot: Casper[F] => F[CasperSnapshot],
+    getCasperSnapshot: F[CasperSnapshot],
     validateBlock: (Casper[F], CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
     effValidBlock: (Casper[F], BlockMessage) => F[DagRepresentation],
     effInvalidVBlock: (
@@ -86,13 +87,10 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: CasperBufferStorage](
   // validate block and invoke all effects required
   def validateWithEffects(
       c: Casper[F],
-      b: BlockMessage,
-      // this option is required for tests, as sometimes block without parents available are added, so
-      // CasperSnapshot cannot be constructed
-      s: Option[CasperSnapshot] = None
+      b: BlockMessage
   ): F[ValidBlockProcessing] =
     for {
-      cs     <- if (s.isDefined) s.get.pure[F] else getCasperSnapshot(c)
+      cs     <- getCasperSnapshot
       status <- validateBlock(c, cs, b)
       _ <- status
             .map(s => effValidBlock(c, b))
@@ -112,16 +110,15 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: CasperBufferStorage](
 object BlockProcessor {
   // format: off
   def apply[F[_]
-  /* Execution */   : Concurrent
+  /* Execution */   : Concurrent: RuntimeManager
   /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage
   /* Diagnostics */ : Log
-  /* Comm */        : CommUtil: BlockRetriever
-  ] // format: on
-      : BlockProcessor[F] = {
+  /* Comm */        : CommUtil: BlockRetriever // format: on
+  ](casperShardConf: CasperShardConf): BlockProcessor[F] = {
 
     val storeBlock = (b: BlockMessage) => BlockStore[F].put(b)
 
-    val getCasperStateSnapshot = (c: Casper[F]) => c.getSnapshot
+    val getCasperStateSnapshot = MultiParentCasperImpl.getSnapshot[F](casperShardConf)
 
     val getNonValidatedDependencies = (c: Casper[F], b: BlockMessage) => {
       import cats.instances.list._

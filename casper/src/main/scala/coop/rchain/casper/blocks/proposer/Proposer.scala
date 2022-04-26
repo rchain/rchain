@@ -38,7 +38,7 @@ object ProposerResult {
 
 class Proposer[F[_]: Concurrent: Log: Span](
     // base state on top of which block will be created
-    getCasperSnapshot: Casper[F] => F[CasperSnapshot],
+    getCasperSnapshot: F[CasperSnapshot],
     // propose constraint checkers
     checkActiveValidator: (
         CasperSnapshot,
@@ -127,7 +127,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
     }
     for {
       // get snapshot to serve as a base for propose
-      s <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot(c))
+      s <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot)
       result <- if (isAsync) for {
                  nextSeq <- getValidatorNextSeqNumber(s).pure[F]
                  _       <- proposeIdDef.complete(ProposerResult.started(nextSeq))
@@ -161,13 +161,14 @@ object Proposer {
     /* Casper */      : SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
     /* Storage */     : BlockStore: BlockDagStorage: DeployStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
-    /* Comm */        : CommUtil: BlockRetriever
+    /* Comm */        : CommUtil: BlockRetriever: RuntimeManager
   ] // format: on
   (
       validatorIdentity: ValidatorIdentity,
+      casperShardConf: CasperShardConf,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
-  )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
-    val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot
+  ): Proposer[F] = {
+    val getCasperSnapshotSnapshot = MultiParentCasperImpl.getSnapshot[F](casperShardConf)
 
     val createBlock = (s: CasperSnapshot, validatorIdentity: ValidatorIdentity) =>
       BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
@@ -184,7 +185,7 @@ object Proposer {
     val checkEnoughBaseStake = (genesis: BlockMessage, s: CasperSnapshot) =>
       SynchronyConstraintChecker[F].check(
         s,
-        runtimeManager,
+        RuntimeManager[F],
         genesis,
         validatorIdentity
       )

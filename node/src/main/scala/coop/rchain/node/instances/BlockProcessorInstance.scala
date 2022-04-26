@@ -6,7 +6,13 @@ import cats.instances.list._
 import cats.syntax.all._
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.{Casper, PrettyPrinter, ProposeFunction, ValidBlockProcessing}
+import coop.rchain.casper.{
+  Casper,
+  CasperShardConf,
+  PrettyPrinter,
+  ProposeFunction,
+  ValidBlockProcessing
+}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 import fs2.Stream
@@ -66,7 +72,7 @@ object BlockProcessorInstance {
             )
             .evalMap(
               _ =>
-                blockProcessor.validateWithEffects(c, b, None) >>= { r =>
+                blockProcessor.validateWithEffects(c, b) >>= { r =>
                   logResult(r).as(c, b, r)
                 }
             )

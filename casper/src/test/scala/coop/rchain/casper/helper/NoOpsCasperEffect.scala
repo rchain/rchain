@@ -51,7 +51,6 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
       _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
     } yield BlockStatus.valid.asRight
 
-  override def getSnapshot: F[CasperSnapshot] = ???
   override def validate(
       b: BlockMessage,
       s: CasperSnapshot

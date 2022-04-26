@@ -48,27 +48,10 @@ object CasperLaunch {
       conf: CasperConf,
       trimState: Boolean,
       disableStateExporter: Boolean,
-      validatorIdentityOpt: Option[ValidatorIdentity]
+      validatorIdentityOpt: Option[ValidatorIdentity],
+      casperShardConf: CasperShardConf
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
-      val casperShardConf = CasperShardConf(
-        conf.faultToleranceThreshold,
-        conf.shardName,
-        conf.parentShardId,
-        conf.finalizationRate,
-        conf.maxNumberOfParents,
-        conf.maxParentDepth.getOrElse(Int.MaxValue),
-        conf.synchronyConstraintThreshold.toFloat,
-        conf.heightConstraintThreshold,
-        50,
-        1,
-        1,
-        conf.genesisBlockData.bondMinimum,
-        conf.genesisBlockData.bondMaximum,
-        conf.genesisBlockData.epochLength,
-        conf.genesisBlockData.quarantineLength,
-        conf.minPhloPrice
-      )
       def launch(): F[Unit] =
         ApprovedStore[F].getApprovedBlock map {
           case Some(approvedBlock) =>

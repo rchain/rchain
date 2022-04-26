@@ -48,7 +48,6 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def getSnapshot: F[CasperSnapshot]
   def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
@@ -140,7 +139,9 @@ sealed abstract class MultiParentCasperInstances {
     } yield {
       new MultiParentCasperImpl(
         validatorId,
-        casperShardConf,
+        casperShardConf.shardName,
+        casperShardConf.minPhloPrice,
+        casperShardConf.maxNumberOfParents,
         approvedBlock
       )
     }

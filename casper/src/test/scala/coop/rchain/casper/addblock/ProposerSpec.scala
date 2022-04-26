@@ -25,8 +25,8 @@ import scala.collection.immutable.HashMap
 class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
 
   /** declarations of input functions for proposer */
-  def getCasperSnapshotF[F[_]: Applicative]: Casper[F] => F[CasperSnapshot] =
-    _ => Resources.mkDummyCasperSnapshot
+  def getCasperSnapshotF[F[_]: Applicative]: F[CasperSnapshot] =
+    Resources.mkDummyCasperSnapshot
 
   def alwaysNotActiveF[F[_]: Applicative]
       : (CasperSnapshot, ValidatorIdentity) => CheckProposeConstraintsResult =

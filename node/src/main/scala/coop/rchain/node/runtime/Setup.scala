@@ -162,6 +162,25 @@ object Setup {
       }
       (rnodeStateManager, rspaceStateManager) = stateManagers
 
+      casperShardConf = CasperShardConf(
+        conf.casper.faultToleranceThreshold,
+        conf.casper.shardName,
+        conf.casper.parentShardId,
+        conf.casper.finalizationRate,
+        conf.casper.maxNumberOfParents,
+        conf.casper.maxParentDepth.getOrElse(Int.MaxValue),
+        conf.casper.synchronyConstraintThreshold.toFloat,
+        conf.casper.heightConstraintThreshold,
+        50,
+        1,
+        1,
+        conf.casper.genesisBlockData.bondMinimum,
+        conf.casper.genesisBlockData.bondMaximum,
+        conf.casper.genesisBlockData.epochLength,
+        conf.casper.genesisBlockData.quarantineLength,
+        conf.casper.minPhloPrice
+      )
+
       // Engine dynamic reference
       engineCell          <- EngineCell.init[F]
       envVars             = EnvVars.envVars[F]
@@ -169,9 +188,10 @@ object Setup {
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {
+        implicit val rm           = runtimeManager
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
         implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
-        BlockProcessor[F]
+        BlockProcessor[F](casperShardConf)
       }
 
       // Load validator private key if specified
@@ -189,7 +209,7 @@ object Setup {
         val dummyDeployerKey      = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
-        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
+        Proposer[F](validatorIdentity, casperShardConf, dummyDeployerKey.map((_, "Nil")))
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
@@ -222,7 +242,8 @@ object Setup {
           conf.casper,
           !conf.protocolClient.disableLfs,
           conf.protocolServer.disableStateExporter,
-          validatorIdentityOpt
+          validatorIdentityOpt,
+          casperShardConf
         )
       }
       packetHandler = {
