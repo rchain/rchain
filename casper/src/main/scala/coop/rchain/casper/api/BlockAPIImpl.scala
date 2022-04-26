@@ -41,9 +41,7 @@ import fs2.Stream
 
 import scala.collection.immutable.SortedMap
 
-class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagStorage: MultiParentCasper: Log](
-    runtimeManager: RuntimeManager[F],
-    dagStorage: BlockDagStorage[F],
+class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
     validatorOpt: Option[ValidatorIdentity]
 ) extends BlockAPI_v2[F] {
 
@@ -201,7 +199,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
       maxBlocksLimit: Int
   ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] = {
     val response: F[Either[Error, (Seq[DataWithBlockInfo], Int)]] = for {
-      dag                 <- dagStorage.getRepresentation
+      dag                 <- BlockDagStorage[F].getRepresentation
       heightMap           = dag.heightMap
       depthWithLimit      = Math.min(depth, maxBlocksLimit).toLong
       sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
@@ -231,7 +229,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
       maxBlocksLimit: Int
   ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] = {
     val response: F[Either[Error, (Seq[ContinuationsWithBlockInfo], Int)]] = for {
-      dag            <- dagStorage.getRepresentation
+      dag            <- BlockDagStorage[F].getRepresentation
       heightMap      = dag.heightMap
       depthWithLimit = Math.min(depth, maxBlocksLimit).toLong
       sortedListeningNames <- listeningNames.toList
@@ -264,7 +262,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
     if (isListeningNameReduced(block, Seq(sortedListeningName))) {
       val stateHash = ProtoUtil.postStateHash(block)
       for {
-        data      <- runtimeManager.getData(stateHash)(sortedListeningName)
+        data      <- RuntimeManager[F].getData(stateHash)(sortedListeningName)
         blockInfo <- getLightBlockInfo(block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, blockInfo))
     } else {
@@ -278,7 +276,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash = ProtoUtil.postStateHash(block)
       for {
-        continuations <- runtimeManager.getContinuation(stateHash)(sortedListeningNames)
+        continuations <- RuntimeManager[F].getContinuation(stateHash)(sortedListeningNames)
         continuationInfos = continuations.map(
           continuation => WaitingContinuationInfo(continuation._1, continuation._2)
         )
@@ -323,7 +321,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
   ): F[ApiErr[A]] = {
     def response: F[ApiErr[A]] =
       for {
-        dag               <- dagStorage.getRepresentation
+        dag               <- BlockDagStorage[F].getRepresentation
         latestBlockNumber = dag.latestBlockNumber
         topoSort          <- dag.topoSortUnsafe(latestBlockNumber - depth, none)
         result            <- doIt(topoSort)
@@ -342,7 +340,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
   ): F[ApiErr[List[LightBlockInfo]]] = {
     def response: F[ApiErr[List[LightBlockInfo]]] =
       for {
-        dag         <- dagStorage.getRepresentation
+        dag         <- BlockDagStorage[F].getRepresentation
         topoSortDag <- dag.topoSortUnsafe(startBlockNumber, Some(endBlockNumber))
         result <- topoSortDag
                    .foldM(List.empty[LightBlockInfo]) {
@@ -371,7 +369,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
       serialize: F[R]
   ): F[ApiErr[R]] =
     for {
-      dag <- dagStorage.getRepresentation
+      dag <- BlockDagStorage[F].getRepresentation
       // the default startBlockNumber is 0
       // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
       startBlockNum = if (startBlockNumber == 0) dag.latestBlockNumber else startBlockNumber.toLong
@@ -411,7 +409,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
 
   override def findDeploy(id: DeployId): F[ApiErr[LightBlockInfo]] =
     for {
-      dag            <- dagStorage.getRepresentation
+      dag            <- BlockDagStorage[F].getRepresentation
       maybeBlockHash <- BlockDagStorage[F].lookupByDeployId(id)
       maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
       response       <- maybeBlock.traverse(getLightBlockInfo)
@@ -444,7 +442,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
                 BlockRetrievalError(s"Error: Failure to find block with hash: $hash")
               )
       // Check if the block is added to the dag and convert it to block info
-      dag <- dagStorage.getRepresentation
+      dag <- BlockDagStorage[F].getRepresentation
       blockInfo <- if (dag.contains(block.blockHash)) getFullBlockInfo(block)
                   else
                     BlockRetrievalError(s"Error: Block with hash $hash received but not added yet")
@@ -514,7 +512,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
   // Trying to use BlockStore.get as much as possible would more be preferred
   private def findBlockFromStore(hash: String): F[Option[BlockMessage]] =
     for {
-      dag          <- dagStorage.getRepresentation
+      dag          <- BlockDagStorage[F].getRepresentation
       blockHashOpt = dag.find(hash)
       message      <- blockHashOpt.flatTraverse(BlockStore[F].get1)
     } yield message
@@ -532,14 +530,14 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
 
   override def lastFinalizedBlock: F[ApiErr[BlockInfo]] =
     for {
-      dag                <- dagStorage.getRepresentation
+      dag                <- BlockDagStorage[F].getRepresentation
       lastFinalizedBlock <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
       blockInfo          <- getFullBlockInfo(lastFinalizedBlock)
     } yield blockInfo.asRight
 
   override def isFinalized(hash: String): F[ApiErr[Boolean]] =
     for {
-      dag            <- dagStorage.getRepresentation
+      dag            <- BlockDagStorage[F].getRepresentation
       givenBlockHash = hash.unsafeHexToByteString
       result         = dag.isFinalized(givenBlockHash)
     } yield result.asRight[Error]
@@ -549,10 +547,10 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
       targetBlock: Option[BlockMessage] = none[BlockMessage]
   ): F[ApiErr[Boolean]] =
     for {
-      dag                <- dagStorage.getRepresentation
+      dag                <- BlockDagStorage[F].getRepresentation
       lastFinalizedBlock <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
       postStateHash      = ProtoUtil.postStateHash(targetBlock.getOrElse(lastFinalizedBlock))
-      bonds              <- runtimeManager.computeBonds(postStateHash)
+      bonds              <- RuntimeManager[F].computeBonds(postStateHash)
       validatorBondOpt   = bonds.find(_.validator == publicKey)
     } yield validatorBondOpt.isDefined.asRight[Error]
 
@@ -574,7 +572,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
       isReadOnly <- Sync[F].delay(validatorOpt.isEmpty)
       result <- if (isReadOnly || devMode) {
                  for {
-                   dag <- dagStorage.getRepresentation
+                   dag <- BlockDagStorage[F].getRepresentation
                    targetBlock <- if (blockHash.isEmpty)
                                    dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].get1)
                                  else
@@ -594,7 +592,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
                              if (usePreStateHash) ProtoUtil.preStateHash(b)
                              else ProtoUtil.postStateHash(b)
                            for {
-                             res            <- runtimeManager.playExploratoryDeploy(term, postStateHash)
+                             res            <- RuntimeManager[F].playExploratoryDeploy(term, postStateHash)
                              lightBlockInfo <- getLightBlockInfo(b)
                            } yield (res, lightBlockInfo)
                          })
@@ -611,7 +609,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
   override def getLatestMessage: F[ApiErr[BlockMetadata]] =
     for {
       validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
-      dag              <- dagStorage.getRepresentation
+      dag              <- BlockDagStorage[F].getRepresentation
       latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
       latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
     } yield latestMessage.asRight[Error]
