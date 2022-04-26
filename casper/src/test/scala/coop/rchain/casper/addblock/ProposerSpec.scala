@@ -47,12 +47,10 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
     (_: CasperSnapshot) => CheckProposeConstraintsResult.success.pure[F]
 
   def alwaysSuccesfullValidation[F[_]: Applicative] =
-    (_: Casper[F], _: CasperSnapshot, _: BlockMessage) =>
-      BlockStatus.valid.asRight[BlockError].pure[F]
+    (_: CasperSnapshot, _: BlockMessage) => BlockStatus.valid.asRight[BlockError].pure[F]
 
   def alwaysUnsuccesfullValidation[F[_]: Applicative] =
-    (_: Casper[F], _: CasperSnapshot, _: BlockMessage) =>
-      BlockStatus.invalidFormat.asLeft[ValidBlock].pure[F]
+    (_: CasperSnapshot, _: BlockMessage) => BlockStatus.invalidFormat.asLeft[ValidBlock].pure[F]
 
   // var to estimate result of executing of propose effect
   var proposeEffectVar: Int = 0

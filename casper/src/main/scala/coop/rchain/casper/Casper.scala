@@ -51,7 +51,6 @@ trait Casper[F[_]] {
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def getValidator: F[Option[ValidatorIdentity]]
 
-  def validate(b: BlockMessage, s: CasperSnapshot): F[Either[BlockError, ValidBlock]]
   def handleValidBlock(block: BlockMessage): F[DagRepresentation]
   def handleInvalidBlock(
       block: BlockMessage,

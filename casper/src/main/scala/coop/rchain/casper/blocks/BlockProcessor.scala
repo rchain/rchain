@@ -1,6 +1,6 @@
 package coop.rchain.casper.blocks
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -13,8 +13,9 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Time}
 
 /**
   * Logic for processing incoming blocks
@@ -32,7 +33,7 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBuffer
     ackProcessed: (BlockMessage) => F[Unit],
     // Casper state to validate block against
     getCasperSnapshot: F[CasperSnapshot],
-    validateBlock: (Casper[F], CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
+    validateBlock: (CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
     effValidBlock: (Casper[F], BlockMessage) => F[DagRepresentation],
     effInvalidVBlock: (
         Casper[F],
@@ -91,7 +92,7 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBuffer
   ): F[ValidBlockProcessing] =
     for {
       cs     <- getCasperSnapshot
-      status <- validateBlock(c, cs, b)
+      status <- validateBlock(cs, b)
       _ <- status
             .map(s => effValidBlock(c, b))
             .leftMap {
@@ -110,9 +111,9 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBuffer
 object BlockProcessor {
   // format: off
   def apply[F[_]
-  /* Execution */   : Concurrent: RuntimeManager
+  /* Execution */   : Concurrent: Timer: Time: RuntimeManager
   /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage
-  /* Diagnostics */ : Log
+  /* Diagnostics */ : Log: Metrics: Span
   /* Comm */        : CommUtil: BlockRetriever // format: on
   ](casperShardConf: CasperShardConf): BlockProcessor[F] = {
 
@@ -170,7 +171,7 @@ object BlockProcessor {
       )
     }
 
-    val validateBlock = (c: Casper[F], s: CasperSnapshot, b: BlockMessage) => c.validate(b, s)
+    val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasperImpl.validate(b, s)
 
     def ackProcessed =
       (b: BlockMessage) => BlockRetriever[F].ackInCasper(b.blockHash)

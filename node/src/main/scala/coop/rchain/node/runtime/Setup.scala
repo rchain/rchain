@@ -188,7 +188,7 @@ object Setup {
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {
-        implicit val rm           = runtimeManager
+        implicit val (rm, sp)     = (runtimeManager, span)
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
         implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
         BlockProcessor[F](casperShardConf)
@@ -202,6 +202,7 @@ object Setup {
       // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
+        implicit val cbs          = casperBufferStorage
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)

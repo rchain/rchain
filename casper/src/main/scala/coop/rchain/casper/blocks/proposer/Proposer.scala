@@ -1,10 +1,11 @@
 package coop.rchain.casper.blocks.proposer
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Timer}
 import cats.effect.concurrent.Deferred
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.engine.BlockRetriever
@@ -50,7 +51,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
         CasperSnapshot,
         ValidatorIdentity
     ) => F[BlockCreatorResult],
-    validateBlock: (Casper[F], CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
+    validateBlock: (CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
     proposeEffect: (Casper[F], BlockMessage) => F[Unit],
     validator: ValidatorIdentity
 ) {
@@ -75,7 +76,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
                         case NoNewDeploys =>
                           (ProposeResult.failure(NoNewDeploys), none[BlockMessage]).pure[F]
                         case Created(b) =>
-                          validateBlock(casper, s, b).flatMap {
+                          validateBlock(s, b).flatMap {
                             case Right(v) =>
                               proposeEffect(casper, b) >>
                                 (ProposeResult.success(v), b.some).pure[F]
@@ -154,9 +155,9 @@ class Proposer[F[_]: Concurrent: Log: Span](
 object Proposer {
   // format: off
   def apply[F[_]
-    /* Execution */   : Concurrent: Time
+    /* Execution */   : Concurrent: Timer: Time
     /* Casper */      : SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage
+    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
     /* Comm */        : CommUtil: BlockRetriever: RuntimeManager
   ] // format: on
@@ -170,8 +171,7 @@ object Proposer {
     val createBlock = (s: CasperSnapshot, validatorIdentity: ValidatorIdentity) =>
       BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
 
-    val validateBlock = (casper: Casper[F], s: CasperSnapshot, b: BlockMessage) =>
-      casper.validate(b, s)
+    val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasperImpl.validate(b, s)
 
     val checkValidatorIsActive = (s: CasperSnapshot, validator: ValidatorIdentity) =>
       if (s.onChainState.activeValidators.contains(ByteString.copyFrom(validator.publicKey.bytes)))

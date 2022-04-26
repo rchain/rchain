@@ -118,89 +118,6 @@ class MultiParentCasperImpl[F[_]
     } yield ()
   }
 
-  override def validate(
-      b: BlockMessage,
-      s: CasperSnapshot
-  ): F[Either[BlockError, ValidBlock]] = {
-    val validationProcess: EitherT[F, BlockError, ValidBlock] =
-      for {
-        _ <- EitherT(
-              Validate
-                .blockSummary(b, s, shardName, deployLifespan)
-            )
-        _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
-        _ <- EitherT(
-              InterpreterUtil
-                .validateBlockCheckpoint(b, s, RuntimeManager[F])
-                .map {
-                  case Left(ex)       => Left(ex)
-                  case Right(Some(_)) => Right(BlockStatus.valid)
-                  case Right(None)    => Left(BlockStatus.invalidTransaction)
-                }
-            )
-        _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
-        _ <- EitherT(Validate.bondsCache(b, RuntimeManager[F]))
-        _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
-        _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
-        _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
-        //        _ <- EitherT(
-        //              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
-        //            )
-        _ <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
-
-        // This validation is only to punish validator which accepted lower price deploys.
-        // And this can happen if not configured correctly.
-        _ <- EitherT(Validate.phloPrice(b, minPhloPrice)).recoverWith {
-              case _ =>
-                val warnToLog = EitherT.liftF[F, BlockError, Unit](
-                  Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
-                )
-                val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
-                warnToLog *> asValid
-            }
-        _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
-
-        depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
-        //        status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
-        status = ValidBlock.Valid // TEMP
-        _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
-      } yield status
-
-    val blockPreState  = b.body.state.preStateHash
-    val blockPostState = b.body.state.postStateHash
-    val blockSender    = b.sender.toByteArray
-    val indexBlock = for {
-      mergeableChs <- RuntimeManager[F].loadMergeableChannels(blockPostState, blockSender, b.seqNum)
-
-      index <- BlockIndex(
-                b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
-                blockPreState.toBlake2b256Hash,
-                blockPostState.toBlake2b256Hash,
-                RuntimeManager[F].getHistoryRepo,
-                mergeableChs
-              )
-      _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
-    } yield ()
-
-    val validationProcessDiag = for {
-      // Create block and measure duration
-      r                    <- Stopwatch.duration(validationProcess.value)
-      (valResult, elapsed) = r
-      _ <- valResult
-            .map { status =>
-              val blockInfo   = PrettyPrinter.buildString(b, short = true)
-              val deployCount = b.body.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
-                indexBlock.whenA(maxNumberOfParents > 1)
-            }
-            .getOrElse(().pure[F])
-    } yield valResult
-
-    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
-  }
-
   override def handleValidBlock(block: BlockMessage): F[DagRepresentation] =
     for {
       updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
@@ -383,5 +300,89 @@ object MultiParentCasperImpl {
       maxSeqNums,
       onChainState
     )
+  }
+
+  def validate[F[_]: Concurrent: Timer: Time: RuntimeManager: BlockDagStorage: BlockStore: CasperBufferStorage: Log: Metrics: Span](
+      b: BlockMessage,
+      s: CasperSnapshot
+  ): F[Either[BlockError, ValidBlock]] = {
+    val validationProcess: EitherT[F, BlockError, ValidBlock] =
+      for {
+        _ <- EitherT(
+              Validate
+                .blockSummary(b, s, s.onChainState.shardConf.shardName, deployLifespan)
+            )
+        _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
+        _ <- EitherT(
+              InterpreterUtil
+                .validateBlockCheckpoint(b, s, RuntimeManager[F])
+                .map {
+                  case Left(ex)       => Left(ex)
+                  case Right(Some(_)) => Right(BlockStatus.valid)
+                  case Right(None)    => Left(BlockStatus.invalidTransaction)
+                }
+            )
+        _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
+        _ <- EitherT(Validate.bondsCache(b, RuntimeManager[F]))
+        _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
+        _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
+        _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
+        //        _ <- EitherT(
+        //              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
+        //            )
+        _ <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
+
+        // This validation is only to punish validator which accepted lower price deploys.
+        // And this can happen if not configured correctly.
+        minPhloPrice = s.onChainState.shardConf.minPhloPrice
+        _ <- EitherT(Validate.phloPrice(b, minPhloPrice)).recoverWith {
+              case _ =>
+                val warnToLog = EitherT.liftF[F, BlockError, Unit](
+                  Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
+                )
+                val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
+                warnToLog *> asValid
+            }
+        _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
+
+        depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
+        //        status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
+        status = ValidBlock.Valid // TEMP
+        _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
+      } yield status
+
+    val blockPreState  = b.body.state.preStateHash
+    val blockPostState = b.body.state.postStateHash
+    val blockSender    = b.sender.toByteArray
+    val indexBlock = for {
+      mergeableChs <- RuntimeManager[F].loadMergeableChannels(blockPostState, blockSender, b.seqNum)
+
+      index <- BlockIndex(
+                b.blockHash,
+                b.body.deploys,
+                b.body.systemDeploys,
+                blockPreState.toBlake2b256Hash,
+                blockPostState.toBlake2b256Hash,
+                RuntimeManager[F].getHistoryRepo,
+                mergeableChs
+              )
+      _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
+    } yield ()
+
+    val validationProcessDiag = for {
+      // Create block and measure duration
+      r                    <- Stopwatch.duration(validationProcess.value)
+      (valResult, elapsed) = r
+      _ <- valResult
+            .map { status =>
+              val blockInfo   = PrettyPrinter.buildString(b, short = true)
+              val deployCount = b.body.deploys.size
+              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
+                indexBlock.whenA(s.onChainState.shardConf.maxNumberOfParents > 1)
+            }
+            .getOrElse(().pure[F])
+    } yield valResult
+
+    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
   }
 }
