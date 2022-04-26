@@ -28,14 +28,14 @@ object RadixTree {
     * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
     * @param value stores radixValue. Always contains 32 bytes.
     */
-  final case class Leaf(prefix: ByteVector, value: ByteVector) extends Item
+  final case class Leaf(prefix: ByteVector, value: Blake2b256Hash) extends Item
 
   /**
     * NodePtr is pointer to the next child [[Node]]. Contains 2 fields.
     * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
     * @param ptr stores hash of the child node (see section Storing of tree). Always contains 32 bytes.
     */
-  final case class NodePtr(prefix: ByteVector, ptr: ByteVector) extends Item
+  final case class NodePtr(prefix: ByteVector, ptr: Blake2b256Hash) extends Item
 
   /**
     * Base type for nodes in Radix History.
@@ -101,7 +101,7 @@ object RadixTree {
           val sizePrefix = leafPrefix.size.toInt
           assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
           assert(
-            value.size == defSize,
+            value.bytes.size == defSize,
             "Error during serialization: size of leafValue not equal 32."
           )
           size + headSize + sizePrefix + defSize
@@ -110,7 +110,7 @@ object RadixTree {
           val sizePrefix = ptrPrefix.size.toInt
           assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
           assert(
-            ptr.size == defSize,
+            ptr.bytes.size == defSize,
             "Error during serialization: size of ptrPrefix not equal 32."
           )
           size + headSize + sizePrefix + defSize
@@ -146,7 +146,7 @@ object RadixTree {
               for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix(i.toLong)
               // Fill leafValue
               val posValueStart = posPrefixStart + prefixSize
-              for (i <- 0 until defSize) arr(posValueStart + i) = value(i.toLong)
+              for (i <- 0 until defSize) arr(posValueStart + i) = value.bytes(i.toLong)
               putItemIntoArray(idxItem + 1, posValueStart + defSize) // Loop to the next item.
 
             case NodePtr(prefix, ptr) =>
@@ -161,7 +161,7 @@ object RadixTree {
               for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix(i.toLong)
               // Fill ptr
               val posPtrStart = posPrefixStart + prefixSize
-              for (i <- 0 until defSize) arr(posPtrStart + i) = ptr(i.toLong)
+              for (i <- 0 until defSize) arr(posPtrStart + i) = ptr.bytes(i.toLong)
               putItemIntoArray(idxItem + 1, posPtrStart + defSize) // Loop to the next item.
           }
         }
@@ -206,8 +206,8 @@ object RadixTree {
 
           // Decoding type of non-empty item
           val item =
-            if (isLeaf(secondByte)) Leaf(ByteVector(prefix), ByteVector(valOrPtr))
-            else NodePtr(ByteVector(prefix), ByteVector(valOrPtr))
+            if (isLeaf(secondByte)) Leaf(ByteVector(prefix), Blake2b256Hash.fromByteArray(valOrPtr))
+            else NodePtr(ByteVector(prefix), Blake2b256Hash.fromByteArray(valOrPtr))
 
           val nodeNext = node.updated(idxItem, item)
 
@@ -341,7 +341,7 @@ object RadixTree {
               s"Export error: node with prefix ${(p.nodePrefix ++ p.restPrefix).toHex} not found."
             )
             NodePathData(
-              ptr,
+              ptr.bytes,
               (p.nodePrefix :+ p.restPrefix.head) ++ prefixCommon,
               prefixRest,
               NodeData(p.nodePrefix, node, p.restPrefix.head.some) +: p.path
@@ -482,9 +482,9 @@ object RadixTree {
         case EmptyItem =>
           StepData(newPath, p.skip, p.take, p.expData).pure
         case Leaf(leafPrefix, leafValue) =>
-          addLeaf(p, leafPrefix, leafValue, itemIndex, curNodePrefix, newPath).pure
+          addLeaf(p, leafPrefix, leafValue.bytes, itemIndex, curNodePrefix, newPath).pure
         case NodePtr(ptrPrefix, ptr) =>
-          addNodePtr(p, ptrPrefix, ptr, itemIndex, curNodePrefix, newPath)
+          addNodePtr(p, ptrPrefix, ptr.bytes, itemIndex, curNodePrefix, newPath)
       }
     }
 
@@ -692,13 +692,14 @@ object RadixTree {
               case EmptyItem => Option.empty[ByteVector].asRight[Params].pure // Not found
 
               case Leaf(leafPrefix, value) =>
-                if (leafPrefix == prefix.tail) value.some.asRight[Params].pure // Happy end
-                else Option.empty[ByteVector].asRight[Params].pure             // Not found
+                if (leafPrefix == prefix.tail) value.bytes.some.asRight[Params].pure // Happy end
+                else Option.empty[ByteVector].asRight[Params].pure                   // Not found
 
               case NodePtr(ptrPrefix, ptr) =>
                 val (_, prefixRest, ptrPrefixRest) = commonPrefix(prefix.tail, ptrPrefix)
-                if (ptrPrefixRest.isEmpty) loadNode(ptr).map(n => (n, prefixRest).asLeft) // Deeper
-                else Option.empty[ByteVector].asRight[Params].pure                        // Not found
+                if (ptrPrefixRest.isEmpty)
+                  loadNode(ptr.bytes).map(n => (n, prefixRest).asLeft) // Deeper
+                else Option.empty[ByteVector].asRight[Params].pure     // Not found
             }
         }
       (startNode, startPrefix).tailRecM(loop)
@@ -729,7 +730,7 @@ object RadixTree {
       */
     def constructNodeFromItem(item: Item): F[Node] =
       item match {
-        case NodePtr(ByteVector.empty, ptr) => loadNode(ptr)
+        case NodePtr(ByteVector.empty, ptr) => loadNode(ptr.bytes)
         case _                              => Sync[F].delay(createNodeFromItem(item))
       }
 
@@ -755,9 +756,9 @@ object RadixTree {
                 NodePtr(prefix ++ ByteVector(idxItem) ++ nodePtrPrefix, ptr)
             }
           case 2 => // 2 or more items are not empty.
-            NodePtr(prefix, saveNode(node))
+            NodePtr(prefix, Blake2b256Hash.fromByteVector(saveNode(node)))
         }
-      } else NodePtr(prefix, saveNode(node))
+      } else NodePtr(prefix, Blake2b256Hash.fromByteVector(saveNode(node)))
 
     /**
       * Save new leaf value to this part of tree (start from curItems).
@@ -791,7 +792,7 @@ object RadixTree {
       Sync[F].defer {
         curItem match {
           case EmptyItem =>
-            (Leaf(insPrefix, insValue): Item).some.pure // Update EmptyItem to Leaf.
+            (Leaf(insPrefix, Blake2b256Hash.fromByteVector(insValue)): Item).some.pure // Update EmptyItem to Leaf.
 
           case Leaf(leafPrefix, leafValue) =>
             assert(
@@ -800,7 +801,7 @@ object RadixTree {
             )
             if (leafPrefix == insPrefix) {
               if (insValue == leafValue) none[Item].pure
-              else (Leaf(insPrefix, insValue): Item).some.pure
+              else (Leaf(insPrefix, Blake2b256Hash.fromByteVector(insValue)): Item).some.pure
             } // Update Leaf.
             else {
               // Create child node, insert existing and new leaf in this node.
@@ -808,7 +809,10 @@ object RadixTree {
               val (commPrefix, insPrefixRest, leafPrefixRest) = commonPrefix(insPrefix, leafPrefix)
               val newNode = emptyNode
                 .updated(byteToInt(leafPrefixRest.head), Leaf(leafPrefixRest.tail, leafValue))
-                .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
+                .updated(
+                  byteToInt(insPrefixRest.head),
+                  Leaf(insPrefixRest.tail, Blake2b256Hash.fromByteVector(insValue))
+                )
               saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
             }
 
@@ -816,12 +820,15 @@ object RadixTree {
             assert(ptrPrefix.size < insPrefix.size, "Radix key should be longer than NodePtr key.")
             val (commPrefix, insPrefixRest, ptrPrefixRest) = commonPrefix(insPrefix, ptrPrefix)
             if (ptrPrefixRest.isEmpty)
-              insertNewNodeToChild(ptr, commPrefix, insPrefixRest) // Add new node to existing child node.
+              insertNewNodeToChild(ptr.bytes, commPrefix, insPrefixRest) // Add new node to existing child node.
             else {
               // Create child node, insert existing Ptr and new leaf in this node.
               val newNode = emptyNode
                 .updated(byteToInt(ptrPrefixRest.head), NodePtr(ptrPrefixRest.tail, ptr))
-                .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
+                .updated(
+                  byteToInt(insPrefixRest.head),
+                  Leaf(insPrefixRest.tail, Blake2b256Hash.fromByteVector(insValue))
+                )
               saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
             }
         }
@@ -861,7 +868,7 @@ object RadixTree {
           case NodePtr(ptrPrefix, ptr) =>
             val (commPrefix, delPrefixRest, ptrPrefixRest) = commonPrefix(delPrefix, ptrPrefix)
             if (ptrPrefixRest.nonEmpty || delPrefixRest.isEmpty) none[Item].pure // Not found
-            else deleteFromChildNode(ptr, commPrefix, delPrefixRest)             // Deeper
+            else deleteFromChildNode(ptr.bytes, commPrefix, delPrefixRest)       // Deeper
         }
       }
     }
@@ -1016,11 +1023,11 @@ object RadixTree {
           itemVectors <- node.zipWithIndex.traverse {
                           case (EmptyItem, _) => Vector[String]().pure
                           case (Leaf(leafPrefix, value), idx) =>
-                            val leafStr = constructLeafStr(indent, idx, leafPrefix, value)
+                            val leafStr = constructLeafStr(indent, idx, leafPrefix, value.bytes)
                             Vector(leafStr).pure
                           case (NodePtr(ptrPrefix, ptr), idx) =>
                             for {
-                              childNode    <- loadNode(ptr)
+                              childNode    <- loadNode(ptr.bytes)
                               childTreeStr <- print(childNode, indentLevel + 1)
                               ptrStr       = constructNodePtrStr(indent, idx, ptrPrefix)
                               r            = ptrStr +: childTreeStr
