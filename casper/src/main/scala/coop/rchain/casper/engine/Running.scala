@@ -243,7 +243,7 @@ class Running[F[_]
   /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: Metrics] // format: on
 (
-    blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+    blockProcessingQueue: Queue[F, BlockMessage],
     blocksInProcessing: Ref[F, Set[BlockHash]],
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
@@ -285,7 +285,7 @@ class Running[F[_]
                 s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
               ),
-              blockProcessingQueue.enqueue1(casper, b) <* Log[F].debug(
+              blockProcessingQueue.enqueue1(b) <* Log[F].debug(
                 s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
               )

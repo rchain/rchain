@@ -71,7 +71,7 @@ object Setup {
         Option[Ref[F, ProposerState[F]]],
         BlockProcessor[F],
         Ref[F, Set[BlockHash]],
-        Queue[F, (Casper[F], BlockMessage)],
+        Queue[F, BlockMessage],
         Option[ProposeFunction[F]]
     )
   ] =
@@ -182,7 +182,7 @@ object Setup {
       // Engine dynamic reference
       engineCell          <- EngineCell.init[F]
       envVars             = EnvVars.envVars[F]
-      blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
+      blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {

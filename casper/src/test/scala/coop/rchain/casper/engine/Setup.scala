@@ -140,7 +140,7 @@ object Setup {
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     implicit val blockProcessingQueue = Queue
-      .unbounded[Task, (Casper[Task], BlockMessage)]
+      .unbounded[Task, BlockMessage]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     implicit val blockProcessingState = Ref

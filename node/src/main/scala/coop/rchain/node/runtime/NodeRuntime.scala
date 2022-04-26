@@ -237,7 +237,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       blockProcessor: BlockProcessor[F],
       blockProcessingState: Ref[F, Set[BlockHash]],
-      incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)]
+      incomingBlocksQueue: Queue[F, BlockMessage]
   )(
       implicit
       time: Time[F],
@@ -342,14 +342,12 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       engineInitStream = fs2.Stream.eval(engineInit)
 
       casperLoopStream = fs2.Stream.eval(casperLoop).repeat
-      blockProcessorStream = {
-        BlockProcessorInstance.create(
-          incomingBlocksQueue,
-          blockProcessor,
-          blockProcessingState,
-          if (nodeConf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]]
-        )
-      }
+      blockProcessorStream = BlockProcessorInstance.create(
+        incomingBlocksQueue,
+        blockProcessor,
+        blockProcessingState,
+        if (nodeConf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]]
+      )
 
       proposerStream = if (proposer.isDefined)
         ProposerInstance

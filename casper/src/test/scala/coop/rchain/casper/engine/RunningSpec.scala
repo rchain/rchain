@@ -69,7 +69,7 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
       val test: Task[Unit] = for {
         _ <- engine.handle(local, signedBlockMessage)
         blockIsInqueue <- blockProcessingQueue.dequeue1.map(
-                           _._2.blockHash == signedBlockMessage.blockHash
+                           _.blockHash == signedBlockMessage.blockHash
                          )
         _ = assert(blockIsInqueue)
       } yield ()

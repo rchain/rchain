@@ -95,7 +95,7 @@ object Engine {
     /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blockProcessingQueue: Queue[F, BlockMessage],
       blocksInProcessing: Ref[F, Set[BlockHash]],
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
@@ -135,7 +135,7 @@ object Engine {
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blockProcessingQueue: Queue[F, BlockMessage],
       blocksInProcessing: Ref[F, Set[BlockHash]],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],

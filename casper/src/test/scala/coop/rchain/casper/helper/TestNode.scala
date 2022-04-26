@@ -5,16 +5,18 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
 import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
+import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer._
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.BlockRetriever._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
@@ -25,8 +27,6 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
-import coop.rchain.casper._
-import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -67,7 +67,7 @@ case class TestNode[F[_]: Timer](
     maxParentDepth: Option[Int] = Int.MaxValue.some,
     isReadOnly: Boolean = false,
     triggerProposeFOpt: Option[ProposeFunction[F]],
-    blockProcessorQueue: Queue[F, (Casper[F], BlockMessage)],
+    blockProcessorQueue: Queue[F, BlockMessage],
     blockProcessorState: Ref[F, Set[BlockHash]],
     blockProcessingPipe: Pipe[
       F,
@@ -581,7 +581,7 @@ object TestNode {
                          )
                      })
                  }
-                 blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
+                 blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
                  blockProcessorState <- Ref.of[F, Set[BlockHash]](Set.empty)
 
                  node = new TestNode[F](

@@ -42,7 +42,7 @@ object CasperLaunch {
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blockProcessingQueue: Queue[F, BlockMessage],
       blocksInProcessing: Ref[F, Set[BlockHash]],
       proposeFOpt: Option[ProposeFunction[F]],
       conf: CasperConf,
@@ -117,7 +117,7 @@ object CasperLaunch {
                               )
                               .whenA(dc)
                         _ <- BlockRetriever[F].ackReceive(hash)
-                        _ <- blockProcessingQueue.enqueue1((casper, block))
+                        _ <- blockProcessingQueue.enqueue1(block)
                       } yield ()
                   )
           } yield ()
