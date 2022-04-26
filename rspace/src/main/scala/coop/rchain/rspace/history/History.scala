@@ -21,7 +21,7 @@ trait History[F[_]] {
   /**
     * Read operation on the Merkle tree
     */
-  def read(key: ByteVector): F[Option[ByteVector]]
+  def read(key: ByteVector): F[Option[Blake2b256Hash]]
 
   /**
     * Insert/update/delete operations on the underlying Merkle tree (key-value store)

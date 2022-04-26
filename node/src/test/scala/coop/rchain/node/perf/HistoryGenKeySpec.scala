@@ -196,7 +196,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
       def readAndVerify(h: History[F], tasks: List[Blake2b256Hash]) =
         tasks.traverse { t =>
-          h.read(t.bytes).map(readVal => assert(readVal.contains(t.bytes), "Test read not passed"))
+          h.read(t.bytes).map(readVal => assert(readVal.contains(t), "Test read not passed"))
         }
 
       def calcSizeBytesAndNumRecords(h: HistoryType[F]): Option[(Long, Int)] =
@@ -220,7 +220,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
             flagLeafValues = true
           )
           sequentialExport[F](
-            rootHash.bytes,
+            rootHash,
             None,
             skipSize,
             1000000,
@@ -237,12 +237,12 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
       ): F[Unit] =
         for {
           keysForValid <- Sync[F].delay(
-                           expData.nodeValues.map(bytes => ByteVector(Blake2b256.hash(bytes)))
+                           expData.nodeValues.map(bytes => Blake2b256Hash.create(bytes))
                          )
 
           _ = assert(keysForValid == expData.nodeKeys, "Error 1 of validation")
 
-          localStorage = (expData.nodeKeys zip expData.nodeValues).toMap
+          localStorage = (expData.nodeKeys.map(_.bytes) zip expData.nodeValues).toMap
 
           expDataForValid <- export(rootHash, 0, localStorage.get(_).pure)
           _               = assert(expDataForValid == expData, "Error 2 of validation")

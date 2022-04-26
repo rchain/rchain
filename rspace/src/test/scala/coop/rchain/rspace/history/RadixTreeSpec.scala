@@ -167,7 +167,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "RadixTreeImpl" should "not allow to radix key smaller than NodePtr key" in withImplAndStore {
     (impl, _) =>
-      val initialItem           = NodePtr(createBV("11223344"), createBV32("01"))
+      val initialItem           = NodePtr(createBV("11223344"), createBlakeHash("01"))
       val wrongKVPair           = radixKV("11", "FF")
       val referenceErrorMessage = s"assertion failed: Radix key should be longer than NodePtr key."
       for {
@@ -379,7 +379,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         err                   <- impl.loadNode(hash).attempt
         ex                    = err.left.get
         _                     = ex shouldBe a[AssertionError]
-        referenceErrorMessage = s"assertion failed: Missing node in database. ptr=${hash.toHex}."
+        referenceErrorMessage = s"assertion failed: Missing node in database. ptr=${hash.bytes.toHex}."
         _                     = ex.getMessage shouldBe referenceErrorMessage
       } yield ()
     }
@@ -389,11 +389,11 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "encoding and then decoding a node" should "give this node" in {
     val leaf = Leaf(
       createBV("FFFF"),
-      createBV32("0000000000000000000000000000000000000000000000000000000000000001")
+      createBlakeHash("0000000000000000000000000000000000000000000000000000000000000001")
     )
     val nodePtr = NodePtr(
       createBV(""),
-      createBV("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+      createBlakeHash("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
     )
     val referenceNode = emptyNode
       .updated(1, leaf)
@@ -530,7 +530,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
           None,
           skipSize = 0,
           takeSize = 100,
-          x => Sync[Task].delay(localStorage.get(x)),
+          x => Sync[Task].delay(localStorage.get(Blake2b256Hash.fromByteVector(x))),
           exportSettings
         )
       }
@@ -655,23 +655,23 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     res6 shouldBe (ByteVector.empty, ByteVector.empty, ByteVector.empty)
   }
 
-  def createBV32(s: String): ByteVector = {
+  def createBlakeHash(s: String): Blake2b256Hash = {
     val notEmptyPart = createBV(s)
     val emptyPart    = List.fill(32 - notEmptyPart.size.toInt)(0x00.toByte)
-    ByteVector(emptyPart) ++ notEmptyPart
+    Blake2b256Hash.fromByteVector(ByteVector(emptyPart) ++ notEmptyPart)
   }
 
   def createBV(s: String): ByteVector = ByteVector(Base16.unsafeDecode(s))
   def createInsertActions(dataSet: List[radixKV]): List[InsertAction] =
     dataSet.map { ds =>
-      InsertAction(ds.rKey.toSeq, Blake2b256Hash.fromByteVector(ds.rValue))
+      InsertAction(ds.rKey.toSeq, ds.rValue)
     }
 
-  case class radixKV(rKey: ByteVector, rValue: ByteVector)
+  case class radixKV(rKey: ByteVector, rValue: Blake2b256Hash)
 
   object radixKV {
     def apply(strKey: String, strValue: String): radixKV =
-      new radixKV(createBV(strKey), createBV32(strValue))
+      new radixKV(createBV(strKey), createBlakeHash(strValue))
   }
 
   /*
@@ -705,7 +705,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     flagLeafValues = true
   )
   case class ExportParameters(
-      rootHash: ByteVector, // hash
+      rootHash: Blake2b256Hash, // hash
       typedStore: KeyValueTypedStore[Task, ByteVector, ByteVector],
       takeSize: Int,     // take size
       skipSize: Int,     // skip size
@@ -720,7 +720,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   )
 
   def validateMultipageExport(
-      rootHash: ByteVector,
+      rootHash: Blake2b256Hash,
       store: KeyValueTypedStore[Task, ByteVector, ByteVector],
       withSkip: Boolean
   ): Task[MultipageExportResults] = {
@@ -762,7 +762,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
     // Initialize structure for export
     val initSeq        = Seq[ByteVector]()
-    val initExportData = ExportData(initSeq, initSeq, initSeq, initSeq, initSeq)
+    val initExportData = ExportData(initSeq, Seq.empty, initSeq, initSeq, Seq.empty)
     val initParameters = ExportParameters(
       rootHash,
       store,
@@ -786,7 +786,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
                                 None,
                                 skipSize = 0,
                                 takeSize = 100,
-                                x => Sync[Task].delay(localStorage.get(x)),
+                                x =>
+                                  Sync[Task]
+                                    .delay(localStorage.get(Blake2b256Hash.fromByteVector(x))),
                                 exportSettings
                               )
 

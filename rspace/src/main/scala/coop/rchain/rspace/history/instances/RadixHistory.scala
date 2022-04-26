@@ -22,7 +22,7 @@ object RadixHistory {
   ): F[RadixHistory[F]] =
     for {
       impl <- Sync[F].delay(new RadixTreeImpl[F](store))
-      node <- impl.loadNode(root.bytes, noAssert = true)
+      node <- impl.loadNode(root, noAssert = true)
     } yield RadixHistory(root, node, impl, store)
 
   def createStore[F[_]: Sync](
@@ -44,10 +44,10 @@ final case class RadixHistory[F[_]: Sync: Parallel](
   override def reset(root: Blake2b256Hash): F[History[F]] =
     for {
       impl <- Sync[F].delay(new RadixTreeImpl[F](store))
-      node <- impl.loadNode(root.bytes, noAssert = true)
+      node <- impl.loadNode(root, noAssert = true)
     } yield this.copy(root, node, impl, store)
 
-  override def read(key: ByteVector): F[Option[ByteVector]] =
+  override def read(key: ByteVector): F[Option[Blake2b256Hash]] =
     impl.read(rootNode, key)
 
   override def process(actions: List[HistoryAction]): F[History[F]] =
@@ -60,8 +60,7 @@ final case class RadixHistory[F[_]: Sync: Parallel](
       newRootDataOpt <- impl.saveAndCommit(rootNode, actions)
       newHistoryOpt = newRootDataOpt.map { newRootData =>
         val (newRootNode, newRootHash) = newRootData
-        val blakeHash                  = Blake2b256Hash.fromByteVector(newRootHash)
-        this.copy(blakeHash, newRootNode, impl, store)
+        this.copy(newRootHash, newRootNode, impl, store)
       }
       _ = impl.clearReadCache()
     } yield newHistoryOpt.getOrElse(this)

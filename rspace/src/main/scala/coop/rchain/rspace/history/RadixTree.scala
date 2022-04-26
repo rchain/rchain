@@ -28,14 +28,14 @@ object RadixTree {
     * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
     * @param value stores radixValue. Always contains 32 bytes.
     */
-  final case class Leaf(prefix: ByteVector, value: ByteVector) extends Item
+  final case class Leaf(prefix: ByteVector, value: Blake2b256Hash) extends Item
 
   /**
     * NodePtr is pointer to the next child [[Node]]. Contains 2 fields.
     * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
     * @param ptr stores hash of the child node (see section Storing of tree). Always contains 32 bytes.
     */
-  final case class NodePtr(prefix: ByteVector, ptr: ByteVector) extends Item
+  final case class NodePtr(prefix: ByteVector, ptr: Blake2b256Hash) extends Item
 
   /**
     * Base type for nodes in Radix History.
@@ -53,7 +53,7 @@ object RadixTree {
     */
   val emptyNode: Node = (0 until numItems).map(_ => EmptyItem).toVector
 
-  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteVector(hashNode(emptyNode)._1)
+  val emptyRootHash: Blake2b256Hash = hashNode(emptyNode)._1
 
   /**
     * Binary codecs for serializing/deserializing Node in Radix tree
@@ -101,7 +101,7 @@ object RadixTree {
           val sizePrefix = leafPrefix.size.toInt
           assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
           assert(
-            value.size == defSize,
+            value.bytes.size == defSize,
             "Error during serialization: size of leafValue not equal 32."
           )
           size + headSize + sizePrefix + defSize
@@ -110,7 +110,7 @@ object RadixTree {
           val sizePrefix = ptrPrefix.size.toInt
           assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
           assert(
-            ptr.size == defSize,
+            ptr.bytes.size == defSize,
             "Error during serialization: size of ptrPrefix not equal 32."
           )
           size + headSize + sizePrefix + defSize
@@ -146,7 +146,7 @@ object RadixTree {
               for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix(i.toLong)
               // Fill leafValue
               val posValueStart = posPrefixStart + prefixSize
-              for (i <- 0 until defSize) arr(posValueStart + i) = value(i.toLong)
+              for (i <- 0 until defSize) arr(posValueStart + i) = value.bytes(i.toLong)
               putItemIntoArray(idxItem + 1, posValueStart + defSize) // Loop to the next item.
 
             case NodePtr(prefix, ptr) =>
@@ -161,7 +161,7 @@ object RadixTree {
               for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix(i.toLong)
               // Fill ptr
               val posPtrStart = posPrefixStart + prefixSize
-              for (i <- 0 until defSize) arr(posPtrStart + i) = ptr(i.toLong)
+              for (i <- 0 until defSize) arr(posPtrStart + i) = ptr.bytes(i.toLong)
               putItemIntoArray(idxItem + 1, posPtrStart + defSize) // Loop to the next item.
           }
         }
@@ -207,8 +207,8 @@ object RadixTree {
 
           // Decoding type of non-empty item
           val item =
-            if (isLeaf(secondByte)) Leaf(ByteVector(prefix), ByteVector(valOrPtr))
-            else NodePtr(ByteVector(prefix), ByteVector(valOrPtr))
+            if (isLeaf(secondByte)) Leaf(ByteVector(prefix), Blake2b256Hash.fromByteArray(valOrPtr))
+            else NodePtr(ByteVector(prefix), Blake2b256Hash.fromByteArray(valOrPtr))
 
           val nodeNext = node.updated(idxItem, item)
 
@@ -247,10 +247,9 @@ object RadixTree {
     *
     * @return Blake2b256 hash of input data.
     */
-  def hashNode(node: Node): (ByteVector, ByteVector) = {
-    import coop.rchain.crypto.hash.Blake2b256
+  def hashNode(node: Node): (Blake2b256Hash, ByteVector) = {
     val bytes = Codecs.encode(node)
-    (ByteVector(Blake2b256.hash(bytes)), bytes)
+    (Blake2b256Hash.create(bytes), bytes)
   }
 
   def byteToInt(b: Byte): Int = b & 0xff
@@ -266,10 +265,10 @@ object RadixTree {
     */
   final case class ExportData(
       nodePrefixes: Seq[ByteVector],
-      nodeKeys: Seq[ByteVector],
+      nodeKeys: Seq[Blake2b256Hash],
       nodeValues: Seq[ByteVector],
       leafPrefixes: Seq[ByteVector],
-      leafValues: Seq[ByteVector]
+      leafValues: Seq[Blake2b256Hash]
   )
 
   /**
@@ -305,7 +304,7 @@ object RadixTree {
     * }}}
     */
   def sequentialExport[F[_]: Sync](
-      rootHash: ByteVector,
+      rootHash: Blake2b256Hash,
       lastPrefix: Option[ByteVector],
       skipSize: Int,
       takeSize: Int,
@@ -320,7 +319,7 @@ object RadixTree {
     type Path = Vector[NodeData] // Sequence used in recursions
 
     final case class NodePathData(
-        hash: ByteVector,       // Hash of node for load
+        hash: Blake2b256Hash,   // Hash of node for load
         nodePrefix: ByteVector, // Prefix of this node
         restPrefix: ByteVector, // Prefix that describes the rest of the Path
         path: Path              // Return path
@@ -355,9 +354,9 @@ object RadixTree {
         }
       }
       for {
-        nodeOpt <- getNodeDataFromStore(p.hash)
+        nodeOpt <- getNodeDataFromStore(p.hash.bytes)
         node <- nodeOpt.liftTo[F](
-                 new Exception(s"Export error: node with key ${p.hash.toHex} not found.")
+                 new Exception(s"Export error: node with key ${p.hash.bytes.toHex} not found.")
                )
         decodedNode = Codecs.decode(node)
       } yield
@@ -399,7 +398,7 @@ object RadixTree {
     def addLeaf(
         p: StepData,
         leafPrefix: ByteVector,
-        leafValue: ByteVector,
+        leafHash: Blake2b256Hash,
         itemIndex: Byte,
         curNodePrefix: ByteVector,
         newPath: Vector[NodeData]
@@ -412,7 +411,7 @@ object RadixTree {
           p.expData.leafPrefixes :+ newSingleLP
         } else Vector()
         val newLV =
-          if (settings.flagLeafValues) p.expData.leafValues :+ leafValue
+          if (settings.flagLeafValues) p.expData.leafValues :+ leafHash
           else Vector()
         val newExportData = ExportData(
           nodePrefixes = p.expData.nodePrefixes,
@@ -427,7 +426,7 @@ object RadixTree {
     def addNodePtr(
         p: StepData,
         ptrPrefix: ByteVector,
-        ptr: ByteVector,
+        ptr: Blake2b256Hash,
         itemIndex: Byte,
         curNodePrefix: ByteVector,
         newPath: Vector[NodeData]
@@ -455,10 +454,10 @@ object RadixTree {
         StepData(childPath, p.skip, p.take - 1, newData)
       }
       for {
-        childNodeOpt <- getNodeDataFromStore(ptr)
+        childNodeOpt <- getNodeDataFromStore(ptr.bytes)
         childNV <- childNodeOpt.liftTo[F](
                     new Exception(
-                      s"Export error: Node with key ${ptr.toHex} not found"
+                      s"Export error: Node with key ${ptr.bytes.toHex} not found"
                     )
                   )
         childDecoded  = Codecs.decode(childNV)
@@ -534,7 +533,8 @@ object RadixTree {
         skippedStart = (emptyExportData, skipSize - 1, takeSize) // Skipped node start
         rootExportData = {
           val newNP = if (settings.flagNodePrefixes) Vector(ByteVector.empty) else Vector()
-          val newNK = if (settings.flagNodeKeys) Vector(rootHash) else Vector()
+          val newNK =
+            if (settings.flagNodeKeys) Vector(rootHash) else Vector()
           val newNV = if (settings.flagNodeValues) Vector(rootNodeSer) else Vector()
           ExportData(newNP, newNK, newNV, Vector(), Vector())
         }
@@ -554,7 +554,7 @@ object RadixTree {
 
     for {
       _              <- initConditionsException.whenA((skipSize, takeSize) == (0, 0))
-      rootNodeSerOpt <- getNodeDataFromStore(rootHash)
+      rootNodeSerOpt <- getNodeDataFromStore(rootHash.bytes)
       r              <- rootNodeSerOpt.map(doExport).getOrElse(emptyResult)
     } yield r
   }
@@ -588,8 +588,8 @@ object RadixTree {
     /**
       * Load and decode serializing data from KVDB.
       */
-    private def loadNodeFromStore(nodePtr: ByteVector): F[Option[Node]] =
-      store.get1(nodePtr).map(_.map(Codecs.decode))
+    private def loadNodeFromStore(nodePtr: Blake2b256Hash): F[Option[Node]] =
+      store.get1(nodePtr.bytes).map(_.map(Codecs.decode))
 
     /**
       * Cache for storing read and decoded nodes.
@@ -598,7 +598,7 @@ object RadixTree {
       * Where hash - Blake2b256Hash of serializing nodes data,
       *       node - deserialized data of this node.
       */
-    private val cacheR: TrieMap[ByteVector, Node] = TrieMap.empty
+    private val cacheR: TrieMap[Blake2b256Hash, Node] = TrieMap.empty
 
     /**
       * Load one node from [[cacheR]].
@@ -606,8 +606,9 @@ object RadixTree {
       * If there is no such record in cache - load and decode from KVDB, then save to cacheR.
       * If there is no such record in KVDB - execute assert (if set noAssert flag - return emptyNode).
       */
-    def loadNode(nodePtr: ByteVector, noAssert: Boolean = false): F[Node] = {
-      def errorMsg(): Unit = assert(noAssert, s"Missing node in database. ptr=${nodePtr.toHex}.")
+    def loadNode(nodePtr: Blake2b256Hash, noAssert: Boolean = false): F[Node] = {
+      def errorMsg(): Unit =
+        assert(noAssert, s"Missing node in database. ptr=${nodePtr.bytes.toHex}.")
       def cacheMiss =
         for {
           storeNodeOpt <- loadNodeFromStore(nodePtr)
@@ -631,7 +632,7 @@ object RadixTree {
       * Where hash -  Blake2b256Hash of bytes,
       *       bytes - serializing data of nodes.
       */
-    private val cacheW: TrieMap[ByteVector, ByteVector] = TrieMap.empty
+    private val cacheW: TrieMap[Blake2b256Hash, ByteVector] = TrieMap.empty
 
     /**
       * Serializing and hashing one [[Node]].
@@ -639,11 +640,11 @@ object RadixTree {
       * Serializing data load in [[cacheW]].
       * If detected collision with older cache data - executing assert
       */
-    def saveNode(node: Node): ByteVector = {
+    def saveNode(node: Node): Blake2b256Hash = {
       val (hash, bytes) = hashNode(node)
       def checkCollision(v: Node): Unit = assert(
         v == node,
-        s"Collision in cache: record with key = ${hash.toHex} has already existed."
+        s"Collision in cache: record with key = ${hash.bytes.toHex} has already existed."
       )
       cacheR.get(hash).map(checkCollision).getOrElse(cacheR.update(hash, node))
       cacheW.update(hash, bytes)
@@ -656,21 +657,21 @@ object RadixTree {
       * If detected collision with older KVDB data - execute Exception
       */
     def commit: F[Unit] = {
-      def collisionException(collisions: List[(ByteVector, ByteVector)]): F[Unit] =
+      def collisionException(collisions: List[(Blake2b256Hash, ByteVector)]): F[Unit] =
         new RuntimeException(
-          s"${collisions.length} collisions in KVDB (first collision with key = ${collisions.head._1.toHex})."
+          s"${collisions.length} collisions in KVDB (first collision with key = ${collisions.head._1.bytes.toHex})."
         ).raiseError
       for {
         kvPairs           <- Sync[F].delay(cacheW.toList)
-        ifAbsent          <- store.contains(kvPairs.map(_._1))
+        ifAbsent          <- store.contains(kvPairs.map(_._1.bytes))
         kvIfAbsent        = kvPairs zip ifAbsent
         kvExist           = kvIfAbsent.filter(_._2).map(_._1)
-        valueExistInStore <- store.get(kvExist.map(_._1))
+        valueExistInStore <- store.get(kvExist.map(_._1.bytes))
         kvvExist          = kvExist zip valueExistInStore.map(_.getOrElse(ByteVector.empty))
         kvCollision       = kvvExist.filter(kvv => !(kvv._1._2 == kvv._2)).map(_._1)
         _                 <- if (kvCollision.nonEmpty) collisionException(kvCollision) else ().pure
         kvAbsent          = kvIfAbsent.filterNot(_._2).map(_._1)
-        _                 <- store.put(kvAbsent)
+        _                 <- store.put(kvAbsent.map { case (k, v) => (k.bytes, v) })
       } yield ()
     }
 
@@ -682,23 +683,25 @@ object RadixTree {
     /**
       * Read leaf data with prefix. If data not found, returned [[None]]
       */
-    final def read(startNode: Node, startPrefix: ByteVector): F[Option[ByteVector]] = {
+    final def read(startNode: Node, startPrefix: ByteVector): F[Option[Blake2b256Hash]] = {
       type Params = (Node, ByteVector)
-      def loop(params: Params): F[Either[Params, Option[ByteVector]]] =
+      def loop(params: Params): F[Either[Params, Option[Blake2b256Hash]]] =
         params match {
-          case (_, ByteVector.empty) => Option.empty[ByteVector].asRight[Params].pure // Not found
+          case (_, ByteVector.empty) =>
+            Option.empty[Blake2b256Hash].asRight[Params].pure // Not found
           case (curNode, prefix) =>
             curNode(byteToInt(prefix.head)) match {
-              case EmptyItem => Option.empty[ByteVector].asRight[Params].pure // Not found
+              case EmptyItem => Option.empty[Blake2b256Hash].asRight[Params].pure // Not found
 
               case Leaf(leafPrefix, value) =>
                 if (leafPrefix == prefix.tail) value.some.asRight[Params].pure // Happy end
-                else Option.empty[ByteVector].asRight[Params].pure             // Not found
+                else Option.empty[Blake2b256Hash].asRight[Params].pure         // Not found
 
               case NodePtr(ptrPrefix, ptr) =>
                 val (_, prefixRest, ptrPrefixRest) = commonPrefix(prefix.tail, ptrPrefix)
-                if (ptrPrefixRest.isEmpty) loadNode(ptr).map(n => (n, prefixRest).asLeft) // Deeper
-                else Option.empty[ByteVector].asRight[Params].pure                        // Not found
+                if (ptrPrefixRest.isEmpty)
+                  loadNode(ptr).map(n => (n, prefixRest).asLeft)       // Deeper
+                else Option.empty[Blake2b256Hash].asRight[Params].pure // Not found
             }
         }
       (startNode, startPrefix).tailRecM(loop)
@@ -770,11 +773,11 @@ object RadixTree {
     def update(
         curItem: Item,
         insPrefix: ByteVector,
-        insValue: ByteVector
+        insValue: Blake2b256Hash
     ): F[Option[Item]] = {
 
       def insertNewNodeToChild(
-          childPtr: ByteVector,
+          childPtr: Blake2b256Hash,
           childPrefix: ByteVector,
           insPrefix: ByteVector
       ) =
@@ -808,7 +811,10 @@ object RadixTree {
               val (commPrefix, insPrefixRest, leafPrefixRest) = commonPrefix(insPrefix, leafPrefix)
               val newNode = emptyNode
                 .updated(byteToInt(leafPrefixRest.head), Leaf(leafPrefixRest.tail, leafValue))
-                .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
+                .updated(
+                  byteToInt(insPrefixRest.head),
+                  Leaf(insPrefixRest.tail, insValue)
+                )
               saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
             }
 
@@ -821,7 +827,10 @@ object RadixTree {
               // Create child node, insert existing Ptr and new leaf in this node.
               val newNode = emptyNode
                 .updated(byteToInt(ptrPrefixRest.head), NodePtr(ptrPrefixRest.tail, ptr))
-                .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
+                .updated(
+                  byteToInt(insPrefixRest.head),
+                  Leaf(insPrefixRest.tail, insValue)
+                )
               saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
             }
         }
@@ -837,7 +846,7 @@ object RadixTree {
       */
     def delete(curItem: Item, delPrefix: ByteVector): F[Option[Item]] = {
       def deleteFromChildNode(
-          childPtr: ByteVector,
+          childPtr: Blake2b256Hash,
           childPrefix: ByteVector,
           delPrefix: ByteVector
       ): F[Option[Item]] =
@@ -879,7 +888,7 @@ object RadixTree {
       def processOneAction(action: HistoryAction, item: Item, itemIdx: Int) =
         for {
           newItem <- action match {
-                      case InsertAction(key, hash) => update(item, ByteVector(key).tail, hash.bytes)
+                      case InsertAction(key, hash) => update(item, ByteVector(key).tail, hash)
                       case DeleteAction(key)       => delete(item, ByteVector(key).tail)
                     }
         } yield (itemIdx, newItem)
@@ -955,7 +964,10 @@ object RadixTree {
       * New data load to [[store]], after that clearing [[cacheW]].
       * @return new (rootNode, rootHash). if no action was taken - return [[None]].
       */
-    def saveAndCommit(rootNode: Node, actions: List[HistoryAction]): F[Option[(Node, ByteVector)]] =
+    def saveAndCommit(
+        rootNode: Node,
+        actions: List[HistoryAction]
+    ): F[Option[(Node, Blake2b256Hash)]] =
       for {
         newRootNodeOpt <- makeActions(rootNode, actions)
         r <- newRootNodeOpt.traverse { newRootNode =>
@@ -983,14 +995,14 @@ object RadixTree {
       def constructPrefixStr(prefix: ByteVector): String =
         if (prefix.isEmpty) "empty" else prefix.toHex.toUpperCase
 
-      def constructLeafValueStr(leafValue: ByteVector) =
-        (leafValue.toHex.take(4) ++ "..." ++ leafValue.toHex.takeRight(4)).toUpperCase
+      def constructLeafValueStr(leafValue: Blake2b256Hash) =
+        (leafValue.bytes.toHex.take(4) ++ "..." ++ leafValue.bytes.toHex.takeRight(4)).toUpperCase
 
       def constructLeafStr(
           indent: String,
           idx: Int,
           leafPrefix: ByteVector,
-          leafValue: ByteVector
+          leafValue: Blake2b256Hash
       ) = {
         val idxStr    = constructIdxStr(idx)
         val prefixStr = constructPrefixStr(leafPrefix)
