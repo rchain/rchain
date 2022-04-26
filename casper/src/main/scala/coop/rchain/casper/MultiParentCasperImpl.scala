@@ -38,8 +38,7 @@ class MultiParentCasperImpl[F[_]
     validatorId: Option[ValidatorIdentity],
     shardName: String,
     minPhloPrice: Long,
-    maxNumberOfParents: Int,
-    approvedBlock: BlockMessage
+    maxNumberOfParents: Int
 ) extends MultiParentCasper[F] {
   import MultiParentCasperImpl._
 
@@ -51,8 +50,6 @@ class MultiParentCasperImpl[F[_]
   def getValidator: F[Option[ValidatorIdentity]] = validatorId.pure[F]
 
   def getVersion: F[Long] = version.pure[F]
-
-  def getApprovedBlock: F[BlockMessage] = approvedBlock.pure[F]
 
   /**
     * Check if there are blocks in CasperBuffer available with all dependencies met.

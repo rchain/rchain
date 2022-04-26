@@ -40,7 +40,6 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def lastFinalizedBlock: F[BlockMessage]                             = getRandomBlock().pure[F]
   def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
-  def getApprovedBlock: F[BlockMessage]                               = getRandomBlock().pure[F]
   def getValidator: F[Option[ValidatorIdentity]]                      = none[ValidatorIdentity].pure[F]
   def getVersion: F[Long]                                             = 1L.pure[F]
   def getDeployLifespan: F[Int]                                       = Int.MaxValue.pure[F]

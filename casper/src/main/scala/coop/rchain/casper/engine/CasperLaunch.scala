@@ -121,13 +121,11 @@ object CasperLaunch {
                   )
           } yield ()
 
-        val ab = approvedBlock.candidate.block
         for {
           casper <- MultiParentCasper
                      .hashSetCasper[F](
                        validatorIdentityOpt,
-                       casperShardConf,
-                       ab
+                       casperShardConf
                      )
           init = for {
             _ <- askPeersForForkChoiceTips

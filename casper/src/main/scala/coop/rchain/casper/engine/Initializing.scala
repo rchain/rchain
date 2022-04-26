@@ -241,16 +241,10 @@ class Initializing[F[_]
     } yield ()
   }
 
-  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] = {
-    val ab = approvedBlock.candidate.block
+  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] =
     for {
-      casper <- MultiParentCasper
-                 .hashSetCasper[F](
-                   validatorId,
-                   casperShardConf,
-                   ab
-                 )
-      _ <- Log[F].info("MultiParentCasper instance created.")
+      casper <- MultiParentCasper.hashSetCasper[F](validatorId, casperShardConf)
+      _      <- Log[F].info("MultiParentCasper instance created.")
       _ <- transitionToRunning[F](
             blockProcessingQueue,
             blocksInProcessing,
@@ -262,5 +256,4 @@ class Initializing[F[_]
           )
       _ <- CommUtil[F].sendForkChoiceTipRequest
     } yield ()
-  }
 }

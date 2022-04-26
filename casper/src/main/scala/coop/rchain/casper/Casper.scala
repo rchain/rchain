@@ -52,7 +52,6 @@ trait Casper[F[_]] {
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
-  def getApprovedBlock: F[BlockMessage]
   def getValidator: F[Option[ValidatorIdentity]]
   def getVersion: F[Long]
 
@@ -129,11 +128,10 @@ sealed abstract class MultiParentCasperInstances {
   implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: Timer: BlockStore: BlockDagStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: DeployStorage: CasperBufferStorage: BlockRetriever](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: RuntimeManager: CommUtil: Log: Time: Timer: BlockStore: BlockDagStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: DeployStorage: CasperBufferStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
-      casperShardConf: CasperShardConf,
-      approvedBlock: BlockMessage
-  )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
+      casperShardConf: CasperShardConf
+  ): F[MultiParentCasper[F]] =
     for {
       _ <- ().pure
     } yield {
@@ -141,8 +139,7 @@ sealed abstract class MultiParentCasperInstances {
         validatorId,
         casperShardConf.shardName,
         casperShardConf.minPhloPrice,
-        casperShardConf.maxNumberOfParents,
-        approvedBlock
+        casperShardConf.maxNumberOfParents
       )
     }
 }

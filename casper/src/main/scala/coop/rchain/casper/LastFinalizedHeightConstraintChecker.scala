@@ -16,8 +16,6 @@ import coop.rchain.shared.Log
 final class LastFinalizedHeightConstraintChecker[F[_]: Sync: Log: BlockDagStorage] {
   def check(
       s: CasperSnapshot,
-      // TODO having genesis is a weird way to check, remove
-      genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity
   ): F[CheckProposeConstraintsResult] = {
     val validator                 = ByteString.copyFrom(validatorIdentity.publicKey.bytes)

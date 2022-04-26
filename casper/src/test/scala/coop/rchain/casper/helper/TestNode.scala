@@ -138,8 +138,7 @@ case class TestNode[F[_]: Timer](
     validatorIdOpt,
     casperShardConf.shardName,
     casperShardConf.minPhloPrice,
-    casperShardConf.maxNumberOfParents,
-    genesis
+    casperShardConf.maxNumberOfParents
   )
 
   implicit val rspaceMan = RSpaceStateManagerTestImpl()

@@ -44,8 +44,8 @@ class Proposer[F[_]: Concurrent: Log: Span](
         CasperSnapshot,
         ValidatorIdentity
     ) => CheckProposeConstraintsResult,
-    checkEnoughBaseStake: (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult],
-    checkFinalizedHeight: (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult],
+    checkEnoughBaseStake: CasperSnapshot => F[CheckProposeConstraintsResult],
+    checkFinalizedHeight: CasperSnapshot => F[CheckProposeConstraintsResult],
     createBlock: (
         CasperSnapshot,
         ValidatorIdentity
@@ -63,10 +63,8 @@ class Proposer[F[_]: Concurrent: Log: Span](
   ): F[(ProposeResult, Option[BlockMessage])] =
     Span[F].traceI("do-propose") {
       for {
-        // TODO this genesis should not be here, but required for sync constraint code. Remove
-        genesis <- casper.getApprovedBlock
         // check if node is allowed to propose a block
-        chk <- checkProposeConstraints(genesis, s)
+        chk <- checkProposeConstraints(s)
         r <- chk match {
               case v: CheckProposeConstraintsFailure =>
                 (ProposeResult.failure(v), none[BlockMessage]).pure[F]
@@ -96,15 +94,14 @@ class Proposer[F[_]: Concurrent: Log: Span](
 
   // Check if proposer can issue a block
   private def checkProposeConstraints(
-      genesis: BlockMessage,
       s: CasperSnapshot
   ): F[CheckProposeConstraintsResult] =
     checkActiveValidator(s, validator) match {
       case NotBonded => CheckProposeConstraintsResult.notBonded.pure[F]
       case _ =>
         val work = Stream(
-          Stream.eval[F, CheckProposeConstraintsResult](checkEnoughBaseStake(genesis, s)),
-          Stream.eval[F, CheckProposeConstraintsResult](checkFinalizedHeight(genesis, s))
+          Stream.eval[F, CheckProposeConstraintsResult](checkEnoughBaseStake(s)),
+          Stream.eval[F, CheckProposeConstraintsResult](checkFinalizedHeight(s))
         )
         work
           .parJoin(2)
@@ -182,18 +179,16 @@ object Proposer {
       else
         NotBonded
 
-    val checkEnoughBaseStake = (genesis: BlockMessage, s: CasperSnapshot) =>
+    val checkEnoughBaseStake = (s: CasperSnapshot) =>
       SynchronyConstraintChecker[F].check(
         s,
         RuntimeManager[F],
-        genesis,
         validatorIdentity
       )
 
-    val checkLastFinalizedHeightConstraint = (genesis: BlockMessage, s: CasperSnapshot) =>
+    val checkLastFinalizedHeightConstraint = (s: CasperSnapshot) =>
       LastFinalizedHeightConstraintChecker[F].check(
         s,
-        genesis: BlockMessage,
         validatorIdentity
       )
 

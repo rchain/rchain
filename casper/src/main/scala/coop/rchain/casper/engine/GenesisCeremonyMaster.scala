@@ -80,11 +80,7 @@ object GenesisCeremonyMaster {
                  for {
                    _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
                    casper <- MultiParentCasper
-                              .hashSetCasper[F](
-                                validatorId,
-                                casperShardConf: CasperShardConf,
-                                ab
-                              )
+                              .hashSetCasper[F](validatorId, casperShardConf: CasperShardConf)
                    _ <- Engine
                          .transitionToRunning[F](
                            blockProcessingQueue,

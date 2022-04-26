@@ -37,17 +37,14 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
     (_: CasperSnapshot, _: ValidatorIdentity) => CheckProposeConstraintsResult.success
 
   def alwaysNotEnoughBlocksF[F[_]: Applicative]
-      : (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult] =
-    (_: BlockMessage, _: CasperSnapshot) => CheckProposeConstraintsResult.notEnoughNewBlock.pure[F]
+      : CasperSnapshot => F[CheckProposeConstraintsResult] =
+    (_: CasperSnapshot) => CheckProposeConstraintsResult.notEnoughNewBlock.pure[F]
 
-  def alwaysTooFarAheadF[F[_]: Applicative]
-      : (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult] =
-    (_: BlockMessage, _: CasperSnapshot) =>
-      CheckProposeConstraintsResult.tooFarAheadOfLastFinalized.pure[F]
+  def alwaysTooFarAheadF[F[_]: Applicative]: CasperSnapshot => F[CheckProposeConstraintsResult] =
+    (_: CasperSnapshot) => CheckProposeConstraintsResult.tooFarAheadOfLastFinalized.pure[F]
 
-  def okProposeConstraint[F[_]: Applicative]
-      : (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult] =
-    (_: BlockMessage, _: CasperSnapshot) => CheckProposeConstraintsResult.success.pure[F]
+  def okProposeConstraint[F[_]: Applicative]: CasperSnapshot => F[CheckProposeConstraintsResult] =
+    (_: CasperSnapshot) => CheckProposeConstraintsResult.success.pure[F]
 
   def alwaysSuccesfullValidation[F[_]: Applicative] =
     (_: Casper[F], _: CasperSnapshot, _: BlockMessage) =>
