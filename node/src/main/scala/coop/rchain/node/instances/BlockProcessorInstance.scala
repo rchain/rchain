@@ -4,11 +4,15 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.instances.list._
 import cats.syntax.all._
+import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.{
   Casper,
   CasperShardConf,
+  MultiParentCasperImpl,
   PrettyPrinter,
   ProposeFunction,
   ValidBlockProcessing
@@ -66,7 +70,7 @@ object BlockProcessorInstance {
             }
             .evalFilter(
               _ =>
-                blockProcessor.checkDependenciesWithEffects(c, b) >>= { r =>
+                blockProcessor.checkDependenciesWithEffects(b) >>= { r =>
                   logMissingDeps.unlessA(r).as(r)
                 }
             )
@@ -78,7 +82,7 @@ object BlockProcessorInstance {
             )
             .evalTap { _ =>
               for {
-                bufferPendants <- c.getDependencyFreeFromBuffer
+                bufferPendants <- blockProcessor.getDependencyFreeFromBuffer
                 inProcess      <- state.get
                 _ <- bufferPendants
                       .filterNot(b => inProcess.contains(b.blockHash))
@@ -87,7 +91,7 @@ object BlockProcessorInstance {
               } yield ()
             }
             .evalTap { v =>
-              triggerProposeF.traverse(f => f(v._1, true))
+              triggerProposeF.traverse(_(true))
             }
             // ensure to remove hash from state
             .onFinalize(state.update(s => s - b.blockHash))

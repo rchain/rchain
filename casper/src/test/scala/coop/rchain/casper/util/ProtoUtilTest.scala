@@ -43,7 +43,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
                         0,
                         shardId = genesis.genesisBlock.shardId
                       ) >>= (node.addBlock(_))
-        dag               <- node.casperEff.blockDag
+        dag               <- node.blockDagStorage.getRepresentation
         unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, signedBlock)
         _                 = unseenBlockHashes should be(Set.empty[BlockHash])
       } yield ()
@@ -62,7 +62,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
                    .addBlock(_))
         block1 <- ConstructDeploy
                    .basicDeployData[Effect](1, shardId = shardId) >>= (node.addBlock(_))
-        dag               <- node.casperEff.blockDag
+        dag               <- node.blockDagStorage.getRepresentation
         unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, block0)
         _                 = unseenBlockHashes should be(Set(block1.blockHash))
       } yield ()

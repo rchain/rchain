@@ -179,7 +179,8 @@ object Running {
       Log[F].info(
         s"Sending tips ${PrettyPrinter.buildString(tips)} to ${peer.endpoint.host}"
       )
-    val getTips = casper.blockDag.flatMap(_.latestMessageHashes.map(_.values.toList.distinct))
+    val getTips = BlockDagStorage[F].getRepresentation
+      .flatMap(_.latestMessageHashes.map(_.values.toList.distinct))
     // TODO respond with all tips in a single message
     def respondToPeer(tip: BlockHash) = TransportLayer[F].sendToPeer(peer, HasBlockProto(tip))
 

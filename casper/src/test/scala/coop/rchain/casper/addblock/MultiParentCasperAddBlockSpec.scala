@@ -90,7 +90,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                     shardId = SHARD_ID
                   )
         signedBlock2 <- node.addBlock(deploy2)
-        _            <- node.casperEff.blockDag
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
                  Base16.encode(
@@ -540,7 +539,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         sigAlgorithm = "",
         shardId = "root"
       )
-    nodes(1).casperEff.blockDag.flatMap { dag =>
+    nodes(1).blockDagStorage.getRepresentation.flatMap { dag =>
       val sender       = blockThatPointsToInvalidBlock.sender
       implicit val bds = nodes(1).blockDagStorage
       for {

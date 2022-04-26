@@ -71,7 +71,7 @@ object BlockAPI {
                 )
               )
         // call a propose if proposer defined
-        _ <- triggerPropose.traverse(_(casper, true))
+        _ <- triggerPropose.traverse(_(true))
       } yield r
 
     // Check if node is read-only
@@ -119,31 +119,24 @@ object BlockAPI {
   ): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
     def logSucess(msg: String) = Log[F].info(msg) >> msg.asRight[Error].pure[F]
-    def logWarn(msg: String)   = Log[F].warn(msg) >> msg.asLeft[String].pure[F]
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[String]](
-        casper =>
-          for {
-            // Trigger propose
-            proposerResult <- triggerProposeF(casper, isAsync)
-            r <- proposerResult match {
-                  case ProposerEmpty =>
-                    logDebug(s"Failure: another propose is in progress")
-                  case ProposerFailure(status, seqNumber) =>
-                    logDebug(s"Failure: $status (seqNum $seqNumber)")
-                  case ProposerStarted(seqNumber) =>
-                    logSucess(s"Propose started (seqNum $seqNumber)")
-                  case ProposerSuccess(_, block) =>
-                    // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
-                    //  Fix to use structured result with transport errors/codes.
-                    // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
-                    val blockHashHex = block.blockHash.toHexString
-                    logSucess(s"Success! Block $blockHashHex created and added.")
-                }
-          } yield r,
-        default = logWarn("Failure: casper instance is not available.")
-      )
-    )
+    for {
+      // Trigger propose
+      proposerResult <- triggerProposeF(isAsync)
+      r <- proposerResult match {
+            case ProposerEmpty =>
+              logDebug(s"Failure: another propose is in progress")
+            case ProposerFailure(status, seqNumber) =>
+              logDebug(s"Failure: $status (seqNum $seqNumber)")
+            case ProposerStarted(seqNumber) =>
+              logSucess(s"Propose started (seqNum $seqNumber)")
+            case ProposerSuccess(_, block) =>
+              // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
+              //  Fix to use structured result with transport errors/codes.
+              // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
+              val blockHashHex = block.blockHash.toHexString
+              logSucess(s"Success! Block $blockHashHex created and added.")
+          }
+    } yield r
   }
 
   // Get result of the propose
@@ -657,7 +650,7 @@ object BlockAPI {
           for {
             validatorOpt     <- casper.getValidator
             validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
-            dag              <- casper.blockDag
+            dag              <- BlockDagStorage[F].getRepresentation
             latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
             latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
           } yield latestMessage.asRight[Error],

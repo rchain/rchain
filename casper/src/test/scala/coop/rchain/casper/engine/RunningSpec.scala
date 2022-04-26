@@ -118,7 +118,8 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
       val test: Task[Unit] = for {
         _        <- blockDagStorage.insert(block1, false)
         _        <- blockDagStorage.insert(block2, false)
-        tips     <- casper.blockDag.flatMap(_.latestMessageHashes.map(_.values))
+        blockDag <- blockDagStorage.getRepresentation
+        tips     <- blockDag.latestMessageHashes.map(_.values)
         _        <- engine.handle(local, request)
         requests = transportLayer.requests.map(_.msg.message.packet.get).toSet
         expected = tips.map(tip => ToPacket(HasBlockProto(tip))).toSet

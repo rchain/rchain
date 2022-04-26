@@ -2,7 +2,7 @@ package coop.rchain.node.runtime
 
 import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ContextShift, Sync, Timer}
+import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
@@ -46,8 +46,6 @@ import coop.rchain.shared._
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
-import java.nio.file.Files
-
 object Setup {
   def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
       rpConnections: ConnectionsCell[F],
@@ -68,7 +66,7 @@ object Setup {
         WebApi[F],
         AdminWebApi[F],
         Option[Proposer[F]],
-        Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
+        Queue[F, (Boolean, Deferred[F, ProposerResult])],
         // TODO move towards having a single node state
         Option[Ref[F, ProposerState[F]]],
         BlockProcessor[F],
@@ -214,14 +212,14 @@ object Setup {
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
-      proposerQueue <- Queue.unbounded[F, (Casper[F], Boolean, Deferred[F, ProposerResult])]
+      proposerQueue <- Queue.unbounded[F, (Boolean, Deferred[F, ProposerResult])]
 
       triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
         Some(
-          (casper: Casper[F], isAsync: Boolean) =>
+          (isAsync: Boolean) =>
             for {
               d <- Deferred[F, ProposerResult]
-              _ <- proposerQueue.enqueue1((casper, isAsync, d))
+              _ <- proposerQueue.enqueue1((isAsync, d))
               r <- d.get
             } yield r
         )
@@ -293,11 +291,12 @@ object Setup {
         ReportingRoutes.service[F](blockReportAPI)
       }
       casperLoop = {
-        implicit val br = blockRetriever
+        implicit val br             = blockRetriever
+        implicit val (bs, bds, cbs) = (blockStore, blockDagStorage, casperBufferStorage)
         for {
           engine <- engineCell.read
           // Fetch dependencies from CasperBuffer
-          _ <- engine.withCasper(_.fetchDependencies, ().pure[F])
+          _ <- MultiParentCasperImpl.fetchDependencies
           // Maintain RequestedBlocks for Casper
           _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)

@@ -68,7 +68,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
               )
             )
         // call a propose if proposer defined
-        _ <- triggerPropose.traverse(_(MultiParentCasper[F], true))
+        _ <- triggerPropose.traverse(_(true))
       } yield r
 
     // Check if node is read-only
@@ -124,7 +124,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: BlockDagSt
     def logSucess(msg: String) = Log[F].info(msg) >> msg.asRight[Error].pure[F]
     for {
       // Trigger propose
-      proposerResult <- triggerProposeF(MultiParentCasper[F], isAsync)
+      proposerResult <- triggerProposeF(isAsync)
       r <- proposerResult match {
             case ProposerEmpty =>
               logDebug(s"Failure: another propose is in progress")

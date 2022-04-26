@@ -44,30 +44,6 @@ class MultiParentCasperImpl[F[_]
 
   def getValidator: F[Option[ValidatorIdentity]] = validatorId.pure[F]
 
-  /**
-    * Check if there are blocks in CasperBuffer available with all dependencies met.
-    * @return First from the set of available blocks
-    */
-  override def getDependencyFreeFromBuffer: F[List[BlockMessage]] = {
-    import cats.instances.list._
-    for {
-      pendants       <- CasperBufferStorage[F].getPendants
-      pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
-      depFreePendants <- pendantsStored.filterA { pendant =>
-                          for {
-                            pendantBlock   <- BlockStore[F].get1(pendant)
-                            justifications = pendantBlock.get.justifications
-                            // If even one of justifications is not in DAG - block is not dependency free
-                            dag <- BlockDagStorage[F].getRepresentation
-                            missingDep = justifications
-                              .map(_.latestBlockHash)
-                              .exists(!dag.contains(_))
-                          } yield !missingDep
-                        }
-      r <- depFreePendants.traverse(BlockStore[F].getUnsafe)
-    } yield r
-  }
-
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = {
     import coop.rchain.models.rholang.implicits._
 
@@ -85,30 +61,7 @@ class MultiParentCasperImpl[F[_]
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield deploy.sig
 
-  def blockDag: F[DagRepresentation] =
-    BlockDagStorage[F].getRepresentation
-
   def getRuntimeManager: F[RuntimeManager[F]] = Sync[F].delay(RuntimeManager[F])
-
-  def fetchDependencies: F[Unit] = {
-    import cats.instances.list._
-    for {
-      pendants       <- CasperBufferStorage[F].getPendants
-      pendantsUnseen <- pendants.toList.filterA(BlockStore[F].contains(_).not)
-      _ <- Log[F].debug(s"Requesting CasperBuffer pendant hashes, ${pendantsUnseen.size} items.") >>
-            pendantsUnseen.toList.traverse_(
-              dependency =>
-                Log[F]
-                  .debug(
-                    s"Sending dependency ${PrettyPrinter.buildString(dependency)} to BlockRetriever"
-                  ) >>
-                  BlockRetriever[F].admitHash(
-                    dependency,
-                    admitHashReason = BlockRetriever.MissingDependencyRequested
-                  )
-            )
-    } yield ()
-  }
 }
 
 object MultiParentCasperImpl {
@@ -385,4 +338,46 @@ object MultiParentCasperImpl {
           .as(dag)
     }
   }
+
+  def fetchDependencies[F[_]: Sync: BlockDagStorage: BlockStore: CasperBufferStorage: BlockRetriever: Log]
+      : F[Unit] =
+    for {
+      pendants       <- CasperBufferStorage[F].getPendants
+      pendantsUnseen <- pendants.toList.filterA(BlockStore[F].contains(_).not)
+      _ <- Log[F].debug(s"Requesting CasperBuffer pendant hashes, ${pendantsUnseen.size} items.") >>
+            pendantsUnseen.toList.traverse_(
+              dependency =>
+                Log[F]
+                  .debug(
+                    s"Sending dependency ${PrettyPrinter.buildString(dependency)} to BlockRetriever"
+                  ) >>
+                  BlockRetriever[F].admitHash(
+                    dependency,
+                    admitHashReason = BlockRetriever.MissingDependencyRequested
+                  )
+            )
+    } yield ()
+
+  /**
+    * Check if there are blocks in CasperBuffer available with all dependencies met.
+    * @return First from the set of available blocks
+    */
+  def getDependencyFreeFromBuffer[F[_]: Sync: BlockDagStorage: BlockStore: CasperBufferStorage]
+      : F[List[BlockMessage]] =
+    for {
+      pendants       <- CasperBufferStorage[F].getPendants
+      pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
+      depFreePendants <- pendantsStored.filterA { pendant =>
+                          for {
+                            pendantBlock   <- BlockStore[F].get1(pendant)
+                            justifications = pendantBlock.get.justifications
+                            // If even one of justifications is not in DAG - block is not dependency free
+                            dag <- BlockDagStorage[F].getRepresentation
+                            missingDep = justifications
+                              .map(_.latestBlockHash)
+                              .exists(!dag.contains(_))
+                          } yield !missingDep
+                        }
+      r <- depFreePendants.traverse(BlockStore[F].getUnsafe)
+    } yield r
 }

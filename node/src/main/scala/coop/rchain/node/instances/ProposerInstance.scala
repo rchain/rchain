@@ -13,7 +13,7 @@ import fs2.concurrent.Queue
 
 object ProposerInstance {
   def create[F[_]: Concurrent: Log](
-      proposeRequestsQueue: Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
+      proposeRequestsQueue: Queue[F, (Boolean, Deferred[F, ProposerResult])],
       proposer: Proposer[F],
       state: Ref[F, ProposerState[F]]
   ): Stream[F, (ProposeResult, Option[BlockMessage])] = {
@@ -35,7 +35,7 @@ object ProposerInstance {
       .flatMap {
         case (lock, trigger) =>
           in.map { i =>
-              val (c, isAsync, proposeIDDef) = i
+              val (isAsync, proposeIDDef) = i
 
               Stream
                 .eval(lock.tryAcquire)
@@ -78,7 +78,7 @@ object ProposerInstance {
                     _ <- trigger.tryTake.flatMap {
                           case Some(_) =>
                             Deferred[F, ProposerResult] >>= { d =>
-                              proposeRequestsQueue.enqueue1(c, false, d)
+                              proposeRequestsQueue.enqueue1(false, d)
                             }
                           case None => ().pure[F]
                         }

@@ -23,10 +23,7 @@ import coop.rchain.shared.{Log, Time}
   */
 class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBufferStorage](
     storeBlock: BlockMessage => F[Unit],
-    getDependenciesStatus: (
-        Casper[F],
-        BlockMessage
-    ) => F[(Boolean, Set[BlockHash], Set[BlockHash])],
+    getDependenciesStatus: BlockMessage => F[(Boolean, Set[BlockHash], Set[BlockHash])],
     commitToBuffer: (BlockMessage, Option[Set[BlockHash]]) => F[Unit],
     removeFromBuffer: BlockMessage => F[Unit],
     requestMissingDependencies: Set[BlockHash] => F[Unit],
@@ -61,12 +58,9 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBuffer
     } yield isValid
 
   // check if block has all dependencies available and can be validated
-  def checkDependenciesWithEffects(
-      c: Casper[F],
-      b: BlockMessage
-  ): F[Boolean] =
+  def checkDependenciesWithEffects(b: BlockMessage): F[Boolean] =
     for {
-      r                                    <- getDependenciesStatus(c, b)
+      r                                    <- getDependenciesStatus(b)
       (isReady, depsToFetch, depsInBuffer) = r
       _ <- if (isReady)
             // store pendant block in buffer, it will be removed once block is validated and added to DAG
@@ -98,6 +92,8 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBuffer
       _ <- removeFromBuffer(b)
       _ <- ackProcessed(b)
     } yield (status)
+
+  val getDependencyFreeFromBuffer = MultiParentCasperImpl.getDependencyFreeFromBuffer
 }
 
 object BlockProcessor {
@@ -113,7 +109,7 @@ object BlockProcessor {
 
     val getCasperStateSnapshot = MultiParentCasperImpl.getSnapshot[F](casperShardConf)
 
-    val getNonValidatedDependencies = (c: Casper[F], b: BlockMessage) => {
+    val getNonValidatedDependencies = (b: BlockMessage) => {
       val allDeps = ProtoUtil.dependenciesHashesOf(b)
       for {
         // in addition, equivocation tracker has to be checked, as admissible equivocations are not stored in DAG

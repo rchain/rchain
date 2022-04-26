@@ -50,13 +50,9 @@ object DeployError {
 trait Casper[F[_]] {
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def getValidator: F[Option[ValidatorIdentity]]
-
-  def getDependencyFreeFromBuffer: F[List[BlockMessage]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
-  def blockDag: F[DagRepresentation]
-  def fetchDependencies: F[Unit]
   def getRuntimeManager: F[RuntimeManager[F]]
 }
 

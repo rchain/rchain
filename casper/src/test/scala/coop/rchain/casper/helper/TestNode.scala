@@ -157,13 +157,13 @@ case class TestNode[F[_]: Timer](
 
   def proposeSync: F[BlockHash] =
     for {
-      v <- (triggerProposeFOpt match {
-            case Some(p) => p(casperEff, false)
+      v <- triggerProposeFOpt match {
+            case Some(p) => p(false)
             case None =>
               Sync[F]
                 .raiseError(new Exception("Propose is called in read-only mode."))
                 .as(ProposerEmpty)
-          })
+          }
       r <- v match {
             case ProposerSuccess(_, b) => b.blockHash.pure[F]
             case _ =>
@@ -361,6 +361,8 @@ case class TestNode[F[_]: Timer](
     } yield ()
 
   val lastFinalizedBlock = MultiParentCasperImpl.lastFinalizedBlock
+
+  val fetchDependencies = MultiParentCasperImpl.fetchDependencies
 }
 
 object TestNode {
@@ -547,7 +549,7 @@ object TestNode {
                  // propose function in casper tests is always synchronous
                  triggerProposeFOpt = proposer.map(
                    p =>
-                     (casper: Casper[F], _: Boolean) =>
+                     (_: Boolean) =>
                        for {
                          d <- Deferred[F, ProposerResult]
                          r <- p.propose(false, d)
@@ -560,7 +562,7 @@ object TestNode {
                  blockProcessingPipe = {
                    in: fs2.Stream[F, (Casper[F], BlockMessage)] =>
                      in.evalMap(v => {
-                       val (c, b) = v
+                       val (_, b) = v
                        blockProcessor
                          .checkIfOfInterest(b)
                          .ifM(
@@ -568,7 +570,7 @@ object TestNode {
                              .checkIfWellFormedAndStore(b)
                              .ifM(
                                blockProcessor
-                                 .checkDependenciesWithEffects(c, b)
+                                 .checkDependenciesWithEffects(b)
                                  .ifM(
                                    blockProcessor.validateWithEffects(b),
                                    BlockStatus.missingBlocks.asLeft[ValidBlock].pure[F]

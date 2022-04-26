@@ -123,16 +123,12 @@ object CasperLaunch {
           } yield ()
 
         for {
-          casper <- MultiParentCasper
-                     .hashSetCasper[F](
-                       validatorIdentityOpt,
-                       casperShardConf
-                     )
+          casper <- MultiParentCasper.hashSetCasper[F](validatorIdentityOpt, casperShardConf)
           init = for {
             _ <- askPeersForForkChoiceTips
             _ <- sendBufferPendantsToCasper(casper)
             // try to propose (async way) if proposer is defined
-            _ <- proposeFOpt.traverse(p => p(casper, true))
+            _ <- proposeFOpt.traverse(_(true))
           } yield ()
           _ <- Engine
                 .transitionToRunning[F](
