@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
@@ -9,24 +9,21 @@ import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
-import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
-import coop.rchain.shared.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
-import fs2.concurrent.Queue
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
 import fs2.Stream
+import fs2.concurrent.Queue
 
-import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 
 object Running {
@@ -51,42 +48,33 @@ object Running {
     * To mitigate this issue we can update fork choice tips if current fork-choice tip has old timestamp,
     * which means node does not propose new blocks and no new blocks were received recently.
     */
-  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: BlockDagStorage: EngineCell](
+  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: BlockDagStorage](
       delayThreshold: FiniteDuration
   ): F[Unit] =
     for {
-      engine <- EngineCell[F].read
-      _ <- engine.withCasper(
-            casper => {
-              for {
-                latestMessages <- casper.blockDag.flatMap(
-                                   _.latestMessageHashes.map(_.values.toSet)
-                                 )
-                now <- Time[F].currentMillis
-                hasRecentLatestMessage = Stream
-                  .fromIterator(latestMessages.iterator)
-                  .evalMap(BlockStore[F].getUnsafe)
-                  // filter only blocks that are recent
-                  .filter { b =>
-                    val blockTimestamp = b.header.timestamp
-                    (now - blockTimestamp) < delayThreshold.toMillis
-                  }
-                  .head
-                  .compile
-                  .last
-                  .map(_.isDefined)
-                stuck <- hasRecentLatestMessage.not
-                requestWithLog = Log[F].info(
-                  "Requesting tips update as newest latest message " +
-                    s"is more then ${delayThreshold.toString} old. " +
-                    s"Might be network is faulty."
-                ) >> CommUtil[F].sendForkChoiceTipRequest
+      dag            <- BlockDagStorage[F].getRepresentation
+      latestMessages <- dag.latestMessageHashes.map(_.values.toSet)
+      now            <- Time[F].currentMillis
+      hasRecentLatestMessage = Stream
+        .fromIterator(latestMessages.iterator)
+        .evalMap(BlockStore[F].getUnsafe)
+        // filter only blocks that are recent
+        .filter { b =>
+          val blockTimestamp = b.header.timestamp
+          (now - blockTimestamp) < delayThreshold.toMillis
+        }
+        .head
+        .compile
+        .last
+        .map(_.isDefined)
+      stuck <- hasRecentLatestMessage.not
+      requestWithLog = Log[F].info(
+        "Requesting tips update as newest latest message " +
+          s"is more then ${delayThreshold.toString} old. " +
+          s"Might be network is faulty."
+      ) >> CommUtil[F].sendForkChoiceTipRequest
 
-                _ <- (requestWithLog).whenA(stuck)
-              } yield ()
-            },
-            ().pure[F]
-          )
+      _ <- requestWithLog.whenA(stuck)
     } yield ()
 
   /**

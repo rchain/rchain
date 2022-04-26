@@ -305,7 +305,7 @@ object Setup {
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
       updateForkChoiceLoop = {
-        implicit val (ec, bs, cu, bds) = (engineCell, blockStore, commUtil, blockDagStorage)
+        implicit val (bs, cu, bds) = (blockStore, commUtil, blockDagStorage)
         for {
           _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
           _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
