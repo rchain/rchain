@@ -156,18 +156,13 @@ object Validate {
 
   def blockSummary[F[_]: Sync: Log: Time: BlockStore: BlockDagStorage: Metrics: Span](
       block: BlockMessage,
-      genesis: BlockMessage,
       s: CasperSnapshot,
       shardId: String,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
     (for {
-      _ <- EitherT.liftF(Span[F].mark("before-block-hash-validation"))
-      _ <- EitherT(Validate.blockHash(block))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
       _ <- EitherT(Validate.timestamp(block))
-      _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
-      _ <- EitherT(Validate.shardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
       _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
@@ -413,21 +408,6 @@ object Validate {
     } yield status
   }
 
-  // Agnostic of justifications
-  def shardIdentifier[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage,
-      shardId: String
-  ): F[ValidBlockProcessing] =
-    if (b.shardId == shardId) {
-      BlockStatus.valid.asRight[BlockError].pure
-    } else {
-      for {
-        _ <- Log[F].warn(
-              ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected.")
-            )
-      } yield BlockStatus.invalidShardId.asLeft[ValidBlock]
-    }
-
   // Validator should only process deploys from its own shard
   def deploysShardIdentifier[F[_]: Monad: Log](
       b: BlockMessage,
@@ -438,14 +418,13 @@ object Validate {
     } else {
       for {
         _ <- Log[F].warn(ignore(b, s"not for all deploys shard identifier is $shardId."))
-      } yield BlockStatus.invalidShardId.asLeft[ValidBlock]
+      } yield BlockStatus.invalidDeployShardId.asLeft[ValidBlock]
     }
 
-  // TODO: Double check this validation isn't shadowed by the blockSignature validation
-  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] = {
+  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] = {
     val blockHashComputed = ProtoUtil.hashBlock(b)
     if (b.blockHash == blockHashComputed)
-      BlockStatus.valid.asRight[BlockError].pure
+      true.pure
     else {
       val computedHashString = PrettyPrinter.buildString(blockHashComputed)
       val hashString         = PrettyPrinter.buildString(b.blockHash)
@@ -456,7 +435,7 @@ object Validate {
                 s"block hash $hashString does not match to computed value $computedHashString."
               )
             )
-      } yield BlockStatus.invalidBlockHash.asLeft[ValidBlock]
+      } yield false
     }
   }
 

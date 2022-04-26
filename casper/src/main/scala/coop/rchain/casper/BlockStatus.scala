@@ -13,12 +13,11 @@ object BlockStatus {
   def invalidBlockNumber: BlockError       = InvalidBlock.InvalidBlockNumber
   def invalidRepeatDeploy: BlockError      = InvalidBlock.InvalidRepeatDeploy
   def invalidSequenceNumber: BlockError    = InvalidBlock.InvalidSequenceNumber
-  def invalidShardId: BlockError           = InvalidBlock.InvalidShardId
+  def invalidDeployShardId: BlockError     = InvalidBlock.InvalidDeployShardId
   def justificationRegression: BlockError  = InvalidBlock.JustificationRegression
   def neglectedInvalidBlock: BlockError    = InvalidBlock.NeglectedInvalidBlock
   def invalidTransaction: BlockError       = InvalidBlock.InvalidTransaction
   def invalidBondsCache: BlockError        = InvalidBlock.InvalidBondsCache
-  def invalidBlockHash: BlockError         = InvalidBlock.InvalidBlockHash
   def containsExpiredDeploy: BlockError    = InvalidBlock.ContainsExpiredDeploy
   def containsFutureDeploy: BlockError     = InvalidBlock.ContainsFutureDeploy
   def notOfInterest: BlockError            = InvalidBlock.NotOfInterest
@@ -46,12 +45,11 @@ object InvalidBlock {
   case object InvalidBlockNumber      extends InvalidBlock
   case object InvalidRepeatDeploy     extends InvalidBlock
   case object InvalidSequenceNumber   extends InvalidBlock
-  case object InvalidShardId          extends InvalidBlock
+  case object InvalidDeployShardId    extends InvalidBlock
   case object JustificationRegression extends InvalidBlock
   case object NeglectedInvalidBlock   extends InvalidBlock
   case object InvalidTransaction      extends InvalidBlock
   case object InvalidBondsCache       extends InvalidBlock
-  case object InvalidBlockHash        extends InvalidBlock
   case object InvalidRejectedDeploy   extends InvalidBlock
   case object ContainsExpiredDeploy   extends InvalidBlock
   case object ContainsFutureDeploy    extends InvalidBlock
@@ -63,12 +61,11 @@ object InvalidBlock {
       InvalidBlockNumber,
       InvalidRepeatDeploy,
       InvalidSequenceNumber,
-      InvalidShardId,
+      InvalidDeployShardId,
       JustificationRegression,
       NeglectedInvalidBlock,
       InvalidTransaction,
       InvalidBondsCache,
-      InvalidBlockHash,
       ContainsExpiredDeploy,
       ContainsFutureDeploy
     )

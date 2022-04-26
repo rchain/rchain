@@ -512,7 +512,6 @@ class ValidateTest
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              getRandomBlock(hashF = (ProtoUtil.hashBlock _).some),
               mkCasperSnapshot(dag),
               "root",
               Int.MaxValue
@@ -674,10 +673,10 @@ class ValidateTest
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
         genesis = ValidatorIdentity(sk)
           .signBlock(context.genesisBlock.copy(seqNum = seqNum))
-        _ <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
+        _ <- Validate.blockHash[Task](genesis) shouldBeF true
         result <- Validate.blockHash[Task](
                    genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
-                 ) shouldBeF Left(InvalidBlockHash)
+                 ) shouldBeF false
       } yield result
   }
 

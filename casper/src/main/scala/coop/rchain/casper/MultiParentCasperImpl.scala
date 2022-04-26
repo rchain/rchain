@@ -233,7 +233,7 @@ class MultiParentCasperImpl[F[_]
       for {
         _ <- EitherT(
               Validate
-                .blockSummary(b, approvedBlock, s, casperShardConf.shardName, deployLifespan)
+                .blockSummary(b, s, casperShardConf.shardName, deployLifespan)
             )
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(

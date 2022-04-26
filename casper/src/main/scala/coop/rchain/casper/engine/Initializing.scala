@@ -168,7 +168,7 @@ class Initializing[F[_]
                              BlockStore[F].contains(_),
                              BlockStore[F].getUnsafe,
                              BlockStore[F].put(_, _),
-                             validateBlock
+                             Validate.blockHash[F]
                            )
 
       // Request tuple space state for Last Finalized State
@@ -199,15 +199,6 @@ class Initializing[F[_]
       // Transition to Running state
       _ <- createCasperAndTransitionToRunning(approvedBlock)
     } yield ()
-  }
-
-  private def validateBlock(block: BlockMessage): F[Boolean] = {
-    val blockNumber = ProtoUtil.blockNumber(block)
-    if (blockNumber == 0L) {
-      // TODO: validate genesis (zero) block correctly
-      true.pure
-    } else
-      Validate.blockHash(block).map(_ == Right(Valid))
   }
 
   private def populateDag(
