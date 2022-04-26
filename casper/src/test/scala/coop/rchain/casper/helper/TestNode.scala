@@ -559,7 +559,7 @@ object TestNode {
                      in.evalMap(v => {
                        val (c, b) = v
                        blockProcessor
-                         .checkIfOfInterest(c, b)
+                         .checkIfOfInterest(b)
                          .ifM(
                            blockProcessor
                              .checkIfWellFormedAndStore(b)

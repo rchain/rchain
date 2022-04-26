@@ -19,7 +19,7 @@ import coop.rchain.shared.Log
   * Logic for processing incoming blocks
   * Blocks created by node itself are not held here, but in Proposer.
   */
-class BlockProcessor[F[_]: Concurrent](
+class BlockProcessor[F[_]: Concurrent: BlockDagStorage: CasperBufferStorage](
     storeBlock: BlockMessage => F[Unit],
     getDependenciesStatus: (
         Casper[F],
@@ -42,17 +42,15 @@ class BlockProcessor[F[_]: Concurrent](
 ) {
 
   // check if block should be processed
-  def checkIfOfInterest(c: Casper[F], b: BlockMessage)(
-      implicit log: Log[F]
-  ): F[Boolean] = {
-    // TODO c.dagContains does not take into account equivocation tracker
-    val alreadyProcessed  = c.dagContains(b.blockHash) ||^ c.bufferContains(b.blockHash)
-    val shardOfInterest   = c.getApprovedBlock.map(_.shardId.equalsIgnoreCase(b.shardId))
-    val versionOfInterest = c.getApprovedBlock.flatMap(g => Validate.version(b, g.header.version))
-    val oldBlock =
-      c.getApprovedBlock.flatMap(g => (ProtoUtil.blockNumber(b) < ProtoUtil.blockNumber(g)).pure[F])
-    alreadyProcessed.not &&^ shardOfInterest &&^ versionOfInterest &&^ oldBlock.not
-  }
+  def checkIfOfInterest(b: BlockMessage): F[Boolean] =
+    for {
+      dag <- BlockDagStorage[F].getRepresentation
+      alreadyProcessed <- dag.contains(b.blockHash).pure[F] ||^ CasperBufferStorage[F].contains(
+                           b.blockHash
+                         )
+      lowestBlockHeight = dag.heightMap.headOption.map(_._1).getOrElse(-1L)
+      oldBlock          = ProtoUtil.blockNumber(b) < lowestBlockHeight
+    } yield !alreadyProcessed && !oldBlock
 
   // check block format and store if check passed
   def checkIfWellFormedAndStore(b: BlockMessage)(
@@ -115,7 +113,7 @@ object BlockProcessor {
   // format: off
   def apply[F[_]
   /* Execution */   : Concurrent
-  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage 
+  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage
   /* Diagnostics */ : Log
   /* Comm */        : CommUtil: BlockRetriever
   ] // format: on

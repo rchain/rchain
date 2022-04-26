@@ -45,7 +45,7 @@ object BlockProcessorInstance {
             )
             .evalFilter(
               _ =>
-                blockProcessor.checkIfOfInterest(c, b) >>= { r =>
+                blockProcessor.checkIfOfInterest(b) >>= { r =>
                   logNotOfInterest.unlessA(r).as(r)
                 }
             )
