@@ -265,15 +265,12 @@ class Running[F[_]
 
   import Engine._
   import Running._
-  import coop.rchain.catscontrib.Catscontrib._
 
   private val F    = Applicative[F]
   private val noop = F.unit
 
   private def ignoreCasperMessage(hash: BlockHash): F[Boolean] =
-    blocksInProcessing.get.map(_.contains(hash)) ||^
-      casper.bufferContains(hash) ||^
-      casper.dagContains(hash)
+    MultiParentCasperImpl.blockReceived(hash)
 
   override def init: F[Unit] = theInit
 
@@ -306,11 +303,14 @@ class Running[F[_]
             )
       } yield ()
 
-    case br: BlockRequest => handleBlockRequest(peer, br)
-    // TODO should node say it has block only after it is in DAG, or CasperBuffer is enough? Or even just BlockStore?
-    // https://github.com/rchain/rchain/pull/2943#discussion_r449887701
-    case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.dagContains)
-    case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
+    case br: BlockRequest     => handleBlockRequest(peer, br)
+    case hbr: HasBlockRequest =>
+      // Return blocks only available in the DAG (validated)
+      for {
+        dag <- BlockDagStorage[F].getRepresentation
+        res <- handleHasBlockRequest(peer, hbr)(dag.contains(_).pure[F])
+      } yield res
+    case hb: HasBlock => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
     case _: ForkChoiceTipRequest.type =>
       handleForkChoiceTipRequest(peer)(casper)
     case abr: ApprovedBlockRequest =>

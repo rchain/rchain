@@ -121,7 +121,6 @@ object BlockProcessor {
     val getCasperStateSnapshot = MultiParentCasperImpl.getSnapshot[F](casperShardConf)
 
     val getNonValidatedDependencies = (c: Casper[F], b: BlockMessage) => {
-      import cats.instances.list._
       val allDeps = ProtoUtil.dependenciesHashesOf(b)
       for {
         // in addition, equivocation tracker has to be checked, as admissible equivocations are not stored in DAG
@@ -136,7 +135,8 @@ object BlockProcessor {
                            CasperBufferStorage[F].contains(d) ||^ CasperBufferStorage[F]
                              .isPendant(d)
                        )
-        depsInDag       <- allDeps.filterA(c.dagContains)
+        dag             <- BlockDagStorage[F].getRepresentation
+        depsInDag       = allDeps.filter(dag.contains)
         depsInEqTracker = allDeps.filter(equivocationHashes.contains)
         depsValidated   = depsInDag ++ depsInEqTracker
         depsToFetch     = allDeps diff depsInBuffer diff depsInDag diff depsInEqTracker

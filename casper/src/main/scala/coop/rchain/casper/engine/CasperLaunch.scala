@@ -108,7 +108,8 @@ object CasperLaunch {
                               s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
                                 s"is available in BlockStore, sending to Casper."
                             )
-                        dc <- casper.dagContains(hash)
+                        dag <- BlockDagStorage[F].getRepresentation
+                        dc  = dag.contains(hash)
                         _ <- Log[F]
                               .error(
                                 s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +

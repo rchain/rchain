@@ -28,13 +28,8 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     for {
       _ <- Sync[F].delay(store.update(b.blockHash, b))
     } yield BlockStatus.valid.asRight
-  def contains(blockHash: BlockHash): F[Boolean]       = store.contains(blockHash).pure[F]
-  def dagContains(blockHash: BlockHash): F[Boolean]    = false.pure[F]
-  def bufferContains(blockHash: BlockHash): F[Boolean] = false.pure[F]
   def deploy(r: Signed[DeployData]): F[Either[DeployError, DeployId]] =
     Applicative[F].pure(Right(ByteString.EMPTY))
-  def estimator(dag: DagRepresentation): F[IndexedSeq[BlockHash]] =
-    estimatorFunc.pure[F]
   def blockDag: F[DagRepresentation]                                  = BlockDagStorage[F].getRepresentation
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
   def lastFinalizedBlock: F[BlockMessage]                             = getRandomBlock().pure[F]
@@ -42,12 +37,6 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def fetchDependencies: F[Unit]                                      = ().pure[F]
   def getValidator: F[Option[ValidatorIdentity]]                      = none[ValidatorIdentity].pure[F]
   def getDeployLifespan: F[Int]                                       = Int.MaxValue.pure[F]
-  def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
-  def addBlockFromStore(bh: BlockHash, allowFromStore: Boolean): F[ValidBlockProcessing] =
-    for {
-      b <- BlockStore[F].get1(bh)
-      _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
-    } yield BlockStatus.valid.asRight
 
   override def validate(
       b: BlockMessage,

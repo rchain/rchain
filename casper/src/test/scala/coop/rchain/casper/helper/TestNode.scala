@@ -320,7 +320,8 @@ case class TestNode[F[_]: Timer](
   def syncWith(node1: TestNode[F], node2: TestNode[F], rest: TestNode[F]*): F[Unit] =
     syncWith(IndexedSeq(node1, node2) ++ rest)
 
-  def contains(blockHash: BlockHash) = casperEff.contains(blockHash)
+  def contains(hash: BlockHash) = MultiParentCasperImpl.blockReceived(hash)
+
   def knowsAbout(blockHash: BlockHash) =
     (contains(blockHash), RequestedBlocks.contains[F](blockHash)).mapN(_ || _)
 

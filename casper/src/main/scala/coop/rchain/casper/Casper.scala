@@ -48,9 +48,6 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def contains(hash: BlockHash): F[Boolean]
-  def dagContains(hash: BlockHash): F[Boolean]
-  def bufferContains(hash: BlockHash): F[Boolean]
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def getValidator: F[Option[ValidatorIdentity]]
 

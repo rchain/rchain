@@ -359,8 +359,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
         _ <- nodes(1).contains(signedBlock4.blockHash) shouldBeF true // However, marked as invalid
 
-        _ <- nodes(0).casperEff.contains(signedBlock1.blockHash) shouldBeF false
-        _ <- nodes(0).casperEff.contains(signedBlock1Prime.blockHash) shouldBeF true
+        _ <- nodes(0).contains(signedBlock1.blockHash) shouldBeF false
+        _ <- nodes(0).contains(signedBlock1Prime.blockHash) shouldBeF true
         _ <- nodes(1).blockStore.get1(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
         _ <- nodes(1).blockStore.get1(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
         _ <- nodes(2).blockStore.get1(signedBlock3.blockHash) shouldBeF Some(signedBlock3)

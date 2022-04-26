@@ -60,20 +60,15 @@ class MultiParentCasperImpl[F[_]
                             pendantBlock   <- BlockStore[F].get1(pendant)
                             justifications = pendantBlock.get.justifications
                             // If even one of justifications is not in DAG - block is not dependency free
-                            missingDep <- justifications
-                                           .map(_.latestBlockHash)
-                                           .existsM(dagContains(_).not)
+                            dag <- BlockDagStorage[F].getRepresentation
+                            missingDep = justifications
+                              .map(_.latestBlockHash)
+                              .exists(!dag.contains(_))
                           } yield !missingDep
                         }
       r <- depFreePendants.traverse(BlockStore[F].getUnsafe)
     } yield r
   }
-
-  def dagContains(hash: BlockHash): F[Boolean] = blockDag.map(_.contains(hash))
-
-  def bufferContains(hash: BlockHash): F[Boolean] = CasperBufferStorage[F].contains(hash)
-
-  def contains(hash: BlockHash): F[Boolean] = bufferContains(hash) ||^ dagContains(hash)
 
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = {
     import coop.rchain.models.rholang.implicits._
@@ -292,6 +287,12 @@ object MultiParentCasperImpl {
     val seqNum  = block.seqNum
     (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
   }
+
+  def blockReceived[F[_]: Sync: BlockDagStorage: CasperBufferStorage](blockHash: BlockHash) =
+    for {
+      dag      <- BlockDagStorage[F].getRepresentation
+      inBuffer <- CasperBufferStorage[F].contains(blockHash)
+    } yield inBuffer || dag.contains(blockHash)
 
   // TODO: temporary function until multiparent casper is removed
   def getSnapshot[F[_]: Sync: RuntimeManager: BlockDagStorage: BlockStore](
