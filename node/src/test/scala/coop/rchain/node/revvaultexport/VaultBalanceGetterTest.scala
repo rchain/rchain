@@ -50,7 +50,7 @@ class VaultBalanceGetterTest extends FlatSpec {
         runtime               <- node.runtimeManager.spawnRuntime
         _                     <- runtime.reset(genesisPostStateHash)
         vaultTreeHashMapDepth = StateBalanceMain.genesisVaultMapDepth
-        vaultChannel          = StateBalanceMain.genesisVaultMapPar
+        vaultChannel          <- StateBalances.getGenesisVaultMapPar(runtime)
         balances <- VaultBalanceGetter.getAllVaultBalance(
                      vaultTreeHashMapDepth,
                      vaultChannel,
