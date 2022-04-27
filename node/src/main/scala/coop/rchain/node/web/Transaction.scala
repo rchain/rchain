@@ -251,7 +251,7 @@ object Transaction {
       StandardDeploys.revVaultTimestamp
     )
     // the 11th unforgeable name
-    val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(10).next()
+    val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(11).next()
     GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(unfogeableBytes))))
   }
 
