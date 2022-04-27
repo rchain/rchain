@@ -21,7 +21,6 @@ class MultiParentCasperDeploySpec
   implicit val timeEff = new LogicalTime[Effect]
 
   val genesis          = buildGenesis()
-  private val SHARD_ID = genesis.genesisBlock.shardId
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
@@ -84,7 +83,7 @@ class MultiParentCasperDeploySpec
                          phloPrice = phloPrice,
                          shardId = genesis.genesisBlock.shardId
                        )
-        blockApi <- createBlockApi[Effect](SHARD_ID, 1)
+        blockApi <- createBlockApi(node)
         err      <- blockApi.deploy(deployData).attempt
       } yield {
         err.isLeft shouldBe true
