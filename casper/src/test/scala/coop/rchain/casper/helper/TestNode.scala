@@ -457,7 +457,6 @@ object TestNode {
       shardConf = CasperShardConf(
         faultToleranceThreshold = 0,
         shardName = genesis.shardId,
-        parentShardId = "",
         finalizationRate = 1,
         maxNumberOfParents = maxNumberOfParents,
         maxParentDepth = maxParentDepth.getOrElse(Int.MaxValue),

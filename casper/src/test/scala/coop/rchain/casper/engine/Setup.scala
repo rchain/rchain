@@ -150,7 +150,6 @@ object Setup {
     implicit val casperShardConf = CasperShardConf(
       -1,
       shardId,
-      "",
       finalizationRate,
       Int.MaxValue,
       Int.MaxValue,

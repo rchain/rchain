@@ -90,7 +90,6 @@ final case class OnChainCasperState(
 final case class CasperShardConf(
     faultToleranceThreshold: Float,
     shardName: String,
-    parentShardId: String,
     finalizationRate: Int,
     maxNumberOfParents: Int,
     maxParentDepth: Int,

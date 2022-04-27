@@ -163,7 +163,6 @@ object Setup {
       casperShardConf = CasperShardConf(
         conf.casper.faultToleranceThreshold,
         conf.casper.shardName,
-        conf.casper.parentShardId,
         conf.casper.finalizationRate,
         conf.casper.maxNumberOfParents,
         conf.casper.maxParentDepth.getOrElse(Int.MaxValue),
