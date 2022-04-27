@@ -65,14 +65,7 @@ object WebApi {
 
   class WebApiImpl[F[_]: Sync](
       blockApi: BlockApi[F],
-      apiMaxBlocksLimit: Int,
-      devMode: Boolean = false,
-      cacheTransactionAPI: CacheTransactionAPI[F],
-      triggerProposeF: Option[ProposeFunction[F]],
-      networkId: String,
-      shardId: String,
-      minPhloPrice: Long,
-      isNodeReadOnly: Boolean
+      cacheTransactionAPI: CacheTransactionAPI[F]
   ) extends WebApi[F] {
     import WebApiSyntax._
 

@@ -20,7 +20,7 @@ class MultiParentCasperDeploySpec
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis          = buildGenesis()
+  val genesis = buildGenesis()
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>

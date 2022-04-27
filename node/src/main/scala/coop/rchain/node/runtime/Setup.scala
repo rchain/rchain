@@ -283,8 +283,7 @@ object Setup {
           isNodeReadOnly,
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
-          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none,
+          triggerProposeFOpt,
           proposerStateRefOpt
         )
       }
@@ -310,7 +309,6 @@ object Setup {
         implicit val br             = blockRetriever
         implicit val (bs, bds, cbs) = (blockStore, blockDagStorage, casperBufferStorage)
         for {
-          engine <- engineCell.read
           // Fetch dependencies from CasperBuffer
           _ <- MultiParentCasperImpl.fetchDependencies
           // Maintain RequestedBlocks for Casper
@@ -337,23 +335,11 @@ object Setup {
         blockReportApi,
         Par(unforgeables = Seq(Transaction.transferUnforgeable))
       )
+
+      // Web API
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
-      webApi = {
-        val isNodeReadOnly = conf.casper.validatorPrivateKey.isEmpty
-        new WebApiImpl[F](
-          blockApi,
-          conf.apiServer.maxBlocksLimit,
-          conf.devMode,
-          cacheTransactionAPI,
-          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none[ProposeFunction[F]],
-          conf.protocolServer.networkId,
-          conf.casper.shardName,
-          conf.casper.minPhloPrice,
-          isNodeReadOnly
-        )
-      }
-      adminWebApi = new AdminWebApiImpl[F](blockApi)
+      webApi              = new WebApiImpl[F](blockApi, cacheTransactionAPI)
+      adminWebApi         = new AdminWebApiImpl[F](blockApi)
     } yield (
       packetHandler,
       apiServers,
