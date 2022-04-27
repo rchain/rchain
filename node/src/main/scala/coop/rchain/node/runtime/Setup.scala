@@ -260,6 +260,7 @@ object Setup {
         )
       }*/
 
+      // Query for network information (address, peers, nodes)
       getNetworkStatus = for {
         address <- rpConfAsk.ask
         peers   <- rpConnections.read
@@ -295,16 +296,24 @@ object Setup {
         BlockReportApi[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
 
-      apiServers = {
-        implicit val bs       = blockStore
-        implicit val (ra, rp) = (rpConfAsk, rpConnections)
-        APIServers.build[F](blockApi, blockReportApi, evalRuntime)
-      }
+      // gRPC services (deploy, propose eval/repl)
+      apiServers = APIServers.build[F](blockApi, blockReportApi, evalRuntime)
 
-      reportingRoutes = {
-        ReportingRoutes.service[F](blockReportApi)
-      }
+      // Reporting HTTP routes
+      reportingRoutes = ReportingRoutes.service[F](blockReportApi)
 
+      // Transaction API
+      transactionAPI = Transaction[F](
+        blockReportApi,
+        Par(unforgeables = Seq(Transaction.transferUnforgeable))
+      )
+      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
+
+      // Web API (public and admin)
+      webApi      = new WebApiImpl[F](blockApi, cacheTransactionAPI)
+      adminWebApi = new AdminWebApiImpl[F](blockApi)
+
+      // Infinite loop to trigger request missing dependencies
       casperLoop = {
         implicit val br             = blockRetriever
         implicit val (bs, bds, cbs) = (blockStore, blockDagStorage, casperBufferStorage)
@@ -331,15 +340,6 @@ object Setup {
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
-      transactionAPI = Transaction[F](
-        blockReportApi,
-        Par(unforgeables = Seq(Transaction.transferUnforgeable))
-      )
-
-      // Web API
-      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
-      webApi              = new WebApiImpl[F](blockApi, cacheTransactionAPI)
-      adminWebApi         = new AdminWebApiImpl[F](blockApi)
     } yield (
       packetHandler,
       apiServers,

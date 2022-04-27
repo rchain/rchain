@@ -4,13 +4,10 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import cats.{Applicative, Foldable}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.api._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.syntax._
 import coop.rchain.monix.Monixable
@@ -23,7 +20,7 @@ import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: BlockStore: RPConfAsk: ConnectionsCell: NodeDiscovery: Log](
+  def apply[F[_]: Monixable: Concurrent: Log](
       blockApi: BlockApi[F],
       blockReportAPI: BlockReportApi[F]
   )(
