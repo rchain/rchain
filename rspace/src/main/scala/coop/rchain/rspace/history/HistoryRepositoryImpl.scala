@@ -6,7 +6,6 @@ import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
@@ -81,7 +80,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val dataHash        = Blake2b256Hash.create(dataLeafEncoded)
         (
           (dataHash, Some(dataLeaf)),
-          InsertAction(PREFIX_DATUM +: i.hash.bytes.toSeq.toList, dataHash)
+          InsertAction(KeyPath(PREFIX_DATUM +: i.hash.bytes.toSeq.toList), dataHash)
         )
       case i: TrieInsertConsume[P, K] =>
         val data              = encodeContinuations(i.continuations)(serializeP, serializeK)
@@ -91,7 +90,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val continuationsHash = Blake2b256Hash.create(continuationsLeafEncoded)
         (
           (continuationsHash, Some(continuationsLeaf)),
-          InsertAction(PREFIX_KONT +: i.hash.bytes.toSeq.toList, continuationsHash)
+          InsertAction(KeyPath(PREFIX_KONT +: i.hash.bytes.toSeq.toList), continuationsHash)
         )
       case i: TrieInsertJoins[C] =>
         val data             = encodeJoins(i.joins)(serializeC)
@@ -100,7 +99,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val joinsHash        = Blake2b256Hash.create(joinsLeafEncoded)
         (
           (joinsHash, Some(joinsLeaf)),
-          InsertAction(PREFIX_JOINS +: i.hash.bytes.toSeq.toList, joinsHash)
+          InsertAction(KeyPath(PREFIX_JOINS +: i.hash.bytes.toSeq.toList), joinsHash)
         )
       case i: TrieInsertBinaryProduce =>
         val data            = encodeDatumsBinary(i.data)
@@ -109,7 +108,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val dataHash        = Blake2b256Hash.create(dataLeafEncoded)
         (
           (dataHash, Some(dataLeaf)),
-          InsertAction(PREFIX_DATUM +: i.hash.bytes.toSeq.toList, dataHash)
+          InsertAction(KeyPath(PREFIX_DATUM +: i.hash.bytes.toSeq.toList), dataHash)
         )
       case i: TrieInsertBinaryConsume =>
         val data              = encodeContinuationsBinary(i.continuations)
@@ -119,7 +118,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val continuationsHash = Blake2b256Hash.create(continuationsLeafEncoded)
         (
           (continuationsHash, Some(continuationsLeaf)),
-          InsertAction(PREFIX_KONT +: i.hash.bytes.toSeq.toList, continuationsHash)
+          InsertAction(KeyPath(PREFIX_KONT +: i.hash.bytes.toSeq.toList), continuationsHash)
         )
       case i: TrieInsertBinaryJoins =>
         val data             = encodeJoinsBinary(i.joins)
@@ -128,14 +127,14 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val joinsHash        = Blake2b256Hash.create(joinsLeafEncoded)
         (
           (joinsHash, Some(joinsLeaf)),
-          InsertAction(PREFIX_JOINS +: i.hash.bytes.toSeq.toList, joinsHash)
+          InsertAction(KeyPath(PREFIX_JOINS +: i.hash.bytes.toSeq.toList), joinsHash)
         )
       case d: TrieDeleteProduce =>
-        ((d.hash, None), DeleteAction(PREFIX_DATUM +: d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(KeyPath(PREFIX_DATUM +: d.hash.bytes.toSeq.toList)))
       case d: TrieDeleteConsume =>
-        ((d.hash, None), DeleteAction(PREFIX_KONT +: d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(KeyPath(PREFIX_KONT +: d.hash.bytes.toSeq.toList)))
       case d: TrieDeleteJoins =>
-        ((d.hash, None), DeleteAction(PREFIX_JOINS +: d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(KeyPath(PREFIX_JOINS +: d.hash.bytes.toSeq.toList)))
     }
   }
 

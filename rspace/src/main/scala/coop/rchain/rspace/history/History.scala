@@ -3,7 +3,6 @@ package coop.rchain.rspace.history
 import cats.Parallel
 import cats.effect.{Concurrent, Sync}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.History._
 import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.store.KeyValueStore
 import scodec.bits.ByteVector
@@ -46,6 +45,4 @@ object History {
       root: Blake2b256Hash,
       store: KeyValueStore[F]
   ): F[RadixHistory[F]] = RadixHistory(root, RadixHistory.createStore(store))
-
-  type KeyPath = Seq[Byte]
 }

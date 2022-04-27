@@ -167,7 +167,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "RadixTreeImpl" should "not allow to radix key smaller than NodePtr key" in withImplAndStore {
     (impl, _) =>
-      val initialItem           = NodePtr(createBV("11223344"), createBV32("01"))
+      val initialItem =
+        NodePtr(createBVKey("11223344"), createBV32Blake("01"))
       val wrongKVPair           = radixKV("11", "FF")
       val referenceErrorMessage = s"assertion failed: Radix key should be longer than NodePtr key."
       for {
@@ -370,12 +371,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   // Data for test are given from RadixTree specification
   "encoding and then decoding a node" should "give this node" in {
     val leaf = Leaf(
-      createBV("FFFF"),
-      createBV32("0000000000000000000000000000000000000000000000000000000000000001")
+      createBVKey("FFFF"),
+      createBV32Blake("0000000000000000000000000000000000000000000000000000000000000001")
     )
     val nodePtr = NodePtr(
-      createBV(""),
-      createBV("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+      createBVKey(""),
+      createBV32Blake("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
     )
     val referenceNode = emptyNode
       .updated(1, leaf)
@@ -427,7 +428,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "tree with saveAndCommit" should "be built correctly and not create artefacts in KV - store" in withImplAndStore {
     (impl, inMemoStore) =>
       def createDeleteActions(keys: List[ByteVector]): List[DeleteAction] =
-        keys.map(key => DeleteAction(key.toSeq))
+        keys.map(key => DeleteAction(KeyPath(key)))
 
       /* treeDataSet:
             key      |   value
@@ -642,11 +643,13 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     val emptyPart    = List.fill(32 - notEmptyPart.size.toInt)(0x00.toByte)
     ByteVector(emptyPart) ++ notEmptyPart
   }
+  def createBV32Blake(s: String): Blake2b256Hash = Blake2b256Hash.fromByteVector(createBV32(s))
 
   def createBV(s: String): ByteVector = ByteVector(Base16.unsafeDecode(s))
+  def createBVKey(s: String): KeyPath = KeyPath.create(createBV(s))
   def createInsertActions(dataSet: List[radixKV]): List[InsertAction] =
     dataSet.map { ds =>
-      InsertAction(ds.rKey.toSeq, Blake2b256Hash.fromByteVector(ds.rValue))
+      InsertAction(KeyPath(ds.rKey), Blake2b256Hash.fromByteVector(ds.rValue))
     }
 
   case class radixKV(rKey: ByteVector, rValue: ByteVector)

@@ -6,7 +6,6 @@ import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.HistoryMergingInstances.{CachingHistoryStore, MergingHistory}
 import coop.rchain.rspace.history.RadixTree.ExportData
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.instances._
@@ -27,7 +26,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   object TypesOfHistory extends Enumeration {
     type TypeHistory = Value
-    val Merging, Radix, Default = Value
+    val /*Merging,*/ Radix, Default = Value
   }
   import TypesOfHistory._
 
@@ -106,7 +105,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     def create(root: Blake2b256Hash): F[HistoryType[F]]
   }
 
-  case class CreateMergingHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  /*case class CreateMergingHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
@@ -132,7 +131,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
           } yield HistoryWithoutFunc(history, _ => none[ByteVector].pure)
 
       }
-  }
+  }*/
 
   case class CreateRadixHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
@@ -186,7 +185,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     def getHistory(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeHistory match {
-        case Merging => CreateMergingHistory[F].create(root)
+        //case Merging => CreateMergingHistory[F].create(root)
         case Radix   => CreateRadixHistory[F].create(root)
         case Default => CreateDefaultHistory[F].create(root)
       }
@@ -312,11 +311,11 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
             case (initData, i) =>
               for {
                 initHashes        <- Sync[F].delay(genInitTasks.toList)
-                initInsertActions = initHashes.map(x => InsertAction(x.bytes.toArray.toList, x))
+                initInsertActions = initHashes.map(x => InsertAction(KeyPath(x.bytes), x))
 
                 insReadDelHashes = genTasks.toList
-                insertActions    = insReadDelHashes.map(x => InsertAction(x.bytes.toArray.toList, x))
-                deleteActions    = insReadDelHashes.map(x => DeleteAction(x.bytes.toArray.toList))
+                insertActions    = insReadDelHashes.map(x => InsertAction(KeyPath(x.bytes), x))
+                deleteActions    = insReadDelHashes.map(x => DeleteAction(KeyPath(x.bytes)))
                 historyInitW     <- getHistory(v0)
                 historyInit      <- getHistory(v0)
 
