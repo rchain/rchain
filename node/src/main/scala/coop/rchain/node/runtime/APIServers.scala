@@ -2,7 +2,7 @@ package coop.rchain.node.runtime
 
 import cats.effect.Concurrent
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.casper.api.{BlockAPI_v2, BlockReportAPI}
+import coop.rchain.casper.api.{BlockApi, BlockReportApi}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.comm.discovery.NodeDiscovery
@@ -22,8 +22,8 @@ final case class APIServers(
 
 object APIServers {
   def build[F[_]: Monixable: Concurrent: BlockStore: RPConfAsk: ConnectionsCell: NodeDiscovery: Log](
-      blockApi: BlockAPI_v2[F],
-      blockReportAPI: BlockReportAPI[F],
+      blockApi: BlockApi[F],
+      blockReportAPI: BlockReportApi[F],
       runtime: RhoRuntime[F]
   )(implicit mainScheduler: Scheduler): APIServers = {
     val repl    = ReplGrpcService(runtime, mainScheduler)

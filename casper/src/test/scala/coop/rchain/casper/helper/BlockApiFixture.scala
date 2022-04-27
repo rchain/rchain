@@ -6,7 +6,7 @@ import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.ValidatorIdentity
-import coop.rchain.casper.api.BlockAPIImpl
+import coop.rchain.casper.api.BlockApiImpl
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.rp.Connect.Connection
 import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
@@ -19,9 +19,9 @@ trait BlockApiFixture {
       shardId: String,
       maxDepthLimit: Int,
       validatorIdOpt: Option[ValidatorIdentity] = none
-  ): F[BlockAPIImpl[F]] = {
+  ): F[BlockApiImpl[F]] = {
     val thisNode = peerNode("testNode", 1234)
-    BlockAPIImpl[F](
+    BlockApiImpl[F](
       validatorOpt = validatorIdOpt,
       networkId = "rchain",
       shardId = shardId,
@@ -36,11 +36,11 @@ trait BlockApiFixture {
     )
   }
 
-  def createBlockApi[F[_]: Concurrent](node: TestNode[F]): F[BlockAPIImpl[F]] = {
+  def createBlockApi[F[_]: Concurrent](node: TestNode[F]): F[BlockApiImpl[F]] = {
     import node.{blockDagStorage, blockStore, ds, logEff, runtimeManager, sp}
 
     val thisNode = node.local
-    BlockAPIImpl[F](
+    BlockApiImpl[F](
       validatorOpt = node.validatorIdOpt,
       networkId = "rchain",
       shardId = node.casperShardConf.shardName,

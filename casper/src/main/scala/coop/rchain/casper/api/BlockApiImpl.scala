@@ -10,7 +10,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper._
-import coop.rchain.casper.api.BlockAPI._
+import coop.rchain.casper.api.BlockApi._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
@@ -38,7 +38,7 @@ import fs2.Stream
 
 import scala.collection.immutable.SortedMap
 
-object BlockAPIImpl {
+object BlockApiImpl {
   def apply[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
       validatorOpt: Option[ValidatorIdentity],
       networkId: String,
@@ -51,9 +51,9 @@ object BlockAPIImpl {
       devMode: Boolean,
       triggerPropose: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
-  ): F[BlockAPIImpl[F]] =
+  ): F[BlockApiImpl[F]] =
     Sync[F].delay(
-      new BlockAPIImpl(
+      new BlockApiImpl(
         validatorOpt,
         networkId,
         shardId,
@@ -77,7 +77,7 @@ object BlockAPIImpl {
   final case class BlockRetrievalError(message: String) extends Exception
 }
 
-class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
+class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
     validatorOpt: Option[ValidatorIdentity],
     networkId: String,
     shardId: String,
@@ -89,8 +89,8 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
     devMode: Boolean,
     triggerProposeOpt: Option[ProposeFunction[F]],
     proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
-) extends BlockAPI_v2[F] {
-  import BlockAPIImpl._
+) extends BlockApi[F] {
+  import BlockApiImpl._
 
   val blockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
   val deploySource: Metrics.Source          = Metrics.Source(blockAPIMetricsSource, "deploy")

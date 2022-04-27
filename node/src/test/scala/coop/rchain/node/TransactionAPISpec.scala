@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import coop.rchain.casper.api.BlockReportAPI
+import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, GenesisContext}
@@ -30,7 +30,7 @@ class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
         rspaceStore     <- kvm.rSpaceStores
         reportingCasper = ReportingCasper.rhoReporter[Task](rspaceStore)
         reportingStore  <- ReportStore.store[Task](kvm)
-        blockReportAPI = BlockReportAPI[Task](
+        blockReportAPI = BlockReportApi[Task](
           reportingCasper,
           reportingStore,
           readonly.validatorIdOpt

@@ -2,7 +2,7 @@ package coop.rchain.node.api
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.casper.api.BlockAPI_v2
+import coop.rchain.casper.api.BlockApi
 import coop.rchain.casper.protocol.propose.v1.{
   ProposeResponse,
   ProposeResultResponse,
@@ -21,7 +21,7 @@ import monix.execution.Scheduler
 object ProposeGrpcServiceV1 {
 
   def apply[F[_]: Monixable: Sync: Log](
-      blockApi: BlockAPI_v2[F]
+      blockApi: BlockApi[F]
   )(
       implicit worker: Scheduler
   ): ProposeServiceV1GrpcMonix.ProposeService =

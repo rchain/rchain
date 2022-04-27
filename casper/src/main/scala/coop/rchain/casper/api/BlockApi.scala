@@ -4,14 +4,13 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.api.BlockAPI.ApiErr
+import coop.rchain.casper.api.BlockApi.ApiErr
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.{BlockMetadata, Par}
 
-// TODO: trait and file should be renamed to `BlockAPI` after removing original `object BlockAPI`
-trait BlockAPI_v2[F[_]] {
+trait BlockApi[F[_]] {
   def status: F[Status]
 
   def deploy(d: Signed[DeployData]): F[ApiErr[String]]
@@ -79,7 +78,7 @@ trait BlockAPI_v2[F[_]] {
   def getLatestMessage: F[ApiErr[BlockMetadata]]
 }
 
-object BlockAPI {
+object BlockApi {
   type Error     = String
   type ApiErr[A] = Either[Error, A]
 

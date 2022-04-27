@@ -24,8 +24,8 @@ import monix.reactive.Observable
 object DeployGrpcServiceV1 {
 
   def apply[F[_]: Monixable: Concurrent: BlockStore: RPConfAsk: ConnectionsCell: NodeDiscovery: Log](
-      blockApi: BlockAPI_v2[F],
-      blockReportAPI: BlockReportAPI[F]
+      blockApi: BlockApi[F],
+      blockReportAPI: BlockReportApi[F]
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =

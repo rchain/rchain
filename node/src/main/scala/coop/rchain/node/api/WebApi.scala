@@ -4,8 +4,8 @@ import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ProposeFunction
-import coop.rchain.casper.api.BlockAPIImpl.LatestBlockMessageError
-import coop.rchain.casper.api.BlockAPI_v2
+import coop.rchain.casper.api.BlockApiImpl.LatestBlockMessageError
+import coop.rchain.casper.api.BlockApi
 import coop.rchain.casper.protocol.{
   BlockInfo,
   DataWithBlockInfo,
@@ -64,7 +64,7 @@ trait WebApi[F[_]] {
 object WebApi {
 
   class WebApiImpl[F[_]: Sync](
-      blockApi: BlockAPI_v2[F],
+      blockApi: BlockApi[F],
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],

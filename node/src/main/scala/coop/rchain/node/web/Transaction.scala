@@ -4,7 +4,7 @@ import cats.effect.concurrent.Deferred
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.api.BlockReportAPI
+import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.util.rholang.Tools
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
@@ -56,7 +56,7 @@ trait TransactionAPI[F[_]] {
   * this API might end up with useless.
   */
 final case class TransactionAPIImpl[F[_]: Concurrent](
-    blockReportAPI: BlockReportAPI[F],
+    blockReportAPI: BlockReportApi[F],
     // The transferUnforgeable can be retrieved based on the deployer and the timestamp of RevVault.rho
     // in the genesis ceremony.
     transferUnforgeable: Par
@@ -256,7 +256,7 @@ object Transaction {
   }
 
   def apply[F[_]: Concurrent](
-      blockReportAPI: BlockReportAPI[F],
+      blockReportAPI: BlockReportApi[F],
       // The transferUnforgeable can be retrieved based on the deployer and the timestamp of RevVault.rho
       // in the genesis ceremony.
       transferUnforgeable: Par

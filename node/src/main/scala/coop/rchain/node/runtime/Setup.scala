@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.{approvedStore, blockStore}
 import coop.rchain.casper._
-import coop.rchain.casper.api.{BlockAPIImpl, BlockReportAPI}
+import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
@@ -273,7 +273,7 @@ object Setup {
         implicit val rm            = runtimeManager
         implicit val sp            = span
         val isNodeReadOnly         = conf.casper.validatorPrivateKey.isEmpty
-        BlockAPIImpl[F](
+        BlockApiImpl[F](
           validatorIdentityOpt,
           conf.protocolServer.networkId,
           conf.casper.shardName,
@@ -293,7 +293,7 @@ object Setup {
       reportingStore <- ReportStore.store[F](rnodeStoreManager)
       blockReportApi = {
         implicit val bs = blockStore
-        BlockReportAPI[F](reportingRuntime, reportingStore, validatorIdentityOpt)
+        BlockReportApi[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
 
       apiServers = {

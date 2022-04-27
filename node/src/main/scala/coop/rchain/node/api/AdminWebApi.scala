@@ -2,7 +2,7 @@ package coop.rchain.node.api
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.casper.api.BlockAPI_v2
+import coop.rchain.casper.api.BlockApi
 
 trait AdminWebApi[F[_]] {
   def propose: F[String]
@@ -10,7 +10,7 @@ trait AdminWebApi[F[_]] {
 }
 
 object AdminWebApi {
-  class AdminWebApiImpl[F[_]: Sync](blockApi: BlockAPI_v2[F]) extends AdminWebApi[F] {
+  class AdminWebApiImpl[F[_]: Sync](blockApi: BlockApi[F]) extends AdminWebApi[F] {
     import WebApiSyntax._
 
     def propose: F[String] =
