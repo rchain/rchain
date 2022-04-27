@@ -346,7 +346,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         incomingBlocksQueue,
         blockProcessor,
         blockProcessingState,
-        if (nodeConf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]]
+        triggerProposeFOpt,
+        nodeConf.autopropose
       )
 
       proposerStream = if (proposer.isDefined)

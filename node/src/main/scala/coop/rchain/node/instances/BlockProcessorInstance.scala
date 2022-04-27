@@ -16,7 +16,8 @@ object BlockProcessorInstance {
       blocksQueue: Queue[F, BlockMessage],
       blockProcessor: BlockProcessor[F],
       state: Ref[F, Set[BlockHash]],
-      triggerProposeF: Option[ProposeFunction[F]]
+      triggerProposeF: Option[ProposeFunction[F]],
+      autoPropose: Boolean
   ): Stream[F, (BlockMessage, ValidBlockProcessing)] = {
 
     // Node can handle `parallelism` blocks in parallel, or they will be queued
@@ -79,7 +80,7 @@ object BlockProcessorInstance {
               } yield ()
             }
             .evalTap { v =>
-              triggerProposeF.traverse(_(true))
+              triggerProposeF.traverse(_(true)) whenA autoPropose
             }
             // ensure to remove hash from state
             .onFinalize(state.update(s => s - b.blockHash))

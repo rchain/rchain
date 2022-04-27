@@ -283,7 +283,8 @@ object Setup {
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
           triggerProposeFOpt,
-          proposerStateRefOpt
+          proposerStateRefOpt,
+          conf.autopropose
         )
       }
 

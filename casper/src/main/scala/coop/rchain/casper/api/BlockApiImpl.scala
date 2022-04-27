@@ -50,7 +50,8 @@ object BlockApiImpl {
       maxDepthLimit: Int,
       devMode: Boolean,
       triggerPropose: Option[ProposeFunction[F]],
-      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
+      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
+      autoPropose: Boolean
   ): F[BlockApiImpl[F]] =
     Sync[F].delay(
       new BlockApiImpl(
@@ -64,7 +65,8 @@ object BlockApiImpl {
         maxDepthLimit,
         devMode,
         triggerPropose,
-        proposerStateRefOpt
+        proposerStateRefOpt,
+        autoPropose
       )
     )
 
@@ -88,7 +90,8 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
     maxDepthLimit: Int,
     devMode: Boolean,
     triggerProposeOpt: Option[ProposeFunction[F]],
-    proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
+    proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
+    autoPropose: Boolean
 ) extends BlockApi[F] {
   import BlockApiImpl._
 
@@ -120,8 +123,8 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
                 res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
               )
             )
-        // call a propose if proposer defined
-        _ <- triggerProposeOpt.traverse(_(true))
+        // Call a propose if autoPropose flag is on
+        _ <- triggerProposeOpt.traverse(_(true)) whenA autoPropose
       } yield r
 
     // Check if node is read-only

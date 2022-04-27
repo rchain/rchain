@@ -32,7 +32,8 @@ trait BlockApiFixture {
       maxDepthLimit = maxDepthLimit,
       devMode = false,
       triggerPropose = none,
-      proposerStateRefOpt = none
+      proposerStateRefOpt = none,
+      autoPropose = false
     )
   }
 
@@ -51,7 +52,8 @@ trait BlockApiFixture {
       maxDepthLimit = node.apiMaxBlocksLimit,
       devMode = false,
       triggerPropose = none,
-      proposerStateRefOpt = none
+      proposerStateRefOpt = none,
+      autoPropose = false
     )
   }
 
