@@ -1,11 +1,6 @@
 package coop.rchain.casper.api
 
-import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.casper.engine.Engine
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
@@ -14,7 +9,6 @@ import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.scalatestcontrib._
-import coop.rchain.shared.{Cell, Log}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
@@ -25,27 +19,18 @@ class LastFinalizedAPITest
     with Matchers
     with EitherValues
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with BlockApiFixture {
   val genesisParameters = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
   val genesisContext    = buildGenesis(genesisParameters)
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
-  def isFinalized(block: BlockMessage)(engineCell: Cell[Task, Engine[Task]])(
-      implicit blockStore: BlockStore[Task],
-      blockDagStorage: BlockDagStorage[Task],
-      log: Log[Task]
-  ): Task[Boolean] =
-    BlockAPI
-      .isFinalized[Task](ProtoUtil.hashString(block))(
-        Sync[Task],
-        blockDagStorage,
-        blockStore,
-        log
-      )
-      .map(
-        _.right.value
-      )
+  def isFinalized(node: TestNode[Task])(block: BlockMessage): Task[Boolean] =
+    for {
+      blockApi <- createBlockApi(node)
+      res      <- blockApi.isFinalized(ProtoUtil.hashString(block))
+    } yield res.right.value
 
   /*
    * DAG Looks like this:
@@ -67,8 +52,6 @@ class LastFinalizedAPITest
   "isFinalized" should "return true for ancestors of last finalized block" ignore effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
-        import n1.{blockDagStorage, blockStore, logEff}
-        val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
           produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
 
@@ -83,13 +66,12 @@ class LastFinalizedAPITest
           lastFinalizedBlock <- n1.lastFinalizedBlock
           _                  = lastFinalizedBlock shouldBe b5
 
-          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           // Checking if last finalized block is finalized
-          _ <- isFinalized(b5)(engineCell) shouldBeF true
+          _ <- isFinalized(n1)(b5) shouldBeF true
           // Checking if parent of last finalized block is finalized
-          _ <- isFinalized(b4)(engineCell) shouldBeF true
+          _ <- isFinalized(n1)(b4) shouldBeF true
           // Checking if secondary parent of last finalized block is finalized
-          _ <- isFinalized(b2)(engineCell) shouldBeF true
+          _ <- isFinalized(n1)(b2) shouldBeF true
         } yield ()
     }
   }
@@ -113,8 +95,6 @@ class LastFinalizedAPITest
   it should "return false for children, uncles and cousins of last finalized block" ignore effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
-        import n1.{blockDagStorage, blockStore, logEff}
-        val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
           produceDeploys <- (0 until 7).toList.traverse(
                              i =>
@@ -136,13 +116,12 @@ class LastFinalizedAPITest
           lastFinalizedBlock <- n1.lastFinalizedBlock
           _                  = lastFinalizedBlock shouldBe b3
 
-          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           // Checking if child of last finalized block is finalized
-          _ <- isFinalized(b4)(engineCell) shouldBeF false
+          _ <- isFinalized(n1)(b4) shouldBeF false
           // Checking if uncle of last finalized block is finalized
-          _ <- isFinalized(b6)(engineCell) shouldBeF false
+          _ <- isFinalized(n1)(b6) shouldBeF false
           // Checking if cousin of last finalized block is finalized
-          _ <- isFinalized(b7)(engineCell) shouldBeF false
+          _ <- isFinalized(n1)(b7) shouldBeF false
         } yield ()
     }
   }

@@ -13,7 +13,6 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
 import coop.rchain.casper._
-import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
@@ -36,7 +35,6 @@ import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.comm.transport.CommunicationResponse
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.graphz.StringSerializer
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
@@ -49,7 +47,6 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertions
 
-import java.net.URLEncoder
 import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
@@ -112,8 +109,8 @@ case class TestNode[F[_]: Timer](
   implicit val ds: DeployStorage[F]                           = deployStorageEffect
   implicit val cu: CommUtil[F]                                = commUtilEffect
   implicit val br: BlockRetriever[F]                          = blockRetrieverEffect
-  implicit val m: Metrics[F]                                  = metricEffect
-  implicit val s: Span[F]                                     = spanEffect
+  implicit val me: Metrics[F]                                 = metricEffect
+  implicit val sp: Span[F]                                    = spanEffect
   implicit val cbs: CasperBufferStorage[F]                    = casperBufferStorageEffect
   implicit val runtimeManager: RuntimeManager[F]              = runtimeManagerEffect
   implicit val rhoHistoryRepository: RhoHistoryRepository[F]  = rhoHistoryRepositoryEffect
@@ -326,39 +323,6 @@ case class TestNode[F[_]: Timer](
     (contains(blockHash), RequestedBlocks.contains[F](blockHash)).mapN(_ || _)
 
   def shutoff() = transportLayerEff.clear(local)
-
-  def visualizeDag(startBlockNumber: Int): F[String] =
-    for {
-      ref <- Ref[F].of(new StringBuffer(""))
-      ser = new StringSerializer(ref)
-      result <- BlockAPI.visualizeDag[F, String](
-                 Int.MaxValue,
-                 apiMaxBlocksLimit,
-                 startBlockNumber,
-                 (ts, lfb) =>
-                   GraphzGenerator.dagAsCluster[F](
-                     ts,
-                     lfb,
-                     GraphConfig(showJustificationLines = true),
-                     ser
-                   ),
-                 ref.get.map(_.toString)
-               )
-    } yield result.right.get
-
-  /**
-    * Prints a uri on stdout that, when clicked, visualizes the current dag state using ttps://dreampuf.github.io.
-    * The dag's shape is passed as Graphviz's dot source code, encoded in the URI's hash.
-    */
-  def printVisualizeDagUrl(startBlockNumber: Int): F[Unit] =
-    for {
-      dot <- visualizeDag(startBlockNumber)
-      // Java's URLEncode encodes ' ' as '+' instead of '%20', see https://stackoverflow.com/a/5330239/52142
-      urlEncoded = URLEncoder.encode(dot, "UTF-8").replaceAll("\\+", "%20")
-      _ <- Sync[F].delay {
-            println(s"DAG @ $name: https://dreampuf.github.io/GraphvizOnline/#" + urlEncoded)
-          }
-    } yield ()
 
   val lastFinalizedBlock = MultiParentCasperImpl.lastFinalizedBlock
 

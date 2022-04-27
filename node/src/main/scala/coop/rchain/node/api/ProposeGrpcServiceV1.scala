@@ -1,30 +1,15 @@
 package coop.rchain.node.api
 
-import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.api.BlockAPI_v2
 import coop.rchain.casper.protocol.propose.v1.{
   ProposeResponse,
   ProposeResultResponse,
   ProposeServiceV1GrpcMonix
 }
-import coop.rchain.casper.protocol.{
-  PrintUnmatchedSendsQuery,
-  ProposeQuery,
-  ProposeResultQuery,
-  ServiceError
-}
-import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper.{
-  LastFinalizedHeightConstraintChecker,
-  ProposeFunction,
-  SynchronyConstraintChecker
-}
+import coop.rchain.casper.protocol.{ProposeQuery, ProposeResultQuery, ServiceError}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.ThrowableOps._
@@ -35,9 +20,8 @@ import monix.execution.Scheduler
 
 object ProposeGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: BlockStore: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Log: Metrics: Span](
-      triggerProposeFOpt: Option[ProposeFunction[F]],
-      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
+  def apply[F[_]: Monixable: Sync: Log](
+      blockApi: BlockAPI_v2[F]
   )(
       implicit worker: Scheduler
   ): ProposeServiceV1GrpcMonix.ProposeService =
@@ -65,11 +49,7 @@ object ProposeGrpcServiceV1 {
       def propose(
           request: ProposeQuery
       ): Task[ProposeResponse] =
-        defer(triggerProposeFOpt match {
-          case Some(q) =>
-            BlockAPI.createBlock[F](q, request.isAsync)
-          case None => "Propose error: read-only node.".asLeft[String].pure[F]
-        }) { r =>
+        defer(blockApi.createBlock(request.isAsync)) { r =>
           import ProposeResponse.Message
           import ProposeResponse.Message._
           ProposeResponse(r.fold[Message](Error, Result))
@@ -77,11 +57,7 @@ object ProposeGrpcServiceV1 {
 
       // This method waits for propose to finish, returning result data
       def proposeResult(request: ProposeResultQuery): Task[ProposeResultResponse] =
-        defer(proposerStateRefOpt match {
-          case Some(s) =>
-            BlockAPI.getProposeResult[F](s)
-          case None => "Error: read-only node.".asLeft[String].pure[F]
-        }) { r =>
+        defer(blockApi.getProposeResult) { r =>
           import ProposeResultResponse.Message
           import ProposeResultResponse.Message._
           ProposeResultResponse(r.fold[Message](Error, Result))

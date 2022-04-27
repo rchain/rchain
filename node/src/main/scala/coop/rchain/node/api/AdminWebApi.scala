@@ -1,18 +1,8 @@
 package coop.rchain.node.api
 
-import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper.{
-  LastFinalizedHeightConstraintChecker,
-  ProposeFunction,
-  SynchronyConstraintChecker
-}
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.shared.Log
+import coop.rchain.casper.api.BlockAPI_v2
 
 trait AdminWebApi[F[_]] {
   def propose: F[String]
@@ -20,25 +10,13 @@ trait AdminWebApi[F[_]] {
 }
 
 object AdminWebApi {
-  class AdminWebApiImpl[F[_]: Concurrent: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Log: Span: Metrics](
-      triggerProposeFOpt: Option[ProposeFunction[F]],
-      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
-  ) extends AdminWebApi[F] {
+  class AdminWebApiImpl[F[_]: Sync](blockApi: BlockAPI_v2[F]) extends AdminWebApi[F] {
     import WebApiSyntax._
 
     def propose: F[String] =
-      triggerProposeFOpt match {
-        case Some(q) =>
-          BlockAPI.createBlock[F](q).flatMap(_.liftToBlockApiErr)
-        case None => "Propose error: read-only node.".asLeft[String].liftToBlockApiErr
-      }
+      blockApi.createBlock(isAsync = false).flatMap(_.liftToBlockApiErr)
 
     def proposeResult: F[String] =
-      proposerStateRefOpt match {
-        case Some(s) =>
-          BlockAPI.getProposeResult[F](s).flatMap(_.liftToBlockApiErr)
-        case None => "Error: read-only node.".asLeft[String].liftToBlockApiErr
-      }
-
+      blockApi.getProposeResult.flatMap(_.liftToBlockApiErr)
   }
 }

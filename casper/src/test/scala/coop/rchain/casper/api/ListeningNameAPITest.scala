@@ -1,19 +1,19 @@
 package coop.rchain.casper.api
 
 import cats.syntax.all._
-import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
+import coop.rchain.casper.helper.{BlockApiFixture, TestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 
-class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
+class ListeningNameAPITest extends FlatSpec with Matchers with Inside with BlockApiFixture {
 
   import GenesisBuilder._
 
@@ -21,7 +21,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      import node._
+      import node.t
 
       for {
         block <- ConstructDeploy.sourceDeployNowF(
@@ -29,14 +29,11 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                   shardId = this.genesis.genesisBlock.shardId
                 ) >>= (node.addBlock(_))
 
-        listeningName = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
-        resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
-        listeningNameResponse1 <- BlockAPI
-                                   .getListeningNameDataResponse[Effect](
-                                     Int.MaxValue,
-                                     listeningName,
-                                     Int.MaxValue
-                                   )
+        listeningName          = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
+        resultData             = Par().copy(exprs = Seq(Expr(GInt(0))))
+        blockApi               <- createBlockApi(node)
+        depth                  = node.apiMaxBlocksLimit
+        listeningNameResponse1 <- blockApi.getListeningNameDataResponse(depth, listeningName)
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
             val data1   = blockResults.map(_.postBlockData)
@@ -51,11 +48,6 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   it should "work across a chain" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
-      implicit val nodeZeroLogEffect        = nodes(0).logEff
-      implicit val nodeZeroBlockStoreEffect = nodes(0).blockStore
-      implicit val nodeZeroBlockDagStorage  = nodes(0).blockDagStorage
-      implicit val nodeZeroRuntimeMngr      = nodes(0).runtimeManager
-
       implicit val timeEff = new LogicalTime[Effect]
       for {
         deployDatas <- (0 to 7).toList
@@ -67,13 +59,11 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
         block1 <- nodes(0).propagateBlock(deployDatas(0))(nodes: _*)
 
-        listeningName = Par().copy(exprs = Seq(Expr(GInt(0))))
-        resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
-        listeningNameResponse1 <- BlockAPI.getListeningNameDataResponse[Effect](
-                                   Int.MaxValue,
-                                   listeningName,
-                                   Int.MaxValue
-                                 )
+        listeningName          = Par().copy(exprs = Seq(Expr(GInt(0))))
+        resultData             = Par().copy(exprs = Seq(Expr(GInt(0))))
+        blockApi               <- createBlockApi(nodes(0))
+        depth                  = nodes(0).apiMaxBlocksLimit
+        listeningNameResponse1 <- blockApi.getListeningNameDataResponse(depth, listeningName)
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
             val data1   = blockResults.map(_.postBlockData)
@@ -86,11 +76,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         block3 <- nodes(2).propagateBlock(deployDatas(2))(nodes: _*)
         block4 <- nodes(0).propagateBlock(deployDatas(3))(nodes: _*)
 
-        listeningNameResponse2 <- BlockAPI.getListeningNameDataResponse[Effect](
-                                   Int.MaxValue,
-                                   listeningName,
-                                   Int.MaxValue
-                                 )
+        listeningNameResponse2 <- blockApi.getListeningNameDataResponse(depth, listeningName)
         _ = inside(listeningNameResponse2) {
           case Right((blockResults, l)) =>
             val data2   = blockResults.map(_.postBlockData)
@@ -110,11 +96,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         block6 <- nodes(2).propagateBlock(deployDatas(5))(nodes: _*)
         block7 <- nodes(0).propagateBlock(deployDatas(6))(nodes: _*)
 
-        listeningNameResponse3 <- BlockAPI.getListeningNameDataResponse[Effect](
-                                   Int.MaxValue,
-                                   listeningName,
-                                   Int.MaxValue
-                                 )
+        listeningNameResponse3 <- blockApi.getListeningNameDataResponse(depth, listeningName)
         _ = inside(listeningNameResponse3) {
           case Right((blockResults, l)) =>
             val data3   = blockResults.map(_.postBlockData)
@@ -141,20 +123,11 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             blocks3.length should be(7)
             l should be(7)
         }
-        listeningNameResponse3UntilDepth <- BlockAPI
-                                             .getListeningNameDataResponse[Effect](
-                                               1,
-                                               listeningName,
-                                               Int.MaxValue
-                                             )
+        listeningNameResponse3UntilDepth <- blockApi.getListeningNameDataResponse(1, listeningName)
         _ = inside(listeningNameResponse3UntilDepth) {
           case Right((_, l)) => l should be(1)
         }
-        listeningNameResponse3UntilDepth2 <- BlockAPI.getListeningNameDataResponse[Effect](
-                                              2,
-                                              listeningName,
-                                              Int.MaxValue
-                                            )
+        listeningNameResponse3UntilDepth2 <- blockApi.getListeningNameDataResponse(2, listeningName)
         _ = inside(listeningNameResponse3UntilDepth2) {
           case Right((_, l)) => l should be(2)
         }
@@ -164,8 +137,6 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   "getListeningNameContinuationResponse" should "work with unsorted channels" in {
     TestNode.standaloneEff(genesis).use { node =>
-      import node._
-
       def basicDeployData: Signed[DeployData] =
         ConstructDeploy.sourceDeployNow("for (@0 <- @{ 3 | 2 | 1 } & @1 <- @{ 2 | 1 }) { 0 }")
 
@@ -183,10 +154,11 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
           ),
           Par().copy(exprs = Vector(Expr(GInt(0))))
         )
-        listeningNameResponse1 <- BlockAPI.getListeningNameContinuationResponse[Effect](
-                                   Int.MaxValue,
-                                   listeningNamesShuffled1,
-                                   Int.MaxValue
+        blockApi <- createBlockApi(node)
+        depth    = node.apiMaxBlocksLimit
+        listeningNameResponse1 <- blockApi.getListeningNameContinuationResponse(
+                                   depth,
+                                   listeningNamesShuffled1
                                  )
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
@@ -200,10 +172,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
           Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
           Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))
         )
-        listeningNameResponse2 <- BlockAPI.getListeningNameContinuationResponse[Effect](
-                                   Int.MaxValue,
-                                   listeningNamesShuffled2,
-                                   Int.MaxValue
+        listeningNameResponse2 <- blockApi.getListeningNameContinuationResponse(
+                                   depth,
+                                   listeningNamesShuffled2
                                  )
         _ = inside(listeningNameResponse2) {
           case Right((blockResults, l)) =>

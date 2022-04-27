@@ -1,19 +1,12 @@
 package coop.rchain.node.runtime
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper._
-import coop.rchain.casper.api.BlockReportAPI
-import coop.rchain.casper.engine.EngineCell.EngineCell
+import coop.rchain.casper.api.{BlockAPI_v2, BlockReportAPI}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.{DeployGrpcServiceV1, ProposeGrpcServiceV1, ReplGrpcService}
 import coop.rchain.node.model.repl.ReplGrpcMonix
@@ -28,44 +21,14 @@ final case class APIServers(
 )
 
 object APIServers {
-  def build[F[_]: Monixable: RuntimeManager: RPConfAsk: ConnectionsCell: NodeDiscovery](
-      runtime: RhoRuntime[F],
-      triggerProposeFOpt: Option[ProposeFunction[F]],
-      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
-      apiMaxBlocksLimit: Int,
-      devMode: Boolean,
-      proposeFOpt: Option[ProposeFunction[F]],
+  def build[F[_]: Monixable: Concurrent: BlockStore: RPConfAsk: ConnectionsCell: NodeDiscovery: Log](
+      blockApi: BlockAPI_v2[F],
       blockReportAPI: BlockReportAPI[F],
-      networkId: String,
-      shardId: String,
-      minPhloPrice: Long,
-      isNodeReadOnly: Boolean
-  )(
-      implicit
-      blockStore: BlockStore[F],
-      concurrent: Concurrent[F],
-      metrics: Metrics[F],
-      span: Span[F],
-      engineCell: EngineCell[F],
-      blockDagStorage: BlockDagStorage[F],
-      logF: Log[F],
-      synchronyConstraintChecker: SynchronyConstraintChecker[F],
-      lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F],
-      mainScheduler: Scheduler
-  ): APIServers = {
-    val repl = ReplGrpcService(runtime, mainScheduler)
-    val deploy =
-      DeployGrpcServiceV1(
-        apiMaxBlocksLimit,
-        blockReportAPI,
-        proposeFOpt,
-        devMode,
-        networkId,
-        shardId,
-        minPhloPrice,
-        isNodeReadOnly
-      )
-    val propose = ProposeGrpcServiceV1(triggerProposeFOpt, proposerStateRefOpt)
+      runtime: RhoRuntime[F]
+  )(implicit mainScheduler: Scheduler): APIServers = {
+    val repl    = ReplGrpcService(runtime, mainScheduler)
+    val deploy  = DeployGrpcServiceV1(blockApi, blockReportAPI)
+    val propose = ProposeGrpcServiceV1(blockApi)
     APIServers(repl, propose, deploy)
   }
 }

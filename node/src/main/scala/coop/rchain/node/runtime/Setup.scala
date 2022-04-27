@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.{approvedStore, blockStore}
 import coop.rchain.casper._
-import coop.rchain.casper.api.BlockReportAPI
+import coop.rchain.casper.api.{BlockAPIImpl, BlockReportAPI}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
@@ -21,7 +21,7 @@ import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.rp.Connect.ConnectionsCell
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
@@ -260,36 +260,52 @@ object Setup {
           conf.roundRobinDispatcher.dropPeerAfterRetries
         )
       }*/
-      reportingStore <- ReportStore.store[F](rnodeStoreManager)
-      blockReportAPI = {
-        implicit val bs = blockStore
-        BlockReportAPI[F](reportingRuntime, reportingStore, validatorIdentityOpt)
-      }
-      apiServers = {
-        implicit val (ec, bds, bs, sp) = (engineCell, blockDagStorage, blockStore, span)
-        implicit val (sc, lh)          = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (ra, rp)          = (rpConfAsk, rpConnections)
-        implicit val rm                = runtimeManager
-        val isNodeReadOnly             = conf.casper.validatorPrivateKey.isEmpty
 
-        APIServers.build[F](
-          evalRuntime,
-          triggerProposeFOpt,
-          proposerStateRefOpt,
-          conf.apiServer.maxBlocksLimit,
-          conf.devMode,
-          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none[ProposeFunction[F]],
-          blockReportAPI,
+      getNetworkStatus = for {
+        address <- rpConfAsk.ask
+        peers   <- rpConnections.read
+        nodes   <- NodeDiscovery[F].peers
+      } yield (address.local, peers, nodes)
+
+      // Block API
+      blockApi <- {
+        implicit val (bds, bs, ds) = (blockDagStorage, blockStore, deployStorage)
+        implicit val rm            = runtimeManager
+        implicit val sp            = span
+        val isNodeReadOnly         = conf.casper.validatorPrivateKey.isEmpty
+        BlockAPIImpl[F](
+          validatorIdentityOpt,
           conf.protocolServer.networkId,
           conf.casper.shardName,
           conf.casper.minPhloPrice,
-          isNodeReadOnly
+          coop.rchain.node.web.VersionInfo.get,
+          getNetworkStatus,
+          isNodeReadOnly,
+          conf.apiServer.maxBlocksLimit,
+          conf.devMode,
+          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
+          else none,
+          proposerStateRefOpt
         )
       }
-      reportingRoutes = {
-        ReportingRoutes.service[F](blockReportAPI)
+
+      // Report API
+      reportingStore <- ReportStore.store[F](rnodeStoreManager)
+      blockReportApi = {
+        implicit val bs = blockStore
+        BlockReportAPI[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
+
+      apiServers = {
+        implicit val bs       = blockStore
+        implicit val (ra, rp) = (rpConfAsk, rpConnections)
+        APIServers.build[F](blockApi, blockReportApi, evalRuntime)
+      }
+
+      reportingRoutes = {
+        ReportingRoutes.service[F](blockReportApi)
+      }
+
       casperLoop = {
         implicit val br             = blockRetriever
         implicit val (bs, bds, cbs) = (blockStore, blockDagStorage, casperBufferStorage)
@@ -302,6 +318,7 @@ object Setup {
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)
         } yield ()
       }
+
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
       updateForkChoiceLoop = {
@@ -311,22 +328,20 @@ object Setup {
           _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
         } yield ()
       }
+
       engineInit = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
       transactionAPI = Transaction[F](
-        blockReportAPI,
+        blockReportApi,
         Par(unforgeables = Seq(Transaction.transferUnforgeable))
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
-        implicit val (ec, bds, bs, sp) = (engineCell, blockDagStorage, blockStore, span)
-        implicit val (ra, rc)          = (rpConfAsk, rpConnections)
-        implicit val rm                = runtimeManager
-        val isNodeReadOnly             = conf.casper.validatorPrivateKey.isEmpty
-
+        val isNodeReadOnly = conf.casper.validatorPrivateKey.isEmpty
         new WebApiImpl[F](
+          blockApi,
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
           cacheTransactionAPI,
@@ -338,14 +353,7 @@ object Setup {
           isNodeReadOnly
         )
       }
-      adminWebApi = {
-        implicit val (ec, sp) = (engineCell, span)
-        implicit val (sc, lh) = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        new AdminWebApiImpl[F](
-          triggerProposeFOpt,
-          proposerStateRefOpt
-        )
-      }
+      adminWebApi = new AdminWebApiImpl[F](blockApi)
     } yield (
       packetHandler,
       apiServers,

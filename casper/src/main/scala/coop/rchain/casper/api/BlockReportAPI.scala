@@ -6,7 +6,7 @@ import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.ReportStore.ReportStore
 import coop.rchain.casper._
-import coop.rchain.casper.api.BlockAPI.{reportTransformer, ApiErr, Error}
+import coop.rchain.casper.api.BlockAPI._
 import coop.rchain.casper.protocol._
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
@@ -23,10 +23,12 @@ class BlockReportAPI[F[_]: Concurrent: BlockStore: Metrics: Log](
   implicit val source                                       = Metrics.Source(CasperMetricsSource, "report-replay")
   val blockLockMap: TrieMap[BlockHash, MetricsSemaphore[F]] = TrieMap.empty
 
+  val reportTransformer = new ReportingProtoTransformer()
+
   private def replayBlock(b: BlockMessage) =
     for {
       reportResult <- reportingCasper.trace(b)
-      lightBlock   <- BlockAPI.getLightBlockInfo[F](b)
+      lightBlock   = getLightBlockInfo(b)
       deploys      = createDeployReport(reportResult.deployReportResult)
       sysDeploys   = createSystemDeployReport(reportResult.systemDeployReportResult)
       blockEvent   = BlockEventInfo(lightBlock, deploys, sysDeploys, reportResult.postStateHash)

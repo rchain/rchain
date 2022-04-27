@@ -4,18 +4,13 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.api.BlockAPI_v2
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper._
-import coop.rchain.casper.api.BlockAPI.{
-  BlockRetrievalError,
-  NoBlockMessageError,
-  ValidatorReadOnlyError
-}
+import coop.rchain.casper.api.BlockAPI._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
@@ -24,39 +19,99 @@ import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager, Tools}
+import coop.rchain.comm.PeerNode
+import coop.rchain.comm.rp.Connect.Connections
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.rholang.sorter.Sortable._
-import coop.rchain.models.serialization.implicits.mkProtobufInstance
+import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rspace.hashing.StableHashProvider
-import coop.rchain.rspace.trace._
+import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
 
 import scala.collection.immutable.SortedMap
 
+object BlockAPIImpl {
+  def apply[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
+      validatorOpt: Option[ValidatorIdentity],
+      networkId: String,
+      shardId: String,
+      minPhloPrice: Long,
+      version: String,
+      networkStatus: F[(PeerNode, Connections, Seq[PeerNode])],
+      isNodeReadOnly: Boolean,
+      maxDepthLimit: Int,
+      devMode: Boolean,
+      triggerPropose: Option[ProposeFunction[F]],
+      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
+  ): F[BlockAPIImpl[F]] =
+    Sync[F].delay(
+      new BlockAPIImpl(
+        validatorOpt,
+        networkId,
+        shardId,
+        minPhloPrice,
+        version,
+        networkStatus,
+        isNodeReadOnly,
+        maxDepthLimit,
+        devMode,
+        triggerPropose,
+        proposerStateRefOpt
+      )
+    )
+
+  sealed trait LatestBlockMessageError     extends Throwable
+  final case object ValidatorReadOnlyError extends LatestBlockMessageError
+  final case object NoBlockMessageError    extends LatestBlockMessageError
+
+  // TODO: we should refactor BlockApi with applicative errors for better classification
+  //  of errors and to overcome nesting when validating data.
+  final case class BlockRetrievalError(message: String) extends Exception
+}
+
 class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
-    validatorOpt: Option[ValidatorIdentity]
+    validatorOpt: Option[ValidatorIdentity],
+    networkId: String,
+    shardId: String,
+    minPhloPrice: Long,
+    version: String,
+    networkStatus: F[(PeerNode, Connections, Seq[PeerNode])],
+    isNodeReadOnly: Boolean,
+    maxDepthLimit: Int,
+    devMode: Boolean,
+    triggerProposeOpt: Option[ProposeFunction[F]],
+    proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
 ) extends BlockAPI_v2[F] {
+  import BlockAPIImpl._
 
   val blockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
   val deploySource: Metrics.Source          = Metrics.Source(blockAPIMetricsSource, "deploy")
   val getBlockSource: Metrics.Source        = Metrics.Source(blockAPIMetricsSource, "get-block")
 
-  override def deploy(
-      d: Signed[DeployData],
-      triggerPropose: Option[ProposeFunction[F]],
-      minPhloPrice: Long,
-      isNodeReadOnly: Boolean,
-      shardId: String
-  ): F[ApiErr[String]] = Span[F].trace(deploySource) {
+  override def status: F[Status] =
+    for {
+      netInfo                  <- networkStatus
+      (thisNode, peers, nodes) = netInfo
+      status = Status(
+        version = VersionInfo(api = 1.toString, node = version),
+        thisNode.toAddress,
+        networkId,
+        shardId,
+        peers = peers.length,
+        nodes = nodes.length,
+        minPhloPrice
+      )
+    } yield status
 
+  override def deploy(d: Signed[DeployData]): F[ApiErr[String]] = Span[F].trace(deploySource) {
     def casperDeploy: F[ApiErr[String]] =
       for {
         r <- makeDeploy(d).map(
@@ -66,7 +121,7 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
               )
             )
         // call a propose if proposer defined
-        _ <- triggerPropose.traverse(_(true))
+        _ <- triggerProposeOpt.traverse(_(true))
       } yield r
 
     // Check if node is read-only
@@ -114,15 +169,13 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
       )
   }
 
-  override def createBlock(
-      triggerProposeF: ProposeFunction[F],
-      isAsync: Boolean = false
-  ): F[ApiErr[String]] = {
+  override def createBlock(isAsync: Boolean = false): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
     def logSucess(msg: String) = Log[F].info(msg) >> msg.asRight[Error].pure[F]
     for {
       // Trigger propose
-      proposerResult <- triggerProposeF(isAsync)
+      triggerPropose <- triggerProposeOpt.liftTo(new Exception("Propose error: read-only node."))
+      proposerResult <- triggerPropose(isAsync)
       r <- proposerResult match {
             case ProposerEmpty =>
               logDebug(s"Failure: another propose is in progress")
@@ -141,9 +194,10 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
   }
 
   // Get result of the propose
-  override def getProposeResult(proposerState: Ref[F, ProposerState[F]]): F[ApiErr[String]] =
+  override def getProposeResult: F[ApiErr[String]] =
     for {
-      pr <- proposerState.get.map(_.currProposeResult)
+      proposerState <- proposerStateRefOpt.liftTo(new Exception("Error: read-only node."))
+      pr            <- proposerState.get.map(_.currProposeResult)
       r <- pr match {
             // return latest propose result
             case None =>
@@ -195,13 +249,12 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
 
   override def getListeningNameDataResponse(
       depth: Int,
-      listeningName: Par,
-      maxBlocksLimit: Int
+      listeningName: Par
   ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] = {
     val response: F[Either[Error, (Seq[DataWithBlockInfo], Int)]] = for {
       dag                 <- BlockDagStorage[F].getRepresentation
       heightMap           = dag.heightMap
-      depthWithLimit      = Math.min(depth, maxBlocksLimit).toLong
+      depthWithLimit      = Math.min(depth, maxDepthLimit).toLong
       sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
       blockDataStream = getFromBlocks(heightMap) { block =>
         getDataWithBlockInfo(sortedListeningName, block)
@@ -216,8 +269,8 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
                                .map(_.flatten)
     } yield (blocksWithActiveName, blocksWithActiveName.length).asRight[String]
     // Check depth limit
-    if (depth > maxBlocksLimit)
-      s"Your request on getListeningName depth $depth exceed the max limit $maxBlocksLimit"
+    if (depth > maxDepthLimit)
+      s"Your request on getListeningName depth $depth exceed the max limit $maxDepthLimit"
         .asLeft[(Seq[DataWithBlockInfo], Int)]
         .pure[F]
     else response
@@ -225,13 +278,12 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
 
   override def getListeningNameContinuationResponse(
       depth: Int,
-      listeningNames: Seq[Par],
-      maxBlocksLimit: Int
+      listeningNames: Seq[Par]
   ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] = {
     val response: F[Either[Error, (Seq[ContinuationsWithBlockInfo], Int)]] = for {
       dag            <- BlockDagStorage[F].getRepresentation
       heightMap      = dag.heightMap
-      depthWithLimit = Math.min(depth, maxBlocksLimit).toLong
+      depthWithLimit = Math.min(depth, maxDepthLimit).toLong
       sortedListeningNames <- listeningNames.toList
                                .traverse(parSortable.sortMatch[F](_).map(_.term))
       blockDataStream = getFromBlocks(heightMap) { block =>
@@ -247,8 +299,8 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
                                .map(_.flatten)
     } yield (blocksWithActiveName, blocksWithActiveName.length).asRight[String]
     // Check depth limit
-    if (depth > maxBlocksLimit)
-      s"Your request on getListeningNameContinuation depth $depth exceed the max limit $maxBlocksLimit"
+    if (depth > maxDepthLimit)
+      s"Your request on getListeningNameContinuation depth $depth exceed the max limit $maxDepthLimit"
         .asLeft[(Seq[ContinuationsWithBlockInfo], Int)]
         .pure[F]
     else response
@@ -263,7 +315,7 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
       val stateHash = ProtoUtil.postStateHash(block)
       for {
         data      <- RuntimeManager[F].getData(stateHash)(sortedListeningName)
-        blockInfo <- getLightBlockInfo(block)
+        blockInfo = getLightBlockInfo(block)
       } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, blockInfo))
     } else {
       none[DataWithBlockInfo].pure[F]
@@ -280,7 +332,7 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
         continuationInfos = continuations.map(
           continuation => WaitingContinuationInfo(continuation._1, continuation._2)
         )
-        blockInfo <- getLightBlockInfo(block)
+        blockInfo = getLightBlockInfo(block)
       } yield Option[ContinuationsWithBlockInfo](
         ContinuationsWithBlockInfo(continuationInfos, blockInfo)
       )
@@ -292,13 +344,8 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
       block: BlockMessage,
       sortedListeningName: Seq[Par]
   ): Boolean = {
-    val serializedLog = for {
-      pd    <- block.body.deploys
-      event <- pd.deployLog
-    } yield event
-    val log =
-      serializedLog.map(EventConverter.toRspaceEvent)
-    log.exists {
+    val eventLog = block.body.deploys.flatMap(_.deployLog).map(EventConverter.toRspaceEvent)
+    eventLog.exists {
       case Produce(channelHash, _, _) =>
         assert(sortedListeningName.size == 1, "Produce can have only one channel")
         channelHash == StableHashProvider.hash(sortedListeningName.head)
@@ -335,8 +382,7 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
 
   override def getBlocksByHeights(
       startBlockNumber: Long,
-      endBlockNumber: Long,
-      maxBlocksLimit: Int
+      endBlockNumber: Long
   ): F[ApiErr[List[LightBlockInfo]]] = {
     def response: F[ApiErr[List[LightBlockInfo]]] =
       for {
@@ -347,14 +393,14 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
                      case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
                        for {
                          blocksAtHeight     <- blockHashesAtHeight.traverse(BlockStore[F].getUnsafe)
-                         blockInfosAtHeight <- blocksAtHeight.traverse(getLightBlockInfo)
+                         blockInfosAtHeight = blocksAtHeight.map(getLightBlockInfo)
                        } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
                    }
                    .map(_.asRight[Error])
       } yield result
 
-    if (endBlockNumber - startBlockNumber > maxBlocksLimit)
-      s"Your request startBlockNumber $startBlockNumber and endBlockNumber $endBlockNumber exceed the max limit $maxBlocksLimit"
+    if (endBlockNumber - startBlockNumber > maxDepthLimit)
+      s"Your request startBlockNumber $startBlockNumber and endBlockNumber $endBlockNumber exceed the max limit $maxDepthLimit"
         .asLeft[List[LightBlockInfo]]
         .pure[F]
     else
@@ -363,25 +409,25 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
 
   override def visualizeDag[R](
       depth: Int,
-      maxDepthLimit: Int,
       startBlockNumber: Int,
-      visualizer: (Vector[Vector[BlockHash]], String) => F[Graphz[F]],
-      serialize: F[R]
-  ): F[ApiErr[R]] =
+      showJustificationLines: Boolean
+  ): F[ApiErr[Vector[String]]] =
     for {
       dag <- BlockDagStorage[F].getRepresentation
       // the default startBlockNumber is 0
       // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
       startBlockNum = if (startBlockNumber == 0) dag.latestBlockNumber else startBlockNumber.toLong
-      topoSortDag <- dag.topoSortUnsafe(
-                      startBlockNum - depth,
-                      Some(startBlockNum)
-                    )
-      _      <- visualizer(topoSortDag, PrettyPrinter.buildString(dag.lastFinalizedBlockHash))
-      result <- serialize
+      depthLimited  = if (depth <= 0 || depth > maxDepthLimit) maxDepthLimit else depth
+      topoSortDag   <- dag.topoSortUnsafe(startBlockNum - depthLimited, Some(startBlockNum))
+      ref           <- Ref[F].of(Vector[String]())
+      ser           = new ListSerializer(ref)
+      config        = GraphConfig(showJustificationLines)
+      lfb           = PrettyPrinter.buildString(dag.lastFinalizedBlockHash)
+      _             <- GraphzGenerator.dagAsCluster[F](topoSortDag, lfb, config, ser)
+      result        <- ref.get
     } yield result.asRight[Error]
 
-  override def machineVerifiableDag(depth: Int, maxDepthLimit: Int): F[ApiErr[String]] =
+  override def machineVerifiableDag(depth: Int): F[ApiErr[String]] =
     toposortDag[String](depth, maxDepthLimit) { topoSort =>
       val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
         BlockStore[F].getUnsafe(blockHash) map (_.header.parentsHashList)
@@ -392,16 +438,14 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
         .map(_.asRight[Error])
     }
 
-  override def getBlocks(depth: Int, maxDepthLimit: Int): F[ApiErr[List[LightBlockInfo]]] =
+  override def getBlocks(depth: Int): F[ApiErr[List[LightBlockInfo]]] =
     toposortDag[List[LightBlockInfo]](depth, maxDepthLimit) { topoSort =>
       topoSort
         .foldM(List.empty[LightBlockInfo]) {
           case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
             for {
-              blocksAtHeight <- blockHashesAtHeight.traverse(BlockStore[F].getUnsafe)
-              blockInfosAtHeight <- blocksAtHeight.traverse(
-                                     getLightBlockInfo
-                                   )
+              blocksAtHeight     <- blockHashesAtHeight.traverse(BlockStore[F].getUnsafe)
+              blockInfosAtHeight = blocksAtHeight.map(getLightBlockInfo)
             } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
         }
         .map(_.reverse.asRight[Error])
@@ -409,10 +453,9 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
 
   override def findDeploy(id: DeployId): F[ApiErr[LightBlockInfo]] =
     for {
-      dag            <- BlockDagStorage[F].getRepresentation
       maybeBlockHash <- BlockDagStorage[F].lookupByDeployId(id)
       maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
-      response       <- maybeBlock.traverse(getLightBlockInfo)
+      response       = maybeBlock.map(getLightBlockInfo)
     } yield response.fold(
       s"Couldn't find block containing deploy with id: ${PrettyPrinter
         .buildStringNoLimit(id)}".asLeft[LightBlockInfo]
@@ -443,7 +486,7 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
               )
       // Check if the block is added to the dag and convert it to block info
       dag <- BlockDagStorage[F].getRepresentation
-      blockInfo <- if (dag.contains(block.blockHash)) getFullBlockInfo(block)
+      blockInfo <- if (dag.contains(block.blockHash)) Sync[F].delay(getFullBlockInfo(block))
                   else
                     BlockRetrievalError(s"Error: Block with hash $hash received but not added yet")
                       .raiseError[F, BlockInfo]
@@ -455,58 +498,6 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
       case BlockRetrievalError(errorMessage) => errorMessage.asLeft[BlockInfo]
     }
   }
-
-  private def getBlockInfo[A](
-      block: BlockMessage,
-      constructor: (BlockMessage, Float) => A
-  ): F[A] = constructor(block, -1f).pure[F]
-
-  private def getFullBlockInfo(
-      block: BlockMessage
-  ): F[BlockInfo] =
-    getBlockInfo[BlockInfo](block, constructBlockInfo)
-
-  override def getLightBlockInfo(block: BlockMessage): F[LightBlockInfo] =
-    getBlockInfo[LightBlockInfo](block, constructLightBlockInfo)
-
-  private def constructBlockInfo(
-      block: BlockMessage,
-      faultTolerance: Float
-  ): BlockInfo = {
-    val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
-    val deploys        = block.body.deploys.map(_.toDeployInfo)
-    BlockInfo(blockInfo = lightBlockInfo, deploys = deploys)
-  }
-
-  private def constructLightBlockInfo(
-      block: BlockMessage,
-      faultTolerance: Float
-  ): LightBlockInfo =
-    LightBlockInfo(
-      blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-      sender = PrettyPrinter.buildStringNoLimit(block.sender),
-      seqNum = block.seqNum.toLong,
-      sig = PrettyPrinter.buildStringNoLimit(block.sig),
-      sigAlgorithm = block.sigAlgorithm,
-      shardId = block.shardId,
-      extraBytes = block.extraBytes,
-      version = block.header.version,
-      timestamp = block.header.timestamp,
-      headerExtraBytes = block.header.extraBytes,
-      parentsHashList = block.header.parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-      blockNumber = block.body.state.blockNumber,
-      preStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.preStateHash),
-      postStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash),
-      bodyExtraBytes = block.body.extraBytes,
-      bonds = block.body.state.bonds.map(ProtoUtil.bondToBondInfo),
-      blockSize = block.toProto.serializedSize.toString,
-      deployCount = block.body.deploys.length,
-      faultTolerance = faultTolerance,
-      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
-      rejectedDeploys = block.body.rejectedDeploys.map(
-        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
-      )
-    )
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
@@ -532,7 +523,7 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
     for {
       dag                <- BlockDagStorage[F].getRepresentation
       lastFinalizedBlock <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
-      blockInfo          <- getFullBlockInfo(lastFinalizedBlock)
+      blockInfo          = getFullBlockInfo(lastFinalizedBlock)
     } yield blockInfo.asRight
 
   override def isFinalized(hash: String): F[ApiErr[Boolean]] =
@@ -565,46 +556,42 @@ class BlockAPIImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
   override def exploratoryDeploy(
       term: String,
       blockHash: Option[String] = none,
-      usePreStateHash: Boolean = false,
-      devMode: Boolean = false
+      usePreStateHash: Boolean = false
   ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
-    for {
-      isReadOnly <- Sync[F].delay(validatorOpt.isEmpty)
-      result <- if (isReadOnly || devMode) {
-                 for {
-                   dag <- BlockDagStorage[F].getRepresentation
-                   targetBlock <- if (blockHash.isEmpty)
-                                   dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].get1)
-                                 else
-                                   for {
-                                     hashByteString <- blockHash
-                                                        .getOrElse("")
-                                                        .hexToByteString
-                                                        .liftTo[F](
-                                                          BlockRetrievalError(
-                                                            s"Input hash value is not valid hex string: $blockHash"
-                                                          )
-                                                        )
-                                     block <- BlockStore[F].get1(hashByteString)
-                                   } yield block
-                   res <- targetBlock.traverse(b => {
-                           val postStateHash =
-                             if (usePreStateHash) ProtoUtil.preStateHash(b)
-                             else ProtoUtil.postStateHash(b)
-                           for {
-                             res            <- RuntimeManager[F].playExploratoryDeploy(term, postStateHash)
-                             lightBlockInfo <- getLightBlockInfo(b)
-                           } yield (res, lightBlockInfo)
-                         })
-                 } yield res.fold(
-                   s"Can not find block $blockHash".asLeft[(Seq[Par], LightBlockInfo)]
-                 )(_.asRight[Error])
-               } else {
-                 "Exploratory deploy can only be executed on read-only RNode."
-                   .asLeft[(Seq[Par], LightBlockInfo)]
-                   .pure[F]
-               }
-    } yield result
+    if (isNodeReadOnly || devMode) {
+      for {
+        dag <- BlockDagStorage[F].getRepresentation
+        targetBlock <- if (blockHash.isEmpty)
+                        dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].get1)
+                      else
+                        for {
+                          hashByteString <- blockHash
+                                             .getOrElse("")
+                                             .hexToByteString
+                                             .liftTo[F](
+                                               BlockRetrievalError(
+                                                 s"Input hash value is not valid hex string: $blockHash"
+                                               )
+                                             )
+                          block <- BlockStore[F].get1(hashByteString)
+                        } yield block
+        res <- targetBlock.traverse(b => {
+                val postStateHash =
+                  if (usePreStateHash) ProtoUtil.preStateHash(b)
+                  else ProtoUtil.postStateHash(b)
+                for {
+                  res            <- RuntimeManager[F].playExploratoryDeploy(term, postStateHash)
+                  lightBlockInfo = getLightBlockInfo(b)
+                } yield (res, lightBlockInfo)
+              })
+      } yield res.fold(
+        s"Can not find block $blockHash".asLeft[(Seq[Par], LightBlockInfo)]
+      )(_.asRight[Error])
+    } else {
+      "Exploratory deploy can only be executed on read-only RNode."
+        .asLeft[(Seq[Par], LightBlockInfo)]
+        .pure[F]
+    }
 
   override def getLatestMessage: F[ApiErr[BlockMetadata]] =
     for {
