@@ -75,10 +75,11 @@ object RhoTrieTraverser {
     Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenUnforgeable))))))
 
   private val storeTokenUnforgeable: Par = {
-    import coop.rchain.models.rholang.implicits._
-    GPrivate(
-      "ccd27cf1166fb851019be60c4d756bc53c40f8907ab22a4978864966a528930a".unsafeHexToByteString
-    )
+    val rand =
+      Tools.unforgeableNameRng(StandardDeploys.registryPubKey, StandardDeploys.registryTimestamp)
+    (0 to 12).foreach(_ => rand.next())
+    val target = rand.next()
+    Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target))))))
   }
 
   private def TreeHashMapGetter[F[_]: Sync](

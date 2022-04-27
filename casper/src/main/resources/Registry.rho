@@ -20,18 +20,9 @@ new
   msRet,
   secpVerify(`rho:crypto:secp256k1Verify`),
   blake2b256(`rho:crypto:blake2b256Hash`),
-  hashVerify
+  hashVerify,
+  storeToken
 in {
-  contract hashVerify(@data, @sig, @pubKey, ret) = {
-    new hashCh in {
-      // hash the data
-      blake2b256!(data.toByteArray(), *hashCh) |
-      for (@hash <- hashCh) {
-        // verify the signature
-        secpVerify!(hash, sig, pubKey, *ret)
-      }
-    }
-  } |
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
   // that method assumes the registry already exists.
@@ -76,7 +67,7 @@ in {
 
   new MakeNode, ByteArrayToNybbleList,
       TreeHashMapSetter, TreeHashMapGetter, TreeHashMapContains, TreeHashMapUpdater,
-      powersCh, storeToken, nodeGet in {
+      powersCh, nodeGet in {
     match [1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536] {
       powers => {
         contract MakeNode(@initVal, @node) = {
@@ -421,6 +412,16 @@ in {
     `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
     } {
     shorthands => {
+      contract hashVerify(@data, @sig, @pubKey, ret) = {
+        new hashCh in {
+          // hash the data
+          blake2b256!(data.toByteArray(), *hashCh) |
+          for (@hash <- hashCh) {
+            // verify the signature
+            secpVerify!(hash, sig, pubKey, *ret)
+          }
+        }
+      } |
       // Use 4 * 8 = 32-bit paths to leaf nodes.
       TreeHashMap!("init", 4, *_registryStore) |
       new ack in {
