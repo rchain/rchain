@@ -29,6 +29,10 @@ final case class ParsingError(details: String)
 
 object MultiParentCasper {
 
+  // TODO: copied from previous code
+  //  - remove it, no need to have error message "Error: error ... of error"
+  def parsingError(details: String) = ParsingError(s"Parsing error: $details")
+
   // TODO: Extract hardcoded deployLifespan from shard config
   // Size of deploy safety range.
   // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
@@ -352,7 +356,7 @@ object MultiParentCasper {
     InterpreterUtil
       .mkTerm(d.data.term, NormalizerEnv(d))
       .bitraverse(
-        err => ParsingError(s"Error in parsing term: \n$err").pure[F],
+        err => parsingError(s"Error in parsing term: \n$err").pure[F],
         _ => addDeploy(d)
       )
   }

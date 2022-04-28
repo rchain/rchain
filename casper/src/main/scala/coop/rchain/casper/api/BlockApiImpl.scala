@@ -8,6 +8,7 @@ import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper.MultiParentCasper.parsingError
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
@@ -166,7 +167,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
     InterpreterUtil
       .mkTerm(d.data.term, NormalizerEnv(d))
       .bitraverse(
-        err => ParsingError(s"Error in parsing term: \n$err").pure[F],
+        err => parsingError(s"Error in parsing term: \n$err").pure[F],
         _ => addDeploy(d)
       )
   }
