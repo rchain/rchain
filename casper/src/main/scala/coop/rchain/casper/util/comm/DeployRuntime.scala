@@ -61,6 +61,17 @@ object DeployRuntime {
       }.map(kp("")).value
     }
 
+  def getDataAtPar[F[_]: Sync: DeployService](
+      par: Par,
+      blockHash: String,
+      usePreStateHash: Boolean
+  ): F[Unit] =
+    gracefulExit {
+      EitherT(
+        DeployService[F].getDataAtPar(DataAtNameByBlockQuery(par, blockHash, usePreStateHash))
+      ).map(kp("")).value
+    }
+
   def findDeploy[F[_]: Functor: Sync: Time: DeployService](
       deployId: Array[Byte]
   ): F[Unit] =
