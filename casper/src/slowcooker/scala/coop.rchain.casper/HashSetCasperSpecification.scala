@@ -41,7 +41,7 @@ object HashSetCasperActions {
   def deploy(
       node: TestNode[Effect],
       deployData: Signed[DeployData]
-  ): Effect[Either[DeployError, DeployId]] =
+  ): Effect[Either[ParsingError, DeployId]] =
     node.deploy(deployData)
 
   def create(node: TestNode[Effect]): Task[BlockMessage] =

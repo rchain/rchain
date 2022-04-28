@@ -25,6 +25,8 @@ import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 
+final case class ParsingError(details: String)
+
 object MultiParentCasper {
 
   // TODO: Extract hardcoded deployLifespan from shard config
@@ -344,13 +346,13 @@ object MultiParentCasper {
 
   def deploy[F[_]: Sync: DeployStorage: Log](
       d: Signed[DeployData]
-  ): F[Either[DeployError, DeployId]] = {
+  ): F[Either[ParsingError, DeployId]] = {
     import coop.rchain.models.rholang.implicits._
 
     InterpreterUtil
       .mkTerm(d.data.term, NormalizerEnv(d))
       .bitraverse(
-        err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
+        err => ParsingError(s"Error in parsing term: \n$err").pure[F],
         _ => addDeploy(d)
       )
   }

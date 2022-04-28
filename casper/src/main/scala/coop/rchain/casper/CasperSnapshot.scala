@@ -1,33 +1,10 @@
 package coop.rchain.casper
 
-import cats.Show
 import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-
-sealed trait DeployError
-final case class ParsingError(details: String)          extends DeployError
-final case object MissingUser                           extends DeployError
-final case class UnknownSignatureAlgorithm(alg: String) extends DeployError
-final case object SignatureVerificationFailed           extends DeployError
-
-object DeployError {
-  def parsingError(details: String): DeployError          = ParsingError(details)
-  def missingUser: DeployError                            = MissingUser
-  def unknownSignatureAlgorithm(alg: String): DeployError = UnknownSignatureAlgorithm(alg)
-  def signatureVerificationFailed: DeployError            = SignatureVerificationFailed
-
-  implicit val showDeployError: Show[DeployError] = new Show[DeployError] {
-    def show(error: DeployError): String = error match {
-      case ParsingError(details)          => s"Parsing error: $details"
-      case MissingUser                    => s"Missing user"
-      case UnknownSignatureAlgorithm(alg) => s"Unknown signature algorithm '$alg'"
-      case SignatureVerificationFailed    => "Signature verification failed"
-    }
-  }
-}
 
 /**
   * Casper snapshot is a state that is changing in discrete manner with each new block added.
