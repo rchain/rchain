@@ -173,7 +173,7 @@ object Running {
   // TODO name for this message is misleading, as its a request for all tips, not just fork choice.
   def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: BlockDagStorage: Log](
       peer: PeerNode
-  )(casper: MultiParentCasper[F]): F[Unit] = {
+  ): F[Unit] = {
     val logRequest = Log[F].info(s"Received ForkChoiceTipRequest from ${peer.endpoint.host}")
     def logResponse(tips: Seq[BlockHash]): F[Unit] =
       Log[F].info(
@@ -245,7 +245,6 @@ class Running[F[_]
 (
     blockProcessingQueue: Queue[F, BlockMessage],
     blocksInProcessing: Ref[F, Set[BlockHash]],
-    casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit],
@@ -270,7 +269,7 @@ class Running[F[_]
       )
     case b: BlockMessage =>
       for {
-        _ <- casper.getValidator.flatMap {
+        _ <- validatorId match {
               case None => ().pure[F]
               case Some(id) =>
                 F.whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))(
@@ -301,7 +300,7 @@ class Running[F[_]
       } yield res
     case hb: HasBlock => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
     case _: ForkChoiceTipRequest.type =>
-      handleForkChoiceTipRequest(peer)(casper)
+      handleForkChoiceTipRequest(peer)
     case abr: ApprovedBlockRequest =>
       for {
         lfBlockHash <- BlockDagStorage[F].getRepresentation.flatMap(_.lastFinalizedBlockUnsafe)
@@ -349,9 +348,4 @@ class Running[F[_]
       }
     case _ => noop
   }
-
-  override def withCasper[A](
-      f: MultiParentCasper[F] => F[A],
-      default: F[A]
-  ): F[A] = f(casper)
 }

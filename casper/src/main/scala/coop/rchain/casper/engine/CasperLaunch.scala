@@ -85,7 +85,7 @@ object CasperLaunch {
           disableStateExporter: Boolean
       ): F[Unit] = {
         def askPeersForForkChoiceTips = CommUtil[F].sendForkChoiceTipRequest
-        def sendBufferPendantsToCasper(casper: Casper[F]) =
+        def sendBufferPendantsToCasper =
           for {
             pendants <- CasperBufferStorage[F].getPendants
             // pendantsReceived are either
@@ -122,19 +122,17 @@ object CasperLaunch {
                   )
           } yield ()
 
+        val init = for {
+          _ <- askPeersForForkChoiceTips
+          _ <- sendBufferPendantsToCasper
+          // try to propose (async way) if proposer is defined
+          _ <- proposeFOpt.traverse(_(true))
+        } yield ()
         for {
-          casper <- MultiParentCasper.hashSetCasper[F](validatorIdentityOpt, casperShardConf)
-          init = for {
-            _ <- askPeersForForkChoiceTips
-            _ <- sendBufferPendantsToCasper(casper)
-            // try to propose (async way) if proposer is defined
-            _ <- proposeFOpt.traverse(_(true))
-          } yield ()
           _ <- Engine
                 .transitionToRunning[F](
                   blockProcessingQueue,
                   blocksInProcessing,
-                  casper,
                   approvedBlock,
                   validatorIdentityOpt,
                   init,

@@ -3,8 +3,8 @@ package coop.rchain.casper
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage.blockStore.BlockStore
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
@@ -14,55 +14,16 @@ import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
-import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
-
-// format: off
-class MultiParentCasperImpl[F[_]
-  /* Execution */   : Concurrent: Time: Timer
-  /* Transport */   : CommUtil: BlockRetriever: EventPublisher
-  /* Rholang */     : RuntimeManager
-  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
-  /* Diagnostics */ : Log: Metrics: Span] // format: on
-(
-    validatorId: Option[ValidatorIdentity],
-    shardName: String,
-    minPhloPrice: Long,
-    maxNumberOfParents: Int
-) extends MultiParentCasper[F] {
-  implicit private val logSource: LogSource = LogSource(this.getClass)
-
-  def getValidator: F[Option[ValidatorIdentity]] = validatorId.pure[F]
-
-  def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = {
-    import coop.rchain.models.rholang.implicits._
-
-    InterpreterUtil
-      .mkTerm(d.data.term, NormalizerEnv(d))
-      .bitraverse(
-        err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
-        _ => addDeploy(d)
-      )
-  }
-
-  def addDeploy(deploy: Signed[DeployData]): F[DeployId] =
-    for {
-      _ <- DeployStorage[F].add(List(deploy))
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
-    } yield deploy.sig
-
-  def getRuntimeManager: F[RuntimeManager[F]] = Sync[F].delay(RuntimeManager[F])
-}
 
 object MultiParentCasperImpl {
 
@@ -380,4 +341,23 @@ object MultiParentCasperImpl {
                         }
       r <- depFreePendants.traverse(BlockStore[F].getUnsafe)
     } yield r
+
+  def deploy[F[_]: Sync: DeployStorage: Log](
+      d: Signed[DeployData]
+  ): F[Either[DeployError, DeployId]] = {
+    import coop.rchain.models.rholang.implicits._
+
+    InterpreterUtil
+      .mkTerm(d.data.term, NormalizerEnv(d))
+      .bitraverse(
+        err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
+        _ => addDeploy(d)
+      )
+  }
+
+  private def addDeploy[F[_]: Sync: DeployStorage: Log](deploy: Signed[DeployData]): F[DeployId] =
+    for {
+      _ <- DeployStorage[F].add(List(deploy))
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
+    } yield deploy.sig
 }

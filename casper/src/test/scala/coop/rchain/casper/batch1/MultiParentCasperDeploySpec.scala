@@ -1,6 +1,5 @@
 package coop.rchain.casper.batch1
 
-import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.blocks.proposer.{Created, NoNewDeploys}
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockApiFixture, TestNode}
@@ -21,19 +20,6 @@ class MultiParentCasperDeploySpec
   implicit val timeEff = new LogicalTime[Effect]
 
   val genesis = buildGenesis()
-
-  "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      import node.casperEff
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        deploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        res      <- MultiParentCasper[Effect].deploy(deploy)
-        deployId = res.right.get
-      } yield deployId shouldBe deploy.sig
-    }
-  }
 
   it should "not create a block with a repeated deploy" in effectTest {
     implicit val timeEff = new LogicalTime[Effect]
@@ -73,7 +59,6 @@ class MultiParentCasperDeploySpec
 
   it should "reject deploy with phloPrice lower than minPhloPrice" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      import node.{blockDagStorage, blockStore, ds, logEff, runtimeManager, sp}
       val minPhloPrice = node.casperShardConf.minPhloPrice
       val phloPrice    = minPhloPrice - 1L
       for {

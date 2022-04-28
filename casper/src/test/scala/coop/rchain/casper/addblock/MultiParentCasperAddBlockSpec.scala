@@ -424,11 +424,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     def deployment(ts: Long) =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts, shardId = SHARD_ID)
 
-    def deploy(
-        node: TestNode[Effect],
-        dd: Signed[DeployData]
-    ) = node.casperEff.deploy(dd)
-
     def create(
         node: TestNode[Effect]
     ): Effect[BlockMessage] =
@@ -463,17 +458,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         val v2 = nodes(1)
         val v3 = nodes(2)
         for {
-          _    <- deploy(v1, deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
-          v2c1 <- deploy(v2, deployment(2)) >> create(v2) //V2#1
+          _    <- v1.deploy(deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
+          v2c1 <- v2.deploy(deployment(2)) >> create(v2) //V2#1
           _    <- v2.handleReceive()
           _    <- v3.handleReceive()
-          _    <- deploy(v1, deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
-          v3c2 <- deploy(v3, deployment(5)) >> create(v3) //V3#2
+          _    <- v1.deploy(deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
+          v3c2 <- v3.deploy(deployment(5)) >> create(v3) //V3#2
           _    <- v3.handleReceive()
           _    <- add(v3, v3c2) //V3#2
           _    <- add(v2, v2c1) //V2#1
           _    <- v3.handleReceive()
-          r    <- deploy(v3, deployment(6)) >> create(v3) >>= (b => add(v3, b))
+          r    <- v3.deploy(deployment(6)) >> create(v3) >>= (b => add(v3, b))
           _    = r shouldBe Right(Right(Valid))
         } yield ()
       }
@@ -483,8 +478,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployData <- ConstructDeploy
-                       .basicDeployData[Effect](0, shardId = genesis.genesisBlock.shardId)
-        signedBlock  <- nodes(0).casperEff.deploy(deployData) >> nodes(0).createBlockUnsafe()
+                       .basicDeployData[Effect](0)
+        signedBlock  <- nodes(0).deploy(deployData) >> nodes(0).createBlockUnsafe()
         invalidBlock = signedBlock.copy(seqNum = 47)
         status1      <- nodes(1).processBlock(invalidBlock)
         status2      <- nodes(2).processBlock(invalidBlock)

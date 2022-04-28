@@ -79,13 +79,10 @@ object GenesisCeremonyMaster {
                  val ab = approvedBlock.candidate.block
                  for {
                    _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
-                   casper <- MultiParentCasper
-                              .hashSetCasper[F](validatorId, casperShardConf: CasperShardConf)
                    _ <- Engine
                          .transitionToRunning[F](
                            blockProcessingQueue,
                            blocksInProcessing,
-                           casper,
                            approvedBlock,
                            validatorId,
                            ().pure[F],

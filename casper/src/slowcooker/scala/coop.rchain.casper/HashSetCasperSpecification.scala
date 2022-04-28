@@ -1,28 +1,21 @@
 package coop.rchain.casper
 
-import scala.util.{Random, Try}
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
-import coop.rchain.casper.blocks.proposer.Created
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.crypto.PublicKey
-import coop.rchain.models.BlockHash
-import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.crypto.signatures.Signed
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck._
 import org.scalacheck.commands.Commands
+
+import scala.util.Try
 
 case class RNode(idx: Int, name: String, deployed: Boolean)
 
@@ -49,7 +42,7 @@ object HashSetCasperActions {
       node: TestNode[Effect],
       deployData: Signed[DeployData]
   ): Effect[Either[DeployError, DeployId]] =
-    node.casperEff.deploy(deployData)
+    node.deploy(deployData)
 
   def create(node: TestNode[Effect]): Task[BlockMessage] =
     for {
@@ -66,7 +59,7 @@ object HashSetCasperActions {
     )
 
   def deployment(i: Int, ts: Long = System.currentTimeMillis()): Signed[DeployData] =
-    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts)
+    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, shardId = "root")
 
   implicit class EffectOps[A](f: Effect[A]) {
     def result: A = f.unsafeRunSync

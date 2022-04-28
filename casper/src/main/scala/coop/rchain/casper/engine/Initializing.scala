@@ -243,12 +243,10 @@ class Initializing[F[_]
 
   private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] =
     for {
-      casper <- MultiParentCasper.hashSetCasper[F](validatorId, casperShardConf)
-      _      <- Log[F].info("MultiParentCasper instance created.")
+      _ <- Log[F].info("MultiParentCasper instance created.")
       _ <- transitionToRunning[F](
             blockProcessingQueue,
             blocksInProcessing,
-            casper,
             approvedBlock,
             validatorId,
             ().pure,

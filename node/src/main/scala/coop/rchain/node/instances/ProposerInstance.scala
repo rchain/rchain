@@ -3,10 +3,10 @@ package coop.rchain.node.instances
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Deferred, MVar, Ref, Semaphore}
 import cats.syntax.all._
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper.{Casper, PrettyPrinter}
 import coop.rchain.shared.Log
 import fs2.Stream
 import fs2.concurrent.Queue

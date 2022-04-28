@@ -20,6 +20,7 @@ import coop.rchain.casper.engine.BlockRetriever._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
@@ -50,7 +51,7 @@ import org.scalatest.Assertions
 import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-case class TestNode[F[_]: Timer](
+case class TestNode[F[_]: Sync: Timer](
     name: String,
     local: PeerNode,
     tle: TransportLayerTestImpl[F],
@@ -66,11 +67,7 @@ case class TestNode[F[_]: Timer](
     triggerProposeFOpt: Option[ProposeFunction[F]],
     blockProcessorQueue: Queue[F, BlockMessage],
     blockProcessorState: Ref[F, Set[BlockHash]],
-    blockProcessingPipe: Pipe[
-      F,
-      (Casper[F], BlockMessage),
-      ValidBlockProcessing
-    ],
+    blockProcessingPipe: Pipe[F, BlockMessage, ValidBlockProcessing],
     blockStoreEffect: BlockStore[F],
     approvedStoreEffect: ApprovedStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
@@ -131,19 +128,11 @@ case class TestNode[F[_]: Timer](
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
-  implicit val casperEff = new MultiParentCasperImpl[F](
-    validatorIdOpt,
-    casperShardConf.shardName,
-    casperShardConf.minPhloPrice,
-    casperShardConf.maxNumberOfParents
-  )
-
   implicit val rspaceMan = RSpaceStateManagerTestImpl()
   val engine =
     new coop.rchain.casper.engine.Running(
       blockProcessorQueue,
       blockProcessorState,
-      casperEff,
       approvedBlock,
       validatorIdOpt,
       ().pure[F],
@@ -170,8 +159,11 @@ case class TestNode[F[_]: Timer](
           }
     } yield r
 
+  def deploy(dd: Signed[DeployData]) =
+    MultiParentCasperImpl.deploy[F](dd)
+
   def addBlock(block: BlockMessage): F[ValidBlockProcessing] =
-    Stream((casperEff, block)).through(blockProcessingPipe).compile.lastOrError
+    Stream(block).through(blockProcessingPipe).compile.lastOrError
 
   def addBlock(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     addBlockStatus(ValidBlock.Valid.asRight)(deployDatums: _*)
@@ -207,19 +199,17 @@ case class TestNode[F[_]: Timer](
 
   def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
     for {
-      _                 <- deployDatums.toList.traverse(casperEff.deploy)
+      _                 <- deployDatums.toList.traverse(MultiParentCasperImpl.deploy[F])
       cs                <- MultiParentCasperImpl.getSnapshot[F](casperShardConf)
-      vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, validatorIdOpt.get)
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
   def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
-      _                 <- deployDatums.toList.traverse(casperEff.deploy)
+      _                 <- deployDatums.toList.traverse(MultiParentCasperImpl.deploy[F])
       cs                <- MultiParentCasperImpl.getSnapshot[F](casperShardConf)
-      vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, validatorIdOpt.get)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case _ =>
@@ -231,7 +221,7 @@ case class TestNode[F[_]: Timer](
 
   def processBlock(b: BlockMessage): F[ValidBlockProcessing] =
     for {
-      r <- Stream((casperEff, b)).through(blockProcessingPipe).compile.lastOrError
+      r <- Stream(b).through(blockProcessingPipe).compile.lastOrError
     } yield r
 
   def handleReceive(): F[Unit] =
@@ -523,9 +513,8 @@ object TestNode {
                  blockProcessor = BlockProcessor[F](shardConf)
 
                  blockProcessingPipe = {
-                   in: fs2.Stream[F, (Casper[F], BlockMessage)] =>
-                     in.evalMap(v => {
-                       val (_, b) = v
+                   in: fs2.Stream[F, BlockMessage] =>
+                     in.evalMap(b => {
                        blockProcessor
                          .checkIfOfInterest(b)
                          .ifM(
