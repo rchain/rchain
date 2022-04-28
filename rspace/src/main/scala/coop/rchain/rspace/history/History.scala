@@ -9,25 +9,14 @@ import coop.rchain.store.KeyValueStore
 import scodec.bits.ByteVector
 
 /**
-  * Helper trait to be able to return self type for _process_ and _reset_ methods.
-  *
-  * Used to extend History with old _find_ method in [[HistoryWithFind]].
-  *
-  * TODO: Delete when old ("merging") [[HistoryMergingInstances.MergingHistory]] is removed.
-  */
-trait HistorySelf[F[_]] {
-  type HistoryF <: HistorySelf[F]
-}
-
-/**
   * History definition represents key-value API for RSpace tuple space
   *
   * [[History]] contains only references to data stored on keys ([[KeyPath]]).
   *
   * [[ColdStoreInstances.ColdKeyValueStore]] holds full data referenced by [[LeafPointer]] in [[History]].
   */
-trait History[F[_]] extends HistorySelf[F] {
-  override type HistoryF <: History[F]
+trait History[F[_]] {
+  type HistoryF <: History[F]
 
   /**
     * Read operation on the Merkle tree
@@ -50,32 +39,13 @@ trait History[F[_]] extends HistorySelf[F] {
   def reset(root: Blake2b256Hash): F[HistoryF]
 }
 
-/**
-  * Support for old ("merging") History
-  *
-  * TODO: Delete when old ("merging") [[HistoryMergingInstances.MergingHistory]] is removed.
-  */
-trait HistoryWithFind[F[_]] extends History[F] {
-  override type HistoryF <: HistoryWithFind[F]
-
-  /**
-    * Read operation on the Merkle tree ("merging" History)
-    */
-  def find(key: KeyPath): F[(TriePointer, Vector[Trie])]
-}
-
 object History {
   val emptyRootHash: Blake2b256Hash = RadixHistory.emptyRootHash
-//  val emptyRootHash: Blake2b256Hash = HistoryMergingInstances.emptyRootHash //for MergingHistory
 
   def create[F[_]: Concurrent: Sync: Parallel](
       root: Blake2b256Hash,
       store: KeyValueStore[F]
   ): F[RadixHistory[F]] = RadixHistory(root, RadixHistory.createStore(store))
-//  ): F[HistoryWithFind[F]] =
-//    Sync[F].delay(
-//      HistoryMergingInstances.merging(root, HistoryStoreInstances.historyStore[F](store))
-//    ) //for MergingHistory
 
   type KeyPath = Seq[Byte]
 }
