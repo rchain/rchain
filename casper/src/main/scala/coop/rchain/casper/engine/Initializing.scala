@@ -43,7 +43,7 @@ class Initializing[F[_]
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
-    blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+    blockProcessingQueue: Queue[F, BlockMessage],
     blocksInProcessing: Ref[F, Set[BlockHash]],
     casperShardConf: CasperShardConf,
     validatorId: Option[ValidatorIdentity],
@@ -155,7 +155,7 @@ class Initializing[F[_]
     val block            = approvedBlock.candidate.block
     val startBlockNumber = ProtoUtil.blockNumber(block)
     val minBlockNumberForDeployLifespan =
-      Math.max(0, startBlockNumber - MultiParentCasperImpl.deployLifespan)
+      Math.max(0, startBlockNumber - MultiParentCasper.deployLifespan)
 
     for {
       // Request all blocks for Last Finalized State
@@ -168,7 +168,7 @@ class Initializing[F[_]
                              BlockStore[F].contains(_),
                              BlockStore[F].getUnsafe,
                              BlockStore[F].put(_, _),
-                             validateBlock
+                             Validate.blockHash[F]
                            )
 
       // Request tuple space state for Last Finalized State
@@ -199,15 +199,6 @@ class Initializing[F[_]
       // Transition to Running state
       _ <- createCasperAndTransitionToRunning(approvedBlock)
     } yield ()
-  }
-
-  private def validateBlock(block: BlockMessage): F[Boolean] = {
-    val blockNumber = ProtoUtil.blockNumber(block)
-    if (blockNumber == 0L) {
-      // TODO: validate genesis (zero) block correctly
-      true.pure
-    } else
-      Validate.blockHash(block).map(_ == Right(Valid))
   }
 
   private def populateDag(
@@ -250,20 +241,12 @@ class Initializing[F[_]
     } yield ()
   }
 
-  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] = {
-    val ab = approvedBlock.candidate.block
+  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] =
     for {
-      casper <- MultiParentCasper
-                 .hashSetCasper[F](
-                   validatorId,
-                   casperShardConf,
-                   ab
-                 )
       _ <- Log[F].info("MultiParentCasper instance created.")
       _ <- transitionToRunning[F](
             blockProcessingQueue,
             blocksInProcessing,
-            casper,
             approvedBlock,
             validatorId,
             ().pure,
@@ -271,5 +254,4 @@ class Initializing[F[_]
           )
       _ <- CommUtil[F].sendForkChoiceTipRequest
     } yield ()
-  }
 }

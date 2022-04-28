@@ -37,8 +37,6 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: 
   def check(
       s: CasperSnapshot,
       runtimeManager: RuntimeManager[F],
-      // TODO having genesis here is a weird way to check, remove
-      approvedBlock: BlockMessage,
       validatorIdentity: ValidatorIdentity
   ): F[CheckProposeConstraintsResult] = {
     val synchronyConstraintThreshold = s.onChainState.shardConf.synchronyConstraintThreshold

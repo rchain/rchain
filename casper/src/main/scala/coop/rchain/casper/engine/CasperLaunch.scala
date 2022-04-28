@@ -42,33 +42,16 @@ object CasperLaunch {
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blockProcessingQueue: Queue[F, BlockMessage],
       blocksInProcessing: Ref[F, Set[BlockHash]],
       proposeFOpt: Option[ProposeFunction[F]],
       conf: CasperConf,
       trimState: Boolean,
       disableStateExporter: Boolean,
-      validatorIdentityOpt: Option[ValidatorIdentity]
+      validatorIdentityOpt: Option[ValidatorIdentity],
+      casperShardConf: CasperShardConf
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
-      val casperShardConf = CasperShardConf(
-        conf.faultToleranceThreshold,
-        conf.shardName,
-        conf.parentShardId,
-        conf.finalizationRate,
-        conf.maxNumberOfParents,
-        conf.maxParentDepth.getOrElse(Int.MaxValue),
-        conf.synchronyConstraintThreshold.toFloat,
-        conf.heightConstraintThreshold,
-        50,
-        1,
-        1,
-        conf.genesisBlockData.bondMinimum,
-        conf.genesisBlockData.bondMaximum,
-        conf.genesisBlockData.epochLength,
-        conf.genesisBlockData.quarantineLength,
-        conf.minPhloPrice
-      )
       def launch(): F[Unit] =
         ApprovedStore[F].getApprovedBlock map {
           case Some(approvedBlock) =>
@@ -102,7 +85,7 @@ object CasperLaunch {
           disableStateExporter: Boolean
       ): F[Unit] = {
         def askPeersForForkChoiceTips = CommUtil[F].sendForkChoiceTipRequest
-        def sendBufferPendantsToCasper(casper: Casper[F]) =
+        def sendBufferPendantsToCasper =
           for {
             pendants <- CasperBufferStorage[F].getPendants
             // pendantsReceived are either
@@ -125,7 +108,8 @@ object CasperLaunch {
                               s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
                                 s"is available in BlockStore, sending to Casper."
                             )
-                        dc <- casper.dagContains(hash)
+                        dag <- BlockDagStorage[F].getRepresentation
+                        dc  = dag.contains(hash)
                         _ <- Log[F]
                               .error(
                                 s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
@@ -133,30 +117,22 @@ object CasperLaunch {
                               )
                               .whenA(dc)
                         _ <- BlockRetriever[F].ackReceive(hash)
-                        _ <- blockProcessingQueue.enqueue1((casper, block))
+                        _ <- blockProcessingQueue.enqueue1(block)
                       } yield ()
                   )
           } yield ()
 
-        val ab = approvedBlock.candidate.block
+        val init = for {
+          _ <- askPeersForForkChoiceTips
+          _ <- sendBufferPendantsToCasper
+          // try to propose (async way) if proposer is defined
+          _ <- proposeFOpt.traverse(_(true))
+        } yield ()
         for {
-          casper <- MultiParentCasper
-                     .hashSetCasper[F](
-                       validatorIdentityOpt,
-                       casperShardConf,
-                       ab
-                     )
-          init = for {
-            _ <- askPeersForForkChoiceTips
-            _ <- sendBufferPendantsToCasper(casper)
-            // try to propose (async way) if proposer is defined
-            _ <- proposeFOpt.traverse(p => p(casper, true))
-          } yield ()
           _ <- Engine
                 .transitionToRunning[F](
                   blockProcessingQueue,
                   blocksInProcessing,
-                  casper,
                   approvedBlock,
                   validatorIdentityOpt,
                   init,

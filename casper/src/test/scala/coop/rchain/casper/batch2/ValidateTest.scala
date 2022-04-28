@@ -64,7 +64,7 @@ class ValidateTest
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )
@@ -495,86 +495,6 @@ class ValidateTest
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  "Parent validation" should "return true for proper justifications and false otherwise" ignore withGenesis(
-    genesisContext
-  ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
-    val validotors          = GenesisBuilder.defaultValidatorPks
-    val v0 +: v1 +: v2 +: _ = validotors
-    val bonds               = GenesisBuilder.createBonds(validotors)
-
-    def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
-        parents: Seq[BlockMessage],
-        genesis: BlockMessage,
-        justifications: Seq[BlockMessage],
-        validator: PublicKey
-    ): F[BlockMessage] =
-      for {
-        current <- Time[F].currentMillis
-        deploy  <- ConstructDeploy.basicProcessedDeploy[F](current.toInt)
-        block <- createBlock[F](
-                  parents.map(_.blockHash),
-                  genesis,
-                  creator = ByteString.copyFrom(validator.bytes),
-                  bonds = bonds.map { case (k, v) => Bond(ByteString.copyFrom(k.bytes), v) }.toSeq,
-                  deploys = Seq(deploy),
-                  justifications = latestMessages(justifications)
-                )
-      } yield block
-
-    def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
-      messages.map(b => b.sender -> b.blockHash).toMap
-
-    val b0 = genesis
-
-    for {
-      _  <- IndexedBlockDagStorage[Task].insertIndexed(genesis, genesis, invalid = false)
-      b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, v0)
-      b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, v1)
-      b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq.empty, v2)
-      b4 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1), v0)
-      b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), b0, Seq(b1, b2, b3), v1)
-      b6 <- createValidatorBlock[Task](Seq(b5, b4), b0, Seq(b1, b4, b5), v0)
-      b7 <- createValidatorBlock[Task](Seq(b4), b0, Seq(b1, b4, b5), v1) //not highest score parent
-      b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), b0, Seq(b1, b2, b3), v2) //parents wrong order
-      b9 <- createValidatorBlock[Task](Seq(b6), b0, Seq.empty, v0) //empty justification
-
-      _   <- step[Task](runtimeManager)(b1, b0)
-      _   <- step[Task](runtimeManager)(b2, b0)
-      _   <- step[Task](runtimeManager)(b3, b0)
-      _   <- step[Task](runtimeManager)(b4, b0)
-      _   <- step[Task](runtimeManager)(b5, b0)
-      _   <- step[Task](runtimeManager)(b6, b0)
-      _   <- step[Task](runtimeManager)(b7, b0)
-      _   <- step[Task](runtimeManager)(b8, b0)
-      _   <- step[Task](runtimeManager)(b9, b0)
-      dag <- blockDagStorage.getRepresentation
-
-      // Valid
-      _ <- Validate.parents[Task](b0, b0, mkCasperSnapshot(dag))
-      _ <- Validate.parents[Task](b1, b0, mkCasperSnapshot(dag))
-      _ <- Validate.parents[Task](b2, b0, mkCasperSnapshot(dag))
-      _ <- Validate.parents[Task](b3, b0, mkCasperSnapshot(dag))
-      _ <- Validate.parents[Task](b4, b0, mkCasperSnapshot(dag))
-      _ <- Validate.parents[Task](b5, b0, mkCasperSnapshot(dag))
-      _ <- Validate.parents[Task](b6, b0, mkCasperSnapshot(dag))
-      _ = log.warns shouldBe empty
-
-      // Not valid
-      _ <- Validate.parents[Task](b7, b0, mkCasperSnapshot(dag))
-      _ <- Validate.parents[Task](b8, b0, mkCasperSnapshot(dag))
-      _ <- Validate.parents[Task](b9, b0, mkCasperSnapshot(dag))
-
-      result = log.warns.forall(
-        _.matches(
-          ".* block parents .* did not match estimate .* based on justification .*"
-        )
-      ) should be(
-        true
-      )
-      _ = log.warns.size should be(3)
-    } yield result
-  }
-
   // Creates a block with an invalid block number and sequence number
   "Block summary validation" should "short circuit after first invalidity" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -592,91 +512,11 @@ class ValidateTest
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              getRandomBlock(hashF = (ProtoUtil.hashBlock _).some),
               mkCasperSnapshot(dag),
               "root",
               Int.MaxValue
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
-      } yield result
-  }
-
-  "Justification follow validation" should "return valid for proper justifications and failed otherwise" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val v1     = generateValidator("Validator One")
-      val v2     = generateValidator("Validator Two")
-      val v1Bond = Bond(v1, 2)
-      val v2Bond = Bond(v2, 3)
-      val bonds  = Seq(v1Bond, v2Bond)
-
-      for {
-        genesis <- createGenesis[Task](bonds = bonds)
-        b2 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               genesis,
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
-             )
-        b3 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               genesis,
-               v1,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
-             )
-        b4 <- createBlock[Task](
-               Seq(b2.blockHash),
-               genesis,
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
-             )
-        b5 <- createBlock[Task](
-               Seq(b2.blockHash),
-               genesis,
-               v1,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
-             )
-        b6 <- createBlock[Task](
-               Seq(b4.blockHash),
-               genesis,
-               v2,
-               bonds,
-               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
-             )
-        b7 <- createBlock[Task](
-               Seq(b4.blockHash),
-               genesis,
-               v1,
-               Seq(),
-               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
-             )
-        b8 <- createBlock[Task](
-               Seq(b7.blockHash),
-               genesis,
-               v1,
-               bonds,
-               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
-             )
-        _ <- (1 to 6).toList.forallM[Task](
-              i =>
-                for {
-                  block <- blockDagStorage.lookupByIdUnsafe(i)
-                  dag   <- blockDagStorage.getRepresentation
-                  result <- Validate.justificationFollows[Task](
-                             block
-                           )
-                } yield result == Right(Valid)
-            ) shouldBeF true
-        blockId7 <- blockDagStorage.lookupByIdUnsafe(7)
-        dag      <- blockDagStorage.getRepresentation
-        _ <- Validate.justificationFollows[Task](
-              blockId7
-            ) shouldBeF Left(InvalidFollows)
-        _      = log.warns.size shouldBe 1
-        result = log.warns.forall(_.contains("do not match the bonded validators")) shouldBe true
       } yield result
   }
 
@@ -833,10 +673,10 @@ class ValidateTest
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
         genesis = ValidatorIdentity(sk)
           .signBlock(context.genesisBlock.copy(seqNum = seqNum))
-        _ <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
+        _ <- Validate.blockHash[Task](genesis) shouldBeF true
         result <- Validate.blockHash[Task](
                    genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
-                 ) shouldBeF Left(InvalidBlockHash)
+                 ) shouldBeF false
       } yield result
   }
 

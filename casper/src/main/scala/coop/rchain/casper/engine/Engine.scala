@@ -1,43 +1,36 @@
 package coop.rchain.casper.engine
 
-import cats.{Applicative, Monad}
-import cats.syntax.all._
-import cats.effect.{Concurrent, Sync, Timer}
-import EngineCell._
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync, Timer}
+import cats.syntax.all._
+import cats.{Applicative, Monad}
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.casper._
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper._
+import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared
 import coop.rchain.shared._
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.casper.state.RNodeStateManager
-import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared.syntax._
 import fs2.concurrent.Queue
 
 trait Engine[F[_]] {
   def init: F[Unit]
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit]
-  def withCasper[A](
-      f: MultiParentCasper[F] => F[A],
-      default: F[A]
-  ): F[A] = default
 }
 
 object Engine {
@@ -95,9 +88,8 @@ object Engine {
     /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blockProcessingQueue: Queue[F, BlockMessage],
       blocksInProcessing: Ref[F, Set[BlockHash]],
-      casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
@@ -114,7 +106,6 @@ object Engine {
       running = new Running[F](
         blockProcessingQueue,
         blocksInProcessing,
-        casper,
         approvedBlock,
         validatorId,
         init,
@@ -135,7 +126,7 @@ object Engine {
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blockProcessingQueue: Queue[F, BlockMessage],
       blocksInProcessing: Ref[F, Set[BlockHash]],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],

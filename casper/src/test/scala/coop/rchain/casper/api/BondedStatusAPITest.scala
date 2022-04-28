@@ -22,7 +22,8 @@ class BondedStatusAPITest
     with Matchers
     with EitherValues
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with BlockApiFixture {
   val genesisParameters = buildGenesisParameters(
     defaultValidatorKeyPairs.take(3) :+ ConstructDeploy.defaultKeyPair,
     createBonds(defaultValidatorPks.take(3))
@@ -31,25 +32,23 @@ class BondedStatusAPITest
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
-  def bondedStatus(publicKey: PublicKey, block: BlockMessage)(
+  def bondedStatus(
       node: TestNode[Effect]
-  ): Task[Boolean] = {
-    import node.logEff
-    implicit val rm  = node.runtimeManager
-    implicit val bds = node.blockDagStorage
-    implicit val bs  = node.blockStore
-    BlockAPI
-      .bondStatus[Task](ByteString.copyFrom(publicKey.bytes), block.some)
-      .map(_.right.value)
-  }
+  )(publicKey: PublicKey, block: BlockMessage): Task[Boolean] =
+    for {
+      blockApi <- createBlockApi(node)
+      res <- blockApi
+              .bondStatus(ByteString.copyFrom(publicKey.bytes), block.some)
+              .map(_.right.value)
+    } yield res
 
   "bondStatus" should "return true for bonded validator" in effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case n1 +: n2 +: n3 +: _ =>
         val gB = genesisContext.genesisBlock
-        (bondedStatus(n1.validatorIdOpt.get.publicKey, gB)(n1) shouldBeF true) >>
-          (bondedStatus(n2.validatorIdOpt.get.publicKey, gB)(n1) shouldBeF true) >>
-          (bondedStatus(n3.validatorIdOpt.get.publicKey, gB)(n1) shouldBeF true)
+        (bondedStatus(n1)(n1.validatorIdOpt.get.publicKey, gB) shouldBeF true) >>
+          (bondedStatus(n1)(n2.validatorIdOpt.get.publicKey, gB) shouldBeF true) >>
+          (bondedStatus(n1)(n3.validatorIdOpt.get.publicKey, gB) shouldBeF true)
     }
   }
 
@@ -57,7 +56,7 @@ class BondedStatusAPITest
     TestNode.standaloneEff(genesisContext).use { node =>
       val gB             = genesisContext.genesisBlock
       val (_, publicKey) = Secp256k1.newKeyPair
-      bondedStatus(publicKey, gB)(node) shouldBeF false
+      bondedStatus(node)(publicKey, gB) shouldBeF false
     }
   }
 
@@ -78,19 +77,19 @@ class BondedStatusAPITest
                          shardId = genesisContext.genesisBlock.shardId
                        )
 
-          _  <- bondedStatus(n4.validatorIdOpt.get.publicKey, genesisContext.genesisBlock)(n1) shouldBeF false
+          _  <- bondedStatus(n1)(n4.validatorIdOpt.get.publicKey, genesisContext.genesisBlock) shouldBeF false
           b1 <- n1.propagateBlock(bondDeploy)(nodes: _*)
           b2 <- n2.propagateBlock(produceDeploys(0))(nodes: _*)
 
           // n4 is still not bonded since b1 is not finalized yet
           // TODO relying on finalization here is not a good thing, consider adjusting test to just test bonding
-          _ <- bondedStatus(n4.validatorIdOpt.get.publicKey, genesisContext.genesisBlock)(n1) shouldBeF false
+          _ <- bondedStatus(n1)(n4.validatorIdOpt.get.publicKey, genesisContext.genesisBlock) shouldBeF false
 
           b3 <- n3.propagateBlock(produceDeploys(1))(nodes: _*)
           b4 <- n1.propagateBlock(produceDeploys(2))(nodes: _*)
 
           // b1 is now finalized, hence n4 is now bonded
-          _ <- bondedStatus(n4.validatorIdOpt.get.publicKey, b1)(n1) shouldBeF true
+          _ <- bondedStatus(n1)(n4.validatorIdOpt.get.publicKey, b1) shouldBeF true
         } yield ()
     }
   }

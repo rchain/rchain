@@ -2,11 +2,10 @@ package coop.rchain.node.instances
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import cats.instances.list._
 import cats.syntax.all._
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.{Casper, PrettyPrinter, ProposeFunction, ValidBlockProcessing}
+import coop.rchain.casper.{PrettyPrinter, ProposeFunction, ValidBlockProcessing}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 import fs2.Stream
@@ -14,11 +13,12 @@ import fs2.concurrent.Queue
 
 object BlockProcessorInstance {
   def create[F[_]: Concurrent: Log](
-      blocksQueue: Queue[F, (Casper[F], BlockMessage)],
+      blocksQueue: Queue[F, BlockMessage],
       blockProcessor: BlockProcessor[F],
       state: Ref[F, Set[BlockHash]],
-      triggerProposeF: Option[ProposeFunction[F]]
-  ): Stream[F, (Casper[F], BlockMessage, ValidBlockProcessing)] = {
+      triggerProposeF: Option[ProposeFunction[F]],
+      autoPropose: Boolean
+  ): Stream[F, (BlockMessage, ValidBlockProcessing)] = {
 
     // Node can handle `parallelism` blocks in parallel, or they will be queued
     val parallelism = 100
@@ -26,9 +26,8 @@ object BlockProcessorInstance {
     val in = blocksQueue.dequeue
 
     val out = in
-      .map { i =>
+      .map { b =>
         {
-          val (c, b)                             = i
           val blockStr                           = PrettyPrinter.buildString(b, short = true)
           val logNotOfInterest                   = Log[F].info(s"Block $blockStr is not of interest. Dropped")
           val logMalformed                       = Log[F].info(s"Block $blockStr is not of malformed. Dropped")
@@ -45,7 +44,7 @@ object BlockProcessorInstance {
             )
             .evalFilter(
               _ =>
-                blockProcessor.checkIfOfInterest(c, b) >>= { r =>
+                blockProcessor.checkIfOfInterest(b) >>= { r =>
                   logNotOfInterest.unlessA(r).as(r)
                 }
             )
@@ -60,28 +59,28 @@ object BlockProcessorInstance {
             }
             .evalFilter(
               _ =>
-                blockProcessor.checkDependenciesWithEffects(c, b) >>= { r =>
+                blockProcessor.checkDependenciesWithEffects(b) >>= { r =>
                   logMissingDeps.unlessA(r).as(r)
                 }
             )
             .evalMap(
               _ =>
-                blockProcessor.validateWithEffects(c, b, None) >>= { r =>
-                  logResult(r).as(c, b, r)
+                blockProcessor.validateWithEffects(b) >>= { r =>
+                  logResult(r).as(b, r)
                 }
             )
             .evalTap { _ =>
               for {
-                bufferPendants <- c.getDependencyFreeFromBuffer
+                bufferPendants <- blockProcessor.getDependencyFreeFromBuffer
                 inProcess      <- state.get
                 _ <- bufferPendants
                       .filterNot(b => inProcess.contains(b.blockHash))
-                      .traverse(b => blocksQueue.enqueue1(c, b))
+                      .traverse(b => blocksQueue.enqueue1(b))
                 _ <- logFinished
               } yield ()
             }
             .evalTap { v =>
-              triggerProposeF.traverse(f => f(v._1, true))
+              triggerProposeF.traverse(_(true)) whenA autoPropose
             }
             // ensure to remove hash from state
             .onFinalize(state.update(s => s - b.blockHash))

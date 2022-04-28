@@ -1,20 +1,19 @@
 package coop.rchain.casper.api
 
-import cats.effect.{Resource, Sync}
+import cats.effect.Resource
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
+import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.metrics.Metrics
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -26,9 +25,15 @@ class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockDagStorageFixture {
-  implicit val log: Log[Task] = new Log.NOPLog[Task]()
-  implicit val s              = Sync[Task]
+    with BlockDagStorageFixture
+    with BlockApiFixture {
+
+  // TODO: temp until DeployStorage will be part of BlockDagStorage
+  implicit val deployStore =
+    KeyValueDeployStorage[Task](InMemoryKeyValueStore[Task]()).runSyncUnsafe()
+
+  implicit val log: Log[Task]       = new Log.NOPLog[Task]()
+  implicit val noopSpan: Span[Task] = NoopSpan[Task]()
 
   val v1     = generateValidator("Validator One")
   val v2     = generateValidator("Validator Two")
@@ -104,21 +109,9 @@ class BlocksResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
-          genesis    <- createDagWith8Blocks(blockStore, blockDagStorage)
-          dag        <- blockDagStorage.getRepresentation
-          metricsEff = new Metrics.MetricsNOP[Task]
-          tips       <- dag.latestMessageHashes.map(_.valuesIterator.toIndexedSeq)
-          casperEffect <- NoOpsCasperEffect[Task](
-                           HashMap.empty[BlockHash, BlockMessage],
-                           tips
-                         )
-          logEff = new LogStub[Task]
-          blocksResponse <- BlockAPI.getBlocks[Task](10, maxBlockLimit)(
-                             Sync[Task],
-                             blockDagStorage,
-                             logEff,
-                             blockStore
-                           )
+          genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
+          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+          blocksResponse <- blockApi.getBlocks(10)
         } yield blocksResponse.right.get.length should be(8) // TODO: Switch to 4 when we implement block height correctly
       }
   }
@@ -126,21 +119,9 @@ class BlocksResponseAPITest
   it should "return until depth" in withStorage { implicit blockStore => implicit blockDagStorage =>
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
-        genesis    <- createDagWith8Blocks(blockStore, blockDagStorage)
-        dag        <- blockDagStorage.getRepresentation
-        metricsEff = new Metrics.MetricsNOP[Task]
-        tips       <- dag.latestMessageHashes.map(_.valuesIterator.toIndexedSeq)
-        casperEffect <- NoOpsCasperEffect[Task](
-                         HashMap.empty[BlockHash, BlockMessage],
-                         tips
-                       )
-        logEff = new LogStub[Task]
-        blocksResponse <- BlockAPI.getBlocks[Task](2, maxBlockLimit)(
-                           Sync[Task],
-                           blockDagStorage,
-                           logEff,
-                           blockStore
-                         )
+        genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
+        blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+        blocksResponse <- blockApi.getBlocks(2)
       } yield blocksResponse.right.get.length should be(2) // TODO: Switch to 3 when we implement block height correctly
     }
   }
@@ -149,26 +130,13 @@ class BlocksResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
-          genesis    <- createDagWith8Blocks(blockStore, blockDagStorage)
-          dag        <- blockDagStorage.getRepresentation
-          metricsEff = new Metrics.MetricsNOP[Task]
-          tips       <- dag.latestMessageHashes.map(_.valuesIterator.toIndexedSeq)
-          casperEffect <- NoOpsCasperEffect[Task](
-                           HashMap.empty[BlockHash, BlockMessage],
-                           tips
-                         )
-          logEff = new LogStub[Task]
-          engine = new EngineWithCasper[Task](casperEffect)
-          blocksResponse <- BlockAPI.getBlocksByHeights[Task](2, 5, maxBlockLimit)(
-                             Sync[Task],
-                             blockDagStorage,
-                             logEff,
-                             blockStore
-                           )
-          blocks = blocksResponse.right.get
-          _      = blocks.length should be(4)
-          _      = blocks.head.blockNumber should be(2)
-          _      = blocks.last.blockNumber should be(5)
+          genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
+          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+          blocksResponse <- blockApi.getBlocksByHeights(2, 5)
+          blocks         = blocksResponse.right.get
+          _              = blocks.length should be(4)
+          _              = blocks.head.blockNumber should be(2)
+          _              = blocks.last.blockNumber should be(5)
         } yield ()
       }
   }

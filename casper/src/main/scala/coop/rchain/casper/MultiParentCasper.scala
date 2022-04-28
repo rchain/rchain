@@ -3,8 +3,8 @@ package coop.rchain.casper
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage.blockStore.BlockStore
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
@@ -14,12 +14,10 @@ import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
-import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.syntax._
@@ -27,117 +25,69 @@ import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 
-// format: off
-class MultiParentCasperImpl[F[_]
-  /* Execution */   : Concurrent: Time: Timer
-  /* Transport */   : CommUtil: BlockRetriever: EventPublisher
-  /* Rholang */     : RuntimeManager
-  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
-  /* Diagnostics */ : Log: Metrics: Span] // format: on
-(
-    validatorId: Option[ValidatorIdentity],
-    // todo this should be read from chain, for now read from startup options
-    casperShardConf: CasperShardConf,
-    approvedBlock: BlockMessage
-) extends MultiParentCasper[F] {
-  import MultiParentCasperImpl._
+final case class ParsingError(details: String)
 
-  implicit private val logSource: LogSource = LogSource(this.getClass)
+object MultiParentCasper {
 
-  // TODO: Extract hardcoded version from shard config
-  private val version = 1L
+  // TODO: copied from previous code
+  //  - remove it, no need to have error message "Error: error ... of error"
+  def parsingError(details: String) = ParsingError(s"Parsing error: $details")
 
-  def getValidator: F[Option[ValidatorIdentity]] = validatorId.pure[F]
+  // TODO: Extract hardcoded deployLifespan from shard config
+  // Size of deploy safety range.
+  // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
+  // Required to enable protection from re-submitting duplicate deploys
+  val deployLifespan = 50
 
-  def getVersion: F[Long] = version.pure[F]
-
-  def getApprovedBlock: F[BlockMessage] = approvedBlock.pure[F]
-
-  private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
-    lastFinalizedBlock.whenA(
-      newBlock.body.state.blockNumber % casperShardConf.finalizationRate == 0
+  def addedEvent(block: BlockMessage): RChainEvent = {
+    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(block)
+    RChainEvent.blockAdded(
+      blockHash,
+      parents,
+      justifications,
+      deployIds,
+      creator,
+      seqNum
     )
-
-  /**
-    * Check if there are blocks in CasperBuffer available with all dependencies met.
-    * @return First from the set of available blocks
-    */
-  override def getDependencyFreeFromBuffer: F[List[BlockMessage]] = {
-    import cats.instances.list._
-    for {
-      pendants       <- CasperBufferStorage[F].getPendants
-      pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
-      depFreePendants <- pendantsStored.filterA { pendant =>
-                          for {
-                            pendantBlock   <- BlockStore[F].get1(pendant)
-                            justifications = pendantBlock.get.justifications
-                            // If even one of justifications is not in DAG - block is not dependency free
-                            missingDep <- justifications
-                                           .map(_.latestBlockHash)
-                                           .existsM(dagContains(_).not)
-                          } yield !missingDep
-                        }
-      r <- depFreePendants.traverse(BlockStore[F].getUnsafe)
-    } yield r
   }
 
-  def dagContains(hash: BlockHash): F[Boolean] = blockDag.map(_.contains(hash))
-
-  def bufferContains(hash: BlockHash): F[Boolean] = CasperBufferStorage[F].contains(hash)
-
-  def contains(hash: BlockHash): F[Boolean] = bufferContains(hash) ||^ dagContains(hash)
-
-  def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = {
-    import coop.rchain.models.rholang.implicits._
-
-    InterpreterUtil
-      .mkTerm(d.data.term, NormalizerEnv(d))
-      .bitraverse(
-        err => DeployError.parsingError(s"Error in parsing term: \n$err").pure[F],
-        _ => addDeploy(d)
-      )
+  def createdEvent(b: BlockMessage): RChainEvent = {
+    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(b)
+    RChainEvent.blockCreated(
+      blockHash,
+      parents,
+      justifications,
+      deployIds,
+      creator,
+      seqNum
+    )
   }
 
-  def addDeploy(deploy: Signed[DeployData]): F[DeployId] =
-    for {
-      _ <- DeployStorage[F].add(List(deploy))
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
-    } yield deploy.sig
+  private def blockEvent(block: BlockMessage) = {
 
-  def lastFinalizedBlock: F[BlockMessage] =
-    for {
-      dag          <- blockDag
-      blockMessage <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
-    } yield blockMessage
-
-  def blockDag: F[DagRepresentation] =
-    BlockDagStorage[F].getRepresentation
-
-  def getRuntimeManager: F[RuntimeManager[F]] = Sync[F].delay(RuntimeManager[F])
-
-  def fetchDependencies: F[Unit] = {
-    import cats.instances.list._
-    for {
-      pendants       <- CasperBufferStorage[F].getPendants
-      pendantsUnseen <- pendants.toList.filterA(BlockStore[F].contains(_).not)
-      _ <- Log[F].debug(s"Requesting CasperBuffer pendant hashes, ${pendantsUnseen.size} items.") >>
-            pendantsUnseen.toList.traverse_(
-              dependency =>
-                Log[F]
-                  .debug(
-                    s"Sending dependency ${PrettyPrinter.buildString(dependency)} to BlockRetriever"
-                  ) >>
-                  BlockRetriever[F].admitHash(
-                    dependency,
-                    admitHashReason = BlockRetriever.MissingDependencyRequested
-                  )
-            )
-    } yield ()
+    val blockHash = block.blockHash.toHexString
+    val parentHashes =
+      block.header.parentsHashList.map(_.toHexString)
+    val justificationHashes =
+      block.justifications.toList
+        .map(j => (j.validator.toHexString, j.latestBlockHash.toHexString))
+    val deployIds: List[String] =
+      block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
+    val creator = block.sender.toHexString
+    val seqNum  = block.seqNum
+    (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
   }
 
-  override def getSnapshot: F[CasperSnapshot] = {
-    import cats.instances.list._
+  def blockReceived[F[_]: Sync: BlockDagStorage: CasperBufferStorage](blockHash: BlockHash) =
+    for {
+      dag      <- BlockDagStorage[F].getRepresentation
+      inBuffer <- CasperBufferStorage[F].contains(blockHash)
+    } yield inBuffer || dag.contains(blockHash)
 
+  // TODO: temporary function until multiparent casper is removed
+  def getSnapshot[F[_]: Sync: RuntimeManager: BlockDagStorage: BlockStore](
+      casperShardConf: CasperShardConf
+  ): F[CasperSnapshot] = {
     def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
       for {
         av <- RuntimeManager[F].getActiveValidators(b.body.state.postStateHash)
@@ -225,7 +175,7 @@ class MultiParentCasperImpl[F[_]
     )
   }
 
-  override def validate(
+  def validate[F[_]: Concurrent: Timer: Time: RuntimeManager: BlockDagStorage: BlockStore: CasperBufferStorage: Log: Metrics: Span](
       b: BlockMessage,
       s: CasperSnapshot
   ): F[Either[BlockError, ValidBlock]] = {
@@ -233,7 +183,7 @@ class MultiParentCasperImpl[F[_]
       for {
         _ <- EitherT(
               Validate
-                .blockSummary(b, approvedBlock, s, casperShardConf.shardName, deployLifespan)
+                .blockSummary(b, s, s.onChainState.shardConf.shardName, deployLifespan)
             )
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
@@ -257,7 +207,7 @@ class MultiParentCasperImpl[F[_]
 
         // This validation is only to punish validator which accepted lower price deploys.
         // And this can happen if not configured correctly.
-        minPhloPrice = casperShardConf.minPhloPrice
+        minPhloPrice = s.onChainState.shardConf.minPhloPrice
         _ <- EitherT(Validate.phloPrice(b, minPhloPrice)).recoverWith {
               case _ =>
                 val warnToLog = EitherT.liftF[F, BlockError, Unit](
@@ -301,7 +251,7 @@ class MultiParentCasperImpl[F[_]
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
               val deployCount = b.body.deploys.size
               Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
-                indexBlock.whenA(casperShardConf.maxNumberOfParents > 1)
+                indexBlock.whenA(s.onChainState.shardConf.maxNumberOfParents > 1)
             }
             .getOrElse(().pure[F])
     } yield valResult
@@ -309,14 +259,22 @@ class MultiParentCasperImpl[F[_]
     Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
   }
 
-  override def handleValidBlock(block: BlockMessage): F[DagRepresentation] =
+  def lastFinalizedBlock[F[_]: Sync: BlockDagStorage: BlockStore]: F[BlockMessage] =
+    for {
+      dag          <- BlockDagStorage[F].getRepresentation
+      blockMessage <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
+    } yield blockMessage
+
+  def handleValidBlock[F[_]: Sync: BlockDagStorage: BlockStore: CasperBufferStorage](
+      block: BlockMessage
+  ): F[DagRepresentation] =
     for {
       updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
       _          <- CasperBufferStorage[F].remove(block.blockHash)
-      _          <- updateLastFinalizedBlock(block)
+      _          <- lastFinalizedBlock
     } yield updatedDag
 
-  override def handleInvalidBlock(
+  def handleInvalidBlock[F[_]: Sync: BlockDagStorage: CasperBufferStorage: Log](
       block: BlockMessage,
       status: InvalidBlock,
       dag: DagRepresentation
@@ -336,44 +294,6 @@ class MultiParentCasperImpl[F[_]
       } yield r
 
     status match {
-      case InvalidBlock.AdmissibleEquivocation =>
-//        val baseEquivocationBlockSeqNum = block.seqNum - 1
-        for {
-//          _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
-//                for {
-//                  equivocations <- tracker.equivocationRecords
-//                  _ <- Sync[F].unlessA(equivocations.exists {
-//                        case EquivocationRecord(validator, seqNum, _) =>
-//                          block.sender == validator && baseEquivocationBlockSeqNum == seqNum
-//                        // More than 2 equivocating children from base equivocation block and base block has already been recorded
-//                      }) {
-//                        val newEquivocationRecord =
-//                          EquivocationRecord(
-//                            block.sender,
-//                            baseEquivocationBlockSeqNum,
-//                            Set.empty[BlockHash]
-//                          )
-//                        tracker.insertEquivocationRecord(newEquivocationRecord)
-//                      }
-//                } yield ()
-//              }
-          // We can only treat admissible equivocations as invalid blocks if
-          // casper is single threaded.
-          updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
-        } yield updatedDag
-
-      case InvalidBlock.IgnorableEquivocation =>
-        /*
-         * We don't have to include these blocks to the equivocation tracker because if any validator
-         * will build off this side of the equivocation, we will get another attempt to add this block
-         * through the admissible equivocations.
-         */
-        Log[F]
-          .info(
-            s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
-          )
-          .as(dag)
-
       case ib: InvalidBlock if InvalidBlock.isSlashable(ib) =>
         handleInvalidBlockEffect(ib, block)
 
@@ -385,52 +305,65 @@ class MultiParentCasperImpl[F[_]
           .as(dag)
     }
   }
-}
 
-object MultiParentCasperImpl {
+  def fetchDependencies[F[_]: Sync: BlockDagStorage: BlockStore: CasperBufferStorage: BlockRetriever: Log]
+      : F[Unit] =
+    for {
+      pendants       <- CasperBufferStorage[F].getPendants
+      pendantsUnseen <- pendants.toList.filterA(BlockStore[F].contains(_).not)
+      _ <- Log[F].debug(s"Requesting CasperBuffer pendant hashes, ${pendantsUnseen.size} items.") >>
+            pendantsUnseen.toList.traverse_(
+              dependency =>
+                Log[F]
+                  .debug(
+                    s"Sending dependency ${PrettyPrinter.buildString(dependency)} to BlockRetriever"
+                  ) >>
+                  BlockRetriever[F].admitHash(
+                    dependency,
+                    admitHashReason = BlockRetriever.MissingDependencyRequested
+                  )
+            )
+    } yield ()
 
-  // TODO: Extract hardcoded deployLifespan from shard config
-  // Size of deploy safety range.
-  // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
-  // Required to enable protection from re-submitting duplicate deploys
-  val deployLifespan = 50
+  /**
+    * Check if there are blocks in CasperBuffer available with all dependencies met.
+    * @return First from the set of available blocks
+    */
+  def getDependencyFreeFromBuffer[F[_]: Sync: BlockDagStorage: BlockStore: CasperBufferStorage]
+      : F[List[BlockMessage]] =
+    for {
+      pendants       <- CasperBufferStorage[F].getPendants
+      pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
+      depFreePendants <- pendantsStored.filterA { pendant =>
+                          for {
+                            pendantBlock   <- BlockStore[F].get1(pendant)
+                            justifications = pendantBlock.get.justifications
+                            // If even one of justifications is not in DAG - block is not dependency free
+                            dag <- BlockDagStorage[F].getRepresentation
+                            missingDep = justifications
+                              .map(_.latestBlockHash)
+                              .exists(!dag.contains(_))
+                          } yield !missingDep
+                        }
+      r <- depFreePendants.traverse(BlockStore[F].getUnsafe)
+    } yield r
 
-  def addedEvent(block: BlockMessage): RChainEvent = {
-    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(block)
-    RChainEvent.blockAdded(
-      blockHash,
-      parents,
-      justifications,
-      deployIds,
-      creator,
-      seqNum
-    )
+  def deploy[F[_]: Sync: DeployStorage: Log](
+      d: Signed[DeployData]
+  ): F[Either[ParsingError, DeployId]] = {
+    import coop.rchain.models.rholang.implicits._
+
+    InterpreterUtil
+      .mkTerm(d.data.term, NormalizerEnv(d))
+      .bitraverse(
+        err => parsingError(s"Error in parsing term: \n$err").pure[F],
+        _ => addDeploy(d)
+      )
   }
 
-  def createdEvent(b: BlockMessage): RChainEvent = {
-    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(b)
-    RChainEvent.blockCreated(
-      blockHash,
-      parents,
-      justifications,
-      deployIds,
-      creator,
-      seqNum
-    )
-  }
-
-  private def blockEvent(block: BlockMessage) = {
-
-    val blockHash = block.blockHash.toHexString
-    val parentHashes =
-      block.header.parentsHashList.map(_.toHexString)
-    val justificationHashes =
-      block.justifications.toList
-        .map(j => (j.validator.toHexString, j.latestBlockHash.toHexString))
-    val deployIds: List[String] =
-      block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
-    val creator = block.sender.toHexString
-    val seqNum  = block.seqNum
-    (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
-  }
+  private def addDeploy[F[_]: Sync: DeployStorage: Log](deploy: Signed[DeployData]): F[DeployId] =
+    for {
+      _ <- DeployStorage[F].add(List(deploy))
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
+    } yield deploy.sig
 }

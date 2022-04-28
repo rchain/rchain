@@ -4,7 +4,6 @@ import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.util.rholang.{RegistrySigGen, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
-import coop.rchain.casper.{MultiParentCasper, MultiParentCasperImpl}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Base16
@@ -21,8 +20,6 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   val genesis = buildGenesis()
 
-  //put a new casper instance at the start of each
-  //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
     TestNode.standaloneEff(genesis).use { implicit node =>
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager

@@ -2,8 +2,8 @@ package coop.rchain.node.web
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.casper.api.BlockAPI.ApiErr
-import coop.rchain.casper.api.BlockReportAPI
+import coop.rchain.casper.api.BlockApi.ApiErr
+import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.protocol.BlockEventInfo
 import org.http4s.{HttpRoutes, ParseFailure, QueryParamDecoder}
 import org.http4s.circe.jsonEncoderOf
@@ -26,7 +26,7 @@ object ReportingRoutes {
     state.map(_.fold(BlockReportError, BlockTracesReport))
 
   def service[F[_]: Concurrent](
-      blockReportAPI: BlockReportAPI[F]
+      blockReportAPI: BlockReportApi[F]
   ): ReportingHttpRoutes[F] = {
     val dsl = org.http4s.dsl.Http4sDsl[F]
     import dsl._

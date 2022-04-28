@@ -90,7 +90,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                     shardId = SHARD_ID
                   )
         signedBlock2 <- node.addBlock(deploy2)
-        _            <- node.casperEff.blockDag
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
                  Base16.encode(
@@ -359,8 +358,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
         _ <- nodes(1).contains(signedBlock4.blockHash) shouldBeF true // However, marked as invalid
 
-        _ <- nodes(0).casperEff.contains(signedBlock1.blockHash) shouldBeF false
-        _ <- nodes(0).casperEff.contains(signedBlock1Prime.blockHash) shouldBeF true
+        _ <- nodes(0).contains(signedBlock1.blockHash) shouldBeF false
+        _ <- nodes(0).contains(signedBlock1Prime.blockHash) shouldBeF true
         _ <- nodes(1).blockStore.get1(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
         _ <- nodes(1).blockStore.get1(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
         _ <- nodes(2).blockStore.get1(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
@@ -425,11 +424,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     def deployment(ts: Long) =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts, shardId = SHARD_ID)
 
-    def deploy(
-        node: TestNode[Effect],
-        dd: Signed[DeployData]
-    ) = node.casperEff.deploy(dd)
-
     def create(
         node: TestNode[Effect]
     ): Effect[BlockMessage] =
@@ -464,17 +458,17 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         val v2 = nodes(1)
         val v3 = nodes(2)
         for {
-          _    <- deploy(v1, deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
-          v2c1 <- deploy(v2, deployment(2)) >> create(v2) //V2#1
+          _    <- v1.deploy(deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
+          v2c1 <- v2.deploy(deployment(2)) >> create(v2) //V2#1
           _    <- v2.handleReceive()
           _    <- v3.handleReceive()
-          _    <- deploy(v1, deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
-          v3c2 <- deploy(v3, deployment(5)) >> create(v3) //V3#2
+          _    <- v1.deploy(deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
+          v3c2 <- v3.deploy(deployment(5)) >> create(v3) //V3#2
           _    <- v3.handleReceive()
           _    <- add(v3, v3c2) //V3#2
           _    <- add(v2, v2c1) //V2#1
           _    <- v3.handleReceive()
-          r    <- deploy(v3, deployment(6)) >> create(v3) >>= (b => add(v3, b))
+          r    <- v3.deploy(deployment(6)) >> create(v3) >>= (b => add(v3, b))
           _    = r shouldBe Right(Right(Valid))
         } yield ()
       }
@@ -483,8 +477,9 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   it should "succeed at slashing" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deployData   <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock  <- nodes(0).casperEff.deploy(deployData) >> nodes(0).createBlockUnsafe()
+        deployData <- ConstructDeploy
+                       .basicDeployData[Effect](0, shardId = SHARD_ID)
+        signedBlock  <- nodes(0).deploy(deployData) >> nodes(0).createBlockUnsafe()
         invalidBlock = signedBlock.copy(seqNum = 47)
         status1      <- nodes(1).processBlock(invalidBlock)
         status2      <- nodes(2).processBlock(invalidBlock)
@@ -496,8 +491,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         signedBlock3 <- nodes(2).createBlockUnsafe()
         status4      <- nodes(2).processBlock(signedBlock3)
       } yield {
-        status1 should be(Left(InvalidBlockHash))
-        status2 should be(Left(InvalidBlockHash))
+        status1 should be(Left(InvalidSequenceNumber))
+        status2 should be(Left(InvalidSequenceNumber))
         status3 should be(Right(Valid))
         status4 should be(Right(Valid))
         // TODO: assert no effect as already slashed
@@ -539,7 +534,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         sigAlgorithm = "",
         shardId = "root"
       )
-    nodes(1).casperEff.blockDag.flatMap { dag =>
+    nodes(1).blockDagStorage.getRepresentation.flatMap { dag =>
       val sender       = blockThatPointsToInvalidBlock.sender
       implicit val bds = nodes(1).blockDagStorage
       for {

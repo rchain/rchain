@@ -8,7 +8,7 @@ import coop.rchain.blockstorage.dag.codecs.{codecByteString, codecSignedDeployDa
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.shared.syntax._
-import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager, KeyValueTypedStore}
 
 final case class KeyValueDeployStorage[F[_]: Functor] private (
     store: KeyValueTypedStore[F, ByteString, Signed[DeployData]]
@@ -24,6 +24,11 @@ final case class KeyValueDeployStorage[F[_]: Functor] private (
 }
 
 object KeyValueDeployStorage {
+
+  def apply[F[_]: Sync](store: KeyValueStore[F]): F[KeyValueDeployStorage[F]] =
+    Sync[F].delay(
+      KeyValueDeployStorage[F](store.toTypedStore(codecByteString, codecSignedDeployData))
+    )
 
   def apply[F[_]: Sync](kvm: KeyValueStoreManager[F]): F[KeyValueDeployStorage[F]] =
     for {

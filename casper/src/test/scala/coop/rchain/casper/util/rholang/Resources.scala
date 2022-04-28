@@ -12,8 +12,8 @@ import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
@@ -34,7 +34,7 @@ object Resources {
     // Limit maximum environment (file) size for LMDB in tests
     val limitSize = 100 * mb
     val dbMappings = Sync[F].delay {
-      rnodeDbMapping().map {
+      rnodeDbMapping.map {
         case (db, conf) =>
           val newConf =
             if (conf.maxEnvSize > limitSize) conf.copy(maxEnvSize = limitSize)
@@ -116,7 +116,7 @@ object Resources {
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )

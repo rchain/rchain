@@ -68,6 +68,7 @@ message VisualizeDagQuery {
 }
 
 message MachineVerifyQuery {
+  int32 depth = 1;
 }
 
 message PrivateNamePreviewQuery {

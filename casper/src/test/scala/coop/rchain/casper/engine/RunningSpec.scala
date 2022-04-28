@@ -2,8 +2,8 @@ package coop.rchain.casper.engine
 
 import cats.effect.Sync
 import com.google.protobuf.ByteString
-import coop.rchain.casper._
-import coop.rchain.casper.helper.{NoOpsCasperEffect, RSpaceStateManagerTestImpl}
+import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.catscontrib.TaskContrib._
@@ -14,9 +14,6 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
-import coop.rchain.blockstorage.syntax._
-
-import scala.concurrent.duration.FiniteDuration
 
 class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
 
@@ -47,14 +44,12 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
       )
     )
 
-    implicit val casper    = NoOpsCasperEffect[Task]().unsafeRunSync
     implicit val rspaceMan = RSpaceStateManagerTestImpl[Task]()
 
     val engine =
       new Running[Task](
         fixture.blockProcessingQueue,
         fixture.blockProcessingState,
-        casper,
         approvedBlock,
         None,
         Task.unit,
@@ -69,7 +64,7 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
       val test: Task[Unit] = for {
         _ <- engine.handle(local, signedBlockMessage)
         blockIsInqueue <- blockProcessingQueue.dequeue1.map(
-                           _._2.blockHash == signedBlockMessage.blockHash
+                           _.blockHash == signedBlockMessage.blockHash
                          )
         _ = assert(blockIsInqueue)
       } yield ()
@@ -118,7 +113,8 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
       val test: Task[Unit] = for {
         _        <- blockDagStorage.insert(block1, false)
         _        <- blockDagStorage.insert(block2, false)
-        tips     <- casper.blockDag.flatMap(_.latestMessageHashes.map(_.values))
+        blockDag <- blockDagStorage.getRepresentation
+        tips     <- blockDag.latestMessageHashes.map(_.values)
         _        <- engine.handle(local, request)
         requests = transportLayer.requests.map(_.msg.message.packet.get).toSet
         expected = tips.map(tip => ToPacket(HasBlockProto(tip))).toSet

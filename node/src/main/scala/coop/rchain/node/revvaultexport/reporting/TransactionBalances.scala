@@ -11,7 +11,6 @@ import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.crypto.PrivateKey
@@ -227,15 +226,13 @@ object TransactionBalances {
       bondPath: Path,
       targetBlockHash: String
   )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
-    val oldRSpacePath                           = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
-    val legacyRSpaceDirSupport                  = Files.exists(oldRSpacePath)
     implicit val metrics: Metrics.MetricsNOP[F] = new Metrics.MetricsNOP[F]()
     import coop.rchain.rholang.interpreter.storage._
     implicit val span: NoopSpan[F]                           = NoopSpan[F]()
     implicit val log: Log[F]                                 = Log.log
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
-      rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir)
       blockStore        <- blockStore.create(rnodeStoreManager)
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace

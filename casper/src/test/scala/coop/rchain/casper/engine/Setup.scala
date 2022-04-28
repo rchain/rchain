@@ -2,9 +2,7 @@ package coop.rchain.casper.engine
 
 import cats._
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.casper._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
@@ -140,7 +138,7 @@ object Setup {
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     implicit val blockProcessingQueue = Queue
-      .unbounded[Task, (Casper[Task], BlockMessage)]
+      .unbounded[Task, BlockMessage]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     implicit val blockProcessingState = Ref
@@ -150,7 +148,6 @@ object Setup {
     implicit val casperShardConf = CasperShardConf(
       -1,
       shardId,
-      "",
       finalizationRate,
       Int.MaxValue,
       Int.MaxValue,

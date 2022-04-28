@@ -1,23 +1,13 @@
 package coop.rchain.node.api
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Applicative, Foldable}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.ProposeFunction
 import coop.rchain.casper.api._
-import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.graphz._
-import coop.rchain.metrics.Span
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.syntax._
 import coop.rchain.monix.Monixable
@@ -30,15 +20,9 @@ import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: Log: BlockStore: Span: EngineCell: RuntimeManager: BlockDagStorage: RPConfAsk: ConnectionsCell: NodeDiscovery](
-      apiMaxBlocksLimit: Int,
-      blockReportAPI: BlockReportAPI[F],
-      triggerProposeF: Option[ProposeFunction[F]],
-      devMode: Boolean = false,
-      networkId: String,
-      shardId: String,
-      minPhloPrice: Long,
-      isNodeReadOnly: Boolean
+  def apply[F[_]: Monixable: Concurrent: Log](
+      blockApi: BlockApi[F],
+      blockReportAPI: BlockReportApi[F]
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -92,43 +76,32 @@ object DeployGrpcServiceV1 {
               })
             },
             dd => {
-              defer(BlockAPI.deploy[F](dd, triggerProposeF, minPhloPrice, isNodeReadOnly, shardId)) {
-                r =>
-                  import DeployResponse.Message
-                  import DeployResponse.Message._
-                  DeployResponse(r.fold[Message](Error, Result))
+              defer(blockApi.deploy(dd)) { r =>
+                import DeployResponse.Message
+                import DeployResponse.Message._
+                DeployResponse(r.fold[Message](Error, Result))
               }
             }
           )
 
       def getBlock(request: BlockQuery): Task[BlockResponse] =
-        defer(BlockAPI.getBlock[F](request.hash)) { r =>
+        defer(blockApi.getBlock(request.hash)) { r =>
           import BlockResponse.Message
           import BlockResponse.Message._
           BlockResponse(r.fold[Message](Error, BlockInfo))
         }
 
-      def visualizeDag(request: VisualizeDagQuery): Observable[VisualizeBlocksResponse] = {
-        val depth            = if (request.depth <= 0) apiMaxBlocksLimit else request.depth
-        val config           = GraphConfig(request.showJustificationLines)
-        val startBlockNumber = request.startBlockNumber
-
+      def visualizeDag(request: VisualizeDagQuery): Observable[VisualizeBlocksResponse] =
         Observable
           .fromTask(
             deferCollection(
-              for {
-                ref <- Ref[F].of(Vector[String]())
-                ser = new ListSerializer(ref)
-                res <- BlockAPI
-                        .visualizeDag[F, Vector[String]](
-                          depth,
-                          apiMaxBlocksLimit,
-                          startBlockNumber,
-                          (ts, lfb) => GraphzGenerator.dagAsCluster[F](ts, lfb, config, ser),
-                          ref.get
-                        )
-                        .map(x => x.getOrElse(Vector.empty[String]))
-              } yield res
+              blockApi
+                .visualizeDag(
+                  request.depth,
+                  request.startBlockNumber,
+                  request.showJustificationLines
+                )
+                .map(x => x.getOrElse(Vector.empty[String]))
             ) { r =>
               import VisualizeBlocksResponse.Message
               import VisualizeBlocksResponse.Message._
@@ -136,10 +109,9 @@ object DeployGrpcServiceV1 {
             }
           )
           .flatMap(Observable.fromIterable)
-      }
 
       def machineVerifiableDag(request: MachineVerifyQuery): Task[MachineVerifyResponse] =
-        defer(BlockAPI.machineVerifiableDag[F](apiMaxBlocksLimit, apiMaxBlocksLimit)) { r =>
+        defer(blockApi.machineVerifiableDag(request.depth)) { r =>
           import MachineVerifyResponse.Message
           import MachineVerifyResponse.Message._
           MachineVerifyResponse(r.fold[Message](Error, Content))
@@ -149,9 +121,7 @@ object DeployGrpcServiceV1 {
         Observable
           .fromTask(
             deferCollection(
-              BlockAPI
-                .getBlocks[F](request.depth, apiMaxBlocksLimit)
-                .map(_.getOrElse(List.empty[LightBlockInfo]))
+              blockApi.getBlocks(request.depth).map(_.getOrElse(List.empty[LightBlockInfo]))
             ) { r =>
               import BlockInfoResponse.Message
               import BlockInfoResponse.Message._
@@ -162,7 +132,7 @@ object DeployGrpcServiceV1 {
 
       def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
         defer(
-          BlockAPI.getListeningNameDataResponse[F](request.depth, request.name, apiMaxBlocksLimit)
+          blockApi.getListeningNameDataResponse(request.depth, request.name)
         ) { r =>
           import ListeningNameDataResponse.Message
           import ListeningNameDataResponse.Message._
@@ -174,27 +144,21 @@ object DeployGrpcServiceV1 {
         }
 
       def getDataAtName(request: DataAtNameByBlockQuery): Task[RhoDataResponse] =
-        defer(BlockAPI.getDataAtPar[F](request.par, request.blockHash, request.usePreStateHash)) {
-          r =>
-            import RhoDataResponse.Message
-            import RhoDataResponse.Message._
-            RhoDataResponse(
-              r.fold[Message](
-                Error, { case (par, block) => Payload(RhoDataPayload(par, block)) }
-              )
+        defer(blockApi.getDataAtPar(request.par, request.blockHash, request.usePreStateHash)) { r =>
+          import RhoDataResponse.Message
+          import RhoDataResponse.Message._
+          RhoDataResponse(
+            r.fold[Message](
+              Error, { case (par, block) => Payload(RhoDataPayload(par, block)) }
             )
+          )
         }
 
       def listenForContinuationAtName(
           request: ContinuationAtNameQuery
       ): Task[ContinuationAtNameResponse] =
         defer(
-          BlockAPI
-            .getListeningNameContinuationResponse[F](
-              request.depth,
-              request.names,
-              apiMaxBlocksLimit
-            )
+          blockApi.getListeningNameContinuationResponse(request.depth, request.names)
         ) { r =>
           import ContinuationAtNameResponse.Message
           import ContinuationAtNameResponse.Message._
@@ -206,17 +170,14 @@ object DeployGrpcServiceV1 {
         }
 
       def findDeploy(request: FindDeployQuery): Task[FindDeployResponse] =
-        defer(BlockAPI.findDeploy[F](request.deployId)) { r =>
+        defer(blockApi.findDeploy(request.deployId)) { r =>
           import FindDeployResponse.Message
           import FindDeployResponse.Message._
           FindDeployResponse(r.fold[Message](Error, BlockInfo))
         }
 
       def previewPrivateNames(request: PrivateNamePreviewQuery): Task[PrivateNamePreviewResponse] =
-        defer(
-          BlockAPI
-            .previewPrivateNames[F](request.user, request.timestamp, request.nameQty)
-        ) { r =>
+        defer(blockApi.previewPrivateNames(request.user, request.timestamp, request.nameQty)) { r =>
           import PrivateNamePreviewResponse.Message
           import PrivateNamePreviewResponse.Message._
           PrivateNamePreviewResponse(
@@ -228,21 +189,21 @@ object DeployGrpcServiceV1 {
         }
 
       def lastFinalizedBlock(request: LastFinalizedBlockQuery): Task[LastFinalizedBlockResponse] =
-        defer(BlockAPI.lastFinalizedBlock[F]) { r =>
+        defer(blockApi.lastFinalizedBlock) { r =>
           import LastFinalizedBlockResponse.Message
           import LastFinalizedBlockResponse.Message._
           LastFinalizedBlockResponse(r.fold[Message](Error, BlockInfo))
         }
 
       def isFinalized(request: IsFinalizedQuery): Task[IsFinalizedResponse] =
-        defer(BlockAPI.isFinalized[F](request.hash)) { r =>
+        defer(blockApi.isFinalized(request.hash)) { r =>
           import IsFinalizedResponse.Message
           import IsFinalizedResponse.Message._
           IsFinalizedResponse(r.fold[Message](Error, IsFinalized))
         }
 
       def bondStatus(request: BondStatusQuery): Task[BondStatusResponse] =
-        defer(BlockAPI.bondStatus[F](request.publicKey)) { r =>
+        defer(blockApi.bondStatus(request.publicKey)) { r =>
           import BondStatusResponse.Message
           import BondStatusResponse.Message._
           BondStatusResponse(r.fold[Message](Error, IsBonded))
@@ -250,12 +211,11 @@ object DeployGrpcServiceV1 {
 
       def exploratoryDeploy(request: ExploratoryDeployQuery): Task[ExploratoryDeployResponse] =
         defer(
-          BlockAPI
-            .exploratoryDeploy[F](
+          blockApi
+            .exploratoryDeploy(
               request.term,
               if (request.blockHash.isEmpty) none[String] else Some(request.blockHash),
-              request.usePreStateHash,
-              devMode
+              request.usePreStateHash
             )
         ) { r =>
           import ExploratoryDeployResponse.Message
@@ -288,12 +248,8 @@ object DeployGrpcServiceV1 {
         Observable
           .fromTask(
             deferCollection(
-              BlockAPI
-                .getBlocksByHeights[F](
-                  request.startBlockNumber,
-                  request.endBlockNumber,
-                  apiMaxBlocksLimit
-                )
+              blockApi
+                .getBlocksByHeights(request.startBlockNumber, request.endBlockNumber)
                 .map(_.getOrElse(List.empty[LightBlockInfo]))
             ) { r =>
               import BlockInfoResponse.Message
@@ -304,20 +260,6 @@ object DeployGrpcServiceV1 {
           .flatMap(Observable.fromIterable)
 
       def status(request: com.google.protobuf.empty.Empty): Task[StatusResponse] =
-        (for {
-          address <- RPConfAsk[F].ask
-          peers   <- ConnectionsCell[F].read
-          nodes   <- NodeDiscovery[F].peers
-          status = Status(
-            version = VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get),
-            address.local.toAddress,
-            networkId,
-            shardId,
-            peers.length,
-            nodes.length,
-            minPhloPrice
-          )
-          response = StatusResponse().withStatus(status)
-        } yield response).toTask
+        blockApi.status.map(StatusResponse().withStatus).toTask
     }
 }

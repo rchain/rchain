@@ -1,23 +1,23 @@
 package coop.rchain.casper.blocks.proposer
 
-import cats.effect.Concurrent
 import cats.effect.concurrent.Deferred
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{Casper, _}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.shared.syntax._
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
 import fs2.Stream
 
@@ -38,35 +38,30 @@ object ProposerResult {
 
 class Proposer[F[_]: Concurrent: Log: Span](
     // base state on top of which block will be created
-    getCasperSnapshot: Casper[F] => F[CasperSnapshot],
+    getCasperSnapshot: F[CasperSnapshot],
     // propose constraint checkers
     checkActiveValidator: (
         CasperSnapshot,
         ValidatorIdentity
     ) => CheckProposeConstraintsResult,
-    checkEnoughBaseStake: (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult],
-    checkFinalizedHeight: (BlockMessage, CasperSnapshot) => F[CheckProposeConstraintsResult],
+    checkEnoughBaseStake: CasperSnapshot => F[CheckProposeConstraintsResult],
+    checkFinalizedHeight: CasperSnapshot => F[CheckProposeConstraintsResult],
     createBlock: (
         CasperSnapshot,
         ValidatorIdentity
     ) => F[BlockCreatorResult],
-    validateBlock: (Casper[F], CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
-    proposeEffect: (Casper[F], BlockMessage) => F[Unit],
+    validateBlock: (CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
+    proposeEffect: BlockMessage => F[Unit],
     validator: ValidatorIdentity
 ) {
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "proposer")
   // This is the whole logic of propose
-  private def doPropose(
-      s: CasperSnapshot,
-      casper: Casper[F]
-  ): F[(ProposeResult, Option[BlockMessage])] =
+  private def doPropose(s: CasperSnapshot): F[(ProposeResult, Option[BlockMessage])] =
     Span[F].traceI("do-propose") {
       for {
-        // TODO this genesis should not be here, but required for sync constraint code. Remove
-        genesis <- casper.getApprovedBlock
         // check if node is allowed to propose a block
-        chk <- checkProposeConstraints(genesis, s)
+        chk <- checkProposeConstraints(s)
         r <- chk match {
               case v: CheckProposeConstraintsFailure =>
                 (ProposeResult.failure(v), none[BlockMessage]).pure[F]
@@ -77,9 +72,9 @@ class Proposer[F[_]: Concurrent: Log: Span](
                         case NoNewDeploys =>
                           (ProposeResult.failure(NoNewDeploys), none[BlockMessage]).pure[F]
                         case Created(b) =>
-                          validateBlock(casper, s, b).flatMap {
+                          validateBlock(s, b).flatMap {
                             case Right(v) =>
-                              proposeEffect(casper, b) >>
+                              proposeEffect(b) >>
                                 (ProposeResult.success(v), b.some).pure[F]
                             case Left(v) =>
                               Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
@@ -96,15 +91,14 @@ class Proposer[F[_]: Concurrent: Log: Span](
 
   // Check if proposer can issue a block
   private def checkProposeConstraints(
-      genesis: BlockMessage,
       s: CasperSnapshot
   ): F[CheckProposeConstraintsResult] =
     checkActiveValidator(s, validator) match {
       case NotBonded => CheckProposeConstraintsResult.notBonded.pure[F]
       case _ =>
         val work = Stream(
-          Stream.eval[F, CheckProposeConstraintsResult](checkEnoughBaseStake(genesis, s)),
-          Stream.eval[F, CheckProposeConstraintsResult](checkFinalizedHeight(genesis, s))
+          Stream.eval[F, CheckProposeConstraintsResult](checkEnoughBaseStake(s)),
+          Stream.eval[F, CheckProposeConstraintsResult](checkFinalizedHeight(s))
         )
         work
           .parJoin(2)
@@ -117,7 +111,6 @@ class Proposer[F[_]: Concurrent: Log: Span](
     }
 
   def propose(
-      c: Casper[F],
       isAsync: Boolean,
       proposeIdDef: Deferred[F, ProposerResult]
   ): F[(ProposeResult, Option[BlockMessage])] = {
@@ -127,18 +120,18 @@ class Proposer[F[_]: Concurrent: Log: Span](
     }
     for {
       // get snapshot to serve as a base for propose
-      s <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot(c))
+      s <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot)
       result <- if (isAsync) for {
                  nextSeq <- getValidatorNextSeqNumber(s).pure[F]
                  _       <- proposeIdDef.complete(ProposerResult.started(nextSeq))
 
                  // propose
-                 r <- doPropose(s, c)
+                 r <- doPropose(s)
                } yield r
                else
                  for {
                    // propose
-                   r <- doPropose(s, c)
+                   r <- doPropose(s)
 
                    (result, blockHashOpt) = r
                    proposerResult = blockHashOpt.fold {
@@ -157,23 +150,23 @@ class Proposer[F[_]: Concurrent: Log: Span](
 object Proposer {
   // format: off
   def apply[F[_]
-    /* Execution */   : Concurrent: Time
+    /* Execution */   : Concurrent: Timer: Time
     /* Casper */      : SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage
+    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
-    /* Comm */        : CommUtil: BlockRetriever
+    /* Comm */        : CommUtil: BlockRetriever: RuntimeManager
   ] // format: on
   (
       validatorIdentity: ValidatorIdentity,
+      casperShardConf: CasperShardConf,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
-  )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
-    val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot
+  ): Proposer[F] = {
+    val getCasperSnapshotSnapshot = MultiParentCasper.getSnapshot[F](casperShardConf)
 
     val createBlock = (s: CasperSnapshot, validatorIdentity: ValidatorIdentity) =>
       BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
 
-    val validateBlock = (casper: Casper[F], s: CasperSnapshot, b: BlockMessage) =>
-      casper.validate(b, s)
+    val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasper.validate(b, s)
 
     val checkValidatorIsActive = (s: CasperSnapshot, validator: ValidatorIdentity) =>
       if (s.onChainState.activeValidators.contains(ByteString.copyFrom(validator.publicKey.bytes)))
@@ -181,32 +174,30 @@ object Proposer {
       else
         NotBonded
 
-    val checkEnoughBaseStake = (genesis: BlockMessage, s: CasperSnapshot) =>
+    val checkEnoughBaseStake = (s: CasperSnapshot) =>
       SynchronyConstraintChecker[F].check(
         s,
-        runtimeManager,
-        genesis,
+        RuntimeManager[F],
         validatorIdentity
       )
 
-    val checkLastFinalizedHeightConstraint = (genesis: BlockMessage, s: CasperSnapshot) =>
+    val checkLastFinalizedHeightConstraint = (s: CasperSnapshot) =>
       LastFinalizedHeightConstraintChecker[F].check(
         s,
-        genesis: BlockMessage,
         validatorIdentity
       )
 
-    val proposeEffect = (c: Casper[F], b: BlockMessage) =>
+    val proposeEffect = (b: BlockMessage) =>
       // store block
       BlockStore[F].put(b) >>
         // save changes to Casper
-        c.handleValidBlock(b) >>
+        MultiParentCasper.handleValidBlock(b) >>
         // inform block retriever about block
         BlockRetriever[F].ackInCasper(b.blockHash) >>
         // broadcast hash to peers
         CommUtil[F].sendBlockHash(b.blockHash, b.sender) >>
         // Publish event
-        EventPublisher[F].publish(MultiParentCasperImpl.createdEvent(b))
+        EventPublisher[F].publish(MultiParentCasper.createdEvent(b))
 
     new Proposer(
       getCasperSnapshotSnapshot,

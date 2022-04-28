@@ -10,7 +10,6 @@ final case class CasperConf(
     validatorPrivateKey: Option[String],
     validatorPrivateKeyPath: Option[Path],
     shardName: String,
-    parentShardId: String,
     casperLoopInterval: FiniteDuration,
     requestedBlocksTimeout: FiniteDuration,
     finalizationRate: Int,

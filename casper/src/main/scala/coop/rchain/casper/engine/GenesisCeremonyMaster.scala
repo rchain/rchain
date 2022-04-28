@@ -56,7 +56,7 @@ object GenesisCeremonyMaster {
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blockProcessingQueue: Queue[F, BlockMessage],
       blocksInProcessing: Ref[F, Set[BlockHash]],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
@@ -69,7 +69,7 @@ object GenesisCeremonyMaster {
       cont <- lastApprovedBlockO match {
                case None =>
                  waitingForApprovedBlockLoop[F](
-                   blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+                   blockProcessingQueue: Queue[F, BlockMessage],
                    blocksInProcessing: Ref[F, Set[BlockHash]],
                    casperShardConf,
                    validatorId,
@@ -79,17 +79,10 @@ object GenesisCeremonyMaster {
                  val ab = approvedBlock.candidate.block
                  for {
                    _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
-                   casper <- MultiParentCasper
-                              .hashSetCasper[F](
-                                validatorId,
-                                casperShardConf: CasperShardConf,
-                                ab
-                              )
                    _ <- Engine
                          .transitionToRunning[F](
                            blockProcessingQueue,
                            blocksInProcessing,
-                           casper,
                            approvedBlock,
                            validatorId,
                            ().pure[F],
