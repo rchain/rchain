@@ -93,7 +93,7 @@ class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBuffer
       _ <- ackProcessed(b)
     } yield (status)
 
-  val getDependencyFreeFromBuffer = MultiParentCasperImpl.getDependencyFreeFromBuffer
+  val getDependencyFreeFromBuffer = MultiParentCasper.getDependencyFreeFromBuffer
 }
 
 object BlockProcessor {
@@ -107,7 +107,7 @@ object BlockProcessor {
 
     val storeBlock = (b: BlockMessage) => BlockStore[F].put(b)
 
-    val getCasperStateSnapshot = MultiParentCasperImpl.getSnapshot[F](casperShardConf)
+    val getCasperStateSnapshot = MultiParentCasper.getSnapshot[F](casperShardConf)
 
     val getNonValidatedDependencies = (b: BlockMessage) => {
       val allDeps = ProtoUtil.dependenciesHashesOf(b)
@@ -159,7 +159,7 @@ object BlockProcessor {
       )
     }
 
-    val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasperImpl.validate(b, s)
+    val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasper.validate(b, s)
 
     def ackProcessed =
       (b: BlockMessage) => BlockRetriever[F].ackInCasper(b.blockHash)
@@ -167,13 +167,13 @@ object BlockProcessor {
     val effectsForInvalidBlock =
       (b: BlockMessage, r: InvalidBlock, s: CasperSnapshot) =>
         for {
-          r <- MultiParentCasperImpl.handleInvalidBlock(b, r, s.dag)
+          r <- MultiParentCasper.handleInvalidBlock(b, r, s.dag)
           _ <- CommUtil[F].sendBlockHash(b.blockHash, b.sender)
         } yield r
 
     val effectsForValidBlock = (b: BlockMessage) =>
       for {
-        r <- MultiParentCasperImpl.handleValidBlock(b)
+        r <- MultiParentCasper.handleValidBlock(b)
         _ <- CommUtil[F].sendBlockHash(b.blockHash, b.sender)
       } yield r
 

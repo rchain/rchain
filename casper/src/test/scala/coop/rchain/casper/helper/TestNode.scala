@@ -160,7 +160,7 @@ case class TestNode[F[_]: Sync: Timer](
     } yield r
 
   def deploy(dd: Signed[DeployData]) =
-    MultiParentCasperImpl.deploy[F](dd)
+    MultiParentCasper.deploy[F](dd)
 
   def addBlock(block: BlockMessage): F[ValidBlockProcessing] =
     Stream(block).through(blockProcessingPipe).compile.lastOrError
@@ -199,16 +199,16 @@ case class TestNode[F[_]: Sync: Timer](
 
   def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
     for {
-      _                 <- deployDatums.toList.traverse(MultiParentCasperImpl.deploy[F])
-      cs                <- MultiParentCasperImpl.getSnapshot[F](casperShardConf)
+      _                 <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])
+      cs                <- MultiParentCasper.getSnapshot[F](casperShardConf)
       createBlockResult <- BlockCreator.create(cs, validatorIdOpt.get)
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
   def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
-      _                 <- deployDatums.toList.traverse(MultiParentCasperImpl.deploy[F])
-      cs                <- MultiParentCasperImpl.getSnapshot[F](casperShardConf)
+      _                 <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])
+      cs                <- MultiParentCasper.getSnapshot[F](casperShardConf)
       createBlockResult <- BlockCreator.create(cs, validatorIdOpt.get)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
@@ -307,16 +307,16 @@ case class TestNode[F[_]: Sync: Timer](
   def syncWith(node1: TestNode[F], node2: TestNode[F], rest: TestNode[F]*): F[Unit] =
     syncWith(IndexedSeq(node1, node2) ++ rest)
 
-  def contains(hash: BlockHash) = MultiParentCasperImpl.blockReceived(hash)
+  def contains(hash: BlockHash) = MultiParentCasper.blockReceived(hash)
 
   def knowsAbout(blockHash: BlockHash) =
     (contains(blockHash), RequestedBlocks.contains[F](blockHash)).mapN(_ || _)
 
   def shutoff() = transportLayerEff.clear(local)
 
-  val lastFinalizedBlock = MultiParentCasperImpl.lastFinalizedBlock
+  val lastFinalizedBlock = MultiParentCasper.lastFinalizedBlock
 
-  val fetchDependencies = MultiParentCasperImpl.fetchDependencies
+  val fetchDependencies = MultiParentCasper.fetchDependencies
 }
 
 object TestNode {

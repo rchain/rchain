@@ -7,7 +7,7 @@ import coop.rchain.metrics._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.{MultiParentCasperImpl, PrettyPrinter}
+import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.comm.PeerNode
 import coop.rchain.p2p.effects._
 import coop.rchain.shared.Log
@@ -56,7 +56,7 @@ object CasperPacketHandler {
     def checkMessage(message: (PeerNode, CasperMessage)): F[Dispatch] =
       message match {
         case (_, msg: BlockHashMessage) =>
-          MultiParentCasperImpl
+          MultiParentCasper
             .blockReceived(msg.blockHash)
             .map(if (_) Dispatch.drop else Dispatch.handle)
         case _ => Dispatch.pass.pure[F]

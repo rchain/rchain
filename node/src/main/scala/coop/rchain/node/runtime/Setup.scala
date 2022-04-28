@@ -319,7 +319,7 @@ object Setup {
         implicit val (bs, bds, cbs) = (blockStore, blockDagStorage, casperBufferStorage)
         for {
           // Fetch dependencies from CasperBuffer
-          _ <- MultiParentCasperImpl.fetchDependencies
+          _ <- MultiParentCasper.fetchDependencies
           // Maintain RequestedBlocks for Casper
           _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)

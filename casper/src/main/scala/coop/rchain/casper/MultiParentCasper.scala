@@ -25,7 +25,7 @@ import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 
-object MultiParentCasperImpl {
+object MultiParentCasper {
 
   // TODO: Extract hardcoded deployLifespan from shard config
   // Size of deploy safety range.

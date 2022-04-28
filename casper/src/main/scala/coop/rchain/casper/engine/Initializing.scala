@@ -155,7 +155,7 @@ class Initializing[F[_]
     val block            = approvedBlock.candidate.block
     val startBlockNumber = ProtoUtil.blockNumber(block)
     val minBlockNumberForDeployLifespan =
-      Math.max(0, startBlockNumber - MultiParentCasperImpl.deployLifespan)
+      Math.max(0, startBlockNumber - MultiParentCasper.deployLifespan)
 
     for {
       // Request all blocks for Last Finalized State

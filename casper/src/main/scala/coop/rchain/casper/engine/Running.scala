@@ -258,7 +258,7 @@ class Running[F[_]
   private val noop = F.unit
 
   private def ignoreCasperMessage(hash: BlockHash): F[Boolean] =
-    MultiParentCasperImpl.blockReceived(hash)
+    MultiParentCasper.blockReceived(hash)
 
   override def init: F[Unit] = theInit
 

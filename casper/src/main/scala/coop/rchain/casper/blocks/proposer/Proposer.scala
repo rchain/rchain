@@ -161,12 +161,12 @@ object Proposer {
       casperShardConf: CasperShardConf,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
   ): Proposer[F] = {
-    val getCasperSnapshotSnapshot = MultiParentCasperImpl.getSnapshot[F](casperShardConf)
+    val getCasperSnapshotSnapshot = MultiParentCasper.getSnapshot[F](casperShardConf)
 
     val createBlock = (s: CasperSnapshot, validatorIdentity: ValidatorIdentity) =>
       BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
 
-    val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasperImpl.validate(b, s)
+    val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasper.validate(b, s)
 
     val checkValidatorIsActive = (s: CasperSnapshot, validator: ValidatorIdentity) =>
       if (s.onChainState.activeValidators.contains(ByteString.copyFrom(validator.publicKey.bytes)))
@@ -191,13 +191,13 @@ object Proposer {
       // store block
       BlockStore[F].put(b) >>
         // save changes to Casper
-        MultiParentCasperImpl.handleValidBlock(b) >>
+        MultiParentCasper.handleValidBlock(b) >>
         // inform block retriever about block
         BlockRetriever[F].ackInCasper(b.blockHash) >>
         // broadcast hash to peers
         CommUtil[F].sendBlockHash(b.blockHash, b.sender) >>
         // Publish event
-        EventPublisher[F].publish(MultiParentCasperImpl.createdEvent(b))
+        EventPublisher[F].publish(MultiParentCasper.createdEvent(b))
 
     new Proposer(
       getCasperSnapshotSnapshot,
