@@ -61,7 +61,6 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
       } yield ()
   }
 
-  // TODO: Don't works for MergingHistory
   "deletion of a non existing records" should "not throw error" in withEmptyHistory {
     emptyHistoryF =>
       val changes1 = insert(hexKey("0011")) :: Nil
@@ -86,9 +85,6 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
         val ex = err.left.get
         ex shouldBe a[AssertionError]
         ex.getMessage shouldBe s"assertion failed: The length of all prefixes in the subtree must be the same."
-        // TODO: For MergingHistory
-        // ex shouldBe a[RuntimeException]
-        // ex.getMessage shouldBe s"malformed trie"
       }
   }
 
@@ -197,7 +193,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
         _                = historyOneSize shouldBe historyTwoSize
       } yield ()
   }
-// TODO: Don't works for MergingHistory
+
   "collision detecting in KVDB" should "works" in withEmptyHistoryAndStore {
     (emptyHistoryF, inMemoStore) =>
       def copyBVToBuf(bv: ByteVector): ByteBuffer = {
