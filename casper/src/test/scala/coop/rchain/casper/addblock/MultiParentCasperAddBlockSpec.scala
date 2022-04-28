@@ -478,7 +478,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployData <- ConstructDeploy
-                       .basicDeployData[Effect](0)
+                       .basicDeployData[Effect](0, shardId = SHARD_ID)
         signedBlock  <- nodes(0).deploy(deployData) >> nodes(0).createBlockUnsafe()
         invalidBlock = signedBlock.copy(seqNum = 47)
         status1      <- nodes(1).processBlock(invalidBlock)
