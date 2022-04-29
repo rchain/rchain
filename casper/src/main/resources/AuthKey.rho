@@ -51,7 +51,7 @@ in {
 
       // We could make the key 'usable once' by changing this to a single (vs persistent) receive
       // and returning the response along with a nonce (an unforgable naem), created inside the "challenge" method.
-      contract authKey(@"challenge", retCh) = {
+      for (@"challenge", retCh <- authKey) {
         retCh!(bundle0{ (*_authKey, shape)})
       } |
 
