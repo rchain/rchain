@@ -1,7 +1,6 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.syntax._
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -9,7 +8,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task

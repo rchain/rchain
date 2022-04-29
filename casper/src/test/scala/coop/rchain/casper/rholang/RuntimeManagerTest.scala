@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
 import cats.data.EitherT
 import cats.effect.{Resource, Sync}

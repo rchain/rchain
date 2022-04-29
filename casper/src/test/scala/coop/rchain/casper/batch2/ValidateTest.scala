@@ -7,26 +7,26 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.{DagRepresentation, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
+import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper._
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
-import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Time}
+import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.rspace.syntax._
+import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.syntax._
 import monix.eval.Task

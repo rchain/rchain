@@ -10,8 +10,7 @@ import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.util.rholang.Resources
+import coop.rchain.casper.rholang.{InterpreterUtil, Resources, RuntimeManager}
 import coop.rchain.casper.util.{BondsParser, GenesisBuilder, ProtoUtil, VaultParser}
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics

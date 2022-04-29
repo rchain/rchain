@@ -9,9 +9,8 @@ import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
-import coop.rchain.casper.rholang.{RuntimeManager, SystemDeployUtil}
+import coop.rchain.casper.rholang.{Resources, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
-import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}

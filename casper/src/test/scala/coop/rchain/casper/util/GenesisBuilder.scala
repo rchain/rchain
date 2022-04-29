@@ -8,7 +8,7 @@ import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ConstructDeploy._
-import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
+import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}

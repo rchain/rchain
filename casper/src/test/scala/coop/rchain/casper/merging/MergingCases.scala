@@ -3,9 +3,8 @@ package coop.rchain.casper.merging
 import cats.effect.Resource
 import cats.syntax.all._
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
-import coop.rchain.casper.rholang.{RuntimeManager, SystemDeployUtil}
+import coop.rchain.casper.rholang.{Resources, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator

@@ -2,9 +2,9 @@ package coop.rchain.node
 
 import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.rholang.Resources
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, GenesisContext}
-import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.casper.{ReportStore, ReportingCasper}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1

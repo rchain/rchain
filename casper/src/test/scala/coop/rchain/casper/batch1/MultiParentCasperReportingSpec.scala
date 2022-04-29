@@ -3,8 +3,8 @@ package coop.rchain.casper.batch1
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.CommEvent
+import coop.rchain.casper.rholang.Resources
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.casper.{ReportStore, ReportingCasper}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime

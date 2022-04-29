@@ -1,13 +1,11 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
 import cats.effect.Resource
 import cats.implicits.catsSyntaxApplicativeId
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.rholang.RuntimeManager
-import coop.rchain.shared.scalatestcontrib._
+import coop.rchain.casper.rholang.Resources._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
-import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Signed
@@ -15,6 +13,7 @@ import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployId, Par}
 import coop.rchain.shared.Log
+import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}

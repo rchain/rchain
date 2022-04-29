@@ -1,20 +1,16 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.DagRepresentation
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockMetadata, Par}
+import coop.rchain.models.Par
 import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
@@ -25,7 +21,6 @@ import monix.execution.Scheduler
 
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
-import scala.collection.immutable.SortedMap
 
 object Resources {
 

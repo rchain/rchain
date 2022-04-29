@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
 import org.scalatest.{FlatSpec, Matchers}
 
