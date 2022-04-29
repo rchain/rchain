@@ -1,6 +1,6 @@
-package coop.rchain.casper.util.rholang.costacc
+package coop.rchain.casper.rholang.sysdeploys
 
-import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployUserError}
+import coop.rchain.casper.rholang.types.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}

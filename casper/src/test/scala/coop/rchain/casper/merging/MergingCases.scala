@@ -1,24 +1,24 @@
 package coop.rchain.casper.merging
 
-import cats.syntax.all._
 import cats.effect.Resource
+import cats.syntax.all._
+import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
+import coop.rchain.casper.rholang.{RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
+import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
-import coop.rchain.casper.util.rholang.{Resources, RuntimeManager, SystemDeployUtil}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.merger.{EventLogIndex, MergingLogic}
 import coop.rchain.rspace.merger.MergingLogic.computeRelatedSets
-import coop.rchain.shared.{Log, Time}
-import coop.rchain.shared.syntax._
+import coop.rchain.rspace.merger.{EventLogIndex, MergingLogic}
 import coop.rchain.shared.scalatestcontrib.effectTest
+import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers}
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{FlatSpec, Matchers}
 
 class MergingCases extends FlatSpec with Matchers {
 

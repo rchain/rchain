@@ -13,7 +13,7 @@ import coop.rchain.casper._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.{CommUtil, _}
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer

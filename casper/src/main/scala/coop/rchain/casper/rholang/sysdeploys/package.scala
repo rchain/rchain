@@ -1,7 +1,7 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
 import shapeless.labelled.FieldType
 
-package object costacc {
+package object sysdeploys {
   type ->>[A, B] = FieldType[A, B]
 }

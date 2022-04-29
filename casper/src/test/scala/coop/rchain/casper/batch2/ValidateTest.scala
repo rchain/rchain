@@ -14,9 +14,9 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}

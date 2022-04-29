@@ -1,25 +1,25 @@
 package coop.rchain.casper.blocks.proposer
 
-import cats.effect.{Concurrent, Sync}
-import cats.syntax.all._
+import cats.effect.Concurrent
 import cats.instances.list._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.protocol.{Header, _}
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
+import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.shared.{Base16, Log, Stopwatch, Time}
+import coop.rchain.shared.{Log, Stopwatch, Time}
 
 object BlockCreator {
   private[this] val ProcessDeploysAndCreateBlockMetricsSource =

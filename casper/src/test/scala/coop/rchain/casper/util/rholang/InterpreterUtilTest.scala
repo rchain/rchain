@@ -8,11 +8,13 @@ import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.RSpaceUtil._
-import coop.rchain.casper.util.rholang.InterpreterUtil._
+import coop.rchain.casper.rholang.InterpreterUtil._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics

@@ -1,9 +1,9 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang.types
 
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.UnexpectedResult
+import coop.rchain.casper.rholang.types.SystemDeployPlatformFailure.UnexpectedResult
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}

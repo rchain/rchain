@@ -6,9 +6,9 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.rholang.Tools
 import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.casper.util.rholang.Resources.{copyStorage, mkTestRNodeStoreManager}
-import coop.rchain.casper.util.rholang.Tools
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.hash.Blake2b512Random

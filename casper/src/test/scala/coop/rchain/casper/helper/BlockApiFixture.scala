@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.api.BlockApiImpl
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.comm.rp.Connect.Connection
 import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Span

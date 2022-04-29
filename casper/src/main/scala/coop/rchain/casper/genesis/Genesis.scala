@@ -5,10 +5,10 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.{GPrivate, Par}
 

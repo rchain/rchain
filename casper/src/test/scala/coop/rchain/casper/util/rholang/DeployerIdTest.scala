@@ -3,6 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.effect.Resource
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}

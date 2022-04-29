@@ -13,16 +13,22 @@ import coop.rchain.casper.protocol.{
   ProcessedSystemDeploy,
   SlashSystemDeployData
 }
+import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
+import coop.rchain.casper.rholang._
 import coop.rchain.casper.rholang.syntax.RuntimeSyntax.SysEvalResult
-import coop.rchain.casper.util.EventConverter
-import coop.rchain.casper.util.rholang.InterpreterUtil.printDeployErrors
-import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.util.rholang.costacc.{
+import coop.rchain.casper.rholang.sysdeploys.{
   CloseBlockDeploy,
   PreChargeDeploy,
   RefundDeploy,
   SlashDeploy
 }
+import coop.rchain.casper.rholang.types.{
+  ReplayFailure,
+  SystemDeploy,
+  SystemDeployUserError,
+  UnusedCOMMEvent
+}
+import coop.rchain.casper.util.EventConverter
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}

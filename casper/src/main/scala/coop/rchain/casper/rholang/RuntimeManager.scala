@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
 import cats.Parallel
 import cats.data.EitherT
@@ -6,8 +6,9 @@ import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
+import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash

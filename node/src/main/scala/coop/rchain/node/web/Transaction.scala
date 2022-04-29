@@ -6,7 +6,6 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.genesis.contracts.StandardDeploys
-import coop.rchain.casper.util.rholang.Tools
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models.{GPrivate, GUnforgeable}
 import coop.rchain.casper.protocol.{
@@ -17,6 +16,7 @@ import coop.rchain.casper.protocol.{
   SingleReport,
   SlashSystemDeployDataProto
 }
+import coop.rchain.casper.rholang.Tools
 import coop.rchain.models.Par
 import coop.rchain.node.web.Transaction.TransactionStore
 import coop.rchain.rspace.hashing.Blake2b256Hash

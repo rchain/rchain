@@ -1,8 +1,9 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang.syntax
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{

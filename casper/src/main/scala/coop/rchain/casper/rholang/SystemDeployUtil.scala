@@ -1,15 +1,12 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
-import com.google.protobuf.{ByteString}
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
-
-import com.google.protobuf.{CodedInputStream, CodedOutputStream}
-import com.google.protobuf.wrappers.Int32Value
-import coop.rchain.casper.genesis.contracts.Validator
+import com.google.protobuf.{ByteString, CodedOutputStream}
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.crypto.PublicKey
+
+import java.io.ByteArrayOutputStream
 
 object SystemDeployUtil {
   // Currently we have 4 system deploys -> refund, preCharge, closeBlock, Slashing

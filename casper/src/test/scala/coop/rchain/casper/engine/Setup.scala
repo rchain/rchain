@@ -10,8 +10,8 @@ import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.protocol.{CommUtil, _}
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._

@@ -9,8 +9,8 @@ import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryKeyValueStore

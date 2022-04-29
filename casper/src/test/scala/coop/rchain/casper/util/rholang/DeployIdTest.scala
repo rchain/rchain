@@ -4,6 +4,7 @@ import cats.effect.Resource
 import cats.implicits.catsSyntaxApplicativeId
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.rholang.Resources._

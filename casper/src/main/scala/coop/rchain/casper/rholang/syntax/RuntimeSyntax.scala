@@ -14,22 +14,22 @@ import coop.rchain.casper.protocol.{
   ProcessedSystemDeploy,
   SystemDeployData
 }
+import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
+import coop.rchain.casper.rholang._
 import coop.rchain.casper.rholang.syntax.RuntimeSyntax.SysEvalResult
-import coop.rchain.casper.rholang.types.EvalCollector
-import coop.rchain.casper.util.rholang.InterpreterUtil.printDeployErrors
-import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.{
-  ConsumeFailed,
-  GasRefundFailure,
-  UnexpectedResult,
-  UnexpectedSystemErrors
-}
-import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.util.rholang.costacc.{
+import coop.rchain.casper.rholang.sysdeploys.{
   CloseBlockDeploy,
   PreChargeDeploy,
   RefundDeploy,
   SlashDeploy
 }
+import coop.rchain.casper.rholang.types.SystemDeployPlatformFailure.{
+  ConsumeFailed,
+  GasRefundFailure,
+  UnexpectedResult,
+  UnexpectedSystemErrors
+}
+import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
 import coop.rchain.crypto.PublicKey

@@ -14,7 +14,7 @@ import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol.{CommUtil, _}
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}

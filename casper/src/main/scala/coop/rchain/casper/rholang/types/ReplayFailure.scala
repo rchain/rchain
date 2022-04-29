@@ -1,7 +1,5 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang.types
 
-import coop.rchain.casper.protocol.DeployData
-import coop.rchain.crypto.signatures.Signed
 import coop.rchain.rspace.util.ReplayException
 
 sealed trait ReplayFailure

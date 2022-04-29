@@ -13,8 +13,8 @@ import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer

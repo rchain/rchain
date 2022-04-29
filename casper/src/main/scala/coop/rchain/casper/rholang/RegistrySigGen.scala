@@ -1,11 +1,10 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.DeployDataProto
-import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Bundle, ETuple, GPrivate, Par}
 import coop.rchain.rholang.interpreter.PrettyPrinter

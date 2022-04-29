@@ -7,8 +7,17 @@ import cats.{Functor, Id}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.rholang.sysdeploys._
+import coop.rchain.casper.rholang._
+import coop.rchain.casper.rholang.types.{
+  PlayFailed,
+  PlaySucceeded,
+  ReplayCostMismatch,
+  ReplayFailure,
+  SystemDeploy,
+  SystemDeployUserError
+}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.costacc._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.effect.implicits._

@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import cats.{Id, MonadError}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.casper.rholang.InterpreterUtil
 import coop.rchain.models.{GPrivate, NormalizerEnv, Par}
 import coop.rchain.shared.Time
 

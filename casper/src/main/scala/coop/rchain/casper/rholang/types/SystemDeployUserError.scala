@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.casper.rholang.types
 
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.PrettyPrinter
