@@ -20,7 +20,8 @@ new
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
   rl(`rho:registry:lookup`),
-  ListOpsCh
+  ListOpsCh,
+  deployerID(`rho:rchain:deployerId`)
 in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
@@ -244,9 +245,8 @@ in {
   } |
   // Insert the signed, write-only contract into the registry uri map
   rs!(
-    "04c71f6c7b87edf4bec14f16f715ee49c6fea918549abdf06c734d384b60ba922990317cc4bf68da8c85b455a65595cf7007f1e54bfd6be26ffee53d1ea6d7406b".hexToBytes(),
     (9223372036854775807, bundle+{*Either}),
-    "3045022100aa2bbdd706e157efb6df78156f1520c6422ff651728ccff69d5bffbf901767eb0220799a0451c72c284b1da128f0e4031125dbed9ac8b9de6ce5b0e4d35562ade877".hexToBytes(),
+    *deployerID,
     *uriOut
   )
 }

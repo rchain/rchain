@@ -24,7 +24,8 @@ new
   _multiSigRevVault,
   RevVaultCh,
   AuthKeyCh,
-  ListOpsCh
+  ListOpsCh,
+  deployerID(`rho:rchain:deployerId`)
 in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
@@ -272,9 +273,8 @@ in {
   rb!(`rho:rchain:multiSigRevVault`, bundle+{*MultiSigRevVault}, *MultiSigRevVaultDispatcher) |
   // Insert the signed, write-only dispatcher contract into the registry uri map
   rs!(
-    "04fe2eb1e0e7462b1a8f64600389e1e76727f8b2d38804eaa4b48f7a7d6715130fc24d3c4dac2d8bdc19e0b49879dbaf07c30773cd9740a9d14a092ef76339207a".hexToBytes(),
     (9223372036854775807, bundle+{*MultiSigRevVaultDispatcher}),
-    "30450221008539caafe08b2a27cfcabdcf9c7c345a1c1a926330a1a320ca614cf9240f6c77022024ad8465597c8a673431007b8e33317bd49c9c68dacb41eef6a4316d933909c4".hexToBytes(),
+    *deployerID,
     *uriOut
   )
 }
