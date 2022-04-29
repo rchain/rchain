@@ -754,11 +754,11 @@ object RadixTree {
             nonEmptyItems.head match {
               case EmptyItem => EmptyItem
               case Leaf(leafPrefix, value) =>
-                val newPrefix = KeyPath.create(prefix) ++ KeyPath.create(ByteVector(idxItem)) ++ leafPrefix
+                val newPrefix = KeyPath(prefix) ++ KeyPath(ByteVector(idxItem)) ++ leafPrefix
                 Leaf(newPrefix, value)
               case NodePtr(nodePtrPrefix, ptr) =>
-                val newPrefix = prefix ++ ByteVector(idxItem) ++ nodePtrPrefix.value
-                NodePtr(KeyPath.create(newPrefix), ptr)
+                val newPrefix = KeyPath(prefix) ++ KeyPath(ByteVector(idxItem)) ++ nodePtrPrefix
+                NodePtr(newPrefix, ptr)
             }
           case 2 => // 2 or more items are not empty.
             NodePtr(KeyPath.create(prefix), Blake2b256Hash.fromByteVector(saveNode(node)))
