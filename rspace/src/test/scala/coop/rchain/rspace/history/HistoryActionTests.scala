@@ -16,14 +16,12 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTestBase {
-  implicit def fromKeyPathToByteVector(kp: KeyPath): ByteVector = kp.value
-  implicit def fromSeqToKeyPath(seq: Seq[Byte]): KeyPath        = KeyPath(seq)
   "creating and read one record" should "works" in withEmptyHistory { emptyHistoryF =>
     val data = insert(_zeros) :: Nil
     for {
       emptyHistory <- emptyHistoryF
       newHistory   <- emptyHistory.process(data)
-      readValue    <- newHistory.read(_zeros)
+      readValue    <- newHistory.read(_zeros.value)
       _            = readValue shouldBe data.head.hash.bytes.some
     } yield ()
   }
@@ -34,7 +32,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
       emptyHistory    <- emptyHistoryF
       newHistory      <- emptyHistory.process(data)
       historyOneReset <- emptyHistory.reset(newHistory.root)
-      readValue       <- historyOneReset.read(_zeros)
+      readValue       <- historyOneReset.read(_zeros.value)
       _               = readValue shouldBe data.head.hash.bytes.some
     } yield ()
   }
@@ -44,7 +42,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
     for {
       emptyHistory <- emptyHistoryF
       newHistory   <- emptyHistory.process(data)
-      readValues   <- data.traverse(action => newHistory.read(action.key))
+      readValues   <- data.traverse(action => newHistory.read(action.key.value))
       _            = readValues shouldBe data.map(_.hash.bytes.some)
     } yield ()
   }
@@ -56,7 +54,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
       for {
         emptyHistory <- emptyHistoryF
         newHistory   <- emptyHistory.process(data)
-        readValues   <- data.traverse(action => newHistory.read(action.key))
+        readValues   <- data.traverse(action => newHistory.read(action.key.value))
         _            = readValues shouldBe data.map(_.hash.bytes.some)
       } yield ()
   }
@@ -131,7 +129,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
     val key = hexKey("0011")
     for {
       emptyHistory <- emptyHistoryF
-      readValue    <- emptyHistory.read(ByteVector(key))
+      readValue    <- emptyHistory.read(key.value)
       _            = readValue shouldBe None
     } yield ()
   }
@@ -142,10 +140,10 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
     for {
       emptyHistory     <- emptyHistoryF
       historyOne       <- emptyHistory.process(insertOne)
-      readValueOnePre  <- historyOne.read(_zeros)
+      readValueOnePre  <- historyOne.read(_zeros.value)
       historyTwo       <- historyOne.process(insertTwo)
-      readValueOnePost <- historyOne.read(_zeros)
-      readValueTwo     <- historyTwo.read(_zeros)
+      readValueOnePost <- historyOne.read(_zeros.value)
+      readValueTwo     <- historyTwo.read(_zeros.value)
       _                = readValueOnePre shouldBe readValueOnePost
       _                = readValueOnePre should not be readValueTwo
     } yield ()
@@ -257,7 +255,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
                   _ <- newState.toList.traverse {
                         case (k, value) =>
                           for {
-                            re <- newHistory.read(k)
+                            re <- newHistory.read(k.value)
                             _ = re match {
                               case Some(v) => assert(v == value.bytes)
                               case _       => fail("Can not get value")
@@ -267,7 +265,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
                   _ <- newDeletes.traverse(
                         d =>
                           for {
-                            re <- newHistory.read(d.key)
+                            re <- newHistory.read(d.key.value)
                             _ = re match {
                               case None => succeed
                               case _    => fail("got empty pointer after remove")
@@ -298,7 +296,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
       case p              => fail("unknown trie prefix" + p)
     }
 
-  def randomKey(size: Int): Seq[Byte] = List.fill(size)((Random.nextInt(256) - 128).toByte)
+  def randomKey(size: Int): KeyPath = KeyPath(List.fill(size)((Random.nextInt(256) - 128).toByte))
 
   def generateRandomInsert(size: Int): List[InsertAction] = List.fill(size)(insert(randomKey(32)))
   def generateRandomDelete(size: Int): List[DeleteAction] = List.fill(size)(delete(randomKey(32)))
@@ -320,20 +318,17 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
 }
 
 object TestData {
-  implicit def fromListToKeyPath(bytes: List[Byte]): KeyPath = KeyPath(bytes)
-  implicit def fromIntToKeyPath(value: Int): KeyPath         = KeyPath(Seq(value.toByte))
-
-  val _zeros: KeyPath           = List.fill(32)(0).map(_.toByte)
-  val _zerosOnes: KeyPath       = (List.fill(16)(0) ++ List.fill(16)(1)).map(_.toByte)
-  val _31zeros: KeyPath         = List.fill(31)(0).map(_.toByte)
-  def zerosAnd(i: Int): KeyPath = _31zeros ++ i.toByte
+  val _zeros: KeyPath           = KeyPath(List.fill(32)(0).map(_.toByte))
+  val _zerosOnes: KeyPath       = KeyPath((List.fill(16)(0) ++ List.fill(16)(1)).map(_.toByte))
+  val _31zeros: KeyPath         = KeyPath(List.fill(31)(0).map(_.toByte))
+  def zerosAnd(i: Int): KeyPath = _31zeros ++ KeyPath(Array(i.toByte))
   def prefixWithZeros(s: String): KeyPath = {
     val a = List.fill(32 - s.length)(0).map(_.toByte)
     val b = s.toCharArray.toList.map(_.asDigit).map(_.toByte)
-    a ++ b
+    KeyPath(a ++ b)
   }
 
-  def hexKey(s: String): Seq[Byte] = Base16.unsafeDecode(s).toList
+  def hexKey(s: String): KeyPath = KeyPath(Base16.unsafeDecode(s).toSeq)
 
   def randomBlake: Blake2b256Hash =
     Blake2b256Hash.create(Random.alphanumeric.take(32).map(_.toByte).toArray)
