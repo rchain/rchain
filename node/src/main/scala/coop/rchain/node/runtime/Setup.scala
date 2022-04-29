@@ -248,17 +248,6 @@ object Setup {
         implicit val ec = engineCell
         CasperPacketHandler[F]
       }
-      // Bypass fair dispatcher
-      /*packetHandler <- {
-        implicit val ec = engineCell
-        implicit val rb = requestedBlocks
-        implicit val sp = span
-        CasperPacketHandler.fairDispatcher[F](
-          conf.roundRobinDispatcher.maxPeerQueueSize,
-          conf.roundRobinDispatcher.giveUpAfterSkipped,
-          conf.roundRobinDispatcher.dropPeerAfterRetries
-        )
-      }*/
 
       // Query for network information (address, peers, nodes)
       getNetworkStatus = for {
