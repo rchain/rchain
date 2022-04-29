@@ -8,8 +8,9 @@ import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
-import coop.rchain.casper.util.rholang.{RuntimeManager, SystemDeploy}
+import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.InterpreterUtil.computeDeploysCheckpoint
+import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.models.block.StateHash._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256

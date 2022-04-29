@@ -22,11 +22,11 @@ import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
-import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol

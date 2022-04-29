@@ -6,9 +6,8 @@ import coop.rchain.casper.{engine, PrettyPrinter}
 import coop.rchain.casper.engine.BlockRetriever.{RequestState, RequestedBlocks}
 import coop.rchain.casper.engine.Setup.peerNode
 import coop.rchain.casper.engine.{BlockRetriever, Running}
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.util.TestTime
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing.Protocol

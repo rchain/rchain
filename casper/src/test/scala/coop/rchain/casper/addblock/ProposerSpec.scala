@@ -7,8 +7,8 @@ import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.rholang.Resources
 import coop.rchain.casper.util.GenesisBuilder.defaultValidatorSks
-import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.blockImplicits.getRandomBlock

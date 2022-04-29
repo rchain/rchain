@@ -7,9 +7,8 @@ import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.protocol.{CommUtil, _}
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
 import coop.rchain.crypto.hash.Blake2b256

@@ -8,8 +8,8 @@ import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.blockImplicits.getRandomBlock

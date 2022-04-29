@@ -18,7 +18,7 @@ import coop.rchain.casper.protocol.{
 }
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
