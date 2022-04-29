@@ -1,17 +1,15 @@
-package coop.rchain.casper.util.comm
-
-import java.io.Closeable
-import java.util.concurrent.TimeUnit
+package coop.rchain.casper.protocol.client
 
 import cats.effect.Sync
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
+import coop.rchain.casper.protocol.propose.v1._
 import coop.rchain.models.either.implicits._
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.syntax._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 
-import scala.util.Either
+import java.io.Closeable
+import java.util.concurrent.TimeUnit
 
 trait ProposeService[F[_]] {
   def propose(isAsync: Boolean): F[Either[Seq[String], String]]

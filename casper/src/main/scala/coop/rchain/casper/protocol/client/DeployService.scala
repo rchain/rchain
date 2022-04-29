@@ -1,7 +1,4 @@
-package coop.rchain.casper.util.comm
-
-import java.io.Closeable
-import java.util.concurrent.TimeUnit
+package coop.rchain.casper.protocol.client
 
 import cats.effect.Sync
 import cats.syntax.all._
@@ -14,7 +11,8 @@ import coop.rchain.monix.Monixable
 import coop.rchain.shared.syntax._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 
-import scala.util.Either
+import java.io.Closeable
+import java.util.concurrent.TimeUnit
 
 trait DeployService[F[_]] {
   def deploy(d: Signed[DeployData]): F[Either[Seq[String], String]]

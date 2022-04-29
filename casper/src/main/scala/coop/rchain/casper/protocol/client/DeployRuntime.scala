@@ -1,23 +1,22 @@
-package coop.rchain.casper.util.comm
+package coop.rchain.casper.protocol.client
 
-import scala.io.Source
-import scala.language.higherKinds
-import scala.util._
-import cats.{Functor, Id, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.ListenAtName._
-import coop.rchain.catscontrib.ski._
-import coop.rchain.models.Par
-import coop.rchain.shared.Time
-import cats.syntax.either._
+import cats.{Functor, Id, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.client.ListenAtName._
+import coop.rchain.catscontrib.ski.kp
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.shared.ThrowableOps._
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.models.Par
 import coop.rchain.models.syntax._
+import coop.rchain.shared.ThrowableOps._
+import coop.rchain.shared.Time
+
+import scala.io.Source
+import scala.util.Try
 
 object DeployRuntime {
 

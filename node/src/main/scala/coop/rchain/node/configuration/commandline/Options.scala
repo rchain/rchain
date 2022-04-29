@@ -2,7 +2,7 @@ package coop.rchain.node.configuration.commandline
 
 import java.nio.file.{Path, Paths}
 
-import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
+import coop.rchain.casper.protocol.client.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.crypto.{PrivateKey, PublicKey}

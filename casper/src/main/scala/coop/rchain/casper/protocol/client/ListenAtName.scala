@@ -1,18 +1,12 @@
-package coop.rchain.casper.util.comm
+package coop.rchain.casper.protocol.client
 
-import scala.language.higherKinds
-import scala.util.{Either, Right}
-import cats.{Id, MonadError}
 import cats.effect.Sync
-import cats.instances.list._
-import cats.syntax.applicative._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
-import cats.syntax.traverse._
+import cats.syntax.all._
+import cats.{Id, MonadError}
+import com.google.protobuf.ByteString
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.models.{GPrivate, NormalizerEnv, Par}
 import coop.rchain.shared.Time
-import com.google.protobuf.ByteString
 
 object ListenAtName {
   sealed trait Name

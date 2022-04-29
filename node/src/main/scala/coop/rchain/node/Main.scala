@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.Parallel
 import cats.effect._
 import cats.syntax.all._
+import coop.rchain.casper.protocol.client.{DeployRuntime, GrpcDeployService, GrpcProposeService}
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
