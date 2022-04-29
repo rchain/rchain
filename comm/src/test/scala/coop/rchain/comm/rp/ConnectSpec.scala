@@ -1,18 +1,18 @@
 package coop.rchain.comm.rp
 
-import Connect._
-import org.scalatest._
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm._, CommError._
-import coop.rchain.p2p.effects._
-import cats.{catsInstancesForId => _, _}, cats.data._, cats.syntax.all._
-import cats.effect._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import cats.{catsInstancesForId => _, _}
+import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect._
 import coop.rchain.metrics.Metrics
-import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
+import org.scalatest._
+
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
@@ -29,9 +29,8 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
   implicit val metricEff         = new Metrics.MetricsNOP[Effect]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
   implicit val transportLayerEff = new TransportLayerStub[Effect]
-  implicit val packetHandler     = new PacketHandler.NOPPacketHandler[Effect]
-  implicit val connectionsCell   = Cell.unsafe[Effect, Connections](Connect.Connections.empty)
-  implicit val rpConfAsk         = createRPConfAsk[Effect](peerNode("src", 40400))
+  implicit val connectionsCell = Cell.unsafe[Effect, Connections](Connect.Connections.empty)
+  implicit val rpConfAsk       = createRPConfAsk[Effect](peerNode("src", 40400))
 
   override def beforeEach(): Unit = {
     nodeDiscoveryEff.reset()
