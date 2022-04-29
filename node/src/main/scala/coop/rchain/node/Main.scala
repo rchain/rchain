@@ -1,12 +1,9 @@
 package coop.rchain.node
 
-import java.io.File
-import java.nio.file.Path
 import cats.Parallel
 import cats.effect._
 import cats.syntax.all._
 import coop.rchain.casper.protocol.client.{DeployRuntime, GrpcDeployService, GrpcProposeService}
-import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
@@ -18,12 +15,14 @@ import coop.rchain.node.effects._
 import coop.rchain.node.runtime.NodeRuntime
 import coop.rchain.node.web.VersionInfo
 import coop.rchain.shared.StringOps._
-import coop.rchain.shared.{Base16, _}
+import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory
 import org.slf4j.bridge.SLF4JBridgeHandler
 
+import java.io.File
+import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import scala.tools.jline.console.completer.StringsCompleter
@@ -382,7 +381,6 @@ object Main {
       )
 
     import cats.instances.list._
-    import cats.instances.tuple._
 
     for {
       portsAvailability <- List(
