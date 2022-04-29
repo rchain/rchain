@@ -5,7 +5,7 @@ import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.mtl._
 import cats.syntax.all._
-import cats.{Parallel, ~>}
+import cats.{~>, Parallel}
 import com.typesafe.config.Config
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
@@ -29,7 +29,7 @@ import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
 import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
-import coop.rchain.node.{NodeEnvironment, diagnostics, effects}
+import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._

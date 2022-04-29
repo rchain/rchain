@@ -8,12 +8,12 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager.{MergeableStore, StateHash}
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{
@@ -25,10 +25,9 @@ import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
-import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log}
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
 import retry._
 import scodec.bits.ByteVector
@@ -233,7 +232,7 @@ object RuntimeManager {
 
   /**
     * This is a hard-coded value for `emptyStateHash` which is calculated by
-    * [[coop.rchain.casper.rholang.RuntimeOps.emptyStateHash]].
+    * [[RuntimeOps.emptyStateHash]].
     * Because of the value is actually the same all
     * the time. For some situations, we can just use the value directly for better performance.
     */

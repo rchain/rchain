@@ -1,4 +1,4 @@
-package coop.rchain.casper.rholang
+package coop.rchain.casper.rholang.syntax
 
 import cats.data.{EitherT, OptionT}
 import cats.effect.Sync
@@ -6,7 +6,6 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
-import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
 import coop.rchain.casper.protocol.{
   Bond,
   DeployData,
@@ -15,10 +14,8 @@ import coop.rchain.casper.protocol.{
   ProcessedSystemDeploy,
   SystemDeployData
 }
-import coop.rchain.casper.rholang.RuntimeSyntax.SysEvalResult
+import coop.rchain.casper.rholang.syntax.RuntimeSyntax.SysEvalResult
 import coop.rchain.casper.rholang.types.EvalCollector
-import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.util.rholang.InterpreterUtil.printDeployErrors
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.{
   ConsumeFailed,
@@ -26,53 +23,36 @@ import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.{
   UnexpectedResult,
   UnexpectedSystemErrors
 }
+import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.costacc.{
   CloseBlockDeploy,
   PreChargeDeploy,
   RefundDeploy,
   SlashDeploy
 }
-import coop.rchain.casper.util.rholang.{
-  PlayFailed,
-  PlaySucceeded,
-  SystemDeploy,
-  SystemDeployResult,
-  SystemDeployUserError,
-  SystemDeployUtil,
-  Tools
-}
+import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
+import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.shared.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.EVarBody
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
+import coop.rchain.models._
 import coop.rchain.models.block.StateHash.StateHash
-import coop.rchain.models.{
-  BindPattern,
-  EVar,
-  Expr,
-  GPrivate,
-  ListParWithRandom,
-  NormalizerEnv,
-  Par,
-  TaggedContinuation,
-  Var
-}
+import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.rholang.interpreter.RhoRuntime.bootstrapRegistry
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.BugFoundError
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.interpreter.{storage, EvaluateResult, RhoRuntime}
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.History.emptyRootHash
-import coop.rchain.shared.Log
-import coop.rchain.metrics.implicits._
-import coop.rchain.models.syntax.modelsSyntaxByteString
-import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.merger.MergingLogic.NumberChannelsEndVal
+import coop.rchain.shared.{Base16, Log}
 
 trait RuntimeSyntax {
   implicit final def casperSyntaxRholangRuntime[F[_]: Sync: Span: Log](
