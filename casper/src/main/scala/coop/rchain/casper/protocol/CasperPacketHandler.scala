@@ -1,13 +1,12 @@
-package coop.rchain.casper.util.comm
+package coop.rchain.casper.protocol
 
-import cats._
+import cats.FlatMap
 import cats.syntax.all._
-import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.engine._
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.engine.EngineCell
+import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
-import coop.rchain.p2p.effects._
+import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.Log
 
 object CasperPacketHandler {
