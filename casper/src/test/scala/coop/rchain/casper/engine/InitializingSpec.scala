@@ -134,8 +134,6 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
         _ <- initializingEngine.handle(local, approvedBlock)
 
         engine          <- EngineCell[Task].read
-        casperDefined   <- engine.withCasper(kp(true.pure[Task]), false.pure[Task])
-        _               = assert(casperDefined)
         blockO          <- blockStore.get1(genesis.blockHash)
         _               = assert(blockO.isDefined)
         _               = assert(blockO.contains(genesis))

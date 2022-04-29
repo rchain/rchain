@@ -4,11 +4,8 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.{
-  BlockDagKeyValueStorage,
-  BlockDagStorage,
-  IndexedBlockDagStorage
-}
+import coop.rchain.blockstorage.dag.{BlockDagStorage, IndexedBlockDagStorage}
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
@@ -57,6 +54,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     BlockDagStorageTestFixture.withStorageF[Task, R](f).unsafeRunSync
   }
 }
+
 object BlockDagStorageTestFixture {
   def blockDagStorageDir: Path = Files.createTempDirectory("casper-block-dag-storage-test-")
   def blockStorageDir: Path    = Files.createTempDirectory("casper-block-storage-test-")

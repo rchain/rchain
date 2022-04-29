@@ -1,11 +1,11 @@
 package coop.rchain.node
 
-import coop.rchain.casper.{ReportStore, ReportingCasper}
-import coop.rchain.casper.api.BlockReportAPI
+import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, GenesisContext}
 import coop.rchain.casper.util.rholang.Resources
+import coop.rchain.casper.{ReportStore, ReportingCasper}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Par
@@ -14,9 +14,9 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest._
+import org.scalatest.{FlatSpec, Inspectors, Matchers}
+
 class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
   val genesis: GenesisContext = buildGenesis()
 
@@ -30,7 +30,11 @@ class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
         rspaceStore     <- kvm.rSpaceStores
         reportingCasper = ReportingCasper.rhoReporter[Task](rspaceStore)
         reportingStore  <- ReportStore.store[Task](kvm)
-        blockReportAPI  = BlockReportAPI[Task](reportingCasper, reportingStore)
+        blockReportAPI = BlockReportApi[Task](
+          reportingCasper,
+          reportingStore,
+          readonly.validatorIdOpt
+        )
         deploy <- ConstructDeploy.sourceDeployNowF(
                    term,
                    sec = deployKey,

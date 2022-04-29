@@ -2,28 +2,26 @@ package coop.rchain.node.runtime
 
 import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ContextShift, Sync, Timer}
+import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
-import coop.rchain.models.syntax._
 import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.{approvedStore, blockStore}
 import coop.rchain.casper._
-import coop.rchain.casper.api.BlockReportAPI
+import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.rp.Connect.ConnectionsCell
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
@@ -45,11 +43,8 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import coop.rchain.shared.syntax.sharedSyntaxKeyValueStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
-
-import java.nio.file.Files
 
 object Setup {
   def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
@@ -71,12 +66,12 @@ object Setup {
         WebApi[F],
         AdminWebApi[F],
         Option[Proposer[F]],
-        Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
+        Queue[F, (Boolean, Deferred[F, ProposerResult])],
         // TODO move towards having a single node state
         Option[Ref[F, ProposerState[F]]],
         BlockProcessor[F],
         Ref[F, Set[BlockHash]],
-        Queue[F, (Casper[F], BlockMessage)],
+        Queue[F, BlockMessage],
         Option[ProposeFunction[F]]
     )
   ] =
@@ -90,9 +85,7 @@ object Setup {
       else Span.noop[F]
 
       // RNode key-value store manager / manages LMDB databases
-      oldRSpacePath          = conf.storage.dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
-      legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
-      rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
 
       // TODO: Old BlockStore migration message, remove after couple of releases from v0.11.0.
       oldBlockStoreExists = conf.storage.dataDir.resolve("blockstore/storage").toFile.exists
@@ -116,16 +109,14 @@ object Setup {
       // Deploy storage
       deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
 
-      estimator = {
-        implicit val sp = span
-        Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
-      }
       synchronyConstraintChecker = {
-        implicit val bs = blockStore
+        implicit val bs  = blockStore
+        implicit val bds = blockDagStorage
         SynchronyConstraintChecker[F]
       }
       lastFinalizedHeightConstraintChecker = {
-        implicit val bs = blockStore
+        implicit val bs  = blockStore
+        implicit val bds = blockDagStorage
         LastFinalizedHeightConstraintChecker[F]
       }
 
@@ -169,24 +160,46 @@ object Setup {
       }
       (rnodeStateManager, rspaceStateManager) = stateManagers
 
+      casperShardConf = CasperShardConf(
+        conf.casper.faultToleranceThreshold,
+        conf.casper.shardName,
+        conf.casper.finalizationRate,
+        conf.casper.maxNumberOfParents,
+        conf.casper.maxParentDepth.getOrElse(Int.MaxValue),
+        conf.casper.synchronyConstraintThreshold.toFloat,
+        conf.casper.heightConstraintThreshold,
+        50,
+        1,
+        1,
+        conf.casper.genesisBlockData.bondMinimum,
+        conf.casper.genesisBlockData.bondMaximum,
+        conf.casper.genesisBlockData.epochLength,
+        conf.casper.genesisBlockData.quarantineLength,
+        conf.casper.minPhloPrice
+      )
+
       // Engine dynamic reference
       engineCell          <- EngineCell.init[F]
       envVars             = EnvVars.envVars[F]
-      blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
+      blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {
+        implicit val (rm, sp)     = (runtimeManager, span)
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
         implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
-        BlockProcessor[F]
+        BlockProcessor[F](casperShardConf)
       }
 
-      // Proposer instance
+      // Load validator private key if specified
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
                              )
+
+      // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
+        implicit val cbs          = casperBufferStorage
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
@@ -194,18 +207,18 @@ object Setup {
         val dummyDeployerKey      = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
-        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
+        Proposer[F](validatorIdentity, casperShardConf, dummyDeployerKey.map((_, "Nil")))
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
-      proposerQueue <- Queue.unbounded[F, (Casper[F], Boolean, Deferred[F, ProposerResult])]
+      proposerQueue <- Queue.unbounded[F, (Boolean, Deferred[F, ProposerResult])]
 
       triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
         Some(
-          (casper: Casper[F], isAsync: Boolean) =>
+          (isAsync: Boolean) =>
             for {
               d <- Deferred[F, ProposerResult]
-              _ <- proposerQueue.enqueue1((casper, isAsync, d))
+              _ <- proposerQueue.enqueue1((isAsync, d))
               r <- d.get
             } yield r
         )
@@ -226,7 +239,9 @@ object Setup {
           if (conf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]],
           conf.casper,
           !conf.protocolClient.disableLfs,
-          conf.protocolServer.disableStateExporter
+          conf.protocolServer.disableStateExporter,
+          validatorIdentityOpt,
+          casperShardConf
         )
       }
       packetHandler = {
@@ -244,89 +259,87 @@ object Setup {
           conf.roundRobinDispatcher.dropPeerAfterRetries
         )
       }*/
-      reportingStore <- ReportStore.store[F](rnodeStoreManager)
-      blockReportAPI = {
-        implicit val (ec, bs) = (engineCell, blockStore)
-        BlockReportAPI[F](reportingRuntime, reportingStore)
-      }
-      apiServers = {
-        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
-        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (ra, rp)     = (rpConfAsk, rpConnections)
-        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
 
-        APIServers.build[F](
-          evalRuntime,
-          triggerProposeFOpt,
-          proposerStateRefOpt,
-          conf.apiServer.maxBlocksLimit,
-          conf.devMode,
-          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none[ProposeFunction[F]],
-          blockReportAPI,
+      // Query for network information (address, peers, nodes)
+      getNetworkStatus = for {
+        address <- rpConfAsk.ask
+        peers   <- rpConnections.read
+        nodes   <- NodeDiscovery[F].peers
+      } yield (address.local, peers, nodes)
+
+      // Block API
+      blockApi <- {
+        implicit val (bds, bs, ds) = (blockDagStorage, blockStore, deployStorage)
+        implicit val rm            = runtimeManager
+        implicit val sp            = span
+        val isNodeReadOnly         = conf.casper.validatorPrivateKey.isEmpty
+        BlockApiImpl[F](
+          validatorIdentityOpt,
           conf.protocolServer.networkId,
           conf.casper.shardName,
           conf.casper.minPhloPrice,
-          isNodeReadOnly
+          coop.rchain.node.web.VersionInfo.get,
+          getNetworkStatus,
+          isNodeReadOnly,
+          conf.apiServer.maxBlocksLimit,
+          conf.devMode,
+          triggerProposeFOpt,
+          proposerStateRefOpt,
+          conf.autopropose
         )
       }
-      reportingRoutes = {
-        ReportingRoutes.service[F](blockReportAPI)
+
+      // Report API
+      reportingStore <- ReportStore.store[F](rnodeStoreManager)
+      blockReportApi = {
+        implicit val bs = blockStore
+        BlockReportApi[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
+
+      // gRPC services (deploy, propose eval/repl)
+      apiServers = APIServers.build[F](blockApi, blockReportApi, evalRuntime)
+
+      // Reporting HTTP routes
+      reportingRoutes = ReportingRoutes.service[F](blockReportApi)
+
+      // Transaction API
+      transactionAPI = Transaction[F](
+        blockReportApi,
+        Par(unforgeables = Seq(Transaction.transferUnforgeable))
+      )
+      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
+
+      // Web API (public and admin)
+      webApi      = new WebApiImpl[F](blockApi, cacheTransactionAPI)
+      adminWebApi = new AdminWebApiImpl[F](blockApi)
+
+      // Infinite loop to trigger request missing dependencies
       casperLoop = {
-        implicit val br = blockRetriever
+        implicit val br             = blockRetriever
+        implicit val (bs, bds, cbs) = (blockStore, blockDagStorage, casperBufferStorage)
         for {
-          engine <- engineCell.read
           // Fetch dependencies from CasperBuffer
-          _ <- engine.withCasper(_.fetchDependencies, ().pure[F])
+          _ <- MultiParentCasper.fetchDependencies
           // Maintain RequestedBlocks for Casper
           _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)
         } yield ()
       }
+
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
       updateForkChoiceLoop = {
-        implicit val (ec, bs, cu) = (engineCell, blockStore, commUtil)
+        implicit val (bs, cu, bds) = (blockStore, commUtil, blockDagStorage)
         for {
           _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
           _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
         } yield ()
       }
+
       engineInit = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
-      transactionAPI = Transaction[F](
-        blockReportAPI,
-        Par(unforgeables = Seq(Transaction.transferUnforgeable))
-      )
-      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
-      webApi = {
-        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
-        implicit val (ra, rc)     = (rpConfAsk, rpConnections)
-        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
-
-        new WebApiImpl[F](
-          conf.apiServer.maxBlocksLimit,
-          conf.devMode,
-          cacheTransactionAPI,
-          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none[ProposeFunction[F]],
-          conf.protocolServer.networkId,
-          conf.casper.shardName,
-          conf.casper.minPhloPrice,
-          isNodeReadOnly
-        )
-      }
-      adminWebApi = {
-        implicit val (ec, sp) = (engineCell, span)
-        implicit val (sc, lh) = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        new AdminWebApiImpl[F](
-          triggerProposeFOpt,
-          proposerStateRefOpt
-        )
-      }
     } yield (
       packetHandler,
       apiServers,

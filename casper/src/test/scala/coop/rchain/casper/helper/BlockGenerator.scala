@@ -34,7 +34,7 @@ object BlockGenerator {
     Metrics.Source(CasperMetricsSource, "generate-block")
 
   implicit val logSource: LogSource = LogSource(this.getClass)
-  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+  def mkCasperSnapshot[F[_]](dag: DagRepresentation) =
     CasperSnapshot(
       dag,
       ByteString.EMPTY,
@@ -47,7 +47,7 @@ object BlockGenerator {
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )
@@ -72,10 +72,10 @@ object BlockGenerator {
                )
     } yield result
 
-  private def computeBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Metrics: Span](
+  private def computeBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
     for {

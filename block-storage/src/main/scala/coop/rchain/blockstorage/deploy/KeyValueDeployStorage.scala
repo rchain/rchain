@@ -4,11 +4,11 @@ import cats.Functor
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.codecs.{codecDeploySignature, codecSignedDeployData}
+import coop.rchain.blockstorage.dag.codecs.{codecByteString, codecSignedDeployData}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.shared.syntax._
-import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager, KeyValueTypedStore}
 
 final case class KeyValueDeployStorage[F[_]: Functor] private (
     store: KeyValueTypedStore[F, ByteString, Signed[DeployData]]
@@ -25,9 +25,14 @@ final case class KeyValueDeployStorage[F[_]: Functor] private (
 
 object KeyValueDeployStorage {
 
+  def apply[F[_]: Sync](store: KeyValueStore[F]): F[KeyValueDeployStorage[F]] =
+    Sync[F].delay(
+      KeyValueDeployStorage[F](store.toTypedStore(codecByteString, codecSignedDeployData))
+    )
+
   def apply[F[_]: Sync](kvm: KeyValueStoreManager[F]): F[KeyValueDeployStorage[F]] =
     for {
-      store <- kvm.database("deploy_storage", codecDeploySignature, codecSignedDeployData)
+      store <- kvm.database("deploy_storage", codecByteString, codecSignedDeployData)
     } yield KeyValueDeployStorage[F](store)
 
 }

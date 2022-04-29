@@ -34,11 +34,14 @@ class GenesisCeremonyMasterSpec extends WordSpec {
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
       implicit val rspaceMan  = RSpaceStateManagerTestImpl[Task]()
 
-      def waitUtilCasperIsDefined: Task[MultiParentCasper[Task]] =
-        EngineCell[Task].read >>= (_.withCasper(
-          casper => Task.pure(casper),
-          Task.sleep(3.seconds).flatMap(_ => waitUtilCasperIsDefined)
-        ))
+      // TEMP replacement to wait on genesis block to be added to block store
+      // - will be removed with the whole existing genesis ceremony (approved block ...)
+      def waitForGenesisBlock: Task[BlockMessage] =
+        for {
+          bOpt <- blockStore.get1(genesis.blockHash)
+          bb <- if (bOpt.isDefined) bOpt.get.pure[Task]
+               else Task.sleep(10.seconds) *> waitForGenesisBlock
+        } yield bb
 
       val test = for {
         sigs <- Ref.of[Task, Set[Signature]](Set.empty)
@@ -67,13 +70,8 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           validatorSk,
           validatorPk
         )
-        _ <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
-        //wait until casper is defined, with a timeout (indicating failure)
-        possiblyCasper  <- Task.racePair(Task.sleep(3.minute), waitUtilCasperIsDefined)
-        _               = assert(possiblyCasper.isRight)
-        blockO          <- blockStore.get1(genesis.blockHash)
-        _               = assert(blockO.isDefined)
-        _               = assert(blockO.contains(genesis))
+        _               <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
+        blockO          <- waitForGenesisBlock
         handlerInternal <- EngineCell[Task].read
         _               = assert(handlerInternal.isInstanceOf[Running[Task]])
         // assert that we really serve last approved block

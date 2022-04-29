@@ -4,7 +4,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
@@ -55,7 +55,7 @@ class InterpreterUtilTest
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
-  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+  def mkCasperSnapshot(dag: DagRepresentation) =
     CasperSnapshot(
       dag,
       ByteString.EMPTY,
@@ -68,15 +68,15 @@ class InterpreterUtilTest
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )
     )
-  def computeDeploysCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Time: Metrics](
+  def computeDeploysCheckpoint[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: Span: Time: Metrics](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation,
       runtimeManager: RuntimeManager[F],
       blockNumber: Long = 0L,
       seqNum: Int = 0
@@ -322,9 +322,9 @@ class InterpreterUtilTest
 
   def computeDeployCosts(
       runtimeManager: RuntimeManager[Task],
-      dag: BlockDagRepresentation[Task],
+      dag: DagRepresentation,
       deploy: Signed[DeployData]*
-  )(implicit blockStore: BlockStore[Task]): Task[Seq[PCost]] =
+  )(implicit blockStore: BlockStore[Task], bds: BlockDagStorage[Task]): Task[Seq[PCost]] =
     for {
       computeResult <- computeDeploysCheckpoint[Task](
                         Seq(genesis),

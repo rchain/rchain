@@ -3,7 +3,8 @@ package coop.rchain.node.mergeablity
 import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
+import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
@@ -407,6 +408,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             dagStore: BlockDagStorage[Task]
         ): Task[BlockMessage] = {
 
+          implicit val bds     = dagStore
           val baseState        = baseBlock.body.state.postStateHash
           val seqNum           = baseBlock.seqNum + 1
           val mergingBlocksNum = (baseBlock.seqNum * 2 + 1).toLong

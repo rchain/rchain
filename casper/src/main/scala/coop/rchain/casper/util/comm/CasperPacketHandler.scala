@@ -7,11 +7,13 @@ import coop.rchain.metrics._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.comm.PeerNode
 import coop.rchain.p2p.effects._
 import coop.rchain.shared.Log
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.MetricsSemaphore
@@ -26,7 +28,7 @@ object CasperPacketHandler {
           message => EngineCell[F].read >>= (_.handle(peer, message))
         )
 
-  def fairDispatcher[F[_]: Concurrent: EngineCell: Log: Span: Metrics](
+  def fairDispatcher[F[_]: Concurrent: BlockDagStorage: CasperBufferStorage: EngineCell: Log: Span: Metrics](
       maxPeerQueueSize: Int,
       giveUpAfterSkipped: Int,
       dropPeerAfterRetries: Int
@@ -54,11 +56,9 @@ object CasperPacketHandler {
     def checkMessage(message: (PeerNode, CasperMessage)): F[Dispatch] =
       message match {
         case (_, msg: BlockHashMessage) =>
-          for {
-            engine   <- EngineCell[F].read
-            contains <- engine.withCasper(_.contains(msg.blockHash), false.pure[F])
-          } yield if (contains) Dispatch.drop else Dispatch.handle
-
+          MultiParentCasper
+            .blockReceived(msg.blockHash)
+            .map(if (_) Dispatch.drop else Dispatch.handle)
         case _ => Dispatch.pass.pure[F]
       }
 

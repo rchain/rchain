@@ -1,31 +1,28 @@
 package coop.rchain.node.api
 
-import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.ProposeFunction
-import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
-import coop.rchain.casper.blocks.proposer.ProposerResult
-import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
-import coop.rchain.metrics.Span
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
-import coop.rchain.models._
-import coop.rchain.node.api.WebApi._
-import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
+import coop.rchain.casper.api.BlockApiImpl.LatestBlockMessageError
+import coop.rchain.casper.api.BlockApi
+import coop.rchain.casper.protocol.{
+  BlockInfo,
+  DataWithBlockInfo,
+  DeployData,
+  LightBlockInfo,
+  Status
+}
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
+import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
+import coop.rchain.models._
 import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log}
-import coop.rchain.state.StateManager
-import fs2.concurrent.Queue
+import coop.rchain.node.api.WebApi._
+import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
+import coop.rchain.shared.Base16
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -66,28 +63,23 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: Log: Span: BlockStore](
-      apiMaxBlocksLimit: Int,
-      devMode: Boolean = false,
-      cacheTransactionAPI: CacheTransactionAPI[F],
-      triggerProposeF: Option[ProposeFunction[F]],
-      networkId: String,
-      shardId: String,
-      minPhloPrice: Long,
-      isNodeReadOnly: Boolean
+  class WebApiImpl[F[_]: Sync](
+      blockApi: BlockApi[F],
+      cacheTransactionAPI: CacheTransactionAPI[F]
   ) extends WebApi[F] {
     import WebApiSyntax._
 
+    def status: F[ApiStatus] = blockApi.status.map(toApiStatus)
+
     def prepareDeploy(req: Option[PrepareRequest]): F[PrepareResponse] = {
-      val seqNumber = BlockAPI
-        .getLatestMessage[F]
+      val seqNumber = blockApi.getLatestMessage
         .flatMap(_.liftToBlockApiErr)
         .map(_.seqNum)
         .handleError { case _: LatestBlockMessageError => -1 }
 
       val previewNames = req.fold(List[String]().pure) { r =>
-        BlockAPI
-          .previewPrivateNames[F](r.deployer.unsafeHexToByteString, r.timestamp, r.nameQty)
+        blockApi
+          .previewPrivateNames(r.deployer.unsafeHexToByteString, r.timestamp, r.nameQty)
           .flatMap(_.liftToBlockApiErr)
           .map(_.map(toHex).toList)
       }
@@ -97,33 +89,33 @@ object WebApi {
 
     def deploy(request: DeployRequest): F[String] =
       toSignedDeploy(request)
-        .flatMap(BlockAPI.deploy(_, triggerProposeF, minPhloPrice, isNodeReadOnly, shardId))
+        .flatMap(blockApi.deploy)
         .flatMap(_.liftToBlockApiErr)
 
     def listenForDataAtName(req: DataAtNameRequest): F[DataAtNameResponse] =
-      BlockAPI
-        .getListeningNameDataResponse(req.depth, toPar(req), apiMaxBlocksLimit)
+      blockApi
+        .getListeningNameDataResponse(req.depth, toPar(req))
         .flatMap(_.liftToBlockApiErr)
         .map(toDataAtNameResponse)
 
     def getDataAtPar(req: DataAtNameByBlockHashRequest): F[RhoDataResponse] =
-      BlockAPI
+      blockApi
         .getDataAtPar(toPar(req), req.blockHash, req.usePreStateHash)
         .flatMap(_.liftToBlockApiErr)
         .map(toRhoDataResponse)
 
     def lastFinalizedBlock: F[BlockInfo] =
-      BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)
+      blockApi.lastFinalizedBlock.flatMap(_.liftToBlockApiErr)
 
     def getBlock(hash: String): F[BlockInfo] =
-      BlockAPI.getBlock[F](hash).flatMap(_.liftToBlockApiErr)
+      blockApi.getBlock(hash).flatMap(_.liftToBlockApiErr)
 
     def getBlocks(depth: Int): F[List[LightBlockInfo]] =
-      BlockAPI.getBlocks[F](depth, apiMaxBlocksLimit).flatMap(_.liftToBlockApiErr)
+      blockApi.getBlocks(depth).flatMap(_.liftToBlockApiErr)
 
     def findDeploy(deployId: String): F[LightBlockInfo] =
-      BlockAPI
-        .findDeploy[F](deployId.unsafeHexToByteString)
+      blockApi
+        .findDeploy(deployId.unsafeHexToByteString)
         .flatMap(_.liftToBlockApiErr)
 
     def exploratoryDeploy(
@@ -131,33 +123,18 @@ object WebApi {
         blockHash: Option[String],
         usePreStateHash: Boolean
     ): F[RhoDataResponse] =
-      BlockAPI
-        .exploratoryDeploy(term, blockHash, usePreStateHash, devMode)
+      blockApi
+        .exploratoryDeploy(term, blockHash, usePreStateHash)
         .flatMap(_.liftToBlockApiErr)
         .map(toRhoDataResponse)
 
-    def status: F[ApiStatus] =
-      for {
-        address <- RPConfAsk[F].ask
-        peers   <- ConnectionsCell[F].read
-        nodes   <- NodeDiscovery[F].peers
-      } yield ApiStatus(
-        version = VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get),
-        address.local.toAddress,
-        networkId,
-        shardId,
-        peers.length,
-        nodes.length,
-        minPhloPrice
-      )
-
     def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
-      BlockAPI
-        .getBlocksByHeights(startBlockNumber, endBlockNumber, apiMaxBlocksLimit)
+      blockApi
+        .getBlocksByHeights(startBlockNumber, endBlockNumber)
         .flatMap(_.liftToBlockApiErr)
 
     def isFinalized(hash: String): F[Boolean] =
-      BlockAPI.isFinalized(hash).flatMap(_.liftToBlockApiErr)
+      blockApi.isFinalized(hash).flatMap(_.liftToBlockApiErr)
 
     def getTransaction(hash: String): F[TransactionResponse] =
       cacheTransactionAPI.getTransaction(hash)
@@ -268,6 +245,17 @@ object WebApi {
   // Conversion functions for protobuf generated types
 
   import WebApiSyntax._
+
+  def toApiStatus(status: Status) =
+    ApiStatus(
+      version = VersionInfo(api = status.version.api, node = status.version.node),
+      address = status.address,
+      networkId = status.networkId,
+      shardId = status.shardId,
+      peers = status.peers,
+      nodes = status.nodes,
+      minPhloPrice = status.minPhloPrice
+    )
 
   def toSignedDeploy[F[_]: Sync](
       sd: DeployRequest

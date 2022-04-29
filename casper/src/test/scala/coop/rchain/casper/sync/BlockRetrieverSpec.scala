@@ -49,7 +49,7 @@ class BlockRetrieverSpec extends FunSpec with BeforeAndAfterEach with Matchers {
   override def beforeEach(): Unit = {
     transportLayer.reset()
     transportLayer.setResponses(_ => p => Right(()))
-    currentRequests.update(Map.empty)
+    currentRequests.set(Map.empty).runSyncUnsafe()
   }
 
   describe("BlockRetriever admitting hash") {
@@ -92,6 +92,9 @@ class BlockRetrieverSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
       describe("when source peer is unknown") {
         it("should ignore hash") {
+          blockRetriever
+            .admitHash(hash, peer = None, admitHashReason = testReason)
+            .runSyncUnsafe()
           val status = blockRetriever
             .admitHash(hash, peer = None, admitHashReason = testReason)
             .runSyncUnsafe()

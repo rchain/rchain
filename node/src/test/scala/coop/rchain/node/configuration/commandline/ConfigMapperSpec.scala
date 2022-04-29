@@ -215,7 +215,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         validatorPrivateKey = Some("111111"),
         validatorPrivateKeyPath = Some(Paths.get("/var/lib/rnode/pem.key")),
         shardName = "root",
-        parentShardId = "/",
         casperLoopInterval = 111111.seconds,
         requestedBlocksTimeout = 111111.seconds,
         finalizationRate = 111111,

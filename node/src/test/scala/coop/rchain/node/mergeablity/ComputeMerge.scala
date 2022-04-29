@@ -4,7 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
@@ -157,14 +157,17 @@ trait ComputeMerge {
                     s"${rejectRight}, ${deployIds}, ${rightDeployIds}, ${leftDeployIds}"
                 )
             }
-            mergedState <- DagMerger.merge[F](
-                            dag,
-                            bBlock.blockHash,
-                            baseCheckpoint.root,
-                            indices(_).deployChains.pure[F],
-                            historyRepo,
-                            rejectAlg
-                          )
+            mergedState <- {
+              implicit val bds = dagStore
+              DagMerger.merge[F](
+                dag,
+                bBlock.blockHash,
+                baseCheckpoint.root,
+                indices(_).deployChains.pure[F],
+                historyRepo,
+                rejectAlg
+              )
+            }
             result <- checkFunction(runtime, historyRepo, mergedState)
           } yield result
       }

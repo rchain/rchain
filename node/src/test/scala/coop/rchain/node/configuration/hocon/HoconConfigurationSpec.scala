@@ -119,7 +119,6 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         validatorPrivateKey = None,
         validatorPrivateKeyPath = None,
         shardName = "root",
-        parentShardId = "/",
         casperLoopInterval = 30.seconds,
         requestedBlocksTimeout = 240.seconds,
         finalizationRate = 1,

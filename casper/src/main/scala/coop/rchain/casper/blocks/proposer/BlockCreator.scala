@@ -5,6 +5,7 @@ import cats.syntax.all._
 import cats.instances.list._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{Header, _}
@@ -35,8 +36,8 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def create[F[_]: Concurrent: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
-      s: CasperSnapshot[F],
+  def create[F[_]: Concurrent: Log: Time: BlockStore: BlockDagStorage: DeployStorage: Metrics: RuntimeManager: Span](
+      s: CasperSnapshot,
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =

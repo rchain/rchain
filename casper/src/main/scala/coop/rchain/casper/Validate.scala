@@ -6,7 +6,7 @@ import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil.bonds
@@ -154,23 +154,15 @@ object Validate {
     }
   }
 
-  /*
-   * TODO: Double check ordering of validity checks
-   */
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore: BlockDagStorage: Metrics: Span](
       block: BlockMessage,
-      genesis: BlockMessage,
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       shardId: String,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
     (for {
-      _ <- EitherT.liftF(Span[F].mark("before-block-hash-validation"))
-      _ <- EitherT(Validate.blockHash(block))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
       _ <- EitherT(Validate.timestamp(block))
-      _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
-      _ <- EitherT(Validate.shardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
       _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
@@ -181,10 +173,6 @@ object Validate {
       _ <- EitherT(Validate.futureTransaction(block))
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
-      _ <- EitherT.liftF(Span[F].mark("before-justification-follows-validation"))
-      _ <- EitherT(Validate.justificationFollows(block))
-      _ <- EitherT.liftF(Span[F].mark("before-parents-validation"))
-      _ <- EitherT(Validate.parents(block, genesis, s))
       _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
       _ <- EitherT(Validate.sequenceNumber(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
@@ -196,9 +184,9 @@ object Validate {
     *
     * Agnostic of non-parent justifications
     */
-  def repeatDeploy[F[_]: Sync: Log: BlockStore: Span](
+  def repeatDeploy[F[_]: Sync: Log: BlockStore: BlockDagStorage: Span](
       block: BlockMessage,
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
@@ -296,9 +284,9 @@ object Validate {
   }
 
   // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Sync: Log](
+  def blockNumber[F[_]: Sync: BlockDagStorage: Log](
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
 
@@ -385,9 +373,9 @@ object Validate {
     * B's creator justification is the genesis block.
     */
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def sequenceNumber[F[_]: Monad: Log](
+  def sequenceNumber[F[_]: Monad: BlockDagStorage: Log](
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
@@ -420,21 +408,6 @@ object Validate {
     } yield status
   }
 
-  // Agnostic of justifications
-  def shardIdentifier[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage,
-      shardId: String
-  ): F[ValidBlockProcessing] =
-    if (b.shardId == shardId) {
-      BlockStatus.valid.asRight[BlockError].pure
-    } else {
-      for {
-        _ <- Log[F].warn(
-              ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected.")
-            )
-      } yield BlockStatus.invalidShardId.asLeft[ValidBlock]
-    }
-
   // Validator should only process deploys from its own shard
   def deploysShardIdentifier[F[_]: Monad: Log](
       b: BlockMessage,
@@ -445,14 +418,13 @@ object Validate {
     } else {
       for {
         _ <- Log[F].warn(ignore(b, s"not for all deploys shard identifier is $shardId."))
-      } yield BlockStatus.invalidShardId.asLeft[ValidBlock]
+      } yield BlockStatus.invalidDeployShardId.asLeft[ValidBlock]
     }
 
-  // TODO: Double check this validation isn't shadowed by the blockSignature validation
-  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] = {
+  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] = {
     val blockHashComputed = ProtoUtil.hashBlock(b)
     if (b.blockHash == blockHashComputed)
-      BlockStatus.valid.asRight[BlockError].pure
+      true.pure
     else {
       val computedHashString = PrettyPrinter.buildString(blockHashComputed)
       val hashString         = PrettyPrinter.buildString(b.blockHash)
@@ -463,46 +435,8 @@ object Validate {
                 s"block hash $hashString does not match to computed value $computedHashString."
               )
             )
-      } yield BlockStatus.invalidBlockHash.asLeft[ValidBlock]
+      } yield false
     }
-  }
-
-  /**
-    * Works only with fully explicit justifications.
-    */
-  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span](
-      b: BlockMessage,
-      genesis: BlockMessage,
-      s: CasperSnapshot[F]
-  ): F[ValidBlockProcessing] =
-    // TODO reimplement this under multiparent or remove completely?
-    BlockStatus.valid.asRight[BlockError].pure
-  /*
-   * This check must come before Validate.parents
-   */
-  def justificationFollows[F[_]: Sync: Log: BlockStore](
-      b: BlockMessage
-  ): F[ValidBlockProcessing] = {
-    val justifiedValidators = b.justifications.map(_.validator).toSet
-    val mainParentHash      = ProtoUtil.parentHashes(b).head
-    for {
-      mainParent       <- BlockStore[F].getUnsafe(mainParentHash)
-      bondedValidators = ProtoUtil.bonds(mainParent).map(_.validator).toSet
-      status <- if (bondedValidators == justifiedValidators) {
-                 BlockStatus.valid.asRight[BlockError].pure
-               } else {
-                 val justifiedValidatorsPP = justifiedValidators.map(PrettyPrinter.buildString)
-                 val bondedValidatorsPP    = bondedValidators.map(PrettyPrinter.buildString)
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(
-                           b,
-                           s"the justified validators, ${justifiedValidatorsPP}, do not match the bonded validators, ${bondedValidatorsPP}."
-                         )
-                       )
-                 } yield BlockStatus.invalidFollows.asLeft[ValidBlock]
-               }
-    } yield status
   }
 
   /**
@@ -517,9 +451,9 @@ object Validate {
     * Hence, we ignore justification regressions involving the block's sender and
     * let checkEquivocations handle it instead.
     */
-  def justificationRegressions[F[_]: Sync: Log](
+  def justificationRegressions[F[_]: Sync: BlockDagStorage: Log](
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] =
     s.dag.latestMessage(b.sender).flatMap {
       // `b` is first message from sender of `b`, so regression is not possible
@@ -576,9 +510,9 @@ object Validate {
     * If block contains an invalid justification block B and the creator of B is still bonded,
     * return a RejectableBlock. Otherwise return an IncludeableBlock.
     */
-  def neglectedInvalidBlock[F[_]: Applicative](
+  def neglectedInvalidBlock[F[_]: Applicative: BlockDagStorage](
       block: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
 

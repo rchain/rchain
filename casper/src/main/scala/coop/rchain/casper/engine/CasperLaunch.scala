@@ -42,32 +42,16 @@ object CasperLaunch {
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blockProcessingQueue: Queue[F, BlockMessage],
       blocksInProcessing: Ref[F, Set[BlockHash]],
       proposeFOpt: Option[ProposeFunction[F]],
       conf: CasperConf,
       trimState: Boolean,
-      disableStateExporter: Boolean
+      disableStateExporter: Boolean,
+      validatorIdentityOpt: Option[ValidatorIdentity],
+      casperShardConf: CasperShardConf
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
-      val casperShardConf = CasperShardConf(
-        conf.faultToleranceThreshold,
-        conf.shardName,
-        conf.parentShardId,
-        conf.finalizationRate,
-        conf.maxNumberOfParents,
-        conf.maxParentDepth.getOrElse(Int.MaxValue),
-        conf.synchronyConstraintThreshold.toFloat,
-        conf.heightConstraintThreshold,
-        50,
-        1,
-        1,
-        conf.genesisBlockData.bondMinimum,
-        conf.genesisBlockData.bondMaximum,
-        conf.genesisBlockData.epochLength,
-        conf.genesisBlockData.quarantineLength,
-        conf.minPhloPrice
-      )
       def launch(): F[Unit] =
         ApprovedStore[F].getApprovedBlock map {
           case Some(approvedBlock) =>
@@ -101,7 +85,7 @@ object CasperLaunch {
           disableStateExporter: Boolean
       ): F[Unit] = {
         def askPeersForForkChoiceTips = CommUtil[F].sendForkChoiceTipRequest
-        def sendBufferPendantsToCasper(casper: Casper[F]) =
+        def sendBufferPendantsToCasper =
           for {
             pendants <- CasperBufferStorage[F].getPendants
             // pendantsReceived are either
@@ -124,7 +108,8 @@ object CasperLaunch {
                               s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
                                 s"is available in BlockStore, sending to Casper."
                             )
-                        dc <- casper.dagContains(hash)
+                        dag <- BlockDagStorage[F].getRepresentation
+                        dc  = dag.contains(hash)
                         _ <- Log[F]
                               .error(
                                 s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
@@ -132,33 +117,24 @@ object CasperLaunch {
                               )
                               .whenA(dc)
                         _ <- BlockRetriever[F].ackReceive(hash)
-                        _ <- blockProcessingQueue.enqueue1((casper, block))
+                        _ <- blockProcessingQueue.enqueue1(block)
                       } yield ()
                   )
           } yield ()
 
+        val init = for {
+          _ <- askPeersForForkChoiceTips
+          _ <- sendBufferPendantsToCasper
+          // try to propose (async way) if proposer is defined
+          _ <- proposeFOpt.traverse(_(true))
+        } yield ()
         for {
-          validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
-          ab          = approvedBlock.candidate.block
-          casper <- MultiParentCasper
-                     .hashSetCasper[F](
-                       validatorId,
-                       casperShardConf,
-                       ab
-                     )
-          init = for {
-            _ <- askPeersForForkChoiceTips
-            _ <- sendBufferPendantsToCasper(casper)
-            // try to propose (async way) if proposer is defined
-            _ <- proposeFOpt.traverse(p => p(casper, true))
-          } yield ()
           _ <- Engine
                 .transitionToRunning[F](
                   blockProcessingQueue,
                   blocksInProcessing,
-                  casper,
                   approvedBlock,
-                  validatorId,
+                  validatorIdentityOpt,
                   init,
                   disableStateExporter
                 )
@@ -173,10 +149,12 @@ object CasperLaunch {
                     conf.genesisCeremony.autogenShardSize
                   )
 
-          validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
-          vaults      <- VaultParser.parse(conf.genesisBlockData.walletsFile)
+          vaults <- VaultParser.parse(conf.genesisBlockData.walletsFile)
+          validatorId <- validatorIdentityOpt.liftTo(
+                          new Exception(s"Validator private key is missing.")
+                        )
           bap <- BlockApproverProtocol.of(
-                  validatorId.get,
+                  validatorId,
                   timestamp,
                   vaults,
                   bonds,
@@ -189,12 +167,13 @@ object CasperLaunch {
                   conf.genesisBlockData.posMultiSigPublicKeys,
                   conf.genesisBlockData.posMultiSigQuorum
                 )(Sync[F])
+
           _ <- EngineCell[F].set(
                 new GenesisValidator(
                   blockProcessingQueue,
                   blocksInProcessing,
                   casperShardConf,
-                  validatorId.get,
+                  validatorId,
                   bap
                 )
               )
@@ -202,7 +181,6 @@ object CasperLaunch {
 
       private def initBootstrap(disableStateExporter: Boolean): F[Unit] =
         for {
-          validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
           abp <- ApproveBlockProtocol
                   .of[F](
                     conf.genesisBlockData.bondsFile,
@@ -230,7 +208,7 @@ object CasperLaunch {
                     blockProcessingQueue,
                     blocksInProcessing,
                     casperShardConf,
-                    validatorId,
+                    validatorIdentityOpt,
                     disableStateExporter
                   )
               )

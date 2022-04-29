@@ -2,11 +2,10 @@ package coop.rchain.casper.engine
 
 import cats._
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.casper._
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.Validator
@@ -130,7 +129,6 @@ object Setup {
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val deployStorage = KeyValueDeployStorage[Task](kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
     implicit val blockRetriever                 = BlockRetriever.of[Task]
@@ -140,7 +138,7 @@ object Setup {
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     implicit val blockProcessingQueue = Queue
-      .unbounded[Task, (Casper[Task], BlockMessage)]
+      .unbounded[Task, BlockMessage]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     implicit val blockProcessingState = Ref
@@ -150,7 +148,6 @@ object Setup {
     implicit val casperShardConf = CasperShardConf(
       -1,
       shardId,
-      "",
       finalizationRate,
       Int.MaxValue,
       Int.MaxValue,

@@ -4,7 +4,7 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
@@ -12,8 +12,8 @@ import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
@@ -34,7 +34,7 @@ object Resources {
     // Limit maximum environment (file) size for LMDB in tests
     val limitSize = 100 * mb
     val dbMappings = Sync[F].delay {
-      rnodeDbMapping().map {
+      rnodeDbMapping.map {
         case (db, conf) =>
           val newConf =
             if (conf.maxEnvSize > limitSize) conf.copy(maxEnvSize = limitSize)
@@ -103,39 +103,9 @@ object Resources {
       .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
   }
 
-  def mkDummyCasperSnapshot[F[_]: Applicative]: F[CasperSnapshot[F]] = {
-    val dummyRepresentation = new BlockDagRepresentation[F] {
-      override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] = ???
-
-      override def contains(blockHash: BlockHash): F[Boolean] = ???
-
-      override def latestMessageHash(validator: Validator): F[Option[BlockHash]] = ???
-
-      override def latestMessageHashes: F[Map[Validator, BlockHash]] = ???
-
-      override def invalidBlocks: F[Set[BlockMetadata]] = ???
-
-      override def latestBlockNumber: F[Long] = ???
-
-      override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] = ???
-
-      override def find(truncatedHash: String): F[Option[BlockHash]] = ???
-
-      override def getHeightMap: F[SortedMap[Long, Set[BlockHash]]] = ???
-
-      override def topoSort(
-          startBlockNumber: Long,
-          maybeEndBlockNumber: Option[Long]
-      ): F[Vector[Vector[BlockHash]]] = ???
-
-      override def isFinalized(blockHash: BlockHash): F[Boolean] = ???
-
-      override def children(vertex: BlockHash): F[Option[Set[BlockHash]]] = ???
-
-      override def lastFinalizedBlock: BlockHash = ???
-    }
-    CasperSnapshot[F](
-      dummyRepresentation,
+  def mkDummyCasperSnapshot[F[_]: Applicative]: F[CasperSnapshot] = {
+    CasperSnapshot(
+      DagRepresentation.empty,
       ByteString.EMPTY,
       ByteString.EMPTY,
       IndexedSeq.empty,
@@ -146,7 +116,7 @@ object Resources {
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )

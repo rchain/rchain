@@ -12,7 +12,7 @@ package object casper {
   type BlockProcessing[A]   = Either[BlockError, A]
   type ValidBlockProcessing = BlockProcessing[ValidBlock]
 
-  type ProposeFunction[F[_]] = (Casper[F], Boolean) => F[ProposerResult]
+  type ProposeFunction[F[_]] = Boolean => F[ProposerResult]
 
   val CasperMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "casper")
 

@@ -1,41 +1,25 @@
 package coop.rchain.casper.batch1
 
 import coop.rchain.casper.blocks.proposer.{Created, NoNewDeploys}
-import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.casper.engine.Engine
-import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
+import coop.rchain.casper.helper.{BlockApiFixture, TestNode}
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.shared.Cell
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
-class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors {
+class MultiParentCasperDeploySpec
+    extends FlatSpec
+    with Matchers
+    with Inspectors
+    with BlockApiFixture {
 
   import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis          = buildGenesis()
-  private val SHARD_ID = genesis.genesisBlock.shardId
-
-  "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      import node._
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        deploy   <- ConstructDeploy.basicDeployData[Effect](0)
-        res      <- MultiParentCasper[Effect].deploy(deploy)
-        deployId = res.right.get
-      } yield deployId shouldBe deploy.sig
-    }
-  }
+  val genesis = buildGenesis()
 
   it should "not create a block with a repeated deploy" in effectTest {
     implicit val timeEff = new LogicalTime[Effect]
@@ -75,35 +59,22 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   it should "reject deploy with phloPrice lower than minPhloPrice" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      import node.logEff
-      implicit val noopSpan: Span[Effect] = NoopSpan[Effect]()
-      val engine                          = new EngineWithCasper[Effect](node.casperEff)
-      Cell.mvarCell[Effect, Engine[Effect]](engine).flatMap { implicit engineCell =>
-        val minPhloPrice   = 10.toLong
-        val phloPrice      = 1.toLong
-        val isNodeReadOnly = false
-        for {
-          deployData <- ConstructDeploy
-                         .sourceDeployNowF[Effect](
-                           "Nil",
-                           phloPrice = phloPrice,
-                           shardId = genesis.genesisBlock.shardId
-                         )
-          err <- BlockAPI
-                  .deploy[Effect](
-                    deployData,
-                    None,
-                    minPhloPrice = minPhloPrice,
-                    isNodeReadOnly,
-                    shardId = SHARD_ID
-                  )
-                  .attempt
-        } yield {
-          err.isLeft shouldBe true
-          val ex = err.left.get
-          ex shouldBe a[RuntimeException]
-          ex.getMessage shouldBe s"Phlo price $phloPrice is less than minimum price $minPhloPrice."
-        }
+      val minPhloPrice = node.casperShardConf.minPhloPrice
+      val phloPrice    = minPhloPrice - 1L
+      for {
+        deployData <- ConstructDeploy
+                       .sourceDeployNowF[Effect](
+                         "Nil",
+                         phloPrice = phloPrice,
+                         shardId = genesis.genesisBlock.shardId
+                       )
+        blockApi <- createBlockApi(node)
+        err      <- blockApi.deploy(deployData).attempt
+      } yield {
+        err.isLeft shouldBe true
+        val ex = err.left.get
+        ex shouldBe a[RuntimeException]
+        ex.getMessage shouldBe s"Phlo price $phloPrice is less than minimum price $minPhloPrice."
       }
     }
   }

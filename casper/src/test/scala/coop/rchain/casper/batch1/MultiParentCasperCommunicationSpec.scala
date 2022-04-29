@@ -149,7 +149,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
           // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
 
           // And then we assume fetchDependencies eventually gets called
-          _ <- nodes(1).casperEff.fetchDependencies
+          _ <- nodes(1).fetchDependencies
           _ <- nodes(0).handleReceive()
           _ <- nodes(0).handleReceive()
 

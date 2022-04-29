@@ -1,43 +1,47 @@
 package coop.rchain.casper.api
 
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Resource, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.casper._
-import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.engine._
-import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
+import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.metrics.{Metrics, NoopSpan}
-import coop.rchain.models.BlockHash.{BlockHash, _}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.blockImplicits.getRandomBlock
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import coop.rchain.shared.{Cell, Log}
+import coop.rchain.models.syntax._
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
-import coop.rchain.models.syntax._
-import coop.rchain.models.syntax._
-
-import scala.collection.immutable.HashMap
 
 class BlockQueryResponseAPITest
     extends FlatSpec
     with Matchers
     with Inside
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with BlockApiFixture {
   implicit val timeEff = new LogicalTime[Task]
   implicit val spanEff = NoopSpan[Task]()
   implicit val log     = Log.log[Task]
+
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager[Task]("block-query-response-api-test")
+
+  // TODO: temp until DeployStorage will be part of BlockDagStorage
+  implicit val deployStore =
+    KeyValueDeployStorage[Task](InMemoryKeyValueStore[Task]()).runSyncUnsafe()
+
+  implicit val metricsEff           = new Metrics.MetricsNOP[Task]
+  implicit val noopSpan: Span[Task] = NoopSpan[Task]()
 
   val tooShortQuery    = "12345"
   val badTestHashQuery = "1234acd"
@@ -65,7 +69,7 @@ class BlockQueryResponseAPITest
       setBonds = List(bondsValidator).some
     )
 
-  val faultTolerance = Float.MinValue
+  val faultTolerance = -1f
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 
@@ -73,232 +77,170 @@ class BlockQueryResponseAPITest
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlock" should "return successful block info response" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      for {
-        effects              <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
-        spanEff              = NoopSpan[Task]()
-        (logEff, engineCell) = effects
-        hash                 = secondBlock.blockHash.toHexString
-        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
-                               Sync[Task],
-                               engineCell,
-                               logEff,
-                               blockStore,
-                               spanEff
-                             )
-        _ = inside(blockQueryResponse) {
-          case Right(blockInfo) =>
-            blockInfo.deploys should be(
-              randomDeploys.map(_.toDeployInfo)
-            )
-            val b = blockInfo.blockInfo
-            b.blockHash should be(secondBlock.blockHash.toHexString)
-            b.sender should be(secondBlock.sender.toHexString)
-            b.blockSize should be(secondBlock.toProto.serializedSize.toString)
-            b.seqNum should be(secondBlock.toProto.seqNum)
-            b.sig should be(secondBlock.sig.toHexString)
-            b.sigAlgorithm should be(secondBlock.sigAlgorithm)
-            b.shardId should be(secondBlock.toProto.shardId)
-            b.extraBytes should be(secondBlock.toProto.extraBytes)
-            b.version should be(secondBlock.header.version)
-            b.timestamp should be(secondBlock.header.timestamp)
-            b.headerExtraBytes should be(secondBlock.header.extraBytes)
-            b.parentsHashList should be(
-              secondBlock.header.parentsHashList.map(_.toHexString)
-            )
-            b.blockNumber should be(secondBlock.body.state.blockNumber)
-            b.preStateHash should be(
-              secondBlock.body.state.preStateHash.toHexString
-            )
-            b.postStateHash should be(
-              secondBlock.body.state.postStateHash.toHexString
-            )
-            b.bodyExtraBytes should be(secondBlock.body.extraBytes)
-            b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
-            b.blockSize should be(secondBlock.toProto.serializedSize.toString)
-            b.deployCount should be(secondBlock.body.deploys.length)
-            b.faultTolerance should be(faultTolerance)
-            b.justifications should be(
-              secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
-            )
-        }
-      } yield ()
+      runtimeManagerResource.use { implicit runtimeManager =>
+        for {
+          _                  <- prepareDagStorage[Task]
+          blockApi           <- createBlockApi[Task]("", 1)
+          hash               = secondBlock.blockHash.toHexString
+          blockQueryResponse <- blockApi.getBlock(hash)
+          _ = inside(blockQueryResponse) {
+            case Right(blockInfo) =>
+              blockInfo.deploys should be(
+                randomDeploys.map(_.toDeployInfo)
+              )
+              val b = blockInfo.blockInfo
+              b.blockHash should be(secondBlock.blockHash.toHexString)
+              b.sender should be(secondBlock.sender.toHexString)
+              b.blockSize should be(secondBlock.toProto.serializedSize.toString)
+              b.seqNum should be(secondBlock.toProto.seqNum)
+              b.sig should be(secondBlock.sig.toHexString)
+              b.sigAlgorithm should be(secondBlock.sigAlgorithm)
+              b.shardId should be(secondBlock.toProto.shardId)
+              b.extraBytes should be(secondBlock.toProto.extraBytes)
+              b.version should be(secondBlock.header.version)
+              b.timestamp should be(secondBlock.header.timestamp)
+              b.headerExtraBytes should be(secondBlock.header.extraBytes)
+              b.parentsHashList should be(
+                secondBlock.header.parentsHashList.map(_.toHexString)
+              )
+              b.blockNumber should be(secondBlock.body.state.blockNumber)
+              b.preStateHash should be(
+                secondBlock.body.state.preStateHash.toHexString
+              )
+              b.postStateHash should be(
+                secondBlock.body.state.postStateHash.toHexString
+              )
+              b.bodyExtraBytes should be(secondBlock.body.extraBytes)
+              b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+              b.blockSize should be(secondBlock.toProto.serializedSize.toString)
+              b.deployCount should be(secondBlock.body.deploys.length)
+              b.faultTolerance should be(faultTolerance)
+              b.justifications should be(
+                secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
+              )
+          }
+        } yield ()
+      }
   }
 
   it should "return error when no block exists" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      for {
-        effects              <- emptyEffects(blockStore, blockDagStorage)
-        spanEff              = NoopSpan[Task]()
-        (logEff, engineCell) = effects
-        hash                 = badTestHashQuery
-        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
-                               Sync[Task],
-                               engineCell,
-                               logEff,
-                               blockStore,
-                               spanEff
-                             )
-        _ = inside(blockQueryResponse) {
-          case Left(msg) =>
-            msg should be(
-              s"Error: Failure to find block with hash: $badTestHashQuery"
-            )
-        }
-      } yield ()
+      runtimeManagerResource.use { implicit runtimeManager =>
+        for {
+          blockApi           <- createBlockApi[Task]("", 1)
+          hash               = badTestHashQuery
+          blockQueryResponse <- blockApi.getBlock(hash)
+          _ = inside(blockQueryResponse) {
+            case Left(msg) =>
+              msg should be(
+                s"Error: Failure to find block with hash: $badTestHashQuery"
+              )
+          }
+        } yield ()
+      }
   }
 
   it should "return error when hash is invalid hex string" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      for {
-        effects              <- emptyEffects(blockStore, blockDagStorage)
-        spanEff              = NoopSpan[Task]()
-        (logEff, engineCell) = effects
-        hash                 = invalidHexQuery
-        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
-                               Sync[Task],
-                               engineCell,
-                               logEff,
-                               blockStore,
-                               spanEff
-                             )
-        _ = inside(blockQueryResponse) {
-          case Left(msg) =>
-            msg should be(
-              s"Input hash value is not valid hex string: $invalidHexQuery"
-            )
-        }
-      } yield ()
+      runtimeManagerResource.use { implicit runtimeManager =>
+        for {
+          blockApi           <- createBlockApi[Task]("", 1)
+          hash               = invalidHexQuery
+          blockQueryResponse <- blockApi.getBlock(hash)
+          _ = inside(blockQueryResponse) {
+            case Left(msg) =>
+              msg should be(
+                s"Input hash value is not valid hex string: $invalidHexQuery"
+              )
+          }
+        } yield ()
+      }
   }
 
   it should "return error when hash is to short" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      for {
-        effects              <- emptyEffects(blockStore, blockDagStorage)
-        spanEff              = NoopSpan[Task]()
-        (logEff, engineCell) = effects
-        hash                 = tooShortQuery
-        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
-                               Sync[Task],
-                               engineCell,
-                               logEff,
-                               blockStore,
-                               spanEff
-                             )
-        _ = inside(blockQueryResponse) {
-          case Left(msg) =>
-            msg should be(
-              s"Input hash value must be at least 6 characters: $tooShortQuery"
-            )
-        }
-      } yield ()
+      runtimeManagerResource.use { implicit runtimeManager =>
+        for {
+          blockApi           <- createBlockApi[Task]("", 1)
+          hash               = tooShortQuery
+          blockQueryResponse <- blockApi.getBlock(hash)
+          _ = inside(blockQueryResponse) {
+            case Left(msg) =>
+              msg should be(
+                s"Input hash value must be at least 6 characters: $tooShortQuery"
+              )
+          }
+        } yield ()
+      }
   }
 
   "findDeploy" should "return successful block info response when a block contains the deploy with given signature" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      for {
-        effects             <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
-        (logEff, casperRef) = effects
-        deployId            = randomDeploys.head.deploy.sig
-        blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               blockStore
-                             )
-        _ = inside(blockQueryResponse) {
-          case Right(blockInfo) =>
-            blockInfo.blockHash should be(secondBlock.toProto.blockHash.toHexString)
-            blockInfo.sender should be(secondBlock.toProto.sender.toHexString)
-            blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
-            blockInfo.seqNum should be(secondBlock.toProto.seqNum)
-            blockInfo.sig should be(secondBlock.sig.toHexString)
-            blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
-            blockInfo.shardId should be(secondBlock.toProto.shardId)
-            blockInfo.extraBytes should be(secondBlock.toProto.extraBytes)
-            blockInfo.version should be(secondBlock.header.version)
-            blockInfo.timestamp should be(secondBlock.header.timestamp)
-            blockInfo.headerExtraBytes should be(secondBlock.header.extraBytes)
-            blockInfo.parentsHashList should be(
-              secondBlock.header.parentsHashList.map(_.toHexString)
-            )
-            blockInfo.blockNumber should be(secondBlock.body.state.blockNumber)
-            blockInfo.preStateHash should be(
-              secondBlock.body.state.preStateHash.toHexString
-            )
-            blockInfo.postStateHash should be(
-              secondBlock.body.state.postStateHash.toHexString
-            )
-            blockInfo.bodyExtraBytes should be(secondBlock.body.extraBytes)
-            blockInfo.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
-            blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
-            blockInfo.deployCount should be(secondBlock.body.deploys.length)
-            blockInfo.faultTolerance should be(faultTolerance)
-            blockInfo.justifications should be(
-              secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
-            )
-        }
-      } yield ()
+      runtimeManagerResource.use { implicit runtimeManager =>
+        for {
+          _                  <- prepareDagStorage[Task]
+          blockApi           <- createBlockApi[Task]("", 1)
+          deployId           = randomDeploys.head.deploy.sig
+          blockQueryResponse <- blockApi.findDeploy(deployId)
+          _ = inside(blockQueryResponse) {
+            case Right(blockInfo) =>
+              blockInfo.blockHash should be(secondBlock.toProto.blockHash.toHexString)
+              blockInfo.sender should be(secondBlock.toProto.sender.toHexString)
+              blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
+              blockInfo.seqNum should be(secondBlock.toProto.seqNum)
+              blockInfo.sig should be(secondBlock.sig.toHexString)
+              blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
+              blockInfo.shardId should be(secondBlock.toProto.shardId)
+              blockInfo.extraBytes should be(secondBlock.toProto.extraBytes)
+              blockInfo.version should be(secondBlock.header.version)
+              blockInfo.timestamp should be(secondBlock.header.timestamp)
+              blockInfo.headerExtraBytes should be(secondBlock.header.extraBytes)
+              blockInfo.parentsHashList should be(
+                secondBlock.header.parentsHashList.map(_.toHexString)
+              )
+              blockInfo.blockNumber should be(secondBlock.body.state.blockNumber)
+              blockInfo.preStateHash should be(
+                secondBlock.body.state.preStateHash.toHexString
+              )
+              blockInfo.postStateHash should be(
+                secondBlock.body.state.postStateHash.toHexString
+              )
+              blockInfo.bodyExtraBytes should be(secondBlock.body.extraBytes)
+              blockInfo.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+              blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
+              blockInfo.deployCount should be(secondBlock.body.deploys.length)
+              blockInfo.faultTolerance should be(faultTolerance)
+              blockInfo.justifications should be(
+                secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
+              )
+          }
+        } yield ()
+      }
   }
 
   it should "return an error when no block contains the deploy with the given signature" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      for {
-        effects             <- emptyEffects(blockStore, blockDagStorage)
-        (logEff, casperRef) = effects
-        deployId            = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
-        blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               blockStore
-                             )
-        _ = inside(blockQueryResponse) {
-          case Left(msg) =>
-            msg should be(
-              s"Couldn't find block containing deploy with id: ${PrettyPrinter.buildStringNoLimit(deployId)}"
-            )
-        }
-      } yield ()
+      runtimeManagerResource.use { implicit runtimeManager =>
+        for {
+          blockApi           <- createBlockApi[Task]("", 1)
+          deployId           = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
+          blockQueryResponse <- blockApi.findDeploy(deployId)
+          _ = inside(blockQueryResponse) {
+            case Left(msg) =>
+              msg should be(
+                s"Couldn't find block containing deploy with id: ${PrettyPrinter.buildStringNoLimit(deployId)}"
+              )
+          }
+        } yield ()
+      }
   }
 
-  private def effectsForSimpleCasperSetup(
-      blockStore: BlockStore[Task],
-      blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], EngineCell[Task])] =
-    runtimeManagerResource.use { implicit runtimeManager =>
-      for {
-        _ <- blockDagStorage.insert(genesisBlock, false, approved = true)
-        _ <- blockDagStorage.insert(secondBlock, false)
-        casperEffect <- NoOpsCasperEffect[Task](
-                         HashMap[BlockHash, BlockMessage](
-                           (genesisBlock.blockHash, genesisBlock),
-                           (secondBlock.blockHash, secondBlock)
-                         )
-                       )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
-        logEff     = new LogStub[Task]()
-        metricsEff = new Metrics.MetricsNOP[Task]
-        engine     = new EngineWithCasper[Task](casperEffect)
-        engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-      } yield (logEff, engineCell)
-    }
-
-  private def emptyEffects(
-      blockStore: BlockStore[Task],
-      blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], EngineCell[Task])] =
-    runtimeManagerResource.use { implicit runtimeManager =>
-      for {
-        casperEffect <- NoOpsCasperEffect(
-                         HashMap[BlockHash, BlockMessage](
-                           (genesisBlock.blockHash, genesisBlock),
-                           (secondBlock.blockHash, secondBlock)
-                         )
-                       )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
-        _          <- blockDagStorage.insert(genesisBlock, invalid = false, approved = true)
-        logEff     = new LogStub[Task]()
-        metricsEff = new Metrics.MetricsNOP[Task]
-        engine     = new EngineWithCasper[Task](casperEffect)
-        engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-      } yield (logEff, engineCell)
-    }
+  private def prepareDagStorage[F[_]: Sync: BlockDagStorage: BlockStore]: F[Unit] = {
+    import coop.rchain.blockstorage.syntax._
+    for {
+      _ <- BlockDagStorage[F].insert(genesisBlock, false, approved = true)
+      _ <- BlockDagStorage[F].insert(secondBlock, false)
+      _ <- List(genesisBlock, secondBlock).traverse(BlockStore[F].put(_))
+    } yield ()
+  }
 }

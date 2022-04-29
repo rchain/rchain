@@ -6,7 +6,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{DeployData, _}
@@ -16,7 +16,6 @@ import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.DeployParameters
 import coop.rchain.shared.Base16
 import coop.rchain.shared.syntax._
 
@@ -37,8 +36,8 @@ object ProtoUtil {
     * requires a list to be returned. When we reach the goalFunc,
     * we return an empty list.
     */
-  def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+  def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad: BlockDagStorage](
+      blockDag: DagRepresentation,
       blockHash: BlockHash,
       goalFunc: BlockHash => Boolean = _ => false
   ): F[List[BlockHash]] =
@@ -68,8 +67,8 @@ object ProtoUtil {
   def weightMapTotal(weights: Map[ByteString, Long]): Long =
     weights.values.sum
 
-  def minTotalValidatorWeight[F[_]: Monad](
-      blockDag: BlockDagRepresentation[F],
+  def minTotalValidatorWeight[F[_]: Monad: BlockDagStorage](
+      blockDag: DagRepresentation,
       blockHash: BlockHash,
       maxCliqueMinSize: Int
   ): F[Long] =
@@ -83,8 +82,8 @@ object ProtoUtil {
     blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get1)
   }
 
-  def weightFromValidatorByDag[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
+  def weightFromValidatorByDag[F[_]: Monad: BlockDagStorage](
+      dag: DagRepresentation,
       blockHash: BlockHash,
       validator: Validator
   ): F[Long] = {
@@ -125,18 +124,18 @@ object ProtoUtil {
     parentHashes(b).traverse(BlockStore[F].getUnsafe)
   }
 
-  def getParentsMetadata[F[_]: Sync](
+  def getParentsMetadata[F[_]: Sync: BlockDagStorage](
       b: BlockMetadata,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation
   ): F[List[BlockMetadata]] = {
     import cats.instances.list._
-    b.parents.traverse(dag.lookupUnsafe)
+    b.parents.traverse(dag.lookupUnsafe(_))
   }
 
-  def getParentMetadatasAboveBlockNumber[F[_]: Sync](
+  def getParentMetadatasAboveBlockNumber[F[_]: Sync: BlockDagStorage](
       b: BlockMetadata,
       blockNumber: Long,
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation
   ): F[List[BlockMetadata]] =
     getParentsMetadata(b, dag)
       .map(parents => parents.filter(p => p.blockNum >= blockNumber))
@@ -187,9 +186,9 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Sync: BlockStore](
+  def toLatestMessage[F[_]: Sync: BlockStore: BlockDagStorage](
       justifications: Seq[Justification],
-      dag: BlockDagRepresentation[F]
+      dag: DagRepresentation
   ): F[immutable.Map[Validator, BlockMetadata]] = {
 
     import cats.instances.list._
@@ -267,19 +266,6 @@ object ProtoUtil {
     )
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
-  def computeCodeHash(dd: DeployData): Par = {
-    val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
-    val hash: Array[Byte] = Blake2b256.hash(bytes)
-    Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(hash)))))
-  }
-
-  def getRholangDeployParams(dd: Signed[DeployData]): DeployParameters = {
-    val userId: Par = Par(
-      exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(dd.pk.bytes))))
-    )
-    DeployParameters(userId)
-  }
-
   def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
     val missingParents = parentHashes(b).toSet
     val missingJustifications = b.justifications
@@ -289,8 +275,8 @@ object ProtoUtil {
   }
 
   // Return hashes of all blocks that are yet to be seen by the passed in block
-  def unseenBlockHashes[F[_]: Sync: BlockStore](
-      dag: BlockDagRepresentation[F],
+  def unseenBlockHashes[F[_]: Sync: BlockStore: BlockDagStorage](
+      dag: DagRepresentation,
       block: BlockMessage
   ): F[Set[BlockHash]] = {
     import cats.instances.stream._
@@ -325,8 +311,8 @@ object ProtoUtil {
     } yield unseenBlockHashes -- blocksLatestMessages.values.map(_.blockHash) - block.blockHash
   }
 
-  private def getCreatorBlocksBetween[F[_]: Sync](
-      dag: BlockDagRepresentation[F],
+  private def getCreatorBlocksBetween[F[_]: Sync: BlockDagStorage](
+      dag: DagRepresentation,
       topBlock: BlockMetadata,
       bottomBlock: Option[BlockMetadata]
   ): F[Set[BlockHash]] =
@@ -346,8 +332,8 @@ object ProtoUtil {
           .toSet
     }
 
-  private def getCreatorJustificationUnlessGoal[F[_]: Sync](
-      dag: BlockDagRepresentation[F],
+  private def getCreatorJustificationUnlessGoal[F[_]: Sync: BlockDagStorage](
+      dag: DagRepresentation,
       block: BlockMetadata,
       goal: BlockMetadata
   ): F[List[BlockMetadata]] =

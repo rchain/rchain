@@ -4,7 +4,7 @@ import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
@@ -50,9 +50,9 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics: Timer](
+  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: Span: Metrics: Timer](
       block: BlockMessage,
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
@@ -99,10 +99,10 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def replayBlock[F[_]: Sync: Log: BlockStore: Timer](
+  private def replayBlock[F[_]: Sync: Log: BlockStore: BlockDagStorage: Timer](
       initialStateHash: StateHash,
       block: BlockMessage,
-      dag: BlockDagRepresentation[F],
+      dag: DagRepresentation,
       runtimeManager: RuntimeManager[F]
   )(implicit spanF: Span[F]): F[Either[ReplayFailure, StateHash]] =
     spanF.trace(ReplayBlockMetricsSource) {
@@ -221,11 +221,11 @@ object InterpreterUtil {
     Log[F].info(s"Deploy ($deployInfo) errors: ${errors.mkString(", ")}")
   }
 
-  def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: Log: Metrics](
+  def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
@@ -258,9 +258,9 @@ object InterpreterUtil {
       )
     }
 
-  private def computeParentsPostState[F[_]: Concurrent: BlockStore: Log: Metrics](
+  private def computeParentsPostState[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
       parents: Seq[BlockMessage],
-      s: CasperSnapshot[F],
+      s: CasperSnapshot,
       runtimeManager: RuntimeManager[F]
   )(implicit spanF: Span[F]): F[(StateHash, Seq[ByteString])] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
