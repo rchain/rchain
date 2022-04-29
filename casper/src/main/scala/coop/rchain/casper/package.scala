@@ -1,8 +1,8 @@
 package coop.rchain
 
 import coop.rchain.casper.blocks.proposer.ProposerResult
+import coop.rchain.casper.protocol.CommUtilSyntax
 import coop.rchain.casper.rholang.{RuntimeReplaySyntax, RuntimeSyntax}
-import coop.rchain.casper.util.comm.CommUtilSyntax
 import coop.rchain.casper.util.rholang.RuntimeManagerSyntax
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash

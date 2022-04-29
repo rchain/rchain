@@ -2,8 +2,7 @@ package coop.rchain.casper.engine
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._

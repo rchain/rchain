@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.comm
+package coop.rchain.casper.protocol
 
 import cats.Monad
 import cats.effect._
@@ -6,8 +6,7 @@ import cats.syntax.all._
 import cats.tagless.autoFunctorK
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CommUtil.StandaloneNodeSendToBootstrapError
+import coop.rchain.casper.protocol.CommUtil.StandaloneNodeSendToBootstrapError
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.ProtocolHelper.packet

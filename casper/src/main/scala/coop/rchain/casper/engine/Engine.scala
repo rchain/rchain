@@ -13,8 +13,7 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet

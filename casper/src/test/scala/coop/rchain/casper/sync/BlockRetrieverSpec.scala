@@ -6,13 +6,12 @@ import coop.rchain.casper.engine
 import coop.rchain.casper.engine.Setup.peerNode
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.engine.BlockRetriever.RequestState
-import coop.rchain.casper.protocol.{HasBlockRequest, PacketTypeTag}
+import coop.rchain.casper.protocol.{CommUtil, HasBlockRequest, PacketTypeTag}
 import org.scalatest.{BeforeAndAfterEach, FunSpec, Matchers}
 import coop.rchain.catscontrib.TaskContrib._
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.PeerNode

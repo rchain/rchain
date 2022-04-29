@@ -5,15 +5,14 @@ import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.mtl._
 import cats.syntax.all._
-import cats.{~>, Parallel}
+import cats.{Parallel, ~>}
 import com.typesafe.config.Config
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.BlockRetriever
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, CommUtil}
 import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper.util.comm._
-import coop.rchain.casper.{engine, _}
+import coop.rchain.casper._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -30,12 +29,11 @@ import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
 import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
-import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
+import coop.rchain.node.{NodeEnvironment, diagnostics, effects}
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
-import coop.rchain.store.LmdbDirStoreManager.gb
 import fs2.concurrent.Queue
 import kamon._
 import monix.execution.Scheduler
