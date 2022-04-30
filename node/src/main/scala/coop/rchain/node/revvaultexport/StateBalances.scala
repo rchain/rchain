@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.casper.util.rholang.Tools
+import coop.rchain.casper.rholang.Tools
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}

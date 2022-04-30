@@ -7,7 +7,7 @@ import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.ConstructDeploy.defaultSec
-import coop.rchain.casper.util.rholang.Tools
+import coop.rchain.casper.rholang.Tools
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
