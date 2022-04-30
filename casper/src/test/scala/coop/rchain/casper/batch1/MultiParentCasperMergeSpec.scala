@@ -21,10 +21,10 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   val genesisParams = buildGenesisParameters(validatorsNum = 3)
   val genesis       = buildGenesis(genesisParams)
 
-  "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
+  // TODO: this test will be replaced with the new finalizer
+  "HashSetCasper" should "handle multi-parent blocks correctly" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
-      implicit val s  = Sync[Task]
       val shardId     = genesis.genesisBlock.shardId
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](

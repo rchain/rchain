@@ -1,9 +1,9 @@
 package coop.rchain.casper.engine
 
+import cats.Monad
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -198,7 +198,6 @@ object Running {
     Log[F].info(s"Received ApprovedBlockRequest from ${peer}") >>
       TransportLayer[F].streamToPeer(peer, approvedBlock.toProto) >>
       Log[F].info(s"ApprovedBlock sent to ${peer}")
-
   final case object LastFinalizedBlockNotFoundError
       extends Exception("Last finalized block not found in the block storage.")
 
@@ -244,39 +243,30 @@ class Running[F[_]
 (
     blockProcessingQueue: Queue[F, BlockMessage],
     blocksInProcessing: Ref[F, Set[BlockHash]],
-    approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
-    theInit: F[Unit],
     disableStateExporter: Boolean
-) extends Engine[F] {
-
-  import Engine._
+) {
   import Running._
-
-  private val F    = Applicative[F]
-  private val noop = F.unit
+  import Engine._
 
   private def ignoreCasperMessage(hash: BlockHash): F[Boolean] =
     MultiParentCasper.blockReceived(hash)
 
-  override def init: F[Unit] = theInit
-
-  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+  def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case h: BlockHashMessage =>
-      handleBlockHashMessage(peer, h)(
-        ignoreCasperMessage
-      )
+      handleBlockHashMessage(peer, h)(ignoreCasperMessage)
+
     case b: BlockMessage =>
       for {
         _ <- validatorId match {
               case None => ().pure[F]
               case Some(id) =>
-                F.whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))(
-                  Log[F].warn(
+                Log[F]
+                  .warn(
                     s"There is another node $peer proposing using the same private key as you. " +
                       s"Or did you restart your node?"
                   )
-                )
+                  .whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))
             }
         _ <- ignoreCasperMessage(b.blockHash).ifM(
               Log[F].debug(
@@ -290,7 +280,8 @@ class Running[F[_]
             )
       } yield ()
 
-    case br: BlockRequest     => handleBlockRequest(peer, br)
+    case br: BlockRequest => handleBlockRequest(peer, br)
+
     case hbr: HasBlockRequest =>
       // Return blocks only available in the DAG (validated)
       for {
@@ -298,8 +289,9 @@ class Running[F[_]
         res <- handleHasBlockRequest(peer, hbr)(dag.contains(_).pure[F])
       } yield res
     case hb: HasBlock => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
-    case _: ForkChoiceTipRequest.type =>
-      handleForkChoiceTipRequest(peer)
+
+    case _: ForkChoiceTipRequest.type => handleForkChoiceTipRequest(peer)
+
     case abr: ApprovedBlockRequest =>
       for {
         lfBlockHash <- BlockDagStorage[F].getRepresentation.flatMap(_.lastFinalizedBlockUnsafe)
@@ -326,10 +318,12 @@ class Running[F[_]
                           // Respond with approved block that this node is started from.
                           // The very first one is genesis, but this node still might start from later block,
                           // so it will not necessary be genesis.
-                          approvedBlock.pure[F]
+//                          approvedBlock.pure[F]
+                          lastFinalizedBlock
 
         _ <- handleApprovedBlockRequest(peer, approvedBlock)
       } yield ()
+
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
 
     // Approved state store records
@@ -345,6 +339,7 @@ class Running[F[_]
           s"Received StoreItemsMessage request but the node is configured to not respond to StoreItemsMessage, from ${peer}."
         )
       }
-    case _ => noop
+
+    case _ => ().pure[F]
   }
 }

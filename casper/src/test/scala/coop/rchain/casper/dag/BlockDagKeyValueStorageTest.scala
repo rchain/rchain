@@ -14,6 +14,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
+import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.shared
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -260,11 +261,12 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         dag        <- storage.getRepresentation
 
         // in mem DAG state should be correct
-        _ = dag.lastFinalizedBlockUnsafe shouldBe b3.blockHash
-        _ = dag.isFinalized(b1.blockHash) shouldBe true
-        _ = dag.isFinalized(b2.blockHash) shouldBe true
-        _ = dag.isFinalized(b3.blockHash) shouldBe true
-        _ = dag.isFinalized(b4.blockHash) shouldBe false
+        lfb <- dag.lastFinalizedBlockUnsafe
+        _   = lfb.toHexString shouldBe b3.blockHash.toHexString
+        _   = dag.isFinalized(b1.blockHash) shouldBe true
+        _   = dag.isFinalized(b2.blockHash) shouldBe true
+        _   = dag.isFinalized(b3.blockHash) shouldBe true
+        _   = dag.isFinalized(b4.blockHash) shouldBe false
 
         // persisted state should be correct
         _ <- dag

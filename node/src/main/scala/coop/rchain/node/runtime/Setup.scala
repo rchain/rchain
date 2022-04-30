@@ -13,14 +13,15 @@ import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
+import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, PeerMessage, Running}
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.protocol.{BlockMessage, CasperPacketHandler, CommUtil}
+import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.comm.RoutingMessage
 import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
@@ -37,11 +38,11 @@ import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.{ReportingRoutes, Transaction}
-import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
+import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -55,18 +56,16 @@ object Setup {
       eventPublisher: EventPublisher[F]
   )(implicit mainScheduler: Scheduler): F[
     (
-        PacketHandler[F],
+        Queue[F, RoutingMessage],
         APIServers,
         CasperLoop[F],
         CasperLoop[F],
-        EngineInit[F],
-        CasperLaunch[F],
+        F[Unit], // Consensus process
         ReportingHttpRoutes[F],
         WebApi[F],
         AdminWebApi[F],
         Option[Proposer[F]],
         Queue[F, (Boolean, Deferred[F, ProposerResult])],
-        // TODO move towards having a single node state
         Option[Ref[F, ProposerState[F]]],
         BlockProcessor[F],
         Ref[F, Set[BlockHash]],
@@ -177,8 +176,6 @@ object Setup {
         conf.casper.minPhloPrice
       )
 
-      // Engine dynamic reference
-      engineCell          <- EngineCell.init[F]
       envVars             = EnvVars.envVars[F]
       blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
       // block processing state - set of items currently in processing
@@ -225,27 +222,43 @@ object Setup {
 
       proposerStateRefOpt <- triggerProposeFOpt.traverse(_ => Ref.of(ProposerState[F]()))
 
+      // Network packets handler (queue)
+      routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
+      // Peer message stream
+      peerMessageStream = routingMessageQueue
+        .dequeueChunk(1)
+        .parEvalMapUnorderedProcBounded {
+          case RoutingMessage(peer, packet) =>
+            toCasperMessageProto(packet).toEither
+              .flatMap(CasperMessage.from)
+              .fold(
+                err =>
+                  Log[F]
+                    .warn(s"Could not extract casper message from packet sent by $peer: $err")
+                    .as(none[PeerMessage]),
+                cm => PeerMessage(peer, cm).some.pure[F]
+              )
+        }
+        .collect { case Some(m) => m }
+
       casperLaunch = {
-        implicit val (bs, as, bd, ds)     = (blockStore, approvedStore, blockDagStorage, deployStorage)
-        implicit val (br, cb, ep)         = (blockRetriever, casperBufferStorage, eventPublisher)
-        implicit val (ec, ev, lb, ra, rc) = (engineCell, envVars, lab, rpConfAsk, rpConnections)
-        implicit val (sc, lh)             = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (rm, cu)             = (runtimeManager, commUtil)
-        implicit val (rsm, sp)            = (rspaceStateManager, span)
+        implicit val (bs, as, bd, ds) = (blockStore, approvedStore, blockDagStorage, deployStorage)
+        implicit val (br, cb, ep)     = (blockRetriever, casperBufferStorage, eventPublisher)
+        implicit val (lb, ra, rc)     = (lab, rpConfAsk, rpConnections)
+        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (rm, cu)         = (runtimeManager, commUtil)
+        implicit val (rsm, sp)        = (rspaceStateManager, span)
         CasperLaunch.of[F](
+          peerMessageStream,
           blockProcessorQueue,
           blockProcessorStateRef,
-          if (conf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]],
           conf.casper,
           !conf.protocolClient.disableLfs,
           conf.protocolServer.disableStateExporter,
           validatorIdentityOpt,
-          casperShardConf
+          casperShardConf,
+          conf.standalone
         )
-      }
-      packetHandler = {
-        implicit val ec = engineCell
-        CasperPacketHandler[F]
       }
 
       // Query for network information (address, peers, nodes)
@@ -324,16 +337,14 @@ object Setup {
         } yield ()
       }
 
-      engineInit = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
     } yield (
-      packetHandler,
+      routingMessageQueue,
       apiServers,
       casperLoop,
       updateForkChoiceLoop,
-      engineInit,
       casperLaunch,
       reportingRoutes,
       webApi,

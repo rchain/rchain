@@ -92,7 +92,7 @@ object CommUtil {
         RPConfAsk[F].ask >>= { conf =>
           val msg = packet(conf.local, conf.networkId, message)
           Log[F].info(s"Starting to request ${msgTypeName}") >>
-            Concurrent[F].start(keepOnRequestingTillRunning(peer, msg)).void
+            keepOnRequestingTillRunning(peer, msg).void
         }
       }
 

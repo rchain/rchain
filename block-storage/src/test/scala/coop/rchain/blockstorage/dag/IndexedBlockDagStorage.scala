@@ -65,14 +65,6 @@ final class IndexedBlockDagStorage[F[_]: Sync](
       } yield modifiedBlock
     }
 
-  def inject(index: Int, block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[Unit] =
-    lock
-      .withPermit(
-        idToBlocksRef
-          .update(_.updated(index.toLong, block)) >> underlying.insert(block, invalid)
-      )
-      .void
-
   def recordDirectlyFinalized(
       blockHash: BlockHash,
       finalizationEffect: Set[BlockHash] => F[Unit]

@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
@@ -10,7 +10,6 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
-import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
@@ -35,31 +34,30 @@ import scala.concurrent.duration._
 class Initializing[F[_]
   /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
-  /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
+  /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
+    finished: Deferred[F, Unit],
     blockProcessingQueue: Queue[F, BlockMessage],
     blocksInProcessing: Ref[F, Set[BlockHash]],
     casperShardConf: CasperShardConf,
     validatorId: Option[ValidatorIdentity],
-    theInit: F[Unit],
     blockMessageQueue: Queue[F, BlockMessage],
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
     trimState: Boolean = true,
     disableStateExporter: Boolean
-) extends Engine[F] {
-
+) {
   import Engine._
 
-  override def init: F[Unit] = theInit
-
-  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+  def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case ab: ApprovedBlock =>
       onApprovedBlock(peer, ab, disableStateExporter)
+
     case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
+
     case na: NoApprovedBlockAvailable =>
       logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
         Time[F].sleep(10.seconds) >>
@@ -121,8 +119,6 @@ class Initializing[F[_]
     }
 
     for {
-      // TODO resolve validation of approved block - we should be sure that bootstrap is not lying
-      // Might be Validate.approvedBlock is enough but have to check
       isValid <- senderIsBootstrap &&^ shardNameIsValid.pure &&^
                   Validate.approvedBlock[F](approvedBlock)
 
@@ -194,8 +190,8 @@ class Initializing[F[_]
       // Run both streams in parallel until tuple space and all needed blocks are received
       _ <- fs2.Stream(blockRequestAddDagStream, tupleSpaceLogStream).parJoinUnbounded.compile.drain
 
-      // Transition to Running state
-      _ <- createCasperAndTransitionToRunning(approvedBlock)
+      // Mark finished initialization
+      _ <- finished.complete(())
     } yield ()
   }
 
@@ -238,18 +234,4 @@ class Initializing[F[_]
       _ <- Log[F].info(s"Blocks for approved state added to DAG.")
     } yield ()
   }
-
-  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] =
-    for {
-      _ <- Log[F].info("MultiParentCasper instance created.")
-      _ <- transitionToRunning[F](
-            blockProcessingQueue,
-            blocksInProcessing,
-            approvedBlock,
-            validatorId,
-            ().pure,
-            disableStateExporter
-          )
-      _ <- CommUtil[F].sendForkChoiceTipRequest
-    } yield ()
 }
