@@ -6,19 +6,19 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.rholang.Resources.{copyStorage, mkTestRNodeStoreManager}
+import coop.rchain.casper.rholang.Tools
+import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
-import coop.rchain.casper.util.rholang.Resources.{copyStorage, mkTestRNodeStoreManager}
-import coop.rchain.casper.util.rholang.Tools
-import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.NormalizerEnv
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime, SystemProcesses}
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.models.syntax._
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

@@ -9,8 +9,8 @@ import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.rholang.Resources.mkRuntimeManager
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}

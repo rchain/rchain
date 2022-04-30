@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.StandardDeploys
-import coop.rchain.casper.util.rholang.Tools
+import coop.rchain.casper.rholang.Tools
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody

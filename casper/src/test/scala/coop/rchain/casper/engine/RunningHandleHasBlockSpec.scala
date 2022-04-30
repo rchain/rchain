@@ -24,7 +24,6 @@ import coop.rchain.casper.engine.Running.{
   DoNotIgnore,
   IgnoreCasperMessageStatus
 }
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.metrics.Metrics
 import monix.eval.Task

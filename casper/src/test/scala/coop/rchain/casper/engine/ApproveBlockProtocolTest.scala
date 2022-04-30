@@ -5,10 +5,9 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.engine.ApproveBlockProtocolTest.TestFixture
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.TestTime
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.Connections

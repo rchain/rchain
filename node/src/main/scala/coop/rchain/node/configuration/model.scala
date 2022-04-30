@@ -1,7 +1,7 @@
 package coop.rchain.node.configuration
 
 import coop.rchain.casper.CasperConf
-import coop.rchain.casper.util.comm.ListenAtName.Name
+import coop.rchain.casper.protocol.client.ListenAtName.Name
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.crypto.{PrivateKey, PublicKey}

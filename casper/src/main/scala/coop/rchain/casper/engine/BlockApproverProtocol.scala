@@ -9,7 +9,7 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.RPConfAsk

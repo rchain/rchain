@@ -7,10 +7,10 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
+import coop.rchain.casper.rholang.{Resources, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
-import coop.rchain.casper.util.rholang.{Resources, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -31,8 +31,6 @@ import fs2.Stream
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-
-import scala.collection.Seq
 
 class MergingBranchMergerSpec extends FlatSpec with Matchers {
 

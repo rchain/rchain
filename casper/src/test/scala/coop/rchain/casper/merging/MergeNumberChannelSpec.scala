@@ -4,9 +4,9 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.rholang.Resources
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.EventConverter
-import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.{GPrivate, Par}

@@ -9,7 +9,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.{Log, Time}
 import cats.syntax.all._
 import cats.tagless.autoFunctorK
-import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.protocol.CommUtil
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.Metrics

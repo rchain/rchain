@@ -15,10 +15,10 @@ import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, Tools}
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager, Tools}
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.Connections
 import coop.rchain.crypto.PublicKey

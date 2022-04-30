@@ -9,9 +9,8 @@ import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
