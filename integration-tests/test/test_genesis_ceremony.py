@@ -14,7 +14,6 @@ from .rnode import (
     started_bootstrap_with_network,
 )
 from .wait import (
-    wait_for_block_approval,
     wait_for_approved_block_received_handler_state,
     wait_for_sent_approved_block,
 )
@@ -49,7 +48,6 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
         started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-a', private_key=VALIDATOR_A_KEYPAIR) as validator_a, \
         started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='validator-b', private_key=VALIDATOR_B_KEYPAIR) as validator_b, \
         started_peer(context=context, network=ceremony_master.network, bootstrap=ceremony_master, name='readonly-a', private_key=READONLY_A_KEYPAIR) as readonly_a:
-            wait_for_block_approval(context, ceremony_master)
             wait_for_approved_block_received_handler_state(context, ceremony_master)
             wait_for_sent_approved_block(context, ceremony_master)
             wait_for_approved_block_received_handler_state(context, validator_a)
