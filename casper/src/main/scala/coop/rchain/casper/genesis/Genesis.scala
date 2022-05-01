@@ -103,7 +103,7 @@ object Genesis {
       systemDeploys = List.empty
     )
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
-    val header  = blockHeader(body, List.empty[StateHash], version, blockTimestamp)
+    val header  = blockHeader(List.empty[StateHash], version, blockTimestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
