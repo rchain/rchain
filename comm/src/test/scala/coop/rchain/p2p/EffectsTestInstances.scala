@@ -96,9 +96,6 @@ object EffectsTestInstances {
         peers.map(_ => Right(()))
       }
 
-    override def stream(peer: PeerNode, blob: Blob): F[Unit] =
-      stream(Seq(peer), blob)
-
     override def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
       broadcast(peers, ProtocolHelper.protocol(blob.sender, networkId).withPacket(blob.packet)).void
   }

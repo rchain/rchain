@@ -1,12 +1,10 @@
 package coop.rchain.comm.transport
 
-import java.io.ByteArrayInputStream
-
+import cats.Applicative
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.syntax.all._
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import cats.{Applicative, Parallel}
 import coop.rchain.comm.CommError.{protocolException, CommErr}
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
@@ -15,6 +13,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
+import fs2.Stream
 import io.grpc.ManagedChannel
 import io.grpc.netty._
 import io.netty.handler.ssl.SslContext
@@ -22,6 +21,7 @@ import monix.eval.Task
 import monix.execution.Ack.Continue
 import monix.execution.{Cancelable, CancelableFuture, Scheduler}
 
+import java.io.ByteArrayInputStream
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util._
@@ -37,7 +37,7 @@ final case class BufferedGrpcStreamChannel[F[_]](
     buferSubscriber: Cancelable
 )
 
-class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
+class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
     networkId: String,
     cert: String,
     key: String,
@@ -140,20 +140,21 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
   def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
     withClient(peer, DefaultSendTimeout)(GrpcTransport.send(_, peer, msg))
 
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] = {
-    import cats.instances.list._
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
+    Stream
+      .fromIterator(peers.iterator)
+      .parEvalMapUnorderedProcBounded(send(_, msg))
+      .compile
+      .to(Seq)
 
-    peers.toList.parTraverse(send(_, msg)).map(_.toSeq)
-  }
-
-  def stream(peer: PeerNode, blob: Blob): F[Unit] =
-    getChannel(peer).flatMap(_.buffer.enque(blob))
-
-  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] = {
-    import cats.instances.list._
-
-    peers.toList.parTraverse_(stream(_, blob))
-  }
+  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
+    Stream
+      .fromIterator(peers.iterator)
+      .parEvalMapUnorderedProcBounded { peer =>
+        getChannel(peer).flatMap(_.buffer.enque(blob))
+      }
+      .compile
+      .drain
 
   private def streamBlobFile(
       key: String,

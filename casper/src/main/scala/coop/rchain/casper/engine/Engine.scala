@@ -2,14 +2,13 @@ package coop.rchain.casper.engine
 
 import cats.Monad
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol.{CommUtil, _}
@@ -17,12 +16,12 @@ import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.comm.syntax._
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
-import coop.rchain.shared.syntax._
 import fs2.concurrent.Queue
 
 final case class PeerMessage(peer: PeerNode, message: CasperMessage)
@@ -51,7 +50,7 @@ object Engine {
       local <- RPConfAsk[F].reader(_.local)
       //TODO remove NoApprovedBlockAvailable.nodeIdentifier, use `sender` provided by TransportLayer
       msg = Blob(local, noApprovedBlockAvailable(local, identifier))
-      _   <- TransportLayer[F].stream(peer, msg)
+      _   <- TransportLayer[F].stream1(peer, msg)
     } yield ()
 
   // format: off
