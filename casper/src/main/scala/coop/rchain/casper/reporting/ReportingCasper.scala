@@ -6,7 +6,7 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
-import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.genesis.Genesis

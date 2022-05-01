@@ -3,7 +3,7 @@ package coop.rchain.blockstorage.dag
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.approvedStore.{approvedBlockToBytes, bytesToApprovedBlock}
-import coop.rchain.blockstorage.blockStore.{blockMessageToBytes, bytesToBlockMessage}
+import coop.rchain.blockstorage.BlockStore.{blockMessageToBytes, bytesToBlockMessage}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, DeployData, DeployDataProto}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash

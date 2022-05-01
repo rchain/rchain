@@ -7,7 +7,7 @@ import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
-import coop.rchain.blockstorage.{approvedStore, blockStore}
+import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.BlockProcessor
@@ -96,7 +96,7 @@ object Setup {
       _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
 
       // Block storage
-      blockStore    <- blockStore.create(rnodeStoreManager)
+      blockStore    <- BlockStore(rnodeStoreManager)
       approvedStore <- approvedStore.create(rnodeStoreManager)
 
       // Block DAG storage

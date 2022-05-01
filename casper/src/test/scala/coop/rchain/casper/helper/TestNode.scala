@@ -7,7 +7,8 @@ import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
-import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
@@ -428,7 +429,7 @@ object TestNode {
     for {
       newStorageDir       <- Resources.copyStorage[F](storageDir)
       kvm                 <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore          <- Resource.eval(blockStore.create(kvm))
+      blockStore          <- Resource.eval(BlockStore(kvm))
       approvedStore       <- Resource.eval(approvedStore.create(kvm))
       blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
       deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))

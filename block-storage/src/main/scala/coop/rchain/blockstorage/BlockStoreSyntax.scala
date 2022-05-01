@@ -2,7 +2,7 @@ package coop.rchain.blockstorage
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
