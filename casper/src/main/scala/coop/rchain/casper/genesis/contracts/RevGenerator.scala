@@ -3,7 +3,7 @@ package coop.rchain.casper.genesis.contracts
 import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
 
-final class RevGenerator private (supply: Long, code: String)
+final class RevGenerator private (code: String)
     extends CompiledRholangSource(code, NormalizerEnv.Empty) {
   val path: String = "<synthetic in Rev.scala>"
 }
@@ -14,7 +14,7 @@ object RevGenerator {
   // In the last batch `initContinue` channel will not receive
   // anything so further access to `RevVault(@"init", _)` is impossible.
 
-  def apply(userVaults: Seq[Vault], supply: Long, isLastBatch: Boolean): RevGenerator = {
+  def apply(userVaults: Seq[Vault], isLastBatch: Boolean): RevGenerator = {
     val vaultBalanceList =
       userVaults.map(v => s"""("${v.revAddress.toBase58}", ${v.initialBalance})""").mkString(", ")
 
@@ -46,6 +46,6 @@ object RevGenerator {
          # }
      """.stripMargin('#')
 
-    new RevGenerator(supply, code)
+    new RevGenerator(code)
   }
 }

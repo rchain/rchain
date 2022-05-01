@@ -34,10 +34,8 @@ object Genesis {
   }
 
   def defaultBlessedTerms(
-      timestamp: Long,
       posParams: ProofOfStake,
       vaults: Seq[Vault],
-      supply: Long,
       shardId: String
   ): Seq[Signed[DeployData]] = {
     // Splits initial vaults creation in multiple deploys (batches)
@@ -46,7 +44,6 @@ object Genesis {
       case (batchVaults, idx) =>
         StandardDeploys.revGenerator(
           batchVaults,
-          supply,
           timestamp = 1565818101792L + idx,
           isLastBatch = 1 + idx == vaultBatches.size,
           shardId
@@ -67,18 +64,10 @@ object Genesis {
       StandardDeploys.poSGenerator(posParams, shardId)
   }
 
-  def createGenesisBlock[F[_]: Concurrent: RuntimeManager](
-      genesis: Genesis
-  ): F[BlockMessage] = {
+  def createGenesisBlock[F[_]: Concurrent: RuntimeManager](genesis: Genesis): F[BlockMessage] = {
     import genesis._
 
-    val blessedTerms = defaultBlessedTerms(
-      blockTimestamp,
-      proofOfStake,
-      vaults,
-      supply = Long.MaxValue,
-      shardId = genesis.shardId
-    )
+    val blessedTerms = defaultBlessedTerms(proofOfStake, vaults, genesis.shardId)
 
     RuntimeManager[F]
       .computeGenesis(blessedTerms, blockTimestamp, genesis.blockNumber)
