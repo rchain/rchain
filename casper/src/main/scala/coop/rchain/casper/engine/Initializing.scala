@@ -47,14 +47,13 @@ class Initializing[F[_]
     validatorId: Option[ValidatorIdentity],
     blockMessageQueue: Queue[F, BlockMessage],
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
-    trimState: Boolean = true,
-    disableStateExporter: Boolean
+    trimState: Boolean = true
 ) {
   import Engine._
 
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case ab: ApprovedBlock =>
-      onApprovedBlock(peer, ab, disableStateExporter)
+      onApprovedBlock(peer, ab)
 
     case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
 
@@ -77,11 +76,7 @@ class Initializing[F[_]
   // TEMP: flag for single call for process approved block
   val startRequester = Ref.unsafe(true)
 
-  private def onApprovedBlock(
-      sender: PeerNode,
-      approvedBlock: ApprovedBlock,
-      disableStateExporter: Boolean
-  ): F[Unit] = {
+  private def onApprovedBlock(sender: PeerNode, approvedBlock: ApprovedBlock): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
     val receivedShard     = approvedBlock.candidate.block.shardId
     val expectedShard     = casperShardConf.shardName

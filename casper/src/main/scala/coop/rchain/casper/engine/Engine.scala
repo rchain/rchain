@@ -2,7 +2,7 @@ package coop.rchain.casper.engine
 
 import cats.Monad
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
@@ -65,16 +65,9 @@ object Engine {
       blocksInProcessing: Ref[F, Set[BlockHash]],
       validatorId: Option[ValidatorIdentity],
       disableStateExporter: Boolean
-  ): F[Running[F]] =
-    for {
-      _ <- Log[F].info(s"Making a transition to Running state.")
-      running = new Running[F](
-        blockProcessingQueue,
-        blocksInProcessing,
-        validatorId,
-        disableStateExporter
-      )
-    } yield running
+  ): F[Running[F]] = Sync[F].delay(
+    new Running[F](blockProcessingQueue, blocksInProcessing, validatorId, disableStateExporter)
+  )
 
   // format: off
   def transitionToInitializing[F[_]
@@ -91,8 +84,7 @@ object Engine {
       blocksInProcessing: Ref[F, Set[BlockHash]],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
-      trimState: Boolean = true,
-      disableStateExporter: Boolean = false
+      trimState: Boolean = true
   ): F[Initializing[F]] =
     for {
       blockResponseQueue <- Queue.bounded[F, BlockMessage](50)
@@ -105,8 +97,7 @@ object Engine {
         validatorId,
         blockResponseQueue,
         stateResponseQueue,
-        trimState,
-        disableStateExporter
+        trimState
       )
     } yield engine
 }

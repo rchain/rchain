@@ -54,7 +54,6 @@ class POSMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
           case (pk, amount) =>
             RevAddress.fromPublicKey(pk).map(Vault(_, amount))
         }.flattenOption,
-        supply = Long.MaxValue,
         blockNumber = 0
       )
     )

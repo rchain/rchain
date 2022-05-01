@@ -302,7 +302,6 @@ object GenesisTest {
                            posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
                          ),
                          vaults = vaults,
-                         supply = Long.MaxValue,
                          blockNumber = blockNumber,
                          blockTimestamp = blockTimestamp
                        )

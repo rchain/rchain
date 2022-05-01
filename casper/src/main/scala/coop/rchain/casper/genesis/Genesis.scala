@@ -17,8 +17,7 @@ final case class Genesis(
     blockTimestamp: Long,
     blockNumber: Long,
     proofOfStake: ProofOfStake,
-    vaults: Seq[Vault],
-    supply: Long
+    vaults: Seq[Vault]
 )
 
 object Genesis {

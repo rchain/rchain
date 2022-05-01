@@ -12,9 +12,12 @@ import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.Engine.transitionToRunning
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
@@ -50,7 +53,7 @@ object CasperLaunch {
 
     def createGenesisAndBroadcast =
       for {
-        genesisBlock   <- createGenesisBlock
+        genesisBlock   <- createGenesisBlockFromConfig(conf)
         genBlockStr    = PrettyPrinter.buildString(genesisBlock)
         _              <- Log[F].info(s"Sending genesis $genBlockStr to peers...")
         genBlockPacket = ToPacket(genesisBlock.toProto)
@@ -65,29 +68,10 @@ object CasperLaunch {
         _ <- CommUtil[F].streamToPeers(genBlockPacket)
       } yield ()
 
-    def createGenesisBlock: F[BlockMessage] =
-      for {
-        genesisBlock <- ApproveBlockProtocol
-                         .buildGenesis[F](
-                           conf.genesisBlockData.bondsFile,
-                           conf.autogenShardSize,
-                           conf.genesisBlockData.walletsFile,
-                           conf.genesisBlockData.bondMinimum,
-                           conf.genesisBlockData.bondMaximum,
-                           conf.genesisBlockData.epochLength,
-                           conf.genesisBlockData.quarantineLength,
-                           conf.genesisBlockData.numberOfActiveValidators,
-                           conf.shardName,
-                           conf.genesisBlockData.genesisBlockNumber,
-                           conf.genesisBlockData.posMultiSigPublicKeys,
-                           conf.genesisBlockData.posMultiSigQuorum
-                         )
-      } yield genesisBlock
-
     def initializeFromEmptyState: F[Unit] =
       for {
         initFinished <- Deferred[F, Unit]
-        initEngine   <- startInitializing(initFinished, trimState, disableStateExporter)
+        initEngine   <- startInitializing(initFinished, trimState)
         initRunning = packets.parEvalMapUnorderedProcBounded { pm =>
           initEngine.handle(pm.peer, pm.message)
         }
@@ -95,11 +79,7 @@ object CasperLaunch {
         _          <- initStream.compile.drain
       } yield ()
 
-    def startInitializing(
-        finished: Deferred[F, Unit],
-        trimState: Boolean,
-        disableStateExporter: Boolean
-    ): F[Initializing[F]] =
+    def startInitializing(finished: Deferred[F, Unit], trimState: Boolean): F[Initializing[F]] =
       for {
         validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
         engine <- Engine.transitionToInitializing(
@@ -108,8 +88,7 @@ object CasperLaunch {
                    blocksInProcessing,
                    casperShardConf,
                    validatorId,
-                   trimState,
-                   disableStateExporter
+                   trimState
                  )
         _ <- CommUtil[F].requestApprovedBlock(trimState)
       } yield engine
@@ -126,6 +105,7 @@ object CasperLaunch {
         engineRun = packets.parEvalMapUnorderedProcBounded { pm =>
           engine.handle(pm.peer, pm.message)
         }
+        _ <- Log[F].info(s"Making a transition to Running state.")
         _ <- engineRun.compile.drain
       } yield ()
 
@@ -187,4 +167,67 @@ object CasperLaunch {
       _ <- createRunning
     } yield ()
   }
+
+  def createGenesisBlockFromConfig[F[_]: Concurrent: ContextShift: Time: RuntimeManager: Log](
+      conf: CasperConf
+  ): F[BlockMessage] =
+    createGenesisBlock[F](
+      conf.shardName,
+      conf.genesisBlockData.genesisBlockNumber,
+      conf.genesisBlockData.bondsFile,
+      conf.autogenShardSize,
+      conf.genesisBlockData.walletsFile,
+      conf.genesisBlockData.bondMinimum,
+      conf.genesisBlockData.bondMaximum,
+      conf.genesisBlockData.epochLength,
+      conf.genesisBlockData.quarantineLength,
+      conf.genesisBlockData.numberOfActiveValidators,
+      conf.genesisBlockData.posMultiSigPublicKeys,
+      conf.genesisBlockData.posMultiSigQuorum
+    )
+
+  def createGenesisBlock[F[_]: Concurrent: ContextShift: Time: RuntimeManager: Log](
+      shardId: String,
+      blockNumber: Long,
+      bondsPath: String,
+      autogenShardSize: Int,
+      vaultsPath: String,
+      minimumBond: Long,
+      maximumBond: Long,
+      epochLength: Int,
+      quarantineLength: Int,
+      numberOfActiveValidators: Int,
+      posMultiSigPublicKeys: List[String],
+      posMultiSigQuorum: Int
+  ): F[BlockMessage] =
+    for {
+      blockTimestamp <- Time[F].currentMillis
+
+      // Initial REV vaults
+      vaults <- VaultParser.parse[F](vaultsPath)
+
+      // Initial validators
+      bonds      <- BondsParser.parse[F](bondsPath, autogenShardSize)
+      validators = bonds.toSeq.map(Validator.tupled)
+
+      // Run genesis deploys and create block
+      genesisBlock <- Genesis.createGenesisBlock(
+                       Genesis(
+                         shardId = shardId,
+                         blockTimestamp = blockTimestamp,
+                         proofOfStake = ProofOfStake(
+                           minimumBond = minimumBond,
+                           maximumBond = maximumBond,
+                           epochLength = epochLength,
+                           quarantineLength = quarantineLength,
+                           numberOfActiveValidators = numberOfActiveValidators,
+                           validators = validators,
+                           posMultiSigPublicKeys = posMultiSigPublicKeys,
+                           posMultiSigQuorum = posMultiSigQuorum
+                         ),
+                         vaults = vaults,
+                         blockNumber = blockNumber
+                       )
+                     )
+    } yield genesisBlock
 }
