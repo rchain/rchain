@@ -21,7 +21,7 @@ final case class CasperConf(
     heightConstraintThreshold: Long,
     roundRobinDispatcher: RoundRobinDispatcher,
     genesisBlockData: GenesisBlockData,
-    genesisCeremony: GenesisCeremonyConf,
+    autogenShardSize: Int,
     minPhloPrice: Long
 )
 
@@ -35,18 +35,8 @@ final case class GenesisBlockData(
     quarantineLength: Int,
     genesisBlockNumber: Long,
     numberOfActiveValidators: Int,
-    deployTimestamp: Option[Long],
     posMultiSigPublicKeys: List[String],
     posMultiSigQuorum: Int
-)
-
-final case class GenesisCeremonyConf(
-    requiredSignatures: Int,
-    approveInterval: FiniteDuration,
-    approveDuration: FiniteDuration,
-    autogenShardSize: Int,
-    genesisValidatorMode: Boolean,
-    ceremonyMasterMode: Boolean
 )
 
 final case class RoundRobinDispatcher(

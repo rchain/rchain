@@ -39,7 +39,7 @@ class POSMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
       validatorKeys,
       Genesis(
         shardId = shardId,
-        timestamp = 0L,
+        blockTimestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
           maximumBond = Long.MaxValue,

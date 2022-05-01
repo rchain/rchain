@@ -70,8 +70,7 @@ object CasperLaunch {
         genesisBlock <- ApproveBlockProtocol
                          .buildGenesis[F](
                            conf.genesisBlockData.bondsFile,
-                           conf.genesisCeremony.autogenShardSize,
-                           conf.genesisBlockData.genesisDataDir,
+                           conf.autogenShardSize,
                            conf.genesisBlockData.walletsFile,
                            conf.genesisBlockData.bondMinimum,
                            conf.genesisBlockData.bondMaximum,
@@ -79,10 +78,6 @@ object CasperLaunch {
                            conf.genesisBlockData.quarantineLength,
                            conf.genesisBlockData.numberOfActiveValidators,
                            conf.shardName,
-                           conf.genesisBlockData.deployTimestamp,
-                           conf.genesisCeremony.requiredSignatures,
-                           conf.genesisCeremony.approveDuration,
-                           conf.genesisCeremony.approveInterval,
                            conf.genesisBlockData.genesisBlockNumber,
                            conf.genesisBlockData.posMultiSigPublicKeys,
                            conf.genesisBlockData.posMultiSigQuorum

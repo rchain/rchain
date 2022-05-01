@@ -76,6 +76,7 @@ object ConfigMapper {
       add("casper.round-robin-dispatcher.max-peer-queue-size", run.frrdMaxPeerQueueSize)
       add("casper.round-robin-dispatcher.give-up-after-skipped", run.frrdGiveUpAfterSkipped)
       add("casper.round-robin-dispatcher.drop-peer-after-retries", run.frrdDropPeerAfterRetries)
+
       add("casper.genesis-block-data.bonds-file", run.bondsFile)
       add("casper.genesis-block-data.wallets-file", run.walletsFile)
       add("casper.genesis-block-data.bond-minimum", run.bondMinimum)
@@ -83,14 +84,10 @@ object ConfigMapper {
       add("casper.genesis-block-data.epoch-length", run.epochLength)
       add("casper.genesis-block-data.quarantine-length", run.quarantineLength)
       add("casper.genesis-block-data.number-of-active-validators", run.numberOfActiveValidators)
-      add("casper.genesis-block-data.deploy-timestamp", run.deployTimestamp)
       add("casper.genesis-block-data.genesis-block-number", run.genesisBlockNumber)
 
-      add("casper.genesis-ceremony.required-signatures", run.requiredSignatures)
-      add("casper.genesis-ceremony.genesis-validator-mode", run.genesisValidator)
-      add("casper.genesis-ceremony.approve-interval", run.approveInterval)
-      add("casper.genesis-ceremony.approve-duration", run.approveDuration) //TODO remove
-      add("casper.genesis-ceremony.autogen-shard-size", run.autogenShardSize)
+      add("casper.autogen-shard-size", run.autogenShardSize)
+
       add("casper.min-phlo-price", run.minPhloPrice)
 
       add("api-server.port-grpc-external", run.apiPortGrpcExternal)
@@ -120,9 +117,6 @@ object ConfigMapper {
 
       add("dev-mode", run.devMode)
       add("dev.deployer-private-key", run.deployerPrivateKey)
-
-      //TODO remove
-      //add(keys.KnownValidatorsFile, run.knownValidators
     }
     ConfigFactory.parseMap(map.asJava)
   }

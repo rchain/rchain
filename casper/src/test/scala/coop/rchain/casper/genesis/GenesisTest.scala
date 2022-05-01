@@ -15,11 +15,11 @@ import coop.rchain.casper.util.{BondsParser, GenesisBuilder, ProtoUtil, VaultPar
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.models.syntax._
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.{Base16, Time}
+import coop.rchain.shared.Time
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -96,7 +96,13 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           time: LogicalTime[Task]
       ) =>
         for {
-          _ <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+          _ <- fromInputFiles()(
+                genesisPath,
+                runtimeManager,
+                implicitly[Concurrent[Task]],
+                log,
+                time
+              )
           _ = log.warns.count(
             _.contains(
               "Creating file with random bonds"
@@ -117,8 +123,9 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
         val nonExistingPath = storageLocation.resolve("not/a/real/file").toString
         for {
           genesisAttempt <- fromInputFiles(maybeBondsPath = Some(nonExistingPath))(
-                             runtimeManager,
                              genesisPath,
+                             runtimeManager,
+                             implicitly[Concurrent[Task]],
                              log,
                              time
                            ).attempt
@@ -142,8 +149,9 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 
         for {
           genesisAttempt <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
-                             runtimeManager,
                              genesisPath,
+                             runtimeManager,
+                             implicitly[Concurrent[Task]],
                              log,
                              time
                            ).attempt
@@ -166,8 +174,9 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 
         for {
           genesis <- fromInputFiles(maybeBondsPath = Some(bondsFile))(
-                      runtimeManager,
                       genesisPath,
+                      runtimeManager,
+                      implicitly[Concurrent[Task]],
                       log,
                       time
                     )
@@ -192,10 +201,16 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
         ) =>
           implicit val logEff = log
           for {
-            genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-            _       <- blockDagStorage.insert(genesis, false, approved = true)
-            _       <- BlockStore[Task].put(genesis.blockHash, genesis)
-            dag     <- blockDagStorage.getRepresentation
+            genesis <- fromInputFiles()(
+                        genesisPath,
+                        runtimeManager,
+                        implicitly[Concurrent[Task]],
+                        log,
+                        time
+                      )
+            _   <- blockDagStorage.insert(genesis, false, approved = true)
+            _   <- BlockStore[Task].put(genesis.blockHash, genesis)
+            dag <- blockDagStorage.getRepresentation
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
@@ -218,9 +233,15 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
         printBonds(bondsFile)
 
         for {
-          genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-          bonds   = ProtoUtil.bonds(genesis)
-          _       = log.infos.length should be(3)
+          genesis <- fromInputFiles()(
+                      genesisPath,
+                      runtimeManager,
+                      implicitly[Concurrent[Task]],
+                      log,
+                      time
+                    )
+          bonds = ProtoUtil.bonds(genesis)
+          _     = log.infos.length should be(3)
           result = validators
             .map {
               case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
@@ -249,16 +270,15 @@ object GenesisTest {
       quarantineLength: Int = 50000,
       numberOfActiveValidators: Int = 100,
       shardId: String = rchainShardId,
-      deployTimestamp: Option[Long] = Some(System.currentTimeMillis()),
       blockNumber: Long = 0
   )(
-      implicit runtimeManager: RuntimeManager[Task],
-      genesisPath: Path,
+      implicit genesisPath: Path,
+      runtimeManager: RuntimeManager[Task],
+      c: Concurrent[Task],
       log: LogStub[Task],
       time: LogicalTime[Task]
   ): Task[BlockMessage] =
     for {
-      timestamp <- deployTimestamp.fold(Time[Task].currentMillis)(x => x.pure[Task])
       vaults <- VaultParser.parse[Task](
                  maybeVaultsPath.getOrElse(genesisPath + "/wallets.txt")
                )
@@ -266,12 +286,11 @@ object GenesisTest {
                 maybeBondsPath.getOrElse(genesisPath + "/bonds.txt"),
                 autogenShardSize
               )
-      validators = bonds.toSeq.map(Validator.tupled)
+      validators     = bonds.toSeq.map(Validator.tupled)
+      blockTimestamp <- Time[Task].currentMillis
       genesisBlock <- createGenesisBlock(
-                       runtimeManager,
                        Genesis(
                          shardId = shardId,
-                         timestamp = timestamp,
                          proofOfStake = ProofOfStake(
                            minimumBond = minimumBond,
                            maximumBond = maximumBond,
@@ -284,7 +303,8 @@ object GenesisTest {
                          ),
                          vaults = vaults,
                          supply = Long.MaxValue,
-                         blockNumber = blockNumber
+                         blockNumber = blockNumber,
+                         blockTimestamp = blockTimestamp
                        )
                      )
     } yield genesisBlock

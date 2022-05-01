@@ -2,20 +2,10 @@ package coop.rchain.node.configuration.hocon
 
 import com.typesafe.config.ConfigFactory
 import coop.rchain.casper.util.GenesisBuilder
-import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
+import coop.rchain.casper.{CasperConf, GenesisBlockData, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration._
-import coop.rchain.node.configuration.{
-  ApiServer,
-  DevConf,
-  Metrics,
-  NodeConf,
-  PeersDiscovery,
-  ProtocolClient,
-  ProtocolServer,
-  Storage
-}
 import org.scalatest.{FunSuite, Matchers}
 import pureconfig.{ConfigReader, ConfigSource, ConvertHelpers}
 import pureconfig.generic.auto._
@@ -142,20 +132,12 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           epochLength = 10000,
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
-          deployTimestamp = None,
           genesisBlockNumber = 0,
           posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
           posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
         ),
-        genesisCeremony = GenesisCeremonyConf(
-          requiredSignatures = 0,
-          approveDuration = 5.minutes,
-          approveInterval = 5.minute,
-          autogenShardSize = 5,
-          genesisValidatorMode = false,
-          ceremonyMasterMode = false
-        ),
-        minPhloPrice = 1
+        minPhloPrice = 1,
+        autogenShardSize = 5
       ),
       metrics = Metrics(
         prometheus = false,
