@@ -11,13 +11,13 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
-import coop.rchain.casper.engine.Engine.transitionToRunning
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{BondsParser, VaultParser}
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
@@ -27,6 +27,8 @@ import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import fs2.Stream
 import fs2.concurrent.Queue
+
+final case class PeerMessage(peer: PeerNode, message: CasperMessage)
 
 object CasperLaunch {
 
@@ -51,38 +53,28 @@ object CasperLaunch {
       standalone: Boolean
   ): F[Unit] = {
 
-    def createGenesisAndBroadcast =
+    def startAndCreateGenesis: F[Unit] =
       for {
-        genesisBlock   <- createGenesisBlockFromConfig(conf)
-        genBlockStr    = PrettyPrinter.buildString(genesisBlock)
-        _              <- Log[F].info(s"Sending genesis $genBlockStr to peers...")
-        genBlockPacket = ToPacket(genesisBlock.toProto)
+        genesisBlock <- createGenesisBlockFromConfig(conf)
+        genBlockStr  = PrettyPrinter.buildString(genesisBlock)
+        _            <- Log[F].info(s"Sending ApprovedBlock $genBlockStr to peers...")
 
-        // Store genesis
+        // Store genesis block
         _  <- BlockStore[F].put(genesisBlock)
         ab = ApprovedBlock(ApprovedBlockCandidate(genesisBlock, 0), Nil)
         _  <- ApprovedStore[F].putApprovedBlock(ab)
         _  <- LastApprovedBlock[F].set(ab)
         _  <- BlockDagStorage[F].insert(genesisBlock, invalid = false, approved = true)
 
-        _ <- CommUtil[F].streamToPeers(genBlockPacket)
+        // Send approved block to peers
+        _ <- CommUtil[F].streamToPeers(ab.toProto)
       } yield ()
 
-    def initializeFromEmptyState: F[Unit] =
-      for {
-        initFinished <- Deferred[F, Unit]
-        initEngine   <- startInitializing(initFinished, trimState)
-        initRunning = packets.parEvalMapUnorderedProcBounded { pm =>
-          initEngine.handle(pm.peer, pm.message)
-        }
-        initStream = Stream.eval(initFinished.get) concurrently initRunning
-        _          <- initStream.compile.drain
-      } yield ()
-
-    def startInitializing(finished: Deferred[F, Unit], trimState: Boolean): F[Initializing[F]] =
+    def startAndSync: F[Unit] =
       for {
         validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
-        engine <- Engine.transitionToInitializing(
+        finished    <- Deferred[F, Unit]
+        engine <- NodeSyncing[F](
                    finished,
                    blockProcessingQueue,
                    blocksInProcessing,
@@ -90,23 +82,27 @@ object CasperLaunch {
                    validatorId,
                    trimState
                  )
+        handleMessages = packets.parEvalMapUnorderedProcBounded { pm =>
+          engine.handle(pm.peer, pm.message)
+        }
         _ <- CommUtil[F].requestApprovedBlock(trimState)
-      } yield engine
+        _ <- (Stream.eval(finished.get) concurrently handleMessages).compile.drain
+      } yield ()
 
-    def createRunning: F[Unit] =
+    def startAndReconnect: F[Unit] =
       for {
-        engine <- transitionToRunning[F](
+        engine <- NodeRunning[F](
                    blockProcessingQueue,
                    blocksInProcessing,
                    validatorIdentityOpt,
                    disableStateExporter
                  )
-        _ <- CommUtil[F].sendForkChoiceTipRequest
-        engineRun = packets.parEvalMapUnorderedProcBounded { pm =>
+        handleMessages = packets.parEvalMapUnorderedProcBounded { pm =>
           engine.handle(pm.peer, pm.message)
         }
         _ <- Log[F].info(s"Making a transition to Running state.")
-        _ <- engineRun.compile.drain
+        _ <- CommUtil[F].sendForkChoiceTipRequest
+        _ <- handleMessages.compile.drain
       } yield ()
 
     def connectToExistingNetwork: F[Unit] =
@@ -154,17 +150,16 @@ object CasperLaunch {
       _ <- if (dag.dagSet.isEmpty && standalone) {
             // Create genesis block and send to peers
             Log[F].info("Starting as genesis master, creating genesis block...") *>
-              createGenesisAndBroadcast
+              startAndCreateGenesis
           } else if (dag.dagSet.isEmpty) {
-            // If DAG is empty start from initializing (LFS sync)
+            // If DAG is empty start by syncing LFS state
             Log[F].info("Starting from bootstrap node, syncing LFS...") *>
-              initializeFromEmptyState
+              startAndSync
           } else {
-            Log[F].info("Reconnecting to existing network")
+            Log[F].info("Reconnecting to existing network...")
           }
       _ <- connectToExistingNetwork
-      _ <- Log[F].info("Starting running mode")
-      _ <- createRunning
+      _ <- startAndReconnect
     } yield ()
   }
 

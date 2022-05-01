@@ -19,7 +19,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine
 import coop.rchain.casper.engine.BlockRetriever.RequestState
-import coop.rchain.casper.engine.Running.{
+import coop.rchain.casper.engine.NodeRunning.{
   BlockIsInCasperBuffer,
   DoNotIgnore,
   IgnoreCasperMessageStatus
@@ -76,7 +76,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
         )
       currentRequests.set(requestStateBefore).runSyncUnsafe()
       // when
-      Running.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
       // then
       transportLayer.requests shouldBe empty
 
@@ -97,7 +97,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
         )
       currentRequests.set(requestStateBefore).runSyncUnsafe()
       // when
-      Running.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
       // then
       val (recipient, msg) = transportLayer.getRequest(0)
       // assert RequestState
@@ -120,7 +120,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
       val requestStateBefore = Map.empty[BlockHash, RequestState]
       currentRequests.set(requestStateBefore).runSyncUnsafe()
       // when
-      Running.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
       // then
       val (recipient, msg) = transportLayer.getRequest(0)
       // assert RequestState
@@ -142,7 +142,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
           val sender                                     = peerNode("somePeer", 40400)
           val casperContains: BlockHash => Task[Boolean] = _ => true.pure[Task]
           // when
-          Running.handleHasBlockMessage[Task](sender, hb)(casperContains).runSyncUnsafe()
+          NodeRunning.handleHasBlockMessage[Task](sender, hb)(casperContains).runSyncUnsafe()
           // then
           transportLayer.requests shouldBe empty
         }
@@ -156,7 +156,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
         // given
         val casperContains: BlockHash => Task[Boolean] = _ => true.pure[Task]
         // when
-        Running.handleHasBlockMessage[Task](null, hb)(casperContains).runSyncUnsafe()
+        NodeRunning.handleHasBlockMessage[Task](null, hb)(casperContains).runSyncUnsafe()
         // then
         transportLayer.requests shouldBe empty
       }

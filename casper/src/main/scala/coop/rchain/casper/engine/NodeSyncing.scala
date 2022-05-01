@@ -1,5 +1,6 @@
 package coop.rchain.casper.engine
 
+import cats.Monad
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
@@ -10,13 +11,15 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
+import coop.rchain.casper.engine.NodeSyncing.logNoApprovedBlockAvailable
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.comm.PeerNode
+import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
@@ -27,11 +30,57 @@ import fs2.concurrent.Queue
 import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
 
+object NodeSyncing {
+
+  /**
+    * Represents start of the node with creation of genesis block.
+    */
+  // format: off
+  def apply[F[_]
+  /* Execution */   : Concurrent: Time: Timer
+  /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+  /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
+  /* Rholang */     : RuntimeManager
+  /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+  /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+  (
+      finished: Deferred[F, Unit],
+      blockProcessingQueue: Queue[F, BlockMessage],
+      blocksInProcessing: Ref[F, Set[BlockHash]],
+      casperShardConf: CasperShardConf,
+      validatorId: Option[ValidatorIdentity],
+      trimState: Boolean = true
+  ): F[NodeSyncing[F]] =
+    for {
+      blockResponseQueue <- Queue.bounded[F, BlockMessage](50)
+      stateResponseQueue <- Queue.bounded[F, StoreItemsMessage](50)
+      engine = new NodeSyncing(
+        finished,
+        blockProcessingQueue,
+        blocksInProcessing,
+        casperShardConf,
+        validatorId,
+        blockResponseQueue,
+        stateResponseQueue,
+        trimState
+      )
+    } yield engine
+
+  /**
+    * Peer says it has no ApprovedBlock
+    */
+  def logNoApprovedBlockAvailable[F[_]: Log](identifier: String): F[Unit] =
+    Log[F].info(
+      s"No approved block available on node $identifier. Will request again in 10 seconds."
+    )
+}
+
 /**
-  * initializing engine makes sure node receives Approved State and transitions to Running after
-  * */
+  * Represents start of the node with creation of genesis block.
+  */
 // format: off
-class Initializing[F[_]
+class NodeSyncing[F[_]
   /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
@@ -49,8 +98,6 @@ class Initializing[F[_]
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
     trimState: Boolean = true
 ) {
-  import Engine._
-
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case ab: ApprovedBlock =>
       onApprovedBlock(peer, ab)
@@ -229,4 +276,18 @@ class Initializing[F[_]
       _ <- Log[F].info(s"Blocks for approved state added to DAG.")
     } yield ()
   }
+
+  def sendNoApprovedBlockAvailable(
+      peer: PeerNode,
+      identifier: String
+  ): F[Unit] =
+    for {
+      local <- RPConfAsk[F].reader(_.local)
+      //TODO remove NoApprovedBlockAvailable.nodeIdentifier, use `sender` provided by TransportLayer
+      msg = Blob(local, noApprovedBlockAvailable(local, identifier))
+      _   <- TransportLayer[F].stream1(peer, msg)
+    } yield ()
+
+  private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet =
+    ToPacket(NoApprovedBlockAvailable(identifier, peer.toString).toProto)
 }

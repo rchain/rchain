@@ -19,13 +19,34 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.{EventLog, EventPublisher, Log, Time}
 import fs2.Stream
 import fs2.concurrent.Queue
 
 import scala.concurrent.duration._
 
-object Running {
+object NodeRunning {
+
+  // format: off
+  def apply[F[_]
+  /* Execution */   : Concurrent: Time
+  /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+  /* State */       : RPConfAsk: ConnectionsCell
+  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Diagnostics */ : Log: EventLog: Metrics] // format: on
+  (
+      blockProcessingQueue: Queue[F, BlockMessage],
+      blocksInProcessing: Ref[F, Set[BlockHash]],
+      validatorId: Option[ValidatorIdentity],
+      disableStateExporter: Boolean
+  ): F[NodeRunning[F]] = Sync[F].delay(
+    new NodeRunning[F](
+      blockProcessingQueue,
+      blocksInProcessing,
+      validatorId,
+      disableStateExporter
+    )
+  )
 
   implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "running")
@@ -234,7 +255,7 @@ object Running {
 }
 
 // format: off
-class Running[F[_]
+class NodeRunning[F[_]
   /* Execution */   : Concurrent: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
@@ -246,8 +267,7 @@ class Running[F[_]
     validatorId: Option[ValidatorIdentity],
     disableStateExporter: Boolean
 ) {
-  import Running._
-  import Engine._
+  import NodeRunning._
 
   private def ignoreCasperMessage(hash: BlockHash): F[Boolean] =
     MultiParentCasper.blockReceived(hash)
@@ -298,19 +318,11 @@ class Running[F[_]
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {
-          lfBlock <- BlockStore[F].getUnsafe(lfBlockHash)
-
-          // Each approved block should be justified by validators signatures
-          // ATM we have signatures only for genesis approved block - we also have to have a procedure
-          // for gathering signatures for each approved block post genesis.
-          // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
-          // TODO We need signatures of Validators supporting this block
-          lastApprovedBlock = ApprovedBlock(
-            ApprovedBlockCandidate(lfBlock, 0),
-            List.empty
-          )
+          lfBlock           <- BlockStore[F].getUnsafe(lfBlockHash)
+          lastApprovedBlock = ApprovedBlock(ApprovedBlockCandidate(lfBlock, 0), List.empty)
         } yield lastApprovedBlock
 
+        // TODO: fix finalized block depending if trim state requested
         approvedBlock <- if (abr.trimState)
                           // If Last Finalized State is requested return Last Finalized block as Approved block
                           lastFinalizedBlock
@@ -318,13 +330,12 @@ class Running[F[_]
                           // Respond with approved block that this node is started from.
                           // The very first one is genesis, but this node still might start from later block,
                           // so it will not necessary be genesis.
-//                          approvedBlock.pure[F]
                           lastFinalizedBlock
 
         _ <- handleApprovedBlockRequest(peer, approvedBlock)
       } yield ()
 
-    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
+    case na: NoApprovedBlockAvailable => NodeSyncing.logNoApprovedBlockAvailable(na.nodeIdentifer)
 
     // Approved state store records
     case StoreItemsMessageRequest(startPath, skip, take) =>

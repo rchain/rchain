@@ -13,7 +13,7 @@ import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, PeerMessage, Running}
+import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, NodeRunning, PeerMessage}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.rholang.RuntimeManager
@@ -333,7 +333,7 @@ object Setup {
         implicit val (bs, cu, bds) = (blockStore, commUtil, blockDagStorage)
         for {
           _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
-          _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
+          _ <- NodeRunning.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
         } yield ()
       }
 
