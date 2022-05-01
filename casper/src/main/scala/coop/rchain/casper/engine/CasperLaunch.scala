@@ -89,12 +89,11 @@ object CasperLaunch {
                          )
       } yield genesisBlock
 
-    def initializeFromEmptyState =
+    def initializeFromEmptyState: F[Unit] =
       for {
-        // If DAG is empty start from initializing (LFS sync)
         initFinished <- Deferred[F, Unit]
         initEngine   <- startInitializing(initFinished, trimState, disableStateExporter)
-        initRunning = packets.parEvalMapProcBounded { pm =>
+        initRunning = packets.parEvalMapUnorderedProcBounded { pm =>
           initEngine.handle(pm.peer, pm.message)
         }
         initStream = Stream.eval(initFinished.get) concurrently initRunning
@@ -129,7 +128,7 @@ object CasperLaunch {
                    disableStateExporter
                  )
         _ <- CommUtil[F].sendForkChoiceTipRequest
-        engineRun = packets.parEvalMapProcBounded { pm =>
+        engineRun = packets.parEvalMapUnorderedProcBounded { pm =>
           engine.handle(pm.peer, pm.message)
         }
         _ <- engineRun.compile.drain
@@ -182,6 +181,7 @@ object CasperLaunch {
             Log[F].info("Starting as genesis master, creating genesis block...") *>
               createGenesisAndBroadcast
           } else if (dag.dagSet.isEmpty) {
+            // If DAG is empty start from initializing (LFS sync)
             Log[F].info("Starting from bootstrap node, syncing LFS...") *>
               initializeFromEmptyState
           } else {
