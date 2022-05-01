@@ -1,8 +1,8 @@
 package coop.rchain.node.configuration.hocon
 
 import com.typesafe.config.ConfigFactory
+import coop.rchain.casper.{CasperConf, GenesisBlockData}
 import coop.rchain.casper.util.GenesisBuilder
-import coop.rchain.casper.{CasperConf, GenesisBlockData, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration._
@@ -118,11 +118,6 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         forkChoiceCheckIfStaleInterval = 11.minutes,
         synchronyConstraintThreshold = 0.67,
         heightConstraintThreshold = 1000,
-        roundRobinDispatcher = RoundRobinDispatcher(
-          maxPeerQueueSize = 100,
-          giveUpAfterSkipped = 0,
-          dropPeerAfterRetries = 0
-        ),
         genesisBlockData = GenesisBlockData(
           genesisDataDir = Paths.get("/var/lib/rnode/genesis"),
           bondsFile = "/var/lib/rnode/genesis/bonds.txt",

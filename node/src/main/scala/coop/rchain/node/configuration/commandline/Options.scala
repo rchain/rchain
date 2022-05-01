@@ -424,24 +424,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "allowed to propose."
     )
 
-    val frrdMaxPeerQueueSize = opt[Int](
-      descr = "Fair round robin dispatcher individual peer packet queue size. " +
-        "Packets will get dropped by the dispatcher when the queue is full.",
-      validate = _ > 0
-    )
-
-    val frrdGiveUpAfterSkipped = opt[Int](
-      descr = "Fair round robin dispatcher give up and try next peer after skipped packets. " +
-        "Skipped packets are buffered in other peers packet queues.",
-      validate = _ >= 0
-    )
-
-    val frrdDropPeerAfterRetries = opt[Int](
-      descr = "Fair round robin dispatcher drop inactive peer after round robin rounds. " +
-        "After giving up several times the peer gets dropped from the queue.",
-      validate = _ >= 0
-    )
-
     val bondsFile = opt[String](
       descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
         "which defines the bond amounts for each validator at genesis. " +

@@ -1,8 +1,8 @@
 package coop.rchain.node.configuration.commandline
 
 import com.typesafe.config.ConfigFactory
+import coop.rchain.casper.{CasperConf, GenesisBlockData}
 import coop.rchain.casper.util.GenesisBuilder
-import coop.rchain.casper.{CasperConf, GenesisBlockData, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration._
@@ -76,9 +76,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--fork-choice-check-if-stale-interval 111111seconds",
         "--synchrony-constraint-threshold 111111",
         "--height-constraint-threshold 111111",
-        "--frrd-max-peer-queue-size 111111",
-        "--frrd-give-up-after-skipped 111111",
-        "--frrd-drop-peer-after-retries 111111",
         "--bonds-file /var/lib/rnode/genesis/bonds1.txt",
         "--wallets-file /var/lib/rnode/genesis/wallets1.txt",
         "--bond-minimum 111111",
@@ -204,11 +201,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         forkChoiceCheckIfStaleInterval = 111111.seconds,
         synchronyConstraintThreshold = 111111,
         heightConstraintThreshold = 111111,
-        roundRobinDispatcher = RoundRobinDispatcher(
-          maxPeerQueueSize = 111111,
-          giveUpAfterSkipped = 111111,
-          dropPeerAfterRetries = 111111
-        ),
         genesisBlockData = GenesisBlockData(
           genesisDataDir = Paths.get("/var/lib/rnode/genesis"),
           bondsFile = "/var/lib/rnode/genesis/bonds1.txt",

@@ -73,9 +73,6 @@ object ConfigMapper {
       add("casper.requested-blocks-timeout", run.requestedBlocksTimeout)
       add("casper.fork-choice-stale-threshold", run.forkChoiceStaleThreshold)
       add("casper.fork-choice-check-if-stale-interval", run.forkChoiceCheckIfStaleInterval)
-      add("casper.round-robin-dispatcher.max-peer-queue-size", run.frrdMaxPeerQueueSize)
-      add("casper.round-robin-dispatcher.give-up-after-skipped", run.frrdGiveUpAfterSkipped)
-      add("casper.round-robin-dispatcher.drop-peer-after-retries", run.frrdDropPeerAfterRetries)
 
       add("casper.genesis-block-data.bonds-file", run.bondsFile)
       add("casper.genesis-block-data.wallets-file", run.walletsFile)

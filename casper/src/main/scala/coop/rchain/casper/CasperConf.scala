@@ -1,7 +1,6 @@
 package coop.rchain.casper
 
 import java.nio.file.Path
-
 import scala.concurrent.duration.FiniteDuration
 
 final case class CasperConf(
@@ -19,7 +18,6 @@ final case class CasperConf(
     forkChoiceCheckIfStaleInterval: FiniteDuration,
     synchronyConstraintThreshold: Double,
     heightConstraintThreshold: Long,
-    roundRobinDispatcher: RoundRobinDispatcher,
     genesisBlockData: GenesisBlockData,
     autogenShardSize: Int,
     minPhloPrice: Long
@@ -37,10 +35,4 @@ final case class GenesisBlockData(
     numberOfActiveValidators: Int,
     posMultiSigPublicKeys: List[String],
     posMultiSigQuorum: Int
-)
-
-final case class RoundRobinDispatcher(
-    maxPeerQueueSize: Int,
-    giveUpAfterSkipped: Int,
-    dropPeerAfterRetries: Int
 )
