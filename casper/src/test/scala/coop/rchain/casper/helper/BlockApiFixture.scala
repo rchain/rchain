@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.DeployStorage
+
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.api.BlockApiImpl
 import coop.rchain.casper.rholang.RuntimeManager
@@ -15,7 +15,7 @@ import coop.rchain.shared.Log
 
 trait BlockApiFixture {
 
-  def createBlockApi[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
+  def createBlockApi[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
       shardId: String,
       maxDepthLimit: Int,
       validatorIdOpt: Option[ValidatorIdentity] = none
@@ -38,7 +38,7 @@ trait BlockApiFixture {
   }
 
   def createBlockApi[F[_]: Concurrent](node: TestNode[F]): F[BlockApiImpl[F]] = {
-    import node.{blockDagStorage, blockStore, ds, logEff, runtimeManager, sp}
+    import node.{blockDagStorage, blockStore, logEff, runtimeManager, sp}
 
     val thisNode = node.local
     BlockApiImpl[F](

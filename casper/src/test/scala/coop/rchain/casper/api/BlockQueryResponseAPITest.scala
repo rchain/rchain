@@ -6,7 +6,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol._
@@ -36,10 +35,6 @@ class BlockQueryResponseAPITest
 
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager[Task]("block-query-response-api-test")
-
-  // TODO: temp until DeployStorage will be part of BlockDagStorage
-  implicit val deployStore =
-    KeyValueDeployStorage[Task](InMemoryKeyValueStore[Task]()).runSyncUnsafe()
 
   implicit val metricsEff           = new Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task] = NoopSpan[Task]()

@@ -11,7 +11,6 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
@@ -70,7 +69,6 @@ case class TestNode[F[_]: Sync: Timer](
     blockStoreEffect: BlockStore[F],
     approvedStoreEffect: ApprovedStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
-    deployStorageEffect: DeployStorage[F],
     commUtilEffect: CommUtil[F],
     blockRetrieverEffect: BlockRetriever[F],
     metricEffect: Metrics[F],
@@ -103,7 +101,6 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val blockStore: BlockStore[F]                      = blockStoreEffect
   implicit val approvedStore: ApprovedStore[F]                = approvedStoreEffect
   implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
-  implicit val ds: DeployStorage[F]                           = deployStorageEffect
   implicit val cu: CommUtil[F]                                = commUtilEffect
   implicit val br: BlockRetriever[F]                          = blockRetrieverEffect
   implicit val me: Metrics[F]                                 = metricEffect
@@ -432,7 +429,6 @@ object TestNode {
       blockStore          <- Resource.eval(BlockStore(kvm))
       approvedStore       <- Resource.eval(approvedStore.create(kvm))
       blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
-      deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))
       casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
       rSpaceStore         <- Resource.eval(kvm.rSpaceStores)
       mStore              <- Resource.eval(RuntimeManager.mergeableStore(kvm))
@@ -464,7 +460,6 @@ object TestNode {
                implicit val bs                         = blockStore
                implicit val as                         = approvedStore
                implicit val bds                        = blockDagStorage
-               implicit val ds                         = deployStorage
                implicit val cbs                        = casperBufferStorage
                implicit val rm                         = runtimeManager
                implicit val rhr                        = runtimeManager.getHistoryRepo
@@ -555,7 +550,6 @@ object TestNode {
                    blockStoreEffect = bs,
                    approvedStoreEffect = as,
                    blockDagStorageEffect = bds,
-                   deployStorageEffect = ds,
                    casperBufferStorageEffect = cbs,
                    runtimeManagerEffect = rm,
                    rhoHistoryRepositoryEffect = rhr,

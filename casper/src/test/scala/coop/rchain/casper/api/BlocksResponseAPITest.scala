@@ -3,7 +3,6 @@ package coop.rchain.casper.api
 import cats.effect.Resource
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -27,10 +26,6 @@ class BlocksResponseAPITest
     with BlockGenerator
     with BlockDagStorageFixture
     with BlockApiFixture {
-
-  // TODO: temp until DeployStorage will be part of BlockDagStorage
-  implicit val deployStore =
-    KeyValueDeployStorage[Task](InMemoryKeyValueStore[Task]()).runSyncUnsafe()
 
   implicit val log: Log[Task]       = new Log.NOPLog[Task]()
   implicit val noopSpan: Span[Task] = NoopSpan[Task]()

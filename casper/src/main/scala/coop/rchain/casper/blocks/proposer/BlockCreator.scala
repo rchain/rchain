@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.DeployStorage
+
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
@@ -36,7 +36,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def create[F[_]: Concurrent: Log: Time: BlockStore: BlockDagStorage: DeployStorage: Metrics: RuntimeManager: Span](
+  def create[F[_]: Concurrent: Log: Time: BlockStore: BlockDagStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot,
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
@@ -50,7 +50,7 @@ object BlockCreator {
 
       def prepareUserDeploys(blockNumber: Long): F[Set[Signed[DeployData]]] =
         for {
-          unfinalized         <- DeployStorage[F].readAll
+          unfinalized         <- BlockDagStorage[F].pooled.map(_.values.toSet)
           earliestBlockNumber = blockNumber - s.onChainState.shardConf.deployLifespan
           valid = unfinalized.filter(
             d =>

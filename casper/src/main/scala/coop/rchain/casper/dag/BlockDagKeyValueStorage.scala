@@ -12,13 +12,15 @@ import coop.rchain.blockstorage.dag.{BlockDagStorage, BlockMetadataStore, DagRep
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, DeployData}
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
 import coop.rchain.shared.syntax._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
@@ -28,6 +30,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     latestMessagesIndex: KeyValueTypedStore[F, Validator, BlockHash],
     blockMetadataIndex: BlockMetadataStore[F],
     deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
+    deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]],
     invalidBlocksIndex: KeyValueTypedStore[F, BlockHash, BlockMetadata]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagKeyValueStorage.getClass)
@@ -196,6 +199,10 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
     deployIndex.get1(deployId)
+
+  override def addDeploy(d: Signed[DeployData]): F[Unit] = deployStore.put(d.sig, d)
+
+  override def pooled: F[Map[DeployId, Signed[DeployData]]] = deployStore.toMap
 }
 
 object BlockDagKeyValueStorage {
@@ -207,7 +214,8 @@ object BlockDagKeyValueStorage {
       metadataDb: KeyValueTypedStore[F, BlockHash, BlockMetadata],
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      deploys: KeyValueTypedStore[F, DeployId, BlockHash]
+      deploys: KeyValueTypedStore[F, DeployId, BlockHash],
+      deployPool: KeyValueTypedStore[F, DeployId, Signed[DeployData]]
   )
 
   private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
@@ -238,13 +246,19 @@ object BlockDagKeyValueStorage {
                         codecByteString,
                         codecBlockHash
                       )
-
+      // Deploy pool storage
+      deployPoolDb <- KeyValueStoreManager[F].database[DeployId, Signed[DeployData]](
+                       "deploy-pool",
+                       codecByteString,
+                       codecSignedDeployData
+                     )
     } yield DagStores(
       blockMetadataStore,
       blockMetadataDb,
       latestMessagesDb,
       invalidBlocksDb,
-      deployIndexDb
+      deployIndexDb,
+      deployPoolDb
     )
   }
 
@@ -280,6 +294,7 @@ object BlockDagKeyValueStorage {
       stores.latestMessages,
       stores.metadata,
       stores.deploys,
+      stores.deployPool,
       stores.invalidBlocks
     )
 }

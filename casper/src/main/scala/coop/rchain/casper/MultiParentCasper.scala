@@ -9,7 +9,6 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
-import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.protocol._
@@ -349,7 +348,7 @@ object MultiParentCasper {
       r <- depFreePendants.traverse(BlockStore[F].getUnsafe)
     } yield r
 
-  def deploy[F[_]: Sync: DeployStorage: Log](
+  def deploy[F[_]: Sync: BlockDagStorage: Log](
       d: Signed[DeployData]
   ): F[Either[ParsingError, DeployId]] = {
     import coop.rchain.models.rholang.implicits._
@@ -362,9 +361,9 @@ object MultiParentCasper {
       )
   }
 
-  private def addDeploy[F[_]: Sync: DeployStorage: Log](deploy: Signed[DeployData]): F[DeployId] =
+  private def addDeploy[F[_]: Sync: BlockDagStorage: Log](deploy: Signed[DeployData]): F[DeployId] =
     for {
-      _ <- DeployStorage[F].add(List(deploy))
+      _ <- BlockDagStorage[F].addDeploy(deploy)
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield deploy.sig
 }

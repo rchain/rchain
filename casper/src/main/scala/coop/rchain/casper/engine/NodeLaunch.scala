@@ -9,7 +9,6 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
@@ -40,7 +39,7 @@ object NodeLaunch {
     /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       packets: Stream[F, PeerMessage],

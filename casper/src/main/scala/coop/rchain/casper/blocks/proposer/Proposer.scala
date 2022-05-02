@@ -8,7 +8,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.DeployStorage
+
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.{BlockMessage, CommUtil}
@@ -152,7 +152,7 @@ object Proposer {
   def apply[F[_]
     /* Execution */   : Concurrent: Timer: Time
     /* Casper */      : SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
+    /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
     /* Comm */        : CommUtil: BlockRetriever: RuntimeManager
   ] // format: on
