@@ -1,17 +1,13 @@
 package coop.rchain.blockstorage.dag
 
-import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.blockstorage.TopoSortFragmentParameterError
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.Justification
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.syntax._
-import coop.rchain.shared.syntax._
 import fs2.Stream
 
 trait DagRepresentationSyntax {
@@ -101,62 +97,6 @@ final class DagRepresentationOps[F[_]](
       r  = ib.map(block => (block.blockHash, block.sender)).toMap
     } yield r
 
-  def selfJustificationChain(
-      h: BlockHash
-  )(implicit sync: Sync[F], bds: BlockDagStorage[F]): Stream[F, Justification] =
-    Stream.unfoldEval(h)(
-      message =>
-        bds
-          .lookupUnsafe(message)
-          .map { v =>
-            v.justifications.find(_.validator == v.sender)
-          }
-          .map(_.map(next => (next, next.latestBlockHash)))
-    )
-
-  def selfJustification(
-      h: BlockHash
-  )(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[Option[Justification]] =
-    selfJustificationChain(h).head.compile.last
-
-  def mainParentChain(h: BlockHash, stopAtHeight: Long = 0)(
-      implicit sync: Sync[F],
-      bds: BlockDagStorage[F]
-  ): Stream[F, BlockHash] =
-    Stream.unfoldEval(h) { message =>
-      bds
-        .lookupUnsafe(message)
-        .map(
-          meta =>
-            if (meta.blockNum <= stopAtHeight)
-              none[(BlockHash, BlockHash)]
-            else
-              meta.parents.headOption.map(v => (v, v))
-        )
-    }
-
-  def isInMainChain(ancestor: BlockHash, descendant: BlockHash)(
-      implicit sync: Sync[F],
-      bds: BlockDagStorage[F]
-  ): F[Boolean] = {
-    val result = OptionT(bds.lookup(ancestor).map(_.map(_.blockNum))).semiflatMap { aHeight =>
-      mainParentChain(descendant, aHeight)
-        .filter(_ == ancestor)
-        .head
-        .compile
-        .last
-        .map(_.isDefined)
-    }
-    (descendant == ancestor).pure ||^ result.getOrElse(false)
-  }
-
-  def parentsUnsafe(
-      item: BlockHash
-  )(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[List[BlockHash]] = {
-    def errMsg = s"Parents lookup failed: DAG is missing ${item.show}"
-    bds.lookup(item).map(_.map(v => v.parents)) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
-  }
-
   def nonFinalizedBlocks(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[Set[BlockHash]] =
     Stream
       .unfoldLoopEval(dag.latestMessagesHashes.valuesIterator.toList) { lvl =>
@@ -194,12 +134,6 @@ final class DagRepresentationOps[F[_]](
       .flatMap(Stream.emits)
       .compile
       .to(Set)
-
-  def withAncestors(blockHash: BlockHash, filterF: BlockHash => F[Boolean])(
-      implicit sync: Sync[F],
-      bds: BlockDagStorage[F]
-  ): F[Set[BlockHash]] =
-    ancestors(blockHash, filterF).map(_ + blockHash)
 
   def topoSortUnsafe(
       startBlockNumber: Long,
