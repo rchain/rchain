@@ -22,6 +22,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.syntax._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 
@@ -137,7 +138,7 @@ trait BlockGenerator {
       setSeqNumber = seqNum.some
     ).pure[F]
 
-  def createGenesis[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+  def createGenesis[F[_]: Monad: Time: BlockStore: BlockDagStorage](
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: Seq[Justification] = Seq.empty[Justification],
@@ -161,11 +162,11 @@ trait BlockGenerator {
                   preStateHash,
                   seqNum
                 )
-      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(genesis, genesis, false)
-      _             <- BlockStore[F].put(genesis.blockHash, modifiedBlock)
-    } yield modifiedBlock
+      _ <- BlockDagStorage[F].insert(genesis, false, false)
+      _ <- BlockStore[F].put(genesis.blockHash, genesis)
+    } yield genesis
 
-  def createBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+  def createBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       parentsHashList: Seq[BlockHash],
       genesis: BlockMessage,
       creator: Validator = ByteString.EMPTY,
@@ -192,11 +193,27 @@ trait BlockGenerator {
                 preStateHash,
                 seqNum
               )
-      modifiedBlock <- IndexedBlockDagStorage[F].insertIndexed(block, genesis, invalid)
-      _             <- BlockStore[F].put(block.blockHash, modifiedBlock)
+      dag <- BlockDagStorage[F].getRepresentation
+      nextCreatorSeqNum <- if (block.seqNum == 0)
+                            dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
+                          else block.seqNum.pure[F]
+      nextId <- parentsHashList.toList
+                 .filterNot(dag.invalidBlocksSet)
+                 .traverse(
+                   BlockStore[F].getUnsafe(_).map(_.body.state.blockNumber)
+                 )
+                 .map(_.maximumOption.getOrElse(0L) + 1)
+      newPostState = block.body.state.copy(blockNumber = nextId)
+      modifiedBlock = block
+        .copy(
+          body = block.body.copy(state = newPostState),
+          seqNum = nextCreatorSeqNum
+        )
+      _ <- BlockDagStorage[F].insert(modifiedBlock, invalid, false)
+      _ <- BlockStore[F].put(block.blockHash, modifiedBlock)
     } yield modifiedBlock
 
-  def createValidatorBlock[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+  def createValidatorBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       parents: Seq[BlockMessage],
       genesis: BlockMessage,
       justifications: Seq[BlockMessage],

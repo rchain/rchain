@@ -2,7 +2,7 @@ package coop.rchain.casper.api
 
 import cats.effect.Resource
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
@@ -48,7 +48,7 @@ class BlocksResponseAPITest
 
   private def createDagWith8Blocks(
       implicit blockstore: BlockStore[Task],
-      dagstore: IndexedBlockDagStorage[Task]
+      dagstore: BlockDagStorage[Task]
   ) =
     for {
       genesis <- createGenesis[Task](bonds = bonds)
@@ -112,7 +112,7 @@ class BlocksResponseAPITest
           genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
           blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
           blocksResponse <- blockApi.getBlocks(10)
-        } yield blocksResponse.right.get.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+        } yield blocksResponse.right.get.length should be(8)
       }
   }
 
@@ -122,7 +122,7 @@ class BlocksResponseAPITest
         genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
         blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
         blocksResponse <- blockApi.getBlocks(2)
-      } yield blocksResponse.right.get.length should be(2) // TODO: Switch to 3 when we implement block height correctly
+      } yield blocksResponse.right.get.length should be(3)
     }
   }
 
@@ -134,9 +134,9 @@ class BlocksResponseAPITest
           blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
           blocksResponse <- blockApi.getBlocksByHeights(2, 5)
           blocks         = blocksResponse.right.get
-          _              = blocks.length should be(4)
+          _              = blocks.length should be(5)
           _              = blocks.head.blockNumber should be(2)
-          _              = blocks.last.blockNumber should be(5)
+          _              = blocks.last.blockNumber should be(4)
         } yield ()
       }
   }
