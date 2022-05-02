@@ -13,7 +13,7 @@ import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, NodeRunning, PeerMessage}
+import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, NodeRunning, PeerMessage}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.rholang.RuntimeManager
@@ -60,7 +60,7 @@ object Setup {
         APIServers,
         CasperLoop[F],
         CasperLoop[F],
-        F[Unit], // Consensus process
+        F[Unit], // Node startup process (protocol messages handling)
         ReportingHttpRoutes[F],
         WebApi[F],
         AdminWebApi[F],
@@ -226,7 +226,7 @@ object Setup {
       routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
       // Peer message stream
       peerMessageStream = routingMessageQueue
-        .dequeueChunk(1)
+        .dequeueChunk(maxSize = 1)
         .parEvalMapUnorderedProcBounded {
           case RoutingMessage(peer, packet) =>
             toCasperMessageProto(packet).toEither
@@ -241,14 +241,14 @@ object Setup {
         }
         .collect { case Some(m) => m }
 
-      casperLaunch = {
+      nodeLaunch = {
         implicit val (bs, as, bd, ds) = (blockStore, approvedStore, blockDagStorage, deployStorage)
         implicit val (br, cb, ep)     = (blockRetriever, casperBufferStorage, eventPublisher)
         implicit val (lb, ra, rc)     = (lab, rpConfAsk, rpConnections)
         implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu)         = (runtimeManager, commUtil)
         implicit val (rsm, sp)        = (rspaceStateManager, span)
-        CasperLaunch.of[F](
+        NodeLaunch[F](
           peerMessageStream,
           blockProcessorQueue,
           blockProcessorStateRef,
@@ -345,7 +345,7 @@ object Setup {
       apiServers,
       casperLoop,
       updateForkChoiceLoop,
-      casperLaunch,
+      nodeLaunch,
       reportingRoutes,
       webApi,
       adminWebApi,

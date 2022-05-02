@@ -30,10 +30,10 @@ import fs2.concurrent.Queue
 
 final case class PeerMessage(peer: PeerNode, message: CasperMessage)
 
-object CasperLaunch {
+object NodeLaunch {
 
   // format: off
-  def of[F[_]
+  def apply[F[_]
     /* Execution */   : Concurrent: Parallel: ContextShift: Time: Timer
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
@@ -53,7 +53,7 @@ object CasperLaunch {
       standalone: Boolean
   ): F[Unit] = {
 
-    def startAndCreateGenesis: F[Unit] =
+    def createStoreBroadcastGenesis: F[Unit] =
       for {
         genesisBlock <- createGenesisBlockFromConfig(conf)
         genBlockStr  = PrettyPrinter.buildString(genesisBlock)
@@ -70,7 +70,7 @@ object CasperLaunch {
         _ <- CommUtil[F].streamToPeers(ab.toProto)
       } yield ()
 
-    def startAndSync: F[Unit] =
+    def startSyncingMode: F[Unit] =
       for {
         validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
         finished    <- Deferred[F, Unit]
@@ -89,7 +89,7 @@ object CasperLaunch {
         _ <- (Stream.eval(finished.get) concurrently handleMessages).compile.drain
       } yield ()
 
-    def startAndReconnect: F[Unit] =
+    def startRunningMode: F[Unit] =
       for {
         engine <- NodeRunning[F](
                    blockProcessingQueue,
@@ -105,6 +105,7 @@ object CasperLaunch {
         _ <- handleMessages.compile.drain
       } yield ()
 
+    // TODO: move this as part of future block receiver
     def connectToExistingNetwork: F[Unit] =
       for {
         // Ask peers for fork choice tips
@@ -150,16 +151,18 @@ object CasperLaunch {
       _ <- if (dag.dagSet.isEmpty && standalone) {
             // Create genesis block and send to peers
             Log[F].info("Starting as genesis master, creating genesis block...") *>
-              startAndCreateGenesis
+              createStoreBroadcastGenesis
           } else if (dag.dagSet.isEmpty) {
-            // If DAG is empty start by syncing LFS state
+            // If state is empty, transition to syncing mode (LFS)
             Log[F].info("Starting from bootstrap node, syncing LFS...") *>
-              startAndSync
+              startSyncingMode
           } else {
             Log[F].info("Reconnecting to existing network...")
           }
       _ <- connectToExistingNetwork
-      _ <- startAndReconnect
+
+      // Transition to running mode
+      _ <- startRunningMode
     } yield ()
   }
 
