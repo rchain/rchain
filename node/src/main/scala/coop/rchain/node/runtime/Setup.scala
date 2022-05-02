@@ -16,6 +16,7 @@ import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, NodeRunning, PeerMessage}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
+import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
