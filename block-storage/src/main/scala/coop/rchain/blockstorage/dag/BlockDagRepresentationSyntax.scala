@@ -16,8 +16,7 @@ trait DagRepresentationSyntax {
   ): DagRepresentationOps[F] = new DagRepresentationOps[F](dag)
 }
 
-final case class BlockDagInconsistencyError(message: String) extends Exception(message)
-final case class NoLatestMessage(message: String)            extends Exception(message)
+final case class NoLatestMessage(message: String) extends Exception(message)
 
 final class DagRepresentationOps[F[_]](
     // DagRepresentation extensions / syntax

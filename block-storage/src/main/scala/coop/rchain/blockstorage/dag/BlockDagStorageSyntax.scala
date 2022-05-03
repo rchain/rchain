@@ -12,6 +12,8 @@ trait BlockDagStorageSyntax {
   ): BlockDagStorageOps[F] = new BlockDagStorageOps[F](bds)
 }
 
+final case class BlockDagInconsistencyError(message: String) extends Exception(message)
+
 final class BlockDagStorageOps[F[_]](
     // DagRepresentation extensions / syntax
     private val bds: BlockDagStorage[F]
