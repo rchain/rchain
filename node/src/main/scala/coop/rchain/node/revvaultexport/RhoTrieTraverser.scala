@@ -15,6 +15,7 @@ import coop.rchain.rholang.interpreter.{RhoRuntime, RhoType}
 import coop.rchain.shared.Serialize
 
 import scala.annotation.tailrec
+import scala.collection.compat.immutable.LazyList
 
 /**
   * Traverse a Rholang Trie.
@@ -77,8 +78,7 @@ object RhoTrieTraverser {
   private val storeTokenUnforgeable: Par = {
     val rand =
       Tools.unforgeableNameRng(StandardDeploys.registryPubKey, StandardDeploys.registryTimestamp)
-    (0 to 12).foreach(_ => rand.next())
-    val target = rand.next()
+    val target = LazyList.continually(rand.next()).drop(13).head
     Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target))))))
   }
 
