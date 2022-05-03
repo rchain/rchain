@@ -82,16 +82,17 @@ class HttpClient():
         message = rep.json()
         return PrepareResponse(names=message['names'], seq_number=message['seqNumber'])
 
-    def deploy(self, term: str, phlo_limit: int, phlo_price: int, valid_after_block_number: int, deployer: PrivateKey) -> str:
+    def deploy(self, term: str, phlo_limit: int, phlo_price: int, valid_after_block_number: int, deployer: PrivateKey, shard_id: str = '') -> str:
         timestamp = int(time.time()* 1000)
         deploy_data = {
             "term": term,
             "timestamp": timestamp,
             "phloLimit": phlo_limit,
             "phloPrice": phlo_price,
-            "validAfterBlockNumber": valid_after_block_number
+            "validAfterBlockNumber": valid_after_block_number,
+            "shardId": shard_id
         }
-        deploy_proto = DeployDataProto(term=term, timestamp=timestamp, phloLimit=phlo_limit, phloPrice=phlo_price, validAfterBlockNumber=valid_after_block_number)
+        deploy_proto = DeployDataProto(term=term, timestamp=timestamp, phloLimit=phlo_limit, phloPrice=phlo_price, validAfterBlockNumber=valid_after_block_number, shardId=shard_id)
         deploy_req = {
             "data": deploy_data,
             "deployer": deployer.get_public_key().to_hex(),

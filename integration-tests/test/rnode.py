@@ -87,6 +87,8 @@ default_http_port = 40403
 default_internal_grpc_port = 40402
 default_external_grpc_port = 40401
 
+default_shard_id = 'test'
+
 @dataclass
 class PortMapping:
     http: int
@@ -251,11 +253,11 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
-               phlo_price: int = DEFAULT_PHLO_PRICE, valid_after_block_no:int=0) -> str:
+               phlo_price: int = DEFAULT_PHLO_PRICE, valid_after_block_no:int=0, shard_id: str = default_shard_id) -> str:
         try:
             now_time = int(time.time()*1000)
             with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
-                return client.deploy(private_key, self.view_file(rho_file_path), phlo_price, phlo_limit, valid_after_block_no, now_time)
+                return client.deploy(private_key, self.view_file(rho_file_path), phlo_price, phlo_limit, valid_after_block_no, now_time, shard_id=shard_id)
         except RClientException as e:
             message = e.args[0]
             if "Parsing error" in message:
@@ -335,7 +337,7 @@ class Node:
 
     def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str,
                                           private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
-                                          phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
+                                          phlo_price: int = DEFAULT_PHLO_PRICE, shard_id: str = default_shard_id) -> str:
         """
         Supposed that you have a contract with content like below.
 
@@ -358,7 +360,7 @@ class Node:
             '-e', substitute_rules,
             container_contract_file_path,
         )
-        self.deploy(container_contract_file_path, private_key, phlo_limit, phlo_price)
+        self.deploy(container_contract_file_path, private_key, phlo_limit, phlo_price, shard_id=shard_id)
         block_hash = self.propose()
         return block_hash
 
@@ -512,7 +514,8 @@ def make_bootstrap_node(
     number_of_active_validators: int = 10,
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
-    min_phlo_price: int = 1
+    min_phlo_price: int = 1,
+    shard_id: str = default_shard_id
 ) -> Node:
 
     container_name = make_bootstrap_name(network)
@@ -537,7 +540,8 @@ def make_bootstrap_node(
         "--number-of-active-validators":    number_of_active_validators,
         "--epoch-length":                   epoch_length,
         "--quarantine-length":              quarantine_length,
-        "--min-phlo-price":                 min_phlo_price
+        "--min-phlo-price":                 min_phlo_price,
+        "--shard-name":                     shard_id
     }
 
     if cli_flags is not None:
@@ -601,7 +605,8 @@ def make_peer(
     drop_peer_after_retries: int = 0,
     number_of_active_validators: int = 10,
     epoch_length: int = 10000,
-    quarantine_length: int = 50000
+    quarantine_length: int = 50000,
+    shard_id: str = default_shard_id
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -629,7 +634,8 @@ def make_peer(
         "--frrd-drop-peer-after-retries":        drop_peer_after_retries,
         "--number-of-active-validators":    number_of_active_validators,
         "--epoch-length":                   epoch_length,
-        "--quarantine-length":              quarantine_length
+        "--quarantine-length":              quarantine_length,
+        "--shard-name":                     shard_id
     }
 
     if cli_options is not None:
@@ -665,7 +671,8 @@ def started_peer(
     extra_volumes: Optional[List[str]] = None,
     synchrony_constraint_threshold: float = 0.0,
     epoch_length: int = 10000,
-    quarantine_length: int = 50000
+    quarantine_length: int = 50000,
+    shard_id: str = default_shard_id
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -681,7 +688,8 @@ def started_peer(
         extra_volumes=extra_volumes,
         synchrony_constraint_threshold=synchrony_constraint_threshold,
         epoch_length=epoch_length,
-        quarantine_length=quarantine_length
+        quarantine_length=quarantine_length,
+        shard_id=shard_id
     )
     try:
         wait_for_node_started(context, peer)
@@ -700,7 +708,8 @@ def bootstrap_connected_peer(
     cli_options: Optional[Dict[str, str]] = None,
     synchrony_constraint_threshold: float = 0.0,
     epoch_length: int = 10000,
-    quarantine_length: int = 50000
+    quarantine_length: int = 50000,
+    shard_id: str = default_shard_id
 ) -> Generator[Node, None, None]:
     with started_peer(
         context=context,
@@ -711,7 +720,8 @@ def bootstrap_connected_peer(
         cli_options=cli_options,
         synchrony_constraint_threshold=synchrony_constraint_threshold,
         epoch_length=epoch_length,
-        quarantine_length=quarantine_length
+        quarantine_length=quarantine_length,
+        shard_id=shard_id
     ) as peer:
         wait_for_approved_block_received_handler_state(context, peer)
         yield peer
@@ -744,7 +754,8 @@ def started_bootstrap(
     synchrony_constraint_threshold: float = 0.0,
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
-    min_phlo_price: int = 1
+    min_phlo_price: int = 1,
+    shard_id: str = default_shard_id
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
@@ -759,7 +770,8 @@ def started_bootstrap(
         synchrony_constraint_threshold=synchrony_constraint_threshold,
         epoch_length=epoch_length,
         quarantine_length=quarantine_length,
-        min_phlo_price=min_phlo_price
+        min_phlo_price=min_phlo_price,
+        shard_id=shard_id
     )
     try:
         wait_for_node_started(context, bootstrap_node)
@@ -777,6 +789,7 @@ def started_bootstrap_with_network(
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
     min_phlo_price: int = 1,
+    shard_id: str = default_shard_id,
     extra_volumes: Optional[List[str]] = None,
     wait_for_approved_block: bool = False,
 ) -> Generator[Node, None, None]:
@@ -790,7 +803,8 @@ def started_bootstrap_with_network(
                 extra_volumes=extra_volumes,
                 epoch_length=epoch_length,
                 quarantine_length=quarantine_length,
-                min_phlo_price=min_phlo_price
+                min_phlo_price=min_phlo_price,
+                shard_id=shard_id
         ) as bootstrap:
             if wait_for_approved_block:
                 wait_for_approved_block_received_handler_state(context, bootstrap)

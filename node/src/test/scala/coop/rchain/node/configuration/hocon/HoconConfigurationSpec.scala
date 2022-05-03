@@ -1,6 +1,7 @@
 package coop.rchain.node.configuration.hocon
 
 import com.typesafe.config.ConfigFactory
+import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.comm.{CommError, PeerNode}
@@ -143,7 +144,9 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
           deployTimestamp = None,
-          genesisBlockNumber = 0
+          genesisBlockNumber = 0,
+          posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
+          posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
         ),
         genesisCeremony = GenesisCeremonyConf(
           requiredSignatures = 0,

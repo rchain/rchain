@@ -120,7 +120,13 @@ class LastFinalizedAPITest
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
-          produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
+          produceDeploys <- (0 until 7).toList.traverse(
+                             i =>
+                               basicDeployData[Task](
+                                 i,
+                                 shardId = genesisContext.genesisBlock.shardId
+                               )
+                           )
 
           b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
           b2 <- n2.propagateBlock(produceDeploys(1))(n1)
