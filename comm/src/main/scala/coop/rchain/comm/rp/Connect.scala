@@ -1,21 +1,19 @@
 package coop.rchain.comm.rp
 
-import scala.concurrent.duration._
-import scala.util.Random
-
 import cats._
 import cats.effect._
-import cats.syntax.all._
 import cats.mtl._
-
-import coop.rchain.comm._
+import cats.syntax.all._
 import coop.rchain.comm.CommError._
+import coop.rchain.comm._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
+
+import scala.util.Random
 
 object Connect {
 

@@ -4,10 +4,16 @@ import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.casper.ReportStore.ReportStore
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.reporting.ReportStore.ReportStore
+import coop.rchain.casper.reporting.{
+  DeployReportResult,
+  ReportingCasper,
+  ReportingProtoTransformer,
+  SystemDeployReportResult
+}
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log

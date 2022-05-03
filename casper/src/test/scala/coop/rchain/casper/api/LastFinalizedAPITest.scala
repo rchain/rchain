@@ -6,8 +6,8 @@ import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.GenesisBuilder._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.syntax._
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -29,7 +29,7 @@ class LastFinalizedAPITest
   def isFinalized(node: TestNode[Task])(block: BlockMessage): Task[Boolean] =
     for {
       blockApi <- createBlockApi(node)
-      res      <- blockApi.isFinalized(ProtoUtil.hashString(block))
+      res      <- blockApi.isFinalized(block.blockHash.toHexString)
     } yield res.right.value
 
   /*

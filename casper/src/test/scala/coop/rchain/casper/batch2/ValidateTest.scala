@@ -473,25 +473,6 @@ class ValidateTest
       } yield ()
   }
 
-  "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val validator = generateValidator("Validator")
-      val impostor  = generateValidator("Impostor")
-      for {
-        _            <- createChain[Task](3, List(Bond(validator, 1)))
-        genesis      <- blockDagStorage.lookupByIdUnsafe(0)
-        validBlock   <- blockDagStorage.lookupByIdUnsafe(1).map(_.copy(sender = validator))
-        invalidBlock <- blockDagStorage.lookupByIdUnsafe(2).map(_.copy(sender = impostor))
-        dag          <- blockDagStorage.getRepresentation
-        _ <- Validate
-              .blockSenderHasWeight[Task](genesis, genesis) shouldBeF true
-        _ <- Validate
-              .blockSenderHasWeight[Task](validBlock, genesis) shouldBeF true
-        result <- Validate
-                   .blockSenderHasWeight[Task](invalidBlock, genesis) shouldBeF false
-      } yield result
-  }
-
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 

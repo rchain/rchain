@@ -49,7 +49,7 @@ class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach w
           val sender                                    = peerNode("peer", 40400)
           val blockLookup: BlockHash => Coeval[Boolean] = kp(Coeval(true))
           // then
-          Running.handleHasBlockRequest[Coeval](sender, hbr)(blockLookup).apply()
+          NodeRunning.handleHasBlockRequest[Coeval](sender, hbr)(blockLookup).apply()
           // then
           val (peer, msg) = transport.getRequest(0)
           peer should be(sender)
@@ -63,7 +63,7 @@ class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach w
           val sender                                    = peerNode("peer", 40400)
           val blockLookup: BlockHash => Coeval[Boolean] = kp(Coeval(false))
           // then
-          Running.handleHasBlockRequest[Coeval](sender, hbr)(blockLookup).apply()
+          NodeRunning.handleHasBlockRequest[Coeval](sender, hbr)(blockLookup).apply()
           // then
           transport.requests.size should be(0)
         }

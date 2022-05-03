@@ -1,11 +1,8 @@
 package coop.rchain.comm
 
-import java.net.InetSocketAddress
-import coop.rchain.comm.protocol.routing.Node
+import coop.rchain.comm.protocol.routing.{Node, Packet}
 import coop.rchain.shared.Base16
-
-import scala.util.control.NonFatal
-import io.lemonlabs.uri.{Uri, Url}
+import io.lemonlabs.uri.Url
 
 import scala.util.Try
 
@@ -35,6 +32,8 @@ final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
     s"rnode://$sKey@${endpoint.host}?protocol=${endpoint.tcpPort}&discovery=${endpoint.udpPort}"
 
 }
+
+final case class RoutingMessage(peer: PeerNode, packet: Packet)
 
 object PeerNode {
 

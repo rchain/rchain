@@ -140,13 +140,12 @@ object StandardDeploys {
 
   def revGenerator(
       vaults: Seq[Vault],
-      supply: Long,
       timestamp: Long,
       isLastBatch: Boolean,
       shardId: String
   ): Signed[DeployData] =
     toDeploy(
-      RevGenerator(vaults, supply, isLastBatch),
+      RevGenerator(vaults, isLastBatch),
       revGeneratorPk,
       timestamp,
       shardId

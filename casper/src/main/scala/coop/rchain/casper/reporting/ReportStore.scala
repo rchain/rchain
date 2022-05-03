@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package coop.rchain.casper.reporting
 
 import cats.effect.Sync
 import com.google.protobuf.ByteString
@@ -8,9 +8,7 @@ import coop.rchain.shared.Compression
 import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import net.jpountz.lz4.{LZ4CompressorWithLength, LZ4DecompressorWithLength}
-import scodec.SizeBound.unknown
-import scodec.{Attempt, Codec, DecodeResult, SizeBound, TransformSyntax}
-import scodec.bits.{BitVector, ByteVector}
+import scodec.bits.ByteVector
 
 object ReportStore {
 

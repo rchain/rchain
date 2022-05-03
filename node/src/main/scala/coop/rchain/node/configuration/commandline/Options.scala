@@ -424,24 +424,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "allowed to propose."
     )
 
-    val frrdMaxPeerQueueSize = opt[Int](
-      descr = "Fair round robin dispatcher individual peer packet queue size. " +
-        "Packets will get dropped by the dispatcher when the queue is full.",
-      validate = _ > 0
-    )
-
-    val frrdGiveUpAfterSkipped = opt[Int](
-      descr = "Fair round robin dispatcher give up and try next peer after skipped packets. " +
-        "Skipped packets are buffered in other peers packet queues.",
-      validate = _ >= 0
-    )
-
-    val frrdDropPeerAfterRetries = opt[Int](
-      descr = "Fair round robin dispatcher drop inactive peer after round robin rounds. " +
-        "After giving up several times the peer gets dropped from the queue.",
-      validate = _ >= 0
-    )
-
     val bondsFile = opt[String](
       descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
         "which defines the bond amounts for each validator at genesis. " +
@@ -481,27 +463,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "the number of the active validators"
     )
 
-    val requiredSignatures = opt[Int](
-      descr =
-        "Number of signatures from bonded validators required for Ceremony Master to approve the genesis block."
-    )
-
-    val approveInterval = opt[FiniteDuration](
-      descr = "Each `approve-interval` Ceremony Master (CM) checks if it have gathered enough signatures to approve" +
-        "the genesis block. If positive, CM broadcasts Approved Block, if negative - broadcast Unapproved Block " +
-        "one more time and keeps waiting for approvals."
-    )
-
-    //TODO remove
-    val approveDuration = opt[FiniteDuration](
-      descr =
-        "Time window in which BlockApproval messages will be accumulated before checking conditions."
-    )
-
-    val genesisValidator = opt[Flag](
-      descr = "Start a node as a genesis validator."
-    )
-
     val prometheus = opt[Flag](
       descr = "Enable the Prometheus metrics reporter"
     )
@@ -520,11 +481,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val sigar = opt[Flag](
       descr = "Enable Sigar host system metrics"
-    )
-
-    // TODO remove
-    val deployTimestamp = opt[Long](
-      descr = "Timestamp for the deploys."
     )
 
     // Dev mode options

@@ -73,7 +73,7 @@ object GenesisBuilder {
       genesisVaults,
       Genesis(
         shardId = "root",
-        timestamp = 0L,
+        blockTimestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
           maximumBond = Long.MaxValue,
@@ -93,7 +93,6 @@ object GenesisBuilder {
               // Initial validator vaults contain 0 Rev
               RevAddress.fromPublicKey(pk).map(Vault(_, 0))
           }.flattenOption,
-        supply = Long.MaxValue,
         blockNumber = 0
       )
     )
@@ -150,11 +149,14 @@ object GenesisBuilder {
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
     (for {
-      kvsManager      <- mkTestRNodeStoreManager[Task](storageDirectory)
-      rStore          <- kvsManager.rSpaceStores
-      mStore          <- RuntimeManager.mergeableStore(kvsManager)
-      runtimeManager  <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName)
-      genesis         <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
+      kvsManager     <- mkTestRNodeStoreManager[Task](storageDirectory)
+      rStore         <- kvsManager.rSpaceStores
+      mStore         <- RuntimeManager.mergeableStore(kvsManager)
+      runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName)
+      genesis <- {
+        implicit val rm = runtimeManager
+        Genesis.createGenesisBlock[Task](genesisParameters)
+      }
       blockStore      <- blockStore.create[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)

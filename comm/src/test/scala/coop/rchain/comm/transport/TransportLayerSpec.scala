@@ -6,6 +6,7 @@ import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.ProtocolHelper
+import coop.rchain.comm.syntax._
 import org.scalatest._
 
 abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
@@ -78,7 +79,7 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
               local: PeerNode,
               remote: PeerNode
           ): F[Unit] =
-            transportLayer.stream(
+            transportLayer.stream1(
               remote,
               Blob(local, Packet("Test", bigContent))
             )

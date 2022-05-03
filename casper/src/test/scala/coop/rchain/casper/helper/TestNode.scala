@@ -17,10 +17,8 @@ import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.BlockRetriever._
-import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
@@ -88,7 +86,8 @@ case class TestNode[F[_]: Sync: Timer](
     connectionsCellEffect: Cell[F, Connections],
     rpConfAskEffect: RPConfAsk[F],
     eventPublisherEffect: EventPublisher[F],
-    casperShardConf: CasperShardConf
+    casperShardConf: CasperShardConf,
+    routingMessageQueue: Queue[F, RoutingMessage]
 )(implicit concurrentF: Concurrent[F]) {
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...
@@ -130,16 +129,12 @@ case class TestNode[F[_]: Sync: Timer](
 
   implicit val rspaceMan = RSpaceStateManagerTestImpl()
   val engine =
-    new coop.rchain.casper.engine.Running(
+    new coop.rchain.casper.engine.NodeRunning(
       blockProcessorQueue,
       blockProcessorState,
-      approvedBlock,
       validatorIdOpt,
-      ().pure[F],
       true
     )
-  implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
-  implicit val packetHandlerEff          = CasperPacketHandler[F]
 
   def proposeSync: F[BlockHash] =
     for {
@@ -171,7 +166,7 @@ case class TestNode[F[_]: Sync: Timer](
   def publishBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
     for {
       block <- addBlock(deployDatums: _*)
-      _     <- nodes.toList.filter(_ != this).traverse_(_.handleReceive())
+      _     <- nodes.toList.filter(_ != this).traverse_(_.processBlock(block))
     } yield block
 
   def propagateBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
@@ -242,11 +237,11 @@ case class TestNode[F[_]: Sync: Timer](
                         message match {
                           case b: BlockMessage =>
                             processBlock(b).as(CommunicationResponse.handledWithoutMessage)
-                          case _ => handle[F](p)
+                          case _ => handle[F](p, routingMessageQueue)
                         }
                     )
                 }
-                case _ => handle[F](p)
+                case _ => handle[F](p, routingMessageQueue)
               }
           ),
         kp(().pure[F])
@@ -536,6 +531,9 @@ object TestNode {
                  blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
                  blockProcessorState <- Ref.of[F, Set[BlockHash]](Set.empty)
 
+                 // Remove TransportLayer handling in TestNode (too low level for these tests)
+                 routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
+
                  node = new TestNode[F](
                    name,
                    currentPeerNode,
@@ -573,7 +571,8 @@ object TestNode {
                    requestedBlocksEffect = requestedBlocks,
                    blockRetrieverEffect = blockRetriever,
                    metricEffect = metricEff,
-                   casperShardConf = shardConf
+                   casperShardConf = shardConf,
+                   routingMessageQueue = routingMessageQueue
                  )
                } yield node
              })
