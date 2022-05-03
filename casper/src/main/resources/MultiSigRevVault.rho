@@ -73,7 +73,7 @@ in {
     // MultiSig vault creation method
     // Returns (false, errorMsg) or (true, (multiSigVault, revAddress, revVault))
     contract MultiSigRevVault(@"create", @publicKeys, @unsealers, @quorumSize, ret) = {
-      if (quorumSize > publicKeys.length() + unsealers.length() or quorumSize <= 0) {
+      if (quorumSize <= 0 || quorumSize > publicKeys.length() + unsealers.length()) {
         ret!((false, "invalid quorum size"))
       } else {
         new unf, authKeyCh, RevAddress(`rho:rev:address`), revAddrCh in {
