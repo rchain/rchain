@@ -107,23 +107,6 @@ message BlockHashMessageProto {
   bytes  blockCreator = 2;
 }
 
-message BlockMetadataInternal {
-  // This message in mapped to a different Scala class because of protobuf's inability to create map<bytes, int64> for
-  // bonds.
-  option (scalapb.message).type = "coop.rchain.models.BlockMetadata";
-
-  bytes blockHash                            = 1;
-  repeated bytes parents                     = 2 [(scalapb.field).collection_type="collection.immutable.List"];
-  bytes sender                               = 3;
-  repeated JustificationProto justifications = 4 [(scalapb.field).collection_type="collection.immutable.List"];
-  repeated BondProto bonds                   = 5 [(scalapb.field).collection_type="collection.immutable.List"];
-  int64 blockNum                             = 6;
-  int32 seqNum                               = 7;
-  bool invalid                               = 8; // whether the block was marked as invalid
-  bool directlyFinalized                     = 9; // whether the block has been last finalized block (LFB)
-  bool finalized                             = 10;// whether the block is finalized
-}
-
 message HeaderProto {
   repeated bytes parentsHashList = 1; //list of parent block hashes
   int64 timestamp  = 5;
@@ -269,3 +252,21 @@ message StoreItemsMessageProto {
 }
 
 // --------- End Last finalized state  --------
+
+// --------- Internal types ---------
+
+message BlockMetadataProto {
+  bytes blockHash                            = 1;
+  int64 blockNum                             = 2;
+  bytes sender                               = 3;
+  int32 seqNum                               = 4;
+  repeated JustificationProto justifications = 5 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated BondProto bonds                   = 6 [(scalapb.field).collection_type="collection.immutable.List"];
+  bool invalid                               = 7; // whether the block was marked as invalid
+
+  bool directlyFinalized                     = 20; // whether the block has been last finalized block (LFB)
+  bool finalized                             = 21; // whether the block is finalized
+  repeated bytes parents                     = 22 [(scalapb.field).collection_type="collection.immutable.List"];
+}
+
+// --------- End Internal types ---------

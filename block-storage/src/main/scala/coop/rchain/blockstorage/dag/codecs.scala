@@ -25,7 +25,7 @@ object codecs {
 
   val codecBlockMetadata = bytes.xmap[BlockMetadata](
     byteVector => BlockMetadata.fromBytes(byteVector.toArray),
-    blockMetadata => ByteVector(blockMetadata.toByteString.toByteArray)
+    blockMetadata => ByteVector(BlockMetadata.toBytes(blockMetadata))
   )
 
   val codecBlockMessage = bytes.exmap[BlockMessage](

@@ -142,7 +142,7 @@ object EqualM extends EqualMDerivation {
   implicit val ApprovedBlockCandidateHash = gen[ApprovedBlockCandidate]
   implicit val BlockApprovalHash          = gen[BlockApproval]
   implicit val BlockMessageHash           = gen[BlockMessageProto]
-  implicit val BlockMetadataInternalHash  = gen[BlockMetadataInternal]
+  implicit val BlockMetadataInternalHash  = gen[BlockMetadataProto]
   implicit val BodyHash                   = gen[BodyProto]
   implicit val BondHash                   = gen[BondProto]
   implicit val DeployDataHash             = gen[DeployDataProto]
