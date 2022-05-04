@@ -90,13 +90,8 @@ object InterpreterUtil {
                        .as(InvalidRejectedDeploy.asLeft)
                    } else {
                      for {
-                       replayResult <- replayBlock(
-                                        incomingPreStateHash,
-                                        block,
-                                        s.dag,
-                                        runtimeManager
-                                      )
-                       result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
+                       replayResult <- replayBlock(incomingPreStateHash, block, runtimeManager)
+                       result       <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
                      } yield result
                    }
                }
@@ -106,24 +101,15 @@ object InterpreterUtil {
   private def replayBlock[F[_]: Sync: Log: BlockStore: BlockDagStorage: Timer](
       initialStateHash: StateHash,
       block: BlockMessage,
-      dag: DagRepresentation,
       runtimeManager: RuntimeManager[F]
   )(implicit spanF: Span[F]): F[Either[ReplayFailure, StateHash]] =
     spanF.trace(ReplayBlockMetricsSource) {
       val internalDeploys       = ProtoUtil.deploys(block)
       val internalSystemDeploys = ProtoUtil.systemDeploys(block)
       for {
-        invalidBlocksSet <- dag.invalidBlocks
-        unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
-        seenInvalidBlocksSet = invalidBlocksSet.filterNot(
-          block => unseenBlocksSet.contains(block.blockHash)
-        ) // TODO: Write test in which switching this to .filter makes it fail
-        invalidBlocks = seenInvalidBlocksSet
-          .map(block => (block.blockHash, block.sender))
-          .toMap
         _                  <- Span[F].mark("before-process-pre-state-hash")
         blockData          = BlockData.fromBlock(block)
-        withCostAccounting = block.justifications.nonEmpty
+        withCostAccounting = block.justifications.nonEmpty || block.header.parentsHashList.nonEmpty
         replayResultF = runtimeManager
           .replayComputeState(initialStateHash)(
             internalDeploys,

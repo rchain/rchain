@@ -167,7 +167,6 @@ object MultiParentCasper {
       tips,
       parents,
       justifications,
-      invalidBlocks,
       deploysInScope,
       maxBlockNum,
       maxSeqNums,

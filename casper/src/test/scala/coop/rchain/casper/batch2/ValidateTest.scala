@@ -59,7 +59,6 @@ class ValidateTest
       IndexedSeq.empty,
       List.empty,
       Set.empty,
-      Map.empty,
       Set.empty,
       0,
       Map.empty,

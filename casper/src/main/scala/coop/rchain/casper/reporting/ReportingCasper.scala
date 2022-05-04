@@ -23,7 +23,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, createRhoEnv}
-import coop.rchain.rholang.interpreter.SystemProcesses.{BlockData, Definition, InvalidBlocks}
+import coop.rchain.rholang.interpreter.SystemProcesses.{BlockData, Definition}
 import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.RSpace.RSpaceStore
@@ -95,7 +95,7 @@ object ReportingCasper {
           preStateHash     = ProtoUtil.preStateHash(block)
 
           // Block with empty justifications is genesis which is build with turned off cost accounting
-          withCostAccounting = block.justifications.nonEmpty
+          withCostAccounting = block.justifications.nonEmpty || block.header.parentsHashList.nonEmpty
 
           // Set Rholang runtime data
           blockdata = BlockData.fromBlock(block)
@@ -151,16 +151,8 @@ class ReportingRuntime[F[_]: Sync: Span](
     override val space: RhoReportingRspace[F],
     override val cost: _cost[F],
     override val blockDataRef: Ref[F, BlockData],
-    override val invalidBlocksParam: InvalidBlocks[F],
     override val mergeChs: Ref[F, Set[Par]]
-) extends ReplayRhoRuntimeImpl[F](
-      reducer,
-      space,
-      cost,
-      blockDataRef,
-      invalidBlocksParam,
-      mergeChs
-    ) {
+) extends ReplayRhoRuntimeImpl[F](reducer, space, cost, blockDataRef, mergeChs) {
   def getReport: F[Seq[Seq[ReportingEvent]]] = space.getReport
 }
 
@@ -190,8 +182,8 @@ object ReportingRuntime {
         implicit val c = cost
         createRhoEnv(reporting, mergeChs, Genesis.NonNegativeMergeableTagName, extraSystemProcesses)
       }
-      (reducer, blockRef, invalidBlocks) = rhoEnv
-      runtime                            = new ReportingRuntime[F](reducer, reporting, cost, blockRef, invalidBlocks, mergeChs)
-      _                                  <- bootstrapRegistry(runtime)
+      (reducer, blockRef) = rhoEnv
+      runtime             = new ReportingRuntime[F](reducer, reporting, cost, blockRef, mergeChs)
+      _                   <- bootstrapRegistry(runtime)
     } yield runtime
 }
