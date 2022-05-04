@@ -431,60 +431,50 @@ in {
               new commitRewards in {
                 // Private method which transfers all of a validator's rewards + bond to the Coop vault.
                 // Slash expects (Boolean, Either[Nil, String]) on returnCh.
-                contract PoS(@"slash", @deployerId, @blockHash, @sysAuthToken, returnCh) = {
+                contract PoS(@"slash", @slashedValidator, @sysAuthToken, returnCh) = {
                   new isValidTokenCh in {
                     sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
                     for (@isValid <- isValidTokenCh) {
                       if (isValid) {
-                        new invalidBlocksCh, stateProcessCh, userCh,
-                            getInvalidBlocks(`rho:casper:invalidBlocks`)
-                        in {
-                          getInvalidBlocks!(*invalidBlocksCh) |
-                          getUser!(deployerId, *userCh) |
+                        new stateProcessCh in {
                           runMVar!(*stateCh, *stateProcessCh, *returnCh) |
-                          for (@invalidBlocks        <- invalidBlocksCh &
-                               @userPk               <- userCh &
-                               @state, stateUpdateCh <- stateProcessCh) {
-                                new toBeSlashed, valBondCh, valRewardCh, posAuthKeyCh in {
-                                  // Flow of logic:
-                                  // 0. check if blockHash is the hash of an invalid block
-                                  // 1. transfer stake of slashed validator from PoS to Coop vault
-                                  // 2. update state
-                                  // Retrieves either public key of sender of invalid block or the deployer public key.
-                                  toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
-                                  for (@validator <- toBeSlashed) {
-                                    // Takes the stake of slashed validator
-                                    valBondCh!(state.get("allBonds").get(validator)) |
-                                    @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
-                                    for (@valBond <- valBondCh ; @posAuthKey <- posAuthKeyCh) {
-                                      // Transfers slashed funds from PoS vault to Coop vault, then updates state.
-                                      new transferDoneCh in {
-                                        @posVault!(
-                                          "transfer",
-                                          coopMultiVaultAddr,
-                                          valBond,
-                                          posAuthKey,
-                                          *transferDoneCh
-                                        ) |
-                                        // FIXME handle transfer failing case
-                                        for (_ <- transferDoneCh) {
-                                          // Sets slashed validator's committed rewards and bond to 0 in state.
-                                          // Moves slashed validator to withdrawers map with no quarantine period.
-                                          stateUpdateCh!({
-                                            "allBonds"        : state.get("allBonds").set(validator, 0),
-                                            "activeValidators": state.get("activeValidators").delete(validator),
-                                            "committedRewards" : state.get("committedRewards").delete(validator), 
-                                            "withdrawers"     : state.get("withdrawers"),
-                                            "pendingWithdrawers": state.get("pendingWithdrawers"),
-                                            "randomImages"    : state.get("randomImages"),
-                                            "randomNumbers"   : state.get("randomNumbers")
-                                          },
-                                          (true, Nil))
-                                        }
-                                      }
-                                    }
+                          for (@state, stateUpdateCh <- stateProcessCh) {
+                            new valBondCh, valRewardCh, posAuthKeyCh in {
+                              // Flow of logic:
+                              // 0. check if blockHash is the hash of an invalid block
+                              // 1. transfer stake of slashed validator from PoS to Coop vault
+                              // 2. update state
+                              // Takes the stake of slashed validator
+                              valBondCh!(state.get("allBonds").get(slashedValidator)) |
+                              @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
+                              for (@valBond <- valBondCh ; @posAuthKey <- posAuthKeyCh) {
+                                // Transfers slashed funds from PoS vault to Coop vault, then updates state.
+                                new transferDoneCh in {
+                                  @posVault!(
+                                    "transfer",
+                                    coopMultiVaultAddr,
+                                    valBond,
+                                    posAuthKey,
+                                    *transferDoneCh
+                                  ) |
+                                  // FIXME handle transfer failing case
+                                  for (_ <- transferDoneCh) {
+                                    // Sets slashed validator's committed rewards and bond to 0 in state.
+                                    // Moves slashed validator to withdrawers map with no quarantine period.
+                                    stateUpdateCh!({
+                                      "allBonds"        : state.get("allBonds").set(slashedValidator, 0),
+                                      "activeValidators": state.get("activeValidators").delete(slashedValidator),
+                                      "committedRewards" : state.get("committedRewards").delete(slashedValidator),
+                                      "withdrawers"     : state.get("withdrawers"),
+                                      "pendingWithdrawers": state.get("pendingWithdrawers"),
+                                      "randomImages"    : state.get("randomImages"),
+                                      "randomNumbers"   : state.get("randomNumbers")
+                                    },
+                                    (true, Nil))
                                   }
                                 }
+                              }
+                            }
                           }
                         }
                       } else {

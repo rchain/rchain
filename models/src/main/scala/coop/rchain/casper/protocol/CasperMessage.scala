@@ -1,12 +1,13 @@
 package coop.rchain.casper.protocol
 
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
-import coop.rchain.models.PCost
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.PCost
+import coop.rchain.models.Validator.Validator
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.Serialize
@@ -371,16 +372,15 @@ object ProcessedDeploy {
 
 sealed trait SystemDeployData
 
-final case class SlashSystemDeployData(invalidBlockHash: BlockHash, issuerPublicKey: PublicKey)
-    extends SystemDeployData
-case object CloseBlockSystemDeployData extends SystemDeployData
-case object Empty                      extends SystemDeployData
+final case class SlashSystemDeployData(slashedValidator: Validator) extends SystemDeployData
+case object CloseBlockSystemDeployData                              extends SystemDeployData
+case object Empty                                                   extends SystemDeployData
 
 object SystemDeployData {
   val empty: SystemDeployData = Empty
 
-  def from(invalidBlockHash: BlockHash, issuerPublicKey: PublicKey): SystemDeployData =
-    SlashSystemDeployData(invalidBlockHash, issuerPublicKey)
+  def from(slashedValidator: Validator): SystemDeployData =
+    SlashSystemDeployData(slashedValidator)
 
   def from(): SystemDeployData =
     CloseBlockSystemDeployData
@@ -388,7 +388,7 @@ object SystemDeployData {
   def fromProto(proto: SystemDeployDataProto): SystemDeployData =
     proto.systemDeploy match {
       case SystemDeployDataProto.SystemDeploy.SlashSystemDeploy(sd) =>
-        SlashSystemDeployData(sd.invalidBlockHash, PublicKey(sd.issuerPublicKey))
+        SlashSystemDeployData(sd.slashedValidator)
       case SystemDeployDataProto.SystemDeploy.CloseBlockSystemDeploy(_) =>
         CloseBlockSystemDeployData
       case _ => Empty
@@ -396,9 +396,9 @@ object SystemDeployData {
 
   def toProto(sdd: SystemDeployData): SystemDeployDataProto =
     sdd match {
-      case SlashSystemDeployData(invalidBlockHash, issuerPublicKey) =>
+      case SlashSystemDeployData(slashedValidator) =>
         SystemDeployDataProto().withSlashSystemDeploy(
-          SlashSystemDeployDataProto(invalidBlockHash, ByteString.copyFrom(issuerPublicKey.bytes))
+          SlashSystemDeployDataProto(slashedValidator)
         )
       case CloseBlockSystemDeployData =>
         SystemDeployDataProto().withCloseBlockSystemDeploy(

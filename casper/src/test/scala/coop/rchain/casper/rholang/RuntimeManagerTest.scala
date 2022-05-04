@@ -8,15 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.sysdeploys._
-import coop.rchain.casper.rholang._
-import coop.rchain.casper.rholang.types.{
-  PlayFailed,
-  PlaySucceeded,
-  ReplayCostMismatch,
-  ReplayFailure,
-  SystemDeploy,
-  SystemDeployUserError
-}
+import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.Catscontrib._
@@ -85,8 +77,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
               Nil,
-              BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head, 0),
-              Map.empty[BlockHash, Validator]
+              BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head, 0)
             )
       (hash, Seq(result), _) = res
     } yield (hash, result)
@@ -104,8 +95,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         genesisContext.validatorPks.head,
         0
       ),
-      Map.empty[BlockHash, Validator],
-      isGenesis = false
+      withCostAccounting = true
     )
 
   "computeState" should "charge for deploys" in effectTest {
@@ -119,8 +109,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                             #   }
                             # }
                             #""".stripMargin('#')
-      // TODO: Prohibit negative gas prices and gas limits in deploys.
-      // TODO: Make minimum maximum yield for deploy parameter of node.
       ConstructDeploy.sourceDeployNowF(source = source, phloLimit = 100000) >>= { deploy =>
         computeState(runtimeManager, deploy, genPostState) >>= {
           case (playStateHash1, processedDeploy) =>
@@ -336,8 +324,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                  0L,
                                                  genesisContext.validatorPks.head,
                                                  0
-                                               ),
-                                               Map.empty
+                                               )
                                              )
         (playStateHash0, processedDeploys0, processedSysDeploys0) = playStateHash0AndProcessedDeploys0
         bonds0                                                    <- runtimeManager.computeBonds(playStateHash0)
@@ -350,8 +337,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                              genesisContext.validatorPks.head,
                                              0
                                            ),
-                                           Map.empty,
-                                           isGenesis = false
+                                           withCostAccounting = true
                                          )
         Right(replayStateHash0) = replayError0OrReplayStateHash0
         _                       = assert(playStateHash0 == replayStateHash0)
@@ -371,8 +357,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                  0L,
                                                  genesisContext.validatorPks.head,
                                                  0
-                                               ),
-                                               Map.empty
+                                               )
                                              )
         (playStateHash1, processedDeploys1, processedSysDeploys1) = playStateHash1AndProcessedDeploys1
         bonds2                                                    <- runtimeManager.computeBonds(playStateHash1)
@@ -385,8 +370,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                              genesisContext.validatorPks.head,
                                              0
                                            ),
-                                           Map.empty,
-                                           isGenesis = false
+                                           withCostAccounting = true
                                          )
         Right(replayStateHash1) = replayError1OrReplayStateHash1
         _                       = assert(playStateHash1 == replayStateHash1)
@@ -572,16 +556,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                    blockData.seqNum
                                  )
                                ) :: Nil,
-                               blockData,
-                               invalidBlocks
+                               blockData
                              )
         (playPostState, processedDeploys, processedSystemDeploys) = computeStateResult
         replayComputeStateResult <- runtimeManager.replayComputeState(genPostState)(
                                      processedDeploys,
                                      processedSystemDeploys,
                                      blockData,
-                                     invalidBlocks,
-                                     isGenesis = false
+                                     withCostAccounting = true
                                    )
       } yield {
         replayComputeStateResult match {
@@ -614,8 +596,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                             SystemDeployUtil
                               .generateCloseDeployRandomSeed(blockData.sender, blockData.seqNum)
                           ) :: Nil,
-                          blockData,
-                          invalidBlocks
+                          blockData
                         )
                         .map(_._2)
         secondDeploy <- mgr
@@ -625,8 +606,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                              SystemDeployUtil
                                .generateCloseDeployRandomSeed(blockData.sender, blockData.seqNum)
                            ) :: Nil,
-                           blockData,
-                           invalidBlocks
+                           blockData
                          )
                          .map(_._2)
         compoundDeploy <- mgr
@@ -636,8 +616,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                SystemDeployUtil
                                  .generateCloseDeployRandomSeed(blockData.sender, blockData.seqNum)
                              ) :: Nil,
-                             blockData,
-                             invalidBlocks
+                             blockData
                            )
                            .map(_._2)
         _                  = assert(firstDeploy.size == 1)
@@ -765,8 +744,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                              .generateCloseDeployRandomSeed(blockData.sender, blockData.seqNum)
                          )
                        ),
-                       blockData,
-                       invalidBlocks
+                       blockData
                      )
         (_, processedDeploys, processedSystemDeploys) = newState
         processedDeploy                               = processedDeploys.head
@@ -778,8 +756,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                    Seq(invalidProcessedDeploy),
                    processedSystemDeploys,
                    blockData,
-                   invalidBlocks,
-                   isGenesis = false
+                   withCostAccounting = true
                  )
       } yield result
     }
@@ -825,16 +802,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                    newState <- rm.computeState(genPostState)(
                                 Seq(deploy),
                                 Seq(),
-                                blockData,
-                                invalidBlocks
+                                blockData
                               )
                    (stateHash, processedDeploys, processedSysDeploys) = newState
                    result <- rm.replayComputeState(genPostState)(
                               processedDeploys,
                               processedSysDeploys,
                               blockData,
-                              invalidBlocks,
-                              isGenesis = false
+                              withCostAccounting = true
                             )
                  } yield (stateHash, result.right.get)
                }

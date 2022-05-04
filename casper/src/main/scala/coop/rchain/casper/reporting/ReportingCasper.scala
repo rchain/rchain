@@ -5,7 +5,6 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.PrettyPrinter
@@ -17,13 +16,10 @@ import coop.rchain.casper.protocol.{
   SystemDeployData
 }
 import coop.rchain.casper.reporting.ReportingCasper.RhoReportingRspace
-import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, createRhoEnv}
@@ -98,23 +94,12 @@ object ReportingCasper {
           dag              <- BlockDagStorage[F].getRepresentation
           preStateHash     = ProtoUtil.preStateHash(block)
 
-          // Block data & invalid block for runtime
-          blockdata        = BlockData.fromBlock(block)
-          invalidBlocksSet <- dag.invalidBlocks
-          unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
-          seenInvalidBlocksSet = invalidBlocksSet.filterNot(
-            block => unseenBlocksSet.contains(block.blockHash)
-          )
-          invalidBlocks = seenInvalidBlocksSet
-            .map(block => (block.blockHash, block.sender))
-            .toMap
-
           // Block with empty justifications is genesis which is build with turned off cost accounting
-          useCostAccounting = block.justifications.nonEmpty
+          withCostAccounting = block.justifications.nonEmpty
 
           // Set Rholang runtime data
-          _ <- reportingRuntime.setBlockData(blockdata)
-          _ <- reportingRuntime.setInvalidBlocks(invalidBlocks)
+          blockdata = BlockData.fromBlock(block)
+          _         <- reportingRuntime.setBlockData(blockdata)
 
           // Reset runtime (in-memory) state
           _ <- reportingRuntime.reset(Blake2b256Hash.fromByteString(preStateHash))
@@ -124,8 +109,8 @@ object ReportingCasper {
                   reportingRuntime,
                   block.body.deploys,
                   block.body.systemDeploys,
-                  useCostAccounting,
-                  blockdata
+                  blockdata,
+                  withCostAccounting
                 )
         } yield res
 
@@ -133,8 +118,8 @@ object ReportingCasper {
           runtime: ReportingRuntime[F],
           terms: Seq[ProcessedDeploy],
           systemDeploys: Seq[ProcessedSystemDeploy],
-          withCostAccounting: Boolean,
-          blockData: BlockData
+          blockData: BlockData,
+          withCostAccounting: Boolean
       ): F[ReplayResult] =
         for {
           res <- terms.toList.traverse { term =>

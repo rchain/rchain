@@ -32,9 +32,7 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
@@ -66,18 +64,16 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
-      isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      withCostAccounting: Boolean
   ): F[Either[ReplayFailure, (Blake2b256Hash, Seq[NumberChannelsEndVal])]] =
     Span[F].traceI("replay-compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
-        _ <- runtime.setInvalidBlocks(invalidBlocks)
         result <- replayDeploys(
                    startHash,
                    terms,
                    systemDeploys,
-                   replayDeployE(withCostAccounting = !isGenesis)(_).value,
+                   replayDeployE(withCostAccounting)(_).value,
                    replayBlockSystemDeployDiag(blockData)
                  )
       } yield result
@@ -258,11 +254,10 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
     import processedSysDeploy._
     val sender = ByteString.copyFrom(blockData.sender.bytes)
     systemDeploy match {
-      case SlashSystemDeployData(invalidBlockHash, issuerPublicKey) =>
+      case SlashSystemDeployData(slashedValidator) =>
         val slashDeploy = {
           SlashDeploy(
-            invalidBlockHash,
-            issuerPublicKey,
+            slashedValidator,
             SystemDeployUtil.generateSlashDeployRandomSeed(sender, blockData.seqNum)
           )
         }

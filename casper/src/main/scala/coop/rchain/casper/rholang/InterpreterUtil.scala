@@ -121,16 +121,16 @@ object InterpreterUtil {
         invalidBlocks = seenInvalidBlocksSet
           .map(block => (block.blockHash, block.sender))
           .toMap
-        _         <- Span[F].mark("before-process-pre-state-hash")
-        blockData = BlockData.fromBlock(block)
-        isGenesis = block.header.parentsHashList.isEmpty
-        replayResultF = runtimeManager.replayComputeState(initialStateHash)(
-          internalDeploys,
-          internalSystemDeploys,
-          blockData,
-          invalidBlocks,
-          isGenesis
-        )
+        _                  <- Span[F].mark("before-process-pre-state-hash")
+        blockData          = BlockData.fromBlock(block)
+        withCostAccounting = block.justifications.nonEmpty
+        replayResultF = runtimeManager
+          .replayComputeState(initialStateHash)(
+            internalDeploys,
+            internalSystemDeploys,
+            blockData,
+            withCostAccounting
+          )
         replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
                          RetryPolicies.limitRetries(3), {
                            case Right(stateHash) => stateHash == block.body.state.postStateHash
@@ -231,8 +231,7 @@ object InterpreterUtil {
       systemDeploys: Seq[SystemDeploy],
       s: CasperSnapshot,
       runtimeManager: RuntimeManager[F],
-      blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      blockData: BlockData
   )(
       implicit spanF: Span[F]
   ): F[
@@ -249,8 +248,7 @@ object InterpreterUtil {
         result <- runtimeManager.computeState(preStateHash)(
                    deploys,
                    systemDeploys,
-                   blockData,
-                   invalidBlocks
+                   blockData
                  )
         (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (
