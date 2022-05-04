@@ -93,12 +93,10 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Sync: BlockStore: BlockDagStorage](
+  def toLatestMessage[F[_]: Sync: BlockDagStorage](
       justifications: Seq[Justification],
       dag: DagRepresentation
-  ): F[immutable.Map[Validator, BlockMetadata]] = {
-
-    import cats.instances.list._
+  ): F[immutable.Map[Validator, BlockMetadata]] =
     justifications.toList.foldM(Map.empty[Validator, BlockMetadata]) {
       case (acc, Justification(validator, hash)) =>
         for {
@@ -114,7 +112,6 @@ object ProtoUtil {
                             )
         } yield acc.updated(validator, blockMetadata)
     }
-  }
 
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
@@ -175,12 +172,10 @@ object ProtoUtil {
   }
 
   // Return hashes of all blocks that are yet to be seen by the passed in block
-  def unseenBlockHashes[F[_]: Sync: BlockStore: BlockDagStorage](
+  def unseenBlockHashes[F[_]: Sync: BlockDagStorage](
       dag: DagRepresentation,
       block: BlockMessage
-  ): F[Set[BlockHash]] = {
-    import cats.instances.stream._
-
+  ): F[Set[BlockHash]] =
     for {
       dagsLatestMessages   <- dag.latestMessages
       blocksLatestMessages <- toLatestMessage(block.justifications, dag)
@@ -209,7 +204,6 @@ object ProtoUtil {
                             }
                             .map(_.flatten.toSet)
     } yield unseenBlockHashes -- blocksLatestMessages.values.map(_.blockHash) - block.blockHash
-  }
 
   private def getCreatorBlocksBetween[F[_]: Sync: BlockDagStorage](
       dag: DagRepresentation,
