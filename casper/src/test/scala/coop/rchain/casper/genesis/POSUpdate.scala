@@ -29,78 +29,53 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 
-  implicit val timeEff = new LogicalTime[Effect]
+  implicit val timeEff           = new LogicalTime[Effect]
+  private val shardId            = "root"
+  private val hexP1              = "fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b"
+  private val hexP2              = "6e88cf274735f3f7f73ec3d7f0362c439ab508427682b5bd788007aca665d810"
+  private val hexP3              = "87369d132ed6a7626dc4c5dfbaf41e954dd0ec55830e613a3f868c74d64a7a22"
+  private val p1                 = PrivateKey(hexP1.unsafeDecodeHex)
+  private val pub1               = Secp256k1.toPublic(p1)
+  private val noPermissionKey    = PrivateKey(hexP2.unsafeDecodeHex)
+  private val noPermissionKeyPub = Secp256k1.toPublic(noPermissionKey)
+  private val p3                 = PrivateKey(hexP3.unsafeDecodeHex)
+  private val pub3               = Secp256k1.toPublic(p3)
+  private val validatorKeys      = Seq((p1, pub1), (noPermissionKey, noPermissionKeyPub), (p3, pub3))
+  private val genesisVaults =
+    Seq((p1, 100000000000L), (noPermissionKey, 100000000000L), (p3, 100000000000L))
+  private val bonds       = Map(pub1 -> 1000000L, noPermissionKeyPub -> 1000000L, pub3 -> 1000000L)
+  private val genesis     = buildGenesis(buildGenesisParameters(validatorKeys, genesisVaults, bonds))
+  private val epochLength = 1
 
-  it should "update the testLib right" in effectTest {
-    val shardId       = "root"
-    val hexP1         = "fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b"
-    val hexP2         = "6e88cf274735f3f7f73ec3d7f0362c439ab508427682b5bd788007aca665d810"
-    val hexP3         = "87369d132ed6a7626dc4c5dfbaf41e954dd0ec55830e613a3f868c74d64a7a22"
-    val p1            = PrivateKey(hexP1.unsafeDecodeHex)
-    val pub1          = Secp256k1.toPublic(p1)
-    val p2            = PrivateKey(hexP2.unsafeDecodeHex)
-    val pub2          = Secp256k1.toPublic(p2)
-    val p3            = PrivateKey(hexP3.unsafeDecodeHex)
-    val pub3          = Secp256k1.toPublic(p3)
-    val validatorKeys = Seq((p1, pub1), (p2, pub2), (p3, pub3))
-    val genesisVaults = Seq((p1, 100000000000L), (p2, 100000000000L), (p3, 100000000000L))
-    val bonds         = Map(pub1 -> 1000000L, pub2 -> 1000000L, pub3 -> 1000000L)
-    val genesis       = buildGenesis(buildGenesisParameters(validatorKeys, genesisVaults, bonds))
-
-    val proposeTimestamp = 1648038427478L
-    val agreeTimestamp   = 1648038427479L
-    val updateTimestamp  = 1648038427480L
-    val proposeRnd       = Tools.unforgeableNameRng(pub1, proposeTimestamp)
-    val propose = CompiledRholangTemplate.loadTemplate(
-      "updatePOS/ProposePOS.rho",
-      Seq(
-        ("minimumBond", 1),
-        ("maximumBond", 10000000000L),
-        ("epochLength", 1),
-        ("quarantineLength", 3),
-        ("numberOfActiveValidators", 100),
-        (
-          "posMultiSigPublicKeys",
-          ProofOfStake.publicKeys(
-            List(Base16.encode(pub1.bytes), Base16.encode(pub2.bytes), Base16.encode(pub3.bytes))
+  private val updatePOSTerm = CompiledRholangTemplate.loadTemplate(
+    "updatePOS/ProposePOS.rho",
+    Seq(
+      ("minimumBond", 1),
+      ("maximumBond", 10000000000L),
+      ("epochLength", epochLength),
+      ("quarantineLength", 3),
+      ("numberOfActiveValidators", 100),
+      (
+        "posMultiSigPublicKeys",
+        ProofOfStake.publicKeys(
+          List(
+            Base16.encode(pub1.bytes),
+            Base16.encode(noPermissionKey.bytes),
+            Base16.encode(pub3.bytes)
           )
-        ),
-        ("posMultiSigQuorum", 2)
-      )
+        )
+      ),
+      ("posMultiSigQuorum", 2)
     )
-    val agree  = Source.fromResource("updatePOS/AgreePOS.rho").mkString
-    val update = Source.fromResource("updatePOS/UpdatePOS.rho").mkString
-
-    val uri = Par(exprs = Seq(Expr(GUri("rho:rchain:pos"))))
-    val updateCon = Par(
-      unforgeables =
-        Seq(GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(proposeRnd.next())))))
-    )
-    val newContract =
-      Par(
-        unforgeables =
-          Seq(GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(proposeRnd.next())))))
-      )
-    val signedTarget = Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(uri, updateCon, newContract))))))
-
-    val proposeDeploy =
-      ConstructDeploy.sourceDeploy(propose, proposeTimestamp, 100000000L, 1L, p1, shardId = shardId)
-    val proposeSig = Secp256k1.sign(Blake2b256.hash(signedTarget.toByteArray), p1)
-    //    println(proposeDeploy)
-    println(Base16.encode(proposeSig))
-
-    val agreeDeploy =
-      ConstructDeploy.sourceDeploy(agree, agreeTimestamp, 100000000L, 1L, p2, shardId = shardId)
-    val agreeSig = Secp256k1.sign(Blake2b256.hash(signedTarget.toByteArray), p2)
-
+  )
+  "deploy with correct private key" should "update the rho:rchain:pos right" in effectTest {
     val updateDeploy =
-      ConstructDeploy.sourceDeploy(update, updateTimestamp, 100000000L, 1L, p1, shardId = shardId)
-    println(Base16.encode(agreeSig))
+      ConstructDeploy.sourceDeployNow(updatePOSTerm, p1, 100000000L, 0L, shardId = shardId)
 
     val transferAmount = 100000
 
     val pub1RevAddr = RevAddress.fromPublicKey(pub1).get.toBase58
-    val pub2RevAddr = RevAddress.fromPublicKey(pub2).get.toBase58
+    val pub2RevAddr = RevAddress.fromPublicKey(noPermissionKeyPub).get.toBase58
 
     val transferTerm =
       s"""
@@ -131,33 +106,69 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
          #  }
          #}
          #""".stripMargin('#')
+
+    val exploreUpdateResultTerm =
+      """new return, registryLookup(`rho:registry:lookup`),stdout(`rho:io:stdout`), resCh, ret in {
+                                    #  registryLookup!(`rho:rchain:pos`, *resCh) |
+                                    #  for (@(nonce, pos) <- resCh){
+                                    #    stdout!((pos, "get pos"))|
+                                    #    @pos!("getEpochLength", *return)
+                                    #  }
+                                    #}""".stripMargin('#')
     TestNode.standaloneEff(genesis).use { node =>
       val rm = node.runtimeManager
       for {
-        b2      <- node.addBlock(proposeDeploy)
-        _       = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
-        _       = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
-        _       = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
-        b3      <- node.addBlock(agreeDeploy)
-        _       = assert(b3.body.deploys.head.cost.cost > 0L, s"$b3 deploy cost is 0L")
-        _       = assert(b3.body.deploys.head.systemDeployError.isEmpty, s"$b3 system deploy failed")
-        _       = assert(!b3.body.deploys.head.isFailed, s"$b3 deploy failed")
-        b4      <- node.addBlock(updateDeploy)
-        _       = assert(b4.body.deploys.head.cost.cost > 0L, s"$b4 deploy cost is 0L")
-        _       = assert(b4.body.deploys.head.systemDeployError.isEmpty, s"$b4 system deploy failed")
-        _       = assert(!b4.body.deploys.head.isFailed, s"$b4 deploy failed")
-        ret     <- rm.playExploratoryDeploy(getBalanceTerm, b4.body.state.postStateHash)
+        b2 <- node.addBlock(updateDeploy)
+        _  = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _  = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _  = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
+        originalEpoch <- rm.playExploratoryDeploy(
+                          exploreUpdateResultTerm,
+                          genesis.genesisBlock.body.state.postStateHash
+                        )
+        _       = assert(originalEpoch.head.exprs.head.getGInt == 1000)
+        ret     <- rm.playExploratoryDeploy(getBalanceTerm, b2.body.state.postStateHash)
         balance = ret.head.exprs.head.getGInt
         b5 <- node
                .addBlock(
                  ConstructDeploy
-                   .sourceDeployNow(transferTerm, sec = p1, shardId = shardId, phloLimit = 900000L)
+                   .sourceDeployNow(transferTerm, sec = p1, shardId = shardId, phloLimit = 9000000L)
                )
         _    = assert(b5.body.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
         _    = assert(b5.body.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
         _    = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
         ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b5.body.state.postStateHash)
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
+        ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b5.body.state.postStateHash)
+        _    = assert(ret3.head.exprs.head.getGInt == epochLength)
+      } yield ()
+    }
+  }
+
+  "deploy with incorrect private key" should "return auth failure" in effectTest {
+    val updateDeploy =
+      ConstructDeploy.sourceDeployNow(
+        updatePOSTerm,
+        noPermissionKey,
+        100000000L,
+        0L,
+        shardId = shardId
+      )
+
+    val exploreUpdateResultTerm = """new return,ret in {
+                                    #  for (res <- @"updateResult") {
+                                    #    return!(*res)
+                                    #  }
+                                    #}""".stripMargin('#')
+    TestNode.standaloneEff(genesis).use { node =>
+      val rm = node.runtimeManager
+      for {
+        b2  <- node.addBlock(updateDeploy)
+        _   = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _   = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _   = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
+        ret <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b2.body.state.postStateHash)
+        _   = assert(ret.head.exprs.head.getGBool == false, "update should fail")
       } yield ()
     }
   }

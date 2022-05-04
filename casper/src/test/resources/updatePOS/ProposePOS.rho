@@ -6,7 +6,8 @@ new
   rlret,
   _authKey,
   stdout(`rho:io:stdout`),
-  updateRet
+  updateRet,
+  deployerID(`rho:rchain:deployerId`)
 in {
   for (@oldData, ret <- updateContract){
     new revVaultCh, listOpsCh, treeHashMapCh, multiSigRevVaultCh, stateCh, 
@@ -150,7 +151,7 @@ in {
             @humanControlHandle!("transfer", targetAddress, amount, deployerID, transferRet)
           } |
           // Returns current state elements on `ret`.
-          contract POS(@"extractState", ret) = {
+          contract @(bundle+{*POS}, "extractState")(ret) = {
             for (@state <<- stateCh) {
               ret!({
                 "state"     : state,
@@ -534,19 +535,19 @@ in {
     }
   } |
   @"updateContract"!((`rho:rchain:pos`, *updateContract, *POS)) |
-  stdout!(("propose start!!!!!"))|
+  stdout!(("update pos start!!!!!"))|
   rl!(`rho:registry:multisig`, *rlret)|
   for(@multiSigReg <- rlret){
     stdout!(("propose get multisig ok", multiSigReg))|
-    @multiSigReg!("propose",
-                  "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes(),
+    @multiSigReg!("update",
+                  *deployerID,
                   `rho:rchain:pos`,
                   *updateContract,
                   *POS,
-                  "304402203ae1da4ec87d8537a4f020862e5d0a46b6b7562f9d396a1bca2f976e8a576d9a0220099f88d7c83e84dfe015352c676643ea78a0bb3e1f3da4d1495836b4e37c0007".hexToBytes(),
                   *updateRet)|
     for (@result <- updateRet){
-      stdout!((result, "update "))
+      stdout!((result, "pos update result"))|
+      @"updateResult"!(result)
     }
   }
 }
