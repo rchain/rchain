@@ -1,5 +1,5 @@
-
 new
+  deployId(`rho:rchain:deployId`),
   updateContract,
   AuthKey,
   AuthStateCh,
@@ -31,7 +31,7 @@ in {
     } |
     contract AuthKey(@"add", @number, ret) = {
       for (@ori <- AuthStateCh){
-        ret!(number + ori)| 
+        ret!(number + ori)|
         AuthStateCh!(number + ori)
       }
     } |
@@ -39,7 +39,7 @@ in {
       for (@number <<- AuthStateCh){
         ret!(number)
       }
-    } 
+    }
   } |
   stdout!(("propose start!!!!!"))|
   rl!(`rho:registry:multisig`, *rlret)|
@@ -53,7 +53,7 @@ in {
                   *updateRet)|
     for (@result <- updateRet){
       stdout!((result, "update result")) |
-      @"updateResult"!(result)
+      deployId!(result)
     }
   }
 }
