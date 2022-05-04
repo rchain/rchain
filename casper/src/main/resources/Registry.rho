@@ -656,7 +656,9 @@ in {
             // "propose"   - proposals map
             // --------------------------------------------
             contract @(bundle+{*multisig}, "extractState")(ret) = {
-              ret!(Nil)
+              for (@blessedContractLocMap <<- blessedContractLocMapCh) {
+                ret!(blessedContractLocMap)
+              }
             } |
             new ack in {
               for (@map <<- _registryStore) {
