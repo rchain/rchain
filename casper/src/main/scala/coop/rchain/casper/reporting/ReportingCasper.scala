@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package coop.rchain.casper.reporting
 
 import cats.Parallel
 import cats.effect.concurrent.Ref
@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.ReportingCasper.RhoReportingRspace
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{
   BlockMessage,
@@ -16,9 +16,10 @@ import coop.rchain.casper.protocol.{
   ProcessedSystemDeploy,
   SystemDeployData
 }
+import coop.rchain.casper.reporting.ReportingCasper.RhoReportingRspace
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash

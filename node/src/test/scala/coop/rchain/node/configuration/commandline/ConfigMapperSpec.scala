@@ -1,23 +1,8 @@
 package coop.rchain.node.configuration.commandline
 
-import java.nio.file.Paths
-
-import scala.concurrent.duration._
-import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
-import coop.rchain.comm.{CommError, PeerNode}
-import coop.rchain.node.configuration.{
-  ApiServer,
-  DevConf,
-  Metrics,
-  NodeConf,
-  PeersDiscovery,
-  ProtocolClient,
-  ProtocolServer,
-  Storage
-}
 import com.typesafe.config.ConfigFactory
+import coop.rchain.casper.{CasperConf, GenesisBlockData}
 import coop.rchain.casper.util.GenesisBuilder
-import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration._
@@ -91,9 +76,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--fork-choice-check-if-stale-interval 111111seconds",
         "--synchrony-constraint-threshold 111111",
         "--height-constraint-threshold 111111",
-        "--frrd-max-peer-queue-size 111111",
-        "--frrd-give-up-after-skipped 111111",
-        "--frrd-drop-peer-after-retries 111111",
         "--bonds-file /var/lib/rnode/genesis/bonds1.txt",
         "--wallets-file /var/lib/rnode/genesis/wallets1.txt",
         "--bond-minimum 111111",
@@ -102,11 +84,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--quarantine-length 111111",
         "--genesis-block-number 222",
         "--number-of-active-validators 111111",
-        "--deploy-timestamp 111111",
-        "--required-signatures 111111",
-        "--approve-interval 111111seconds",
-        "--approve-duration 111111seconds",
-        "--genesis-validator",
         "--disable-lfs",
         "--prometheus",
         "--influxdb",
@@ -224,11 +201,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         forkChoiceCheckIfStaleInterval = 111111.seconds,
         synchronyConstraintThreshold = 111111,
         heightConstraintThreshold = 111111,
-        roundRobinDispatcher = RoundRobinDispatcher(
-          maxPeerQueueSize = 111111,
-          giveUpAfterSkipped = 111111,
-          dropPeerAfterRetries = 111111
-        ),
         genesisBlockData = GenesisBlockData(
           genesisDataDir = Paths.get("/var/lib/rnode/genesis"),
           bondsFile = "/var/lib/rnode/genesis/bonds1.txt",
@@ -238,19 +210,11 @@ class ConfigMapperSpec extends FunSuite with Matchers {
           epochLength = 111111,
           quarantineLength = 111111,
           numberOfActiveValidators = 111111,
-          deployTimestamp = Some(111111),
           genesisBlockNumber = 222,
           posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
           posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
         ),
-        genesisCeremony = GenesisCeremonyConf(
-          requiredSignatures = 111111,
-          approveDuration = 111111.seconds,
-          approveInterval = 111111.seconds,
-          autogenShardSize = 111111,
-          genesisValidatorMode = true,
-          ceremonyMasterMode = true
-        ),
+        autogenShardSize = 111111,
         minPhloPrice = 1
       ),
       metrics = Metrics(

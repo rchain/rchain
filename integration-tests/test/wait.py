@@ -63,11 +63,6 @@ class SentUnapprovedBlock(LogsContainMessage):
         super().__init__(node, 'Broadcasting UnapprovedBlock')
 
 
-class BlockApproval(LogsContainMessage):
-    def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'Received block approval from')
-
-
 class SentApprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
         super().__init__(node, 'Sending ApprovedBlock')
@@ -263,11 +258,6 @@ def wait_for_peers_count_at_least(context: TestingContext, node: 'Node', npeers:
 
 def wait_for_sent_unapproved_block(context: TestingContext, node: 'Node') -> None:
     predicate = SentUnapprovedBlock(node)
-    wait_using_wall_clock_time_or_fail(predicate, context.network_converge_timeout)
-
-
-def wait_for_block_approval(context: TestingContext, node: 'Node') -> None:
-    predicate = BlockApproval(node)
     wait_using_wall_clock_time_or_fail(predicate, context.network_converge_timeout)
 
 

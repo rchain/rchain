@@ -74,30 +74,12 @@ object Setup {
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
-    val requiredSigs               = 1
     val shardId                    = genesisParams.shardId
     val finalizationRate           = 1
-    val deployTimestamp            = genesisParams.timestamp
 
     val genesis: BlockMessage = context.genesisBlock
 
     val validatorId = ValidatorIdentity(validatorPk, validatorSk, "secp256k1")
-    val bap = BlockApproverProtocol
-      .of[Task](
-        validatorId,
-        deployTimestamp,
-        genesisParams.vaults,
-        bonds,
-        genesisParams.proofOfStake.minimumBond,
-        genesisParams.proofOfStake.maximumBond,
-        genesisParams.proofOfStake.epochLength,
-        genesisParams.proofOfStake.quarantineLength,
-        genesisParams.proofOfStake.numberOfActiveValidators,
-        requiredSigs,
-        genesisParams.proofOfStake.posMultiSigPublicKeys,
-        genesisParams.proofOfStake.posMultiSigQuorum
-      )
-      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     val local: PeerNode = peerNode("src", 40400)
 

@@ -177,6 +177,15 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
         // persist finalization
         _ <- blockMetadataIndex.recordFinalized(directlyFinalizedHash, indirectlyFinalized)
+
+        // TODO: temp code to satisfy tests
+        _ <- representationState.update { dag =>
+              val newFinalizedSet = dag.finalizedBlocksSet ++ indirectlyFinalized + directlyFinalizedHash
+              dag.copy(
+                finalizedBlocksSet = newFinalizedSet,
+                lastFinalizedBlockHash = directlyFinalizedHash.some
+              )
+            }
       } yield ()
     )
   }

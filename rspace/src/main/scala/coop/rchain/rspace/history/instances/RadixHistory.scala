@@ -14,7 +14,7 @@ import scodec.bits.ByteVector
   * History implementation with radix tree
   */
 object RadixHistory {
-  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteVector(hashNode(emptyNode)._1)
+  val emptyRootHash: Blake2b256Hash = RadixTree.emptyRootHash
 
   def apply[F[_]: Sync: Parallel](
       root: Blake2b256Hash,
@@ -53,18 +53,16 @@ final case class RadixHistory[F[_]: Sync: Parallel](
   override def process(actions: List[HistoryAction]): F[History[F]] =
     for {
 
-      /** TODO: To improve time, it is possible to implement this check into the [[RadixTreeImpl.makeActions()]]. */
+      /** TODO: To improve time, it is possible to implement this check into the [[RadixTreeImpl.saveAndCommit()]]. */
       _ <- new RuntimeException("Cannot process duplicate actions on one key.").raiseError
             .unlessA(hasNoDuplicates(actions))
 
-      newRootNodeOpt <- impl.makeActions(rootNode, actions)
-      newHistoryOpt <- newRootNodeOpt.traverse { newRootNode =>
-                        val hash       = impl.saveNode(newRootNode)
-                        val blakeHash  = Blake2b256Hash.fromByteVector(hash)
-                        val newHistory = this.copy(blakeHash, newRootNode, impl, store)
-                        impl.commit.as(newHistory)
-                      }
-      _ = impl.clearWriteCache()
+      newRootDataOpt <- impl.saveAndCommit(rootNode, actions)
+      newHistoryOpt = newRootDataOpt.map { newRootData =>
+        val (newRootNode, newRootHash) = newRootData
+        val blakeHash                  = Blake2b256Hash.fromByteVector(newRootHash)
+        this.copy(blakeHash, newRootNode, impl, store)
+      }
       _ = impl.clearReadCache()
     } yield newHistoryOpt.getOrElse(this)
 

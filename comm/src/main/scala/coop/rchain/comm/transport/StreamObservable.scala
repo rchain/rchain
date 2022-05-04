@@ -11,7 +11,7 @@ import monix.reactive.observers.Subscriber
 
 import scala.collection.concurrent.TrieMap
 
-final case class Stream(key: String, sender: PeerNode)
+final case class StreamMsgId(key: String, sender: PeerNode)
 
 class StreamObservable[F[_]: Sync: Log](
     peer: PeerNode,
@@ -19,9 +19,9 @@ class StreamObservable[F[_]: Sync: Log](
     cache: TrieMap[String, Array[Byte]]
 )(
     implicit scheduler: Scheduler
-) extends Observable[Stream] {
+) extends Observable[StreamMsgId] {
 
-  private val subject = buffer.LimitedBufferObservable.dropNew[Stream](bufferSize)
+  private val subject = buffer.LimitedBufferObservable.dropNew[StreamMsgId](bufferSize)
 
   def enque(blob: Blob): F[Unit] = {
 
@@ -37,7 +37,7 @@ class StreamObservable[F[_]: Sync: Log](
       }
 
     def push(key: String): F[Boolean] =
-      Sync[F].delay(subject.pushNext(Stream(key, blob.sender)))
+      Sync[F].delay(subject.pushNext(StreamMsgId(key, blob.sender)))
 
     def propose(key: String): F[Unit] = {
       val processError = Log[F].warn(
@@ -49,7 +49,7 @@ class StreamObservable[F[_]: Sync: Log](
     logStreamInformation >> storeBlob >>= (_.fold(().pure[F])(propose))
   }
 
-  def unsafeSubscribeFn(subscriber: Subscriber[Stream]): Cancelable = {
+  def unsafeSubscribeFn(subscriber: Subscriber[StreamMsgId]): Cancelable = {
     val subscription = subject.subscribe(subscriber)
     () => subscription.cancel()
   }

@@ -14,11 +14,10 @@ import coop.rchain.models.{GPrivate, Par}
 
 final case class Genesis(
     shardId: String,
-    timestamp: Long,
+    blockTimestamp: Long,
     blockNumber: Long,
     proofOfStake: ProofOfStake,
-    vaults: Seq[Vault],
-    supply: Long
+    vaults: Seq[Vault]
 )
 
 object Genesis {
@@ -34,10 +33,8 @@ object Genesis {
   }
 
   def defaultBlessedTerms(
-      timestamp: Long,
       posParams: ProofOfStake,
       vaults: Seq[Vault],
-      supply: Long,
       shardId: String
   ): Seq[Signed[DeployData]] = {
     // Splits initial vaults creation in multiple deploys (batches)
@@ -46,7 +43,6 @@ object Genesis {
       case (batchVaults, idx) =>
         StandardDeploys.revGenerator(
           batchVaults,
-          supply,
           timestamp = 1565818101792L + idx,
           isLastBatch = 1 + idx == vaultBatches.size,
           shardId
@@ -67,22 +63,13 @@ object Genesis {
       StandardDeploys.poSGenerator(posParams, shardId)
   }
 
-  def createGenesisBlock[F[_]: Concurrent](
-      runtimeManager: RuntimeManager[F],
-      genesis: Genesis
-  ): F[BlockMessage] = {
+  def createGenesisBlock[F[_]: Concurrent: RuntimeManager](genesis: Genesis): F[BlockMessage] = {
     import genesis._
 
-    val blessedTerms = defaultBlessedTerms(
-      timestamp,
-      proofOfStake,
-      vaults,
-      supply = Long.MaxValue,
-      shardId = genesis.shardId
-    )
+    val blessedTerms = defaultBlessedTerms(proofOfStake, vaults, genesis.shardId)
 
-    runtimeManager
-      .computeGenesis(blessedTerms, timestamp, genesis.blockNumber)
+    RuntimeManager[F]
+      .computeGenesis(blessedTerms, blockTimestamp, genesis.blockNumber)
       .map {
         case (startHash, stateHash, processedDeploys) =>
           createProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
@@ -115,7 +102,7 @@ object Genesis {
       systemDeploys = List.empty
     )
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
-    val header  = blockHeader(body, List.empty[StateHash], version, timestamp)
+    val header  = blockHeader(List.empty[StateHash], version, blockTimestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }

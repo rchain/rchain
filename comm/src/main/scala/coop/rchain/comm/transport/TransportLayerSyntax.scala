@@ -7,20 +7,22 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.rspace.hashing.Blake2b256Hash
 
 trait TransportLayerSyntax {
-  implicit final def commSyntaxTransportLayer[F[_]: Monad: RPConfAsk](
+  implicit final def commSyntaxTransportLayer[F[_]](
       transport: TransportLayer[F]
   ): TransportLayerOps[F] = new TransportLayerOps[F](transport)
 }
 
-final class TransportLayerOps[F[_]: Monad: RPConfAsk](
+final class TransportLayerOps[F[_]](
     // TransportLayer extensions / syntax
     private val transport: TransportLayer[F]
-) {
+) extends AnyVal {
+  def stream1(peer: PeerNode, blob: Blob): F[Unit] =
+    transport.stream(Seq(peer), blob)
+
   // Send packet (in one piece)
-  def sendToPeer(peer: PeerNode, message: Packet): F[Unit] =
+  def sendToPeer(peer: PeerNode, message: Packet)(implicit m: Monad[F], c: RPConfAsk[F]): F[Unit] =
     for {
       conf <- RPConfAsk[F].ask
       msg  = packet(conf.local, conf.networkId, message)
@@ -31,23 +33,26 @@ final class TransportLayerOps[F[_]: Monad: RPConfAsk](
   def sendToPeer[Msg: ToPacket](
       peer: PeerNode,
       message: Msg
-  ): F[Unit] = sendToPeer(peer, ToPacket(message))
+  )(implicit m: Monad[F], c: RPConfAsk[F]): F[Unit] = sendToPeer(peer, ToPacket(message))
 
   // Send packet in chunks (stream)
-  def streamToPeer(peer: PeerNode, packet: Packet): F[Unit] =
+  def streamToPeer(
+      peer: PeerNode,
+      packet: Packet
+  )(implicit m: Monad[F], c: RPConfAsk[F]): F[Unit] =
     for {
       local <- RPConfAsk[F].reader(_.local)
       msg   = Blob(local, packet)
-      _     <- transport.stream(peer, msg)
+      _     <- stream1(peer, msg)
     } yield ()
 
   // Send message in chunks (stream)
   def streamToPeer[Msg: ToPacket](
       peer: PeerNode,
       message: Msg
-  ): F[Unit] = streamToPeer(peer, ToPacket(message))
+  )(implicit m: Monad[F], c: RPConfAsk[F]): F[Unit] = streamToPeer(peer, ToPacket(message))
 
-  def sendToBootstrap[Msg: ToPacket](message: Msg): F[Unit] =
+  def sendToBootstrap[Msg: ToPacket](message: Msg)(implicit m: Monad[F], c: RPConfAsk[F]): F[Unit] =
     for {
       maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
       bootstrap      = maybeBootstrap.get

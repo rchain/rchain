@@ -1,8 +1,5 @@
-package coop.rchain.casper
+package coop.rchain.casper.reporting
 
-import cats.syntax.all._
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.rspace.{ReportingRspace, ReportingTransformer}
 import coop.rchain.casper.protocol.{
   PeekProto,
   ReportCommProto,
@@ -10,6 +7,8 @@ import coop.rchain.casper.protocol.{
   ReportEventProto,
   ReportProduceProto
 }
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.rspace.{ReportingRspace, ReportingTransformer}
 
 class ReportingProtoTransformer
     extends ReportingTransformer[

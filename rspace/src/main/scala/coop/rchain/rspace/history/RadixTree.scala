@@ -3,6 +3,7 @@ package coop.rchain.rspace.history
 import cats.Parallel
 import cats.effect.Sync
 import cats.syntax.all._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueTypedStore
 import scodec.bits.ByteVector
@@ -18,24 +19,27 @@ object RadixTree {
   sealed trait Item
 
   /**
-    * Empty item
+    * EmptyItem is item which not storing data
     */
   final case object EmptyItem extends Item
 
   /**
-    * Item which contain data.
+    * Leaf is item for storing radixValue. Contains 2 fields:
+    * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
+    * @param value stores radixValue. Always contains 32 bytes.
     */
   final case class Leaf(prefix: ByteVector, value: ByteVector) extends Item
 
   /**
-    * Item which contain pointer for child [[Node]].
+    * NodePtr is pointer to the next child [[Node]]. Contains 2 fields.
+    * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
+    * @param ptr stores hash of the child node (see section Storing of tree). Always contains 32 bytes.
     */
   final case class NodePtr(prefix: ByteVector, ptr: ByteVector) extends Item
 
   /**
     * Base type for nodes in Radix History.
-    *
-    * Must contain 256 [[Item]]s.
+    * Node is a sequence of 256 [[Item]]s with index from 0 to 255 : Sequence(item0, item1, ..., item255).
     */
   type Node = Vector[Item]
 
@@ -49,8 +53,17 @@ object RadixTree {
     */
   val emptyNode: Node = (0 until numItems).map(_ => EmptyItem).toVector
 
+  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteVector(hashNode(emptyNode)._1)
+
   /**
     * Binary codecs for serializing/deserializing Node in Radix tree
+    *
+    * Physically, a tree may be implemented using KV-database (for example LMDB).
+    * Each Node is one KV-database entry.
+    * The elements are stored as an associative array of KV-pairs (hashNode, serNode), where
+    * serNode = serialization(Node) is serialized node data (see section Serialization of node).
+    * hashNode = hash(serNode) is a BLAKE-256 hash of serNode.
+    *            The result of this hashing is a 32 byte number. Must be unique within the KV-database.
     *
     * {{{
     * Coding structure for items:
@@ -157,6 +170,7 @@ object RadixTree {
 
     /** Deserialization [[ByteVector]] to [[Node]]
       */
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def decode(bv: ByteVector): Node = {
       val arr     = bv.toArray
       val maxSize = arr.length
@@ -201,7 +215,12 @@ object RadixTree {
           decodeItem(pos0Next, nodeNext) // Try to decode next item.
         }
 
-      decodeItem(0, emptyNode)
+      try {
+        decodeItem(0, emptyNode)
+      } catch {
+        case cause: Exception =>
+          throw new Exception("Error during deserialization: invalid data format", cause)
+      }
     }
   }
 
@@ -542,6 +561,27 @@ object RadixTree {
 
   /**
     * Radix Tree implementation
+    * Is a data structure that stores and links together a set
+    * of N KV-pairs (radixKey, radixValue): (key0, value0), (key1, value1), ..., (keyN-1, valueN-1).
+    * Where: N - number of data in the set,
+    *        radixKey - unique identifier of a pair within a set,
+    *        radixValue - data of the KV-pair.
+    *
+    * The entire set is uniquely identified using the rootHash value,
+    * which is calculated when building the Tree. After that rootHash is used to access the elements in the set.
+    *
+    * As a data structure, the version of Radix tree modified for RSpace is used.
+    * Radix tree represents a space-optimized Prefix tree in which each node
+    * that is the only child is merged with its parent.
+    *
+    * - radixKey stored implicitly. radixKey is determined by the path to the leaf in the tree.
+    * The radixKey is formed by connecting the symbol assigned to the edges of the graph.
+    * These edges run from the root to the given leaf.
+    *
+    * - radixValue is stored explicitly as a leaf.
+    *
+    * 1 byte is used as symbol in the path. Such symbol can take 256 values from 0x00 to 0xFF.
+    * In this case, the maximum number of children for each node is 256.
     */
   class RadixTreeImpl[F[_]: Sync: Parallel](store: KeyValueTypedStore[F, ByteVector, ByteVector]) {
 
@@ -754,7 +794,10 @@ object RadixTree {
             (Leaf(insPrefix, insValue): Item).some.pure // Update EmptyItem to Leaf.
 
           case Leaf(leafPrefix, leafValue) =>
-            assert(leafPrefix.size == insPrefix.size, "All Radix keys should be same length.")
+            assert(
+              leafPrefix.size == insPrefix.size,
+              "The length of all prefixes in the subtree must be the same."
+            )
             if (leafPrefix == insPrefix) {
               if (insValue == leafValue) none[Item].pure
               else (Leaf(insPrefix, insValue): Item).some.pure
@@ -852,9 +895,9 @@ object RadixTree {
           case DeleteAction(key)       => DeleteAction(key.tail)
         }
 
-      def processNonEmptyActions(actions: List[HistoryAction], itemIdx: Int) =
+      def processNonEmptyActions(actions: List[HistoryAction], item: Item, itemIdx: Int) =
         for {
-          createdNode <- constructNodeFromItem(curNode(itemIdx))
+          createdNode <- constructNodeFromItem(item)
           newActions  = trimKeys(actions)
           newNodeOpt  <- makeActions(createdNode, newActions)
           newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, ByteVector.empty))
@@ -865,7 +908,7 @@ object RadixTree {
         for {
           clearedActions <- Sync[F].delay(clearingDeleteActions(actions, item))
           r <- if (clearedActions.isEmpty) (itemIdx, none[Item]).pure
-              else processNonEmptyActions(clearedActions, itemIdx)
+              else processNonEmptyActions(clearedActions, item, itemIdx)
         } yield r
 
       // Process actions within each group.
@@ -905,6 +948,22 @@ object RadixTree {
       } // If current node changing return new node, otherwise return none.
       yield if (newCurNode != curNode) newCurNode.some else none
     }
+
+    /**
+      * Changing the tree according to [[HistoryAction]]s.
+      *
+      * New data load to [[store]], after that clearing [[cacheW]].
+      * @return new (rootNode, rootHash). if no action was taken - return [[None]].
+      */
+    def saveAndCommit(rootNode: Node, actions: List[HistoryAction]): F[Option[(Node, ByteVector)]] =
+      for {
+        newRootNodeOpt <- makeActions(rootNode, actions)
+        r <- newRootNodeOpt.traverse { newRootNode =>
+              val newRootHash = saveNode(newRootNode)
+              commit.as(newRootNode, newRootHash)
+            }
+        _ = clearWriteCache()
+      } yield r
 
     /**
       * Pretty printer for Radix tree

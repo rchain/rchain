@@ -90,28 +90,6 @@ object Validate {
       } yield false
     }
 
-  def blockSenderHasWeight[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage,
-      genesis: BlockMessage
-  ): F[Boolean] =
-    if (b == genesis) {
-      true.pure //genesis block has a valid sender
-    } else {
-      for {
-        weight <- ProtoUtil.weightFromSender(b)
-        result <- if (weight > 0) true.pure
-                 else
-                   for {
-                     _ <- Log[F].warn(
-                           ignore(
-                             b,
-                             s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight."
-                           )
-                         )
-                   } yield false
-      } yield result
-    }
-
   def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
     if (b.blockHash.isEmpty) {
       for {

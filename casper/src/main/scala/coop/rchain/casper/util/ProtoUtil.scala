@@ -1,7 +1,5 @@
 package coop.rchain.casper.util
 
-import cats.Monad
-import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
@@ -9,17 +7,13 @@ import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.{DeployData, _}
+import coop.rchain.casper.protocol._
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
-import coop.rchain.shared.Base16
-import coop.rchain.shared.syntax._
 
-import java.nio.charset.StandardCharsets
 import scala.collection.immutable
 
 object ProtoUtil {
@@ -30,99 +24,11 @@ object ProtoUtil {
   def creatorJustification(block: BlockMetadata): Option[Justification] =
     block.justifications.find(_.validator == block.sender)
 
-  /**
-    * Since the creator justification is unique
-    * we don't need to return a list. However, the bfTraverseF
-    * requires a list to be returned. When we reach the goalFunc,
-    * we return an empty list.
-    */
-  def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad: BlockDagStorage](
-      blockDag: DagRepresentation,
-      blockHash: BlockHash,
-      goalFunc: BlockHash => Boolean = _ => false
-  ): F[List[BlockHash]] =
-    (for {
-      block <- OptionT(blockDag.lookup(blockHash))
-      creatorJustificationHash <- OptionT.fromOption(
-                                   block.justifications
-                                     .find(_.validator == block.sender)
-                                     .map(_.latestBlockHash)
-                                 )
-      creatorJustification <- OptionT(blockDag.lookup(creatorJustificationHash))
-      creatorJustificationAsList = if (goalFunc(creatorJustification.blockHash)) {
-        List.empty[BlockHash]
-      } else {
-        List(creatorJustification.blockHash)
-      }
-    } yield creatorJustificationAsList).fold(List.empty[BlockHash])(identity)
-
-  def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
-    weightMap(blockMessage.body.state)
-
-  private def weightMap(state: RChainState): Map[ByteString, Long] =
-    state.bonds.map {
-      case Bond(validator, stake) => validator -> stake
-    }.toMap
-
-  def weightMapTotal(weights: Map[ByteString, Long]): Long =
-    weights.values.sum
-
-  def minTotalValidatorWeight[F[_]: Monad: BlockDagStorage](
-      blockDag: DagRepresentation,
-      blockHash: BlockHash,
-      maxCliqueMinSize: Int
-  ): F[Long] =
-    blockDag.lookup(blockHash).map { blockMetadataOpt =>
-      val sortedWeights = blockMetadataOpt.get.weightMap.values.toVector.sorted
-      sortedWeights.take(maxCliqueMinSize).sum
-    }
-
-  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
-    import cats.instances.option._
-    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get1)
-  }
-
-  def weightFromValidatorByDag[F[_]: Monad: BlockDagStorage](
-      dag: DagRepresentation,
-      blockHash: BlockHash,
-      validator: Validator
-  ): F[Long] = {
-    import cats.instances.option._
-
-    for {
-      blockMetadata  <- dag.lookup(blockHash)
-      blockParentOpt = blockMetadata.get.parents.headOption
-      resultOpt <- blockParentOpt.traverse { bh =>
-                    dag.lookup(bh).map(_.get.weightMap.getOrElse(validator, 0L))
-                  }
-      result <- resultOpt match {
-                 case Some(result) => result.pure[F]
-                 case None         => dag.lookup(blockHash).map(_.get.weightMap.getOrElse(validator, 0L))
-               }
-    } yield result
-  }
-
-  def weightFromValidator[F[_]: Monad: BlockStore](
-      b: BlockMessage,
-      validator: ByteString
-  ): F[Long] =
-    for {
-      maybeMainParent <- mainParent(b)
-      weightFromValidator = maybeMainParent
-        .map(weightMap(_).getOrElse(validator, 0L))
-        .getOrElse(weightMap(b).getOrElse(validator, 0L)) //no parents means genesis -- use itself
-    } yield weightFromValidator
-
-  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Long] =
-    weightFromValidator(b, b.sender)
-
   def parentHashes(b: BlockMessage): List[ByteString] =
     b.header.parentsHashList
 
-  def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] = {
-    import cats.instances.list._
+  def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     parentHashes(b).traverse(BlockStore[F].getUnsafe)
-  }
 
   def getParentsMetadata[F[_]: Sync: BlockDagStorage](
       b: BlockMetadata,
@@ -209,15 +115,10 @@ object ProtoUtil {
     }
   }
 
-  def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString =
-    hashByteArrays(protoSeq.map(_.toByteArray): _*)
-
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
-  // TODO inline this
   def blockHeader(
-      body: Body,
       parentHashes: Seq[ByteString],
       version: Long,
       timestamp: Long
@@ -235,7 +136,6 @@ object ProtoUtil {
       shardId: String,
       seqNum: Int = 0
   ): BlockMessage = {
-    // TODO FIX-ME fields that can be empty SHOULD be optional
     val block = BlockMessage(
       blockHash = ByteString.EMPTY,
       header,
@@ -264,7 +164,6 @@ object ProtoUtil {
       StringValue.of(blockMessage.shardId).toByteArray,
       blockMessage.extraBytes.toByteArray
     )
-  def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
   def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
     val missingParents = parentHashes(b).toSet

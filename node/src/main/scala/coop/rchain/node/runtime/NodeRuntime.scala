@@ -7,12 +7,12 @@ import cats.mtl._
 import cats.syntax.all._
 import cats.{~>, Parallel}
 import com.typesafe.config.Config
+import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.{BlockMessage, CommUtil}
 import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -30,10 +30,10 @@ import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
 import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
-import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
+import fs2.Stream
 import fs2.concurrent.Queue
 import kamon._
 import monix.execution.Scheduler
@@ -65,7 +65,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   def main: F[Unit] = {
     for {
-      // 1. fetch local peer node
+      // Fetch local peer node
       local <- WhoAmI
                 .fetchLocalPeerNode[F](
                   nodeConf.protocolServer.host,
@@ -75,7 +75,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                   id
                 )
 
-      // 3. create instances of typeclasses
+      // Create instances of typeclasses
       metrics = diagnostics.effects.metrics[F]
       time    = effects.time[F]
 
@@ -156,11 +156,10 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         )
       }
       (
-        packetHandler,
+        routingMessageQueue,
         apiServers,
         casperLoop,
         updateForkChoiceLoop,
-        engineInit,
         casperLaunch,
         reportingHTTPRoutes,
         webApi,
@@ -174,10 +173,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         triggerProposeF
       ) = result
 
-      // 4. launch casper
-      _ <- casperLaunch.launch()
-
-      // 5. run the node program.
+      // Build main program
       program = {
         implicit val tr = transport
         implicit val cn = rpConfAsk
@@ -186,7 +182,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         implicit val pn = peerNodeAsk
         implicit val ks = kademliaStore
         implicit val nd = nodeDiscovery
-        implicit val ph = packetHandler
         implicit val eb = eventBus
         implicit val mt = metrics
         implicit val ti = time
@@ -194,7 +189,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           apiServers,
           casperLoop,
           updateForkChoiceLoop,
-          engineInit,
           reportingHTTPRoutes,
           webApi,
           adminWebApi,
@@ -204,10 +198,18 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           proposerStateRefOpt,
           blockProcessor,
           blockProcessorState,
-          blockProcessorQueue
+          blockProcessorQueue,
+          routingMessageQueue
         )
       }
-      _ <- handleUnrecoverableErrors(program)
+
+      // Run main program and casper launch concurrently
+      messageProcess = Stream.eval(casperLaunch)
+      mainProgram    = Stream.eval(handleUnrecoverableErrors(program))
+      delay          = Stream.eval(Timer[F].sleep(3.seconds))
+
+      // TODO: implement cancellation with proper shutdown
+      _ <- (mainProgram concurrently (delay ++ messageProcess)).compile.drain
     } yield ()
   }
 
@@ -225,7 +227,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       apiServers: APIServers,
       casperLoop: CasperLoop[F],
       updateForkChoiceLoop: CasperLoop[F],
-      engineInit: EngineInit[F],
       reportingRoutes: ReportingHttpRoutes[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
@@ -235,7 +236,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       blockProcessor: BlockProcessor[F],
       blockProcessingState: Ref[F, Set[BlockHash]],
-      incomingBlocksQueue: Queue[F, BlockMessage]
+      incomingBlocksQueue: Queue[F, BlockMessage],
+      routingMessageQueue: Queue[F, RoutingMessage]
   )(
       implicit
       time: Time[F],
@@ -247,7 +249,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       kademliaStore: KademliaStore[F],
       nodeDiscovery: NodeDiscovery[F],
       rpConnections: ConnectionsCell[F],
-      packetHandler: PacketHandler[F],
       consumer: EventConsumer[F]
   ): F[Unit] = {
 
@@ -308,8 +309,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                   reportingRoutes,
                   webApi,
                   adminWebApi,
-                  HandleMessages.handle[F](_),
-                  blob => packetHandler.handlePacket(blob.sender, blob.packet),
+                  HandleMessages.handle[F](_, routingMessageQueue),
+                  blob => routingMessageQueue.enqueue1(RoutingMessage(blob.sender, blob.packet)),
                   host,
                   address,
                   nodeConf,
@@ -337,8 +338,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           Log[F].info(s"Waiting for first connection.") >> waitForFirstConnection
         )
 
-      engineInitStream = fs2.Stream.eval(engineInit)
-
       casperLoopStream = fs2.Stream.eval(casperLoop).repeat
       blockProcessorStream = BlockProcessorInstance.create(
         incomingBlocksQueue,
@@ -363,7 +362,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           servers.adminHttpServer,
           blockProcessorStream,
           proposerStream,
-          engineInitStream,
           casperLoopStream,
           updateForkChoiceLoopStream
         )
