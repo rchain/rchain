@@ -7,16 +7,53 @@ new
   rlret,
   _authKey,
   stdout(`rho:io:stdout`),
-  updateRet
+  updateRet,
+  deployerID(`rho:rchain:deployerId`)
 in {
+  for (oldAuthKey, ret <- updateContract){
+    stdout!(("extracting old state", *oldAuthKey))|
+    AuthStateCh!(0)|
+    contract AuthKey(@"make", @shape, ret) = {
+      new authKey in {
+        contract authKey(@"challenge", retCh) = {
+          retCh!(bundle0{ (*_authKey, shape)})
+        } |
+        ret ! (bundle+{*authKey})
+      }
+    } |
+    contract AuthKey(@"check", key, @shape, ret) = {
+      new responseCh in {
+        key!("challenge", *responseCh) |
+        for (@response <- responseCh) {
+          ret!(response == { bundle0{ (*_authKey, shape) } } )
+        }
+      }
+    } |
+    contract AuthKey(@"add", @number, ret) = {
+      for (@ori <- AuthStateCh){
+        ret!(number + ori)| 
+        AuthStateCh!(number + ori)
+      }
+    } |
+    contract @(bundle+{*AuthKey}, "extractState")(ret) = {
+      for (@number <<- AuthStateCh){
+        ret!(number)
+      }
+    } 
+  } |
+  stdout!(("propose start!!!!!"))|
   rl!(`rho:registry:multisig`, *rlret)|
   for(@multiSigReg <- rlret){
-    stdout!(("update get multisig ok", multiSigReg))|
-    @multiSigReg!("update", `rho:rchain:authKey`, *updateRet)|
+    stdout!(("propose get multisig ok", multiSigReg))|
+    @multiSigReg!("update",
+                  *deployerID,
+                  `rho:rchain:authKey`,
+                  *updateContract,
+                  *AuthKey,
+                  *updateRet)|
     for (@result <- updateRet){
-      stdout!((result, "update result "))
+      stdout!((result, "update result")) |
+      @"updateResult"!(result)
     }
-  }|
-  stdout!(("update start!!!!!"))
-  
+  }
 }
