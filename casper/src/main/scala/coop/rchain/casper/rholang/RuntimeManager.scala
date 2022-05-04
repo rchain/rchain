@@ -228,7 +228,7 @@ object RuntimeManager {
 
   /**
     * This is a hard-coded value for `emptyStateHash` which is calculated by
-    * [[RuntimeOps.emptyStateHash]].
+    * [[coop.rchain.casper.rholang.syntax.RuntimeOps.emptyStateHash]].
     * Because of the value is actually the same all
     * the time. For some situations, we can just use the value directly for better performance.
     */
