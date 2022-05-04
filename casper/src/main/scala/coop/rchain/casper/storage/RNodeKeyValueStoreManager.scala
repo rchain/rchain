@@ -22,7 +22,7 @@ object RNodeKeyValueStoreManager {
   // Blocks
   private val blockStorageEnvConfig = LmdbEnvConfig(name = "blockstorage", maxEnvSize = 1 * tb)
   private val dagStorageEnvConfig   = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
-  private val deployPoolEnvConfig   = LmdbEnvConfig(name = "deploypool", maxEnvSize = 1 * gb)
+  private val deployPoolEnvConfig   = LmdbEnvConfig(name = "deploypoolstorage", maxEnvSize = 1 * gb)
   // Temporary storage / cache
   private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
   private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)

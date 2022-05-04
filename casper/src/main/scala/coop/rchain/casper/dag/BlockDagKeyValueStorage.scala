@@ -202,7 +202,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   override def addDeploy(d: Signed[DeployData]): F[Unit] = deployStore.put(d.sig, d)
 
-  override def pooled: F[Map[DeployId, Signed[DeployData]]] = deployStore.toMap
+  override def pooledDeploys: F[Map[DeployId, Signed[DeployData]]] = deployStore.toMap
 }
 
 object BlockDagKeyValueStorage {
