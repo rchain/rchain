@@ -71,7 +71,7 @@ object GenesisBuilder {
       genesisVaults.map { case (k, _) => (k, Secp256k1.toPublic(k)) },
       Genesis(
         shardId = "root",
-        timestamp = 0L,
+        blockTimestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
           maximumBond = Long.MaxValue,
@@ -88,7 +88,6 @@ object GenesisBuilder {
         vaults = genesisVaults.toList.map {
           case (p, s) => Vault(RevAddress.fromPublicKey(Secp256k1.toPublic(p)).get, s)
         },
-        supply = Long.MaxValue,
         blockNumber = 0
       )
     )
