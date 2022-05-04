@@ -1,0 +1,225 @@
+new
+  updateContract,
+  AuthKey,
+  AuthStateCh,
+  rl(`rho:registry:lookup`),
+  rlret,
+  _authKey,
+  stdout(`rho:io:stdout`),
+  updateRet,
+  deployerID(`rho:rchain:deployerId`),
+  multisig,           // MultiSig contract's method entry point
+  agreementMapCh,     // channel on which the agreement map is stored
+  proposalMapCh,      // channel on which the propose map is stored
+  multisigLoc,        // MultiSig contract's location channel
+  multisigDispatcher,  // MultiSig contract's dispatcher
+  hashVerify,
+  blake2b256(`rho:crypto:blake2b256Hash`),
+  secpVerify(`rho:crypto:secp256k1Verify`),
+  blessedContractLocMapCh
+in {
+  contract hashVerify(@data, @sig, @pubKey, ret) = {
+    new hashCh in {
+      // hash the data
+      blake2b256!(data.toByteArray(), *hashCh) |
+      for (@hash <- hashCh) {
+        // verify the signature
+        secpVerify!(hash, sig, pubKey, *ret)
+      }
+    }
+  } |
+  for (@blessedContractLocMap, ret <- updateContract){
+    blessedContractLocMapCh!(blessedContractLocMap)|
+    let @quorumSize, @pubKeys <- 2, Set(
+      // The private keys and public keys are here just for testing now
+      // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
+      "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes(),
+      // 6e88cf274735f3f7f73ec3d7f0362c439ab508427682b5bd788007aca665d810 private
+      "043405f36c6cc2327fbbdf1af442a99e9a04f650ccb415bc23d4379e63a5cb5d53f7c7861d5937db32700b001ab2024f1c078b0ba90f47af46c8c4dea33f972d7c".hexToBytes(),
+      // 87369d132ed6a7626dc4c5dfbaf41e954dd0ec55830e613a3f868c74d64a7a22 private
+      "0412eea943c13ed3e99d2de048a57dbaf4c977df83a50bf7ec79ae58255cf8d891a1cbe3cd51aeafec34241a1a9c9a54e861aa5b373667793c617c0310eab26653".hexToBytes()
+    ) in {
+      // Initialize propose map
+      // uri -> (contractData, methodData)
+      proposalMapCh!({}) |
+      // Initialize agreement map
+      // (uri, contractData, methodData) -> agreement set
+      agreementMapCh!({}) |
+      // -------
+      // Propose
+      // --------------------------------------------------------------------------------
+      // pubKeyBytes: Privileged public keys, i.e. members of `pubKeys`, can propose contract updates.
+      //              There is only one proposal per uri possible at a time.
+      // uri: The uri which is going to be proposed to change
+      // con: A contract which would used in `con!(oldData, *ret)` on working on the old data
+      // meth: The target contract unf handle the loc ch would replace
+      // sig: Signature of (uri, con, meth) signed by pubKeyBytes
+      // --------------------------------------------------------------------------------
+      contract multisig(@"propose", @pubKeyBytes, @uri, @con, @meth, @sig, ret) = {
+        new verifyCh in {
+          if (pubKeys.contains(pubKeyBytes)) {
+            // `pubKey` has the privilege to propose updates
+            for (@bcMap <<- blessedContractLocMapCh) {
+              if (bcMap.contains(uri)) {
+                // `uri` belongs to a blessed contract
+                match (uri, con, meth) {
+                  key => {
+                    for (@proposalMap <- proposalMapCh) {
+                      if (not proposalMap.contains(uri)) {
+                        // the update proposal is unique
+                        // check the signature of (uri, con, meth) = key
+                        hashVerify!(key, sig, pubKeyBytes, *verifyCh) |
+                        for (@verified <- verifyCh) {
+                          if (verified) {
+                            // signature is valid
+                            proposalMapCh!(proposalMap.set(uri, (con, meth))) |
+                            for (@agreeMap <- agreementMapCh) {
+                              // the proposer is the first to agree with a proposal
+                              agreementMapCh!(agreeMap.set(key, Set(pubKeyBytes))) |
+                              ret!((true, uri, con, meth))
+                            }
+                          } else {
+                            // signature is invalid
+                            proposalMapCh!(proposalMap) |
+                            ret!((false, "invalid signature"))
+                          }
+                        }
+                      } else {
+                        // an update has already been proposed for this uri
+                        proposalMapCh!(proposalMap) |
+                        ret!((false, "location already exists"))
+                      }
+                    }
+                  }
+                }
+              } else {
+                // `uri` does not belong to a blessed contract
+                ret!((false, "uri does not exist"))
+              }
+            }
+          } else {
+            // `pubKeyBytes` does not have the privilege to propose updates
+            ret!((false, "invalid public key"))
+          }
+        }
+      } |
+      // Agree
+      // --------------------------------------------------------------------------------------
+      // Privileged public keys can agree with update proposals.
+      // Manages the `agreementMap`: (uri, contractData, methodData) -> set of agreeing pubKeys
+      // --------------------------------------------------------------------------------------
+      contract multisig(@"agree", @pubKeyBytes, @uri, @con, @meth, @sig, ret) = {
+        new verifyCh in {
+          match (uri, con, meth) {
+            agreedTuple => {
+              if (pubKeys.contains(pubKeyBytes)) {
+                // `pubKey` is a member of `pubKeys`
+                hashVerify!(agreedTuple, sig, pubKeyBytes, *verifyCh) |
+                for (@verified <- verifyCh) {
+                  if (verified) {
+                    // valid signature
+                    for (@map <- agreementMapCh) {
+                      match map.getOrElse(agreedTuple, Set()).add(pubKeyBytes) {
+                        agreeing => {
+                          // add `pubKeyBytes` to the set of supporters
+                          agreementMapCh!(map.set(agreedTuple, agreeing)) |
+                          ret!((true, uri, con, meth, agreeing))
+                        }
+                      }
+                    }
+                  } else {
+                    // invalvid signature
+                    ret!((false, "invalid signature"))
+                  }
+                }
+              } else {
+                // `pubKeyBytes` is not in `pubKeys`
+                ret!((false, "invalid public key"))
+              }
+            }
+          }
+        }
+      } |
+      // ------
+      // Update
+      // ------------------------------------------------------------------------------------
+      // if there is a quorum of privileged public keys agreeing on the update for `uri`,
+      // then this method updates the contract data and manages the internal maps accordingly
+      // ------------------------------------------------------------------------------------
+      contract multisig(@"update", @uri, ret) = {
+        for (@proposalMap <- proposalMapCh) {
+          if (proposalMap.contains(uri)) {
+            // there is an update proposal for `uri`
+            for (@blessedContractLocMap <<- blessedContractLocMapCh) {
+              match (blessedContractLocMap.get(uri), proposalMap.get(uri)) {
+                (loc, (con, meth)) => {
+                  for (@agreementMap <- agreementMapCh) {
+                    if (agreementMap.getOrElse((uri, con, meth), Set()).size() >= quorumSize) {
+                      // sufficiently many keys agree to update
+                      // consume data on location channel in order to replace contract data
+                      for (oldData <- @loc) {
+                        new tmp, newRet in {
+                          stdout!("going to update and extractstate")|
+                          @(*oldData, "extractState")!(*tmp) |
+                          for (@oldState <- tmp) {
+                            // launch new contract instance with initial state extracted from the old instance
+                            stdout!(("get old state", *oldData))|
+                            @con!(oldState, *newRet) |
+                            // manage agreement and proposal maps
+                            agreementMapCh!(agreementMap.delete((uri, con, meth))) |
+                            proposalMapCh!(proposalMap.delete(uri)) |
+                            // write new method entry point to location channel
+                            @loc!(meth) |
+                            ret!((true, *newRet))
+                          }
+                        }
+                      }
+                    } else {
+                      // there isn't a quorum of support for the update
+                      agreementMapCh!(agreementMap) |
+                      proposalMapCh!(proposalMap) |
+                      ret!((false, "quorum does not exist"))
+                    }
+                  }
+                }
+              }
+            }
+          } else {
+            // there isn't an update proposal for `uri`
+            proposalMapCh!(proposalMap) |
+            ret!((false, "invalid proposal uri"))
+          }
+        }
+      } |
+      // ExtractState
+      // --------------------------------------------
+      // Returns a map containing the current maps:
+      // "blessed"   - blessed contract location map
+      // "agreement" - agreement map
+      // "propose"   - proposals map
+      // --------------------------------------------
+      contract @(bundle+{*multisig}, "extractState")(ret) = {
+        for (@agreementMap <<- agreementMapCh;
+              @blessedMap   <<- blessedContractLocMapCh;
+              @proposalMap  <<- proposalMapCh) {
+          ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposalMap })
+        }
+      }
+    }
+  } |
+  stdout!(("update blessed registry start!!!!!"))|
+  rl!(`rho:registry:multisig`, *rlret)|
+  for(@multiSigReg <- rlret){
+    stdout!(("update get multisig ok", multiSigReg))|
+    @multiSigReg!("update",
+                  *deployerID,
+                  `rho:registry:multisig`,
+                  *updateContract,
+                  *multisig,
+                  *updateRet)|
+    for (@result <- updateRet){
+      stdout!((result, "update result")) |
+      @"updateResult"!(result)
+    }
+  }
+}

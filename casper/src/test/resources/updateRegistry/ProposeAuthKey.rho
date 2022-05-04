@@ -1,0 +1,59 @@
+
+new
+  updateContract,
+  AuthKey,
+  AuthStateCh,
+  rl(`rho:registry:lookup`),
+  rlret,
+  _authKey,
+  stdout(`rho:io:stdout`),
+  updateRet
+in {
+  for (oldAuthKey, ret <- updateContract){
+    AuthStateCh!(0)|
+    contract AuthKey(@"make", @shape, ret) = {
+      new authKey in {
+        contract authKey(@"challenge", retCh) = {
+          retCh!(bundle0{ (*_authKey, shape)})
+        } |
+        ret ! (bundle+{*authKey})
+      }
+    } |
+
+    contract AuthKey(@"check", key, @shape, ret) = {
+      new responseCh in {
+        key!("challenge", *responseCh) |
+        for (@response <- responseCh) {
+          ret!(response == { bundle0{ (*_authKey, shape) } } )
+        }
+      }
+    } |
+    contract AuthKey(@"add", @number, ret) = {
+      for (@ori <- AuthStateCh){
+        ret!(number + ori)|
+        AuthStateCh!(number + ori)
+      }
+    } |
+    contract AuthKey(@"extractState", ret) = {
+      for (@number <<- AuthStateCh){
+        ret!(number)
+      }
+    }
+  } |
+  @"updateContract"!((`rho:rchain:authKey`, *updateContract, *AuthKey)) |
+  stdout!(("propose start!!!!!"))|
+  rl!(`rho:registry:multisig`, *rlret)|
+  for(@multiSigReg <- rlret){
+    stdout!(("propose get multisig ok", multiSigReg))|
+    @multiSigReg!("propose",
+                  "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes(),
+                  `rho:rchain:authKey`,
+                  *updateContract,
+                  *AuthKey,
+                  "304402206f55ba9a3708f3c2b6782261a2189123d92013a219c8209564314ee1fb3ab8c90220507cb5506aee67a823cfa60b3d71ace1f2dcd8183f902f648c3a21fe8e03e221".hexToBytes(),
+                  *updateRet)|
+    for (@result <- updateRet){
+      stdout!((result, "propose result "))
+    }
+  }
+}
