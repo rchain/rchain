@@ -199,28 +199,19 @@ object MultiParentCasper {
         _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
         _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
         _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
-        //        _ <- EitherT(
-        //              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
-        //            )
-        _ <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
 
         // This validation is only to punish validator which accepted lower price deploys.
         // And this can happen if not configured correctly.
         minPhloPrice = s.onChainState.shardConf.minPhloPrice
-        _ <- EitherT(Validate.phloPrice(b, minPhloPrice)).recoverWith {
-              case _ =>
-                val warnToLog = EitherT.liftF[F, BlockError, Unit](
-                  Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
-                )
-                val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
-                warnToLog *> asValid
-            }
+        status <- EitherT(Validate.phloPrice(b, minPhloPrice)).recoverWith {
+                   case _ =>
+                     val warnToLog = EitherT.liftF[F, BlockError, Unit](
+                       Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
+                     )
+                     val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
+                     warnToLog *> asValid
+                 }
         _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
-
-        depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
-        //        status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
-        status = ValidBlock.Valid // TEMP
-        _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
     val blockPreState  = b.body.state.preStateHash

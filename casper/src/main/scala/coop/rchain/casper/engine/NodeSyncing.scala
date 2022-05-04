@@ -163,7 +163,7 @@ class NodeSyncing[F[_]
 
     for {
       isValid <- senderIsBootstrap &&^ shardNameIsValid.pure &&^
-                  Validate.approvedBlock[F](approvedBlock)
+                  Validate.blockHash[F](approvedBlock.candidate.block)
 
       _ <- Log[F].info("Received approved block from bootstrap node.").whenA(isValid)
 

@@ -9,11 +9,10 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
+import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.bonds
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
@@ -41,40 +40,6 @@ object Validate {
 
   def ignore(b: BlockMessage, reason: String): String =
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
-
-  def approvedBlock[F[_]: Sync: Log](
-      approvedBlock: ApprovedBlock
-  ): F[Boolean] = {
-    val candidateBytesDigest = Blake2b256.hash(approvedBlock.candidate.toProto.toByteArray)
-
-    val requiredSignatures = approvedBlock.candidate.requiredSigs
-
-    val signatures =
-      (for {
-        signature <- approvedBlock.sigs
-        verifySig <- signatureVerifiers.get(signature.algorithm)
-        publicKey = signature.publicKey
-        if verifySig(candidateBytesDigest, signature.sig.toByteArray, publicKey.toByteArray)
-      } yield publicKey).toSet
-
-    val logMsg = signatures.isEmpty match {
-      case true => s"ApprovedBlock is self-signed by ceremony master."
-      case false =>
-        s"ApprovedBlock is signed by: ${signatures
-          .map(x => "<" + Base16.encode(x.toByteArray).substring(0, 10) + "...>")
-          .mkString(", ")}"
-    }
-
-    for {
-      _          <- Log[F].info(logMsg)
-      enoughSigs = (signatures.size >= requiredSignatures)
-      _ <- Log[F]
-            .warn(
-              "Received invalid ApprovedBlock message not containing enough valid signatures."
-            )
-            .whenA(!enoughSigs)
-    } yield enoughSigs
-  }
 
   def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
     signatureVerifiers
@@ -459,9 +424,7 @@ object Validate {
   def neglectedInvalidBlock[F[_]: Applicative: BlockDagStorage](
       block: BlockMessage,
       s: CasperSnapshot
-  ): F[ValidBlockProcessing] = {
-    import cats.instances.list._
-
+  ): F[ValidBlockProcessing] =
     for {
       invalidJustifications <- block.justifications.filterA { justification =>
                                 for {
@@ -481,7 +444,6 @@ object Validate {
         BlockStatus.valid.asRight[BlockError]
       }
     } yield result
-  }
 
   def bondsCache[F[_]: Log: Concurrent](
       b: BlockMessage,
