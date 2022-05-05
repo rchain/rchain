@@ -55,7 +55,7 @@ class RhoTrieTraverserTest extends FlatSpec {
                                |  }
                                |}""".stripMargin
 
-    implicit val concurent                   = Concurrent[Task]
+    implicit val concurrent                  = Concurrent[Task]
     implicit val metricsEff: Metrics[Effect] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Effect]      = NoopSpan[Task]()
     implicit val logger: Log[Effect]         = Log.log[Task]
@@ -83,17 +83,17 @@ class RhoTrieTraverserTest extends FlatSpec {
                              check2.root.toByteString
                            )
           _             <- runtime.reset(check2.root)
-          trieMapHandle = trieMapHandleR(0)
+          trieMapHandle = trieMapHandleR.head
           maps          <- RhoTrieTraverser.traverseTrie(trieDepth, trieMapHandle, runtime)
           goodMap = RhoTrieTraverser.vecParMapToMap(
             maps,
-            p => p.exprs(0).getGByteArray,
-            p => p.exprs(0).getGInt
+            p => p.exprs.head.getGByteArray,
+            p => p.exprs.head.getGInt
           )
           _ = insertKeyValues.map(k => {
             val key =
-              RhoTrieTraverser.keccakKey(k._1).exprs(0).getGByteArray.substring(trieDepth, 32)
-            assert(goodMap.get(key).get == k._2.toLong)
+              RhoTrieTraverser.keccakKey(k._1).exprs.head.getGByteArray.substring(trieDepth, 32)
+            assert(goodMap(key) == k._2.toLong)
           })
         } yield ()
     }

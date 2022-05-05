@@ -16,7 +16,6 @@ new
   TreeHashMap,
   TreeHashMapLoc,
   TreeHashMapDispatcher,
-  MultiSig,
   secpVerify(`rho:crypto:secp256k1Verify`),
   blake2b256(`rho:crypto:blake2b256Hash`),
   hashVerify,
