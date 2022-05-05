@@ -589,9 +589,6 @@ in {
           for (@`rho:rchain:multiSigRevVault`, @lib, @dispatcher <- insertBlessed) {
             newInsert!(lib, `rho:rchain:multiSigRevVault`, dispatcher)
           } |
-          for (@`rho:lang:nonNegativeNumber`, @lib, @dispatcher <- insertBlessed) {
-            newInsert!(lib, `rho:lang:nonNegativeNumber`, dispatcher)
-          } |
           for (@`rho:rchain:pos`, @lib, @dispatcher <- insertBlessed) {
             newInsert!(lib, `rho:rchain:pos`, dispatcher)
           } |
