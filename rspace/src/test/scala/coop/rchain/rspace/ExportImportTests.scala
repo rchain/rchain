@@ -19,7 +19,6 @@ import monix.execution.atomic.AtomicAny
 import org.scalatest._
 import scodec.bits.ByteVector
 
-// TODO: Don't works for MergingHistory
 class ExportImportTests
     extends FlatSpec
     with Matchers

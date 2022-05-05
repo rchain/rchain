@@ -6,7 +6,6 @@ import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.HistoryMergingInstances.{CachingHistoryStore, MergingHistory}
 import coop.rchain.rspace.history.RadixTree.ExportData
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.instances._
@@ -27,7 +26,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   object TypesOfHistory extends Enumeration {
     type TypeHistory = Value
-    val Merging, Radix, Default = Value
+    val Radix, Default = Value
   }
   import TypesOfHistory._
 
@@ -106,34 +105,6 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     def create(root: Blake2b256Hash): F[HistoryType[F]]
   }
 
-  case class CreateMergingHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
-      extends CreateHistory[F] {
-    def create(root: Blake2b256Hash): F[HistoryType[F]] =
-      Settings.typeStore match {
-        case InMemo =>
-          val inMemoStore = InMemoryKeyValueStore[F]
-          val _           = inMemoStore.clear()
-          val store       = HistoryStoreInstances.historyStore(inMemoStore)
-          val history     = MergingHistory(root, CachingHistoryStore(store))
-          val r: HistoryType[F] = HistoryWithFunc(
-            history,
-            _ => none[ByteVector].pure,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
-          )
-          r.pure
-        case Lmdb =>
-          for {
-            store <- storeLMDB()
-            history <- MergingHistory(
-                        root,
-                        CachingHistoryStore(HistoryStoreInstances.historyStore(store))
-                      ).pure
-          } yield HistoryWithoutFunc(history, _ => none[ByteVector].pure)
-
-      }
-  }
-
   case class CreateRadixHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
@@ -186,7 +157,6 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     def getHistory(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeHistory match {
-        case Merging => CreateMergingHistory[F].create(root)
         case Radix   => CreateRadixHistory[F].create(root)
         case Default => CreateDefaultHistory[F].create(root)
       }
