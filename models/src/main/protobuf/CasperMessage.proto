@@ -40,42 +40,17 @@ message ForkChoiceTipRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
 }
 
-// ---------- Signing Protocol ---------
-message ApprovedBlockCandidateProto {
-  option (scalapb.message).extends = "CasperMessageProto";
-  BlockMessageProto block  = 1 [(scalapb.field).no_box = true];
-  int32 requiredSigs       = 2;
-}
-
-message UnapprovedBlockProto {
-  option (scalapb.message).extends = "CasperMessageProto";
-  ApprovedBlockCandidateProto candidate = 1 [(scalapb.field).no_box = true];
-  int64                       timestamp = 2;
-  int64                       duration  = 3;
-}
-
-message Signature {
-  bytes  publicKey = 1;
-  string algorithm = 2;
-  bytes  sig       = 3;
-}
-
-message BlockApprovalProto {
-  option (scalapb.message).extends = "CasperMessageProto";
-  ApprovedBlockCandidateProto candidate = 1 [(scalapb.field).no_box = true];
-  Signature sig                         = 2 [(scalapb.field).no_box = true];
-}
+// ---------- Approved block ---------
 
 message ApprovedBlockProto  {
   option (scalapb.message).extends = "CasperMessageProto";
-  ApprovedBlockCandidateProto candidate = 1 [(scalapb.field).no_box = true];
-  repeated Signature sigs               = 2;
+  BlockMessageProto block  = 1 [(scalapb.field).no_box = true];
 }
 
 message ApprovedBlockRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
   string identifier = 1;
-  bool trimState    = 2;
+  bool   trimState  = 2;
 }
 
 message NoApprovedBlockAvailableProto {
@@ -84,7 +59,7 @@ message NoApprovedBlockAvailableProto {
   string nodeIdentifer = 2;
 }
 
-// ------- End Signing Protocol --------
+// ------- End Approved block --------
 
 // --------- Core Protocol  --------
 message BlockMessageProto {

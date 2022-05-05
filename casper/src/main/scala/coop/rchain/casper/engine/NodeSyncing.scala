@@ -126,12 +126,12 @@ class NodeSyncing[F[_]
 
   private def onApprovedBlock(sender: PeerNode, approvedBlock: ApprovedBlock): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
-    val receivedShard     = approvedBlock.candidate.block.shardId
+    val receivedShard     = approvedBlock.block.shardId
     val expectedShard     = casperShardConf.shardName
     val shardNameIsValid  = receivedShard == expectedShard
 
     def handleApprovedBlock = {
-      val block = approvedBlock.candidate.block
+      val block = approvedBlock.block
       for {
         _ <- Log[F].info(
               s"Valid approved block ${PrettyPrinter.buildString(block, short = true)} received. Restoring approved state."
@@ -163,7 +163,7 @@ class NodeSyncing[F[_]
 
     for {
       isValid <- senderIsBootstrap &&^ shardNameIsValid.pure &&^
-                  Validate.blockHash[F](approvedBlock.candidate.block)
+                  Validate.blockHash[F](approvedBlock.block)
 
       _ <- Log[F].info("Received approved block from bootstrap node.").whenA(isValid)
 
@@ -189,7 +189,7 @@ class NodeSyncing[F[_]
 
   def requestApprovedState(approvedBlock: ApprovedBlock): F[Unit] = {
     // Starting minimum block height. When latest blocks are downloaded new minimum will be calculated.
-    val block            = approvedBlock.candidate.block
+    val block            = approvedBlock.block
     val startBlockNumber = ProtoUtil.blockNumber(block)
     val minBlockNumberForDeployLifespan =
       Math.max(0, startBlockNumber - MultiParentCasper.deployLifespan)
@@ -227,7 +227,7 @@ class NodeSyncing[F[_]
 
       // Receive the blocks and after populate the DAG
       blockRequestAddDagStream = blockRequestStream.last.unNoneTerminate.evalMap { st =>
-        populateDag(approvedBlock.candidate.block, st.lowerBound, st.heightMap)
+        populateDag(approvedBlock.block, st.lowerBound, st.heightMap)
       }
 
       // Run both streams in parallel until tuple space and all needed blocks are received

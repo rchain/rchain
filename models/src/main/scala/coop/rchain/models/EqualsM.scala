@@ -6,10 +6,8 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.models.BlockHash.BlockHash
 import monix.eval.Coeval
 
 import scala.Function.tupled
@@ -138,22 +136,19 @@ object EqualM extends EqualMDerivation {
   implicit val WaitingContinuationInfoHash    = gen[WaitingContinuationInfo]
   implicit val BlockQueryByHeightHash         = gen[BlocksQueryByHeight]
 
-  implicit val ApprovedBlockHash          = gen[ApprovedBlock]
-  implicit val ApprovedBlockCandidateHash = gen[ApprovedBlockCandidate]
-  implicit val BlockApprovalHash          = gen[BlockApproval]
-  implicit val BlockMessageHash           = gen[BlockMessageProto]
-  implicit val BlockMetadataInternalHash  = gen[BlockMetadataProto]
-  implicit val BodyHash                   = gen[BodyProto]
-  implicit val BondHash                   = gen[BondProto]
-  implicit val DeployDataHash             = gen[DeployDataProto]
-  implicit val HeaderHash                 = gen[HeaderProto]
-  implicit val ProcessedDeployHash        = gen[ProcessedDeployProto]
-  implicit val ProcessedSystemDeployHash  = gen[ProcessedSystemDeployProto]
-  implicit val RChainStateHash            = gen[RChainStateProto]
-  implicit val UnapprovedBlockHash        = gen[UnapprovedBlock]
-  implicit val ReportConsumeProto         = gen[ReportConsumeProto]
-  implicit val bindPattern                = gen[BindPattern]
-  implicit val parWithRandom              = gen[ParWithRandom]
+  implicit val ApprovedBlockHash         = gen[ApprovedBlock]
+  implicit val BlockMessageHash          = gen[BlockMessageProto]
+  implicit val BlockMetadataInternalHash = gen[BlockMetadataProto]
+  implicit val BodyHash                  = gen[BodyProto]
+  implicit val BondHash                  = gen[BondProto]
+  implicit val DeployDataHash            = gen[DeployDataProto]
+  implicit val HeaderHash                = gen[HeaderProto]
+  implicit val ProcessedDeployHash       = gen[ProcessedDeployProto]
+  implicit val ProcessedSystemDeployHash = gen[ProcessedSystemDeployProto]
+  implicit val RChainStateHash           = gen[RChainStateProto]
+  implicit val ReportConsumeProto        = gen[ReportConsumeProto]
+  implicit val bindPattern               = gen[BindPattern]
+  implicit val parWithRandom             = gen[ParWithRandom]
 
   implicit val PCostHash              = gen[PCost]
   implicit val TaggedContinuationHash = gen[TaggedContinuation]

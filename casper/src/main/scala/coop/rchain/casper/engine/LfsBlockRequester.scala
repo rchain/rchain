@@ -9,7 +9,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
-import fs2.{Pure, Stream}
+import fs2.Stream
 import fs2.concurrent.Queue
 
 import scala.collection.immutable.SortedMap
@@ -161,7 +161,7 @@ object LfsBlockRequester {
       validateBlock: BlockMessage => F[Boolean]
   ): F[Stream[F, ST[BlockHash]]] = {
 
-    val block = approvedBlock.candidate.block
+    val block = approvedBlock.block
 
     // Active validators as per approved block state
     // - for approved state to be complete it is required to have block from each of them

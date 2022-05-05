@@ -19,23 +19,65 @@ sealed trait CasperMessage {
 
 object CasperMessage {
   def from(cm: CasperMessageProto): Either[String, CasperMessage] = cm match {
-    case hash: BlockHashMessageProto      => Right(BlockHashMessage.from(hash))
-    case bmp: BlockMessageProto           => BlockMessage.from(bmp)
-    case p: ApprovedBlockCandidateProto   => ApprovedBlockCandidate.from(p)
-    case p: ApprovedBlockProto            => ApprovedBlock.from(p)
-    case p: ApprovedBlockRequestProto     => Right(ApprovedBlockRequest.from(p))
-    case p: BlockApprovalProto            => BlockApproval.from(p)
-    case p: BlockRequestProto             => Right(BlockRequest.from(p))
-    case _: ForkChoiceTipRequestProto     => Right(ForkChoiceTipRequest)
-    case p: HasBlockProto                 => Right(HasBlock.from(p))
-    case p: HasBlockRequestProto          => Right(HasBlockRequest.from(p))
-    case p: NoApprovedBlockAvailableProto => Right(NoApprovedBlockAvailable.from(p))
-    case p: UnapprovedBlockProto          => UnapprovedBlock.from(p)
+    // Blocks messages
+    case m: BlockMessageProto     => BlockMessage.from(m)
+    case m: BlockRequestProto     => Right(BlockRequest.from(m))
+    case m: BlockHashMessageProto => Right(BlockHashMessage.from(m))
+    case m: HasBlockProto         => Right(HasBlock.from(m))
+    case m: HasBlockRequestProto  => Right(HasBlockRequest.from(m))
+    // Tips request
+    case _: ForkChoiceTipRequestProto => Right(ForkChoiceTipRequest)
+    // Approved block
+    case m: ApprovedBlockProto            => ApprovedBlock.from(m)
+    case m: ApprovedBlockRequestProto     => Right(ApprovedBlockRequest.from(m))
+    case m: NoApprovedBlockAvailableProto => Right(NoApprovedBlockAvailable.from(m))
     // Last finalized state messages
-    case p: StoreItemsMessageRequestProto => Right(StoreItemsMessageRequest.from(p))
-    case p: StoreItemsMessageProto        => Right(StoreItemsMessage.from(p))
+    case m: StoreItemsMessageRequestProto => Right(StoreItemsMessageRequest.from(m))
+    case m: StoreItemsMessageProto        => Right(StoreItemsMessage.from(m))
   }
 }
+
+/* Approved block message */
+
+final case class ApprovedBlock(block: BlockMessage) extends CasperMessage {
+  def toProto: ApprovedBlockProto = ApprovedBlockProto().withBlock(block.toProto)
+}
+
+object ApprovedBlock {
+  def from(ba: ApprovedBlockProto): Either[String, ApprovedBlock] =
+    BlockMessage.from(ba.block).map(ApprovedBlock(_))
+}
+
+final case class ApprovedBlockRequest(identifier: String, trimState: Boolean = false)
+    extends CasperMessage {
+  def toProto: ApprovedBlockRequestProto = ApprovedBlockRequestProto(identifier, trimState)
+}
+
+object ApprovedBlockRequest {
+  def from(abr: ApprovedBlockRequestProto): ApprovedBlockRequest =
+    ApprovedBlockRequest(abr.identifier, abr.trimState)
+}
+
+final case class NoApprovedBlockAvailable(identifier: String, nodeIdentifer: String)
+    extends CasperMessage {
+  def toProto: NoApprovedBlockAvailableProto =
+    NoApprovedBlockAvailableProto()
+      .withIdentifier(identifier)
+      .withNodeIdentifer(nodeIdentifer)
+}
+
+object NoApprovedBlockAvailable {
+  def from(naba: NoApprovedBlockAvailableProto): NoApprovedBlockAvailable =
+    NoApprovedBlockAvailable(naba.identifier, naba.nodeIdentifer)
+}
+
+/* Tips message */
+
+case object ForkChoiceTipRequest extends CasperMessage {
+  val toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
+}
+
+/* Blocks messages */
 
 final case class HasBlockRequest(hash: ByteString) extends CasperMessage {
   def toProto: HasBlockRequestProto = HasBlockRequestProto(hash)
@@ -59,97 +101,6 @@ final case class BlockRequest(hash: ByteString) extends CasperMessage {
 
 object BlockRequest {
   def from(hbr: BlockRequestProto): BlockRequest = BlockRequest(hbr.hash)
-}
-
-case object ForkChoiceTipRequest extends CasperMessage {
-  val toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
-}
-
-final case class ApprovedBlockCandidate(block: BlockMessage, requiredSigs: Int)
-    extends CasperMessage {
-  def toProto: ApprovedBlockCandidateProto =
-    ApprovedBlockCandidateProto()
-      .withBlock(block.toProto)
-      .withRequiredSigs(requiredSigs)
-}
-
-object ApprovedBlockCandidate {
-  def from(abc: ApprovedBlockCandidateProto): Either[String, ApprovedBlockCandidate] =
-    for {
-      block <- BlockMessage.from(abc.block)
-    } yield ApprovedBlockCandidate(block, abc.requiredSigs)
-}
-
-final case class UnapprovedBlock(
-    candidate: ApprovedBlockCandidate,
-    timestamp: Long,
-    duration: Long
-) extends CasperMessage {
-  def toProto: UnapprovedBlockProto =
-    UnapprovedBlockProto()
-      .withCandidate(candidate.toProto)
-      .withTimestamp(timestamp)
-      .withDuration(duration)
-}
-
-object UnapprovedBlock {
-  def from(ub: UnapprovedBlockProto): Either[String, UnapprovedBlock] =
-    for {
-      candidate <- ApprovedBlockCandidate.from(ub.candidate)
-    } yield UnapprovedBlock(candidate, ub.timestamp, ub.duration)
-}
-
-final case class BlockApproval(candidate: ApprovedBlockCandidate, sig: Signature)
-    extends CasperMessage {
-  def toProto: BlockApprovalProto =
-    BlockApprovalProto()
-      .withCandidate(candidate.toProto)
-      .withSig(sig)
-}
-
-object BlockApproval {
-  def from(ba: BlockApprovalProto): Either[String, BlockApproval] =
-    for {
-      candidate <- ApprovedBlockCandidate.from(ba.candidate)
-    } yield BlockApproval(candidate, ba.sig)
-}
-
-final case class ApprovedBlock(candidate: ApprovedBlockCandidate, sigs: List[Signature])
-    extends CasperMessage {
-  def toProto: ApprovedBlockProto =
-    ApprovedBlockProto()
-      .withCandidate(candidate.toProto)
-      .withSigs(sigs)
-}
-
-object ApprovedBlock {
-  def from(ba: ApprovedBlockProto): Either[String, ApprovedBlock] =
-    for {
-      candidate <- ApprovedBlockCandidate.from(ba.candidate)
-    } yield ApprovedBlock(candidate, ba.sigs.toList)
-}
-
-final case class NoApprovedBlockAvailable(identifier: String, nodeIdentifer: String)
-    extends CasperMessage {
-  def toProto: NoApprovedBlockAvailableProto =
-    NoApprovedBlockAvailableProto()
-      .withIdentifier(identifier)
-      .withNodeIdentifer(nodeIdentifer)
-}
-
-object NoApprovedBlockAvailable {
-  def from(naba: NoApprovedBlockAvailableProto): NoApprovedBlockAvailable =
-    NoApprovedBlockAvailable(naba.identifier, naba.nodeIdentifer)
-}
-
-final case class ApprovedBlockRequest(identifier: String, trimState: Boolean = false)
-    extends CasperMessage {
-  def toProto: ApprovedBlockRequestProto = ApprovedBlockRequestProto(identifier, trimState)
-}
-
-object ApprovedBlockRequest {
-  def from(abr: ApprovedBlockRequestProto): ApprovedBlockRequest =
-    ApprovedBlockRequest(abr.identifier, abr.trimState)
 }
 
 final case class BlockHashMessage(blockHash: BlockHash, blockCreator: ByteString)

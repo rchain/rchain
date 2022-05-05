@@ -33,11 +33,6 @@ object Validate {
       "secp256k1" -> Secp256k1.verify
     )
 
-  def signature(d: Data, sig: protocol.Signature): Boolean =
-    signatureVerifiers.get(sig.algorithm).fold(false) { verify =>
-      verify(d, sig.sig.toByteArray, sig.publicKey.toByteArray)
-    }
-
   def ignore(b: BlockMessage, reason: String): String =
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 

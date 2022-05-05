@@ -34,10 +34,7 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
     )
   }
 
-  def createApprovedBlock(block: BlockMessage): ApprovedBlock = {
-    val candidate = ApprovedBlockCandidate(block, requiredSigs = 0)
-    ApprovedBlock(candidate, Nil)
-  }
+  def createApprovedBlock(block: BlockMessage): ApprovedBlock = ApprovedBlock(block)
 
   val hash9 = mkHash("9")
   val hash8 = mkHash("8")
