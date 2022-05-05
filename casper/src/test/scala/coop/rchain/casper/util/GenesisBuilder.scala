@@ -1,7 +1,8 @@
 package coop.rchain.casper.util
 
 import cats.syntax.all._
-import coop.rchain.blockstorage.blockStore
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
@@ -157,7 +158,7 @@ object GenesisBuilder {
         implicit val rm = runtimeManager
         Genesis.createGenesisBlock[Task](genesisParameters)
       }
-      blockStore      <- blockStore.create[Task](kvsManager)
+      blockStore      <- BlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
       _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)

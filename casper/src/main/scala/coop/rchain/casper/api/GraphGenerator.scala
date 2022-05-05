@@ -4,7 +4,8 @@ import cats.{Monad, _}
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.syntax._
 import coop.rchain.catscontrib.Catscontrib._

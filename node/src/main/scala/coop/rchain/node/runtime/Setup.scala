@@ -6,8 +6,7 @@ import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
-import coop.rchain.blockstorage.{approvedStore, blockStore}
+import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.BlockProcessor
@@ -96,7 +95,7 @@ object Setup {
       _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
 
       // Block storage
-      blockStore    <- blockStore.create(rnodeStoreManager)
+      blockStore    <- BlockStore(rnodeStoreManager)
       approvedStore <- approvedStore.create(rnodeStoreManager)
 
       // Block DAG storage
@@ -104,9 +103,6 @@ object Setup {
 
       // Casper requesting blocks cache
       casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
-
-      // Deploy storage
-      deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
 
       synchronyConstraintChecker = {
         implicit val bs  = blockStore
@@ -195,7 +191,7 @@ object Setup {
 
       // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
-        implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
+        implicit val (bs, bd)     = (blockStore, blockDagStorage)
         implicit val cbs          = casperBufferStorage
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
@@ -243,12 +239,12 @@ object Setup {
         .collect { case Some(m) => m }
 
       nodeLaunch = {
-        implicit val (bs, as, bd, ds) = (blockStore, approvedStore, blockDagStorage, deployStorage)
-        implicit val (br, cb, ep)     = (blockRetriever, casperBufferStorage, eventPublisher)
-        implicit val (lb, ra, rc)     = (lab, rpConfAsk, rpConnections)
-        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (rm, cu)         = (runtimeManager, commUtil)
-        implicit val (rsm, sp)        = (rspaceStateManager, span)
+        implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
+        implicit val (br, cb, ep) = (blockRetriever, casperBufferStorage, eventPublisher)
+        implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
+        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (rm, cu)     = (runtimeManager, commUtil)
+        implicit val (rsm, sp)    = (rspaceStateManager, span)
         NodeLaunch[F](
           peerMessageStream,
           blockProcessorQueue,
@@ -271,10 +267,10 @@ object Setup {
 
       // Block API
       blockApi <- {
-        implicit val (bds, bs, ds) = (blockDagStorage, blockStore, deployStorage)
-        implicit val rm            = runtimeManager
-        implicit val sp            = span
-        val isNodeReadOnly         = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (bds, bs) = (blockDagStorage, blockStore)
+        implicit val rm        = runtimeManager
+        implicit val sp        = span
+        val isNodeReadOnly     = conf.casper.validatorPrivateKey.isEmpty
         BlockApiImpl[F](
           validatorIdentityOpt,
           conf.protocolServer.networkId,

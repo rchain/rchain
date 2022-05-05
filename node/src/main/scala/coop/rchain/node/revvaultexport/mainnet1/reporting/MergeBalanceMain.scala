@@ -3,7 +3,7 @@ package coop.rchain.node.revvaultexport.mainnet1.reporting
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.blockStore
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -164,7 +164,7 @@ object MergeBalanceMain {
     val task: Task[Vector[Account]] = for {
       accountMap        <- getVaultMap(stateBalanceFile, transactionBalanceFile).pure[Task]
       rnodeStoreManager <- RNodeKeyValueStoreManager[Task](dataDir)
-      blockStore        <- blockStore.create[Task](rnodeStoreManager)
+      blockStore        <- BlockStore[Task](rnodeStoreManager)
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
