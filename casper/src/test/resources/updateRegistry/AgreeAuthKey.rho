@@ -11,7 +11,7 @@ new
 in {
   for (@(`rho:rchain:authKey`, *updateContract, *AuthKey) <- @"updateContract") {
     stdout!(("agree get prpose ok"))|
-    rl!(`rho:registry:multisig`, *rlret)|
+    rl!(`rho:registry:systemContractManager`, *rlret)|
     for(@multiSigReg <- rlret){
       stdout!(("agree get multisig ok", multiSigReg))|
       @multiSigReg!("agree",

@@ -606,11 +606,9 @@ in {
           "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes(),
         in {
           new
-            multisig,
-            multisigLoc,       
-            multisigDispatcher
-            // Although the names above have `multisig`, they are not `multisig` currently because 
-            // we want to simplify the process and make it multisig in the future
+            systemContractManager,
+            systemContractManagerLoc,       
+            systemContractManagerDispatcher
           in {
             // ------
             // Update
@@ -619,7 +617,7 @@ in {
             // con:   the update consume which take the old state
             // meth:  the target new contract which would replace the old one
             // ret:   channel which returns the update result
-            contract multisig(@"update", @deployerID, @uri, @con, @meth, ret) = {
+            contract systemContractManager(@"update", @deployerID, @uri, @con, @meth, ret) = {
               // there is an update proposal for `uri`
               new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
                 DeployerIdOps!("pubKeyBytes", deployerID, *deployerPubKeyBytesCh) |
@@ -654,68 +652,68 @@ in {
             // "agreement" - agreement map
             // "propose"   - proposals map
             // --------------------------------------------
-            contract @(bundle+{*multisig}, "extractState")(ret) = {
+            contract @(bundle+{*systemContractManager}, "extractState")(ret) = {
               for (@blessedContractLocMap <<- blessedContractLocMapCh) {
                 ret!(blessedContractLocMap)
               }
             } |
             new ack in {
               for (@map <<- _registryStore) {
-                // add multisig dispatcher to the uri map
-                TreeHashMap!("set", map, `rho:registry:multisig`, bundle+{*multisigDispatcher}, *ack)
+                // add systemContractManager dispatcher to the uri map
+                TreeHashMap!("set", map, `rho:registry:systemContractManager`, bundle+{*systemContractManagerDispatcher}, *ack)
               } |
               for (_ <- ack) {
-                // add multisig location to location map and the methods' entry point to the location channel
+                // add systemContractManager location to location map and the methods' entry point to the location channel
                 for (@blessedContractLocMap <- blessedContractLocMapCh) {
-                  blessedContractLocMapCh!(blessedContractLocMap.set(`rho:registry:multisig`, *multisigLoc)) |
-                  multisigLoc!(bundle+{*multisig})
+                  blessedContractLocMapCh!(blessedContractLocMap.set(`rho:registry:systemContractManager`, *systemContractManagerLoc)) |
+                  systemContractManagerLoc!(bundle+{*systemContractManager})
                 }
               }
             } |
-            // multisig dispatcher contract
+            // systemContractManager dispatcher contract
             // for use with 1-9 arguments
-            contract multisigDispatcher(@arg1) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1)
               }
             } |
-            contract multisigDispatcher(@arg1, @arg2) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1, @arg2) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1, arg2)
               }
             } |
-            contract multisigDispatcher(@arg1, @arg2, @arg3) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1, arg2, arg3)
               }
             } |
-            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1, arg2, arg3, arg4)
               }
             } |
-            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1, arg2, arg3, arg4, arg5)
               }
             } |
-            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1, arg2, arg3, arg4, arg5, arg6)
               }
             } |
-            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
               }
             } |
-            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
               }
             } |
-            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-              for (realMS <<- multisigLoc) {
+            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+              for (realMS <<- systemContractManagerLoc) {
                 realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
               }
             }

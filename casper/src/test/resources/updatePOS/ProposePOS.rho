@@ -536,7 +536,7 @@ in {
   } |
   @"updateContract"!((`rho:rchain:pos`, *updateContract, *POS)) |
   stdout!(("update pos start!!!!!"))|
-  rl!(`rho:registry:multisig`, *rlret)|
+  rl!(`rho:registry:systemContractManager`, *rlret)|
   for(@multiSigReg <- rlret){
     stdout!(("propose get multisig ok", multiSigReg))|
     @multiSigReg!("update",

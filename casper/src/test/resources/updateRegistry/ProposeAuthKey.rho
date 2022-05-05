@@ -42,7 +42,7 @@ in {
   } |
   @"updateContract"!((`rho:rchain:authKey`, *updateContract, *AuthKey)) |
   stdout!(("propose start!!!!!"))|
-  rl!(`rho:registry:multisig`, *rlret)|
+  rl!(`rho:registry:systemContractManager`, *rlret)|
   for(@multiSigReg <- rlret){
     stdout!(("propose get multisig ok", multiSigReg))|
     @multiSigReg!("propose",

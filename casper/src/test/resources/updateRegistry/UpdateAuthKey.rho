@@ -9,7 +9,7 @@ new
   stdout(`rho:io:stdout`),
   updateRet
 in {
-  rl!(`rho:registry:multisig`, *rlret)|
+  rl!(`rho:registry:systemContractManager`, *rlret)|
   for(@multiSigReg <- rlret){
     stdout!(("update get multisig ok", multiSigReg))|
     @multiSigReg!("update", `rho:rchain:authKey`, *updateRet)|
