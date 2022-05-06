@@ -156,13 +156,13 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                     val justificationsOpt =
                       block.justifications
                         .map(_.latestBlockHash)
-                        .map(dagMsgSt.msgViewMap.get)
+                        .map(dagMsgSt.msgMap.get)
                         .sequence
                         .map(_.toSet)
 
                     val newDagMsgState = justificationsOpt
                       .map { justifications =>
-                        val newMsg = dagMsgSt.createMessageView(
+                        val newMsg = dagMsgSt.createMessage(
                           block.blockHash,
                           block.body.state.blockNumber,
                           block.sender,
@@ -170,7 +170,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                           block.body.state.bonds.map(b => (b.validator, b.stake)).toMap,
                           justifications
                         )
-                        dagMsgSt.insertMsgView(newMsg)
+                        dagMsgSt.insertMsg(newMsg)
                       }
                       .getOrElse(dagMsgSt)
 

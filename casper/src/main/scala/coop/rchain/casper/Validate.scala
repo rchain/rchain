@@ -394,7 +394,7 @@ object Validate {
       b: BlockMessage
   ): F[Option[Boolean]] =
     for {
-      msgMap <- BlockDagStorage[F].getRepresentation.map(_.dagMessageState.msgViewMap)
+      msgMap <- BlockDagStorage[F].getRepresentation.map(_.dagMessageState.msgMap)
 //      justifications = b.justifications.map(_.latestBlockHash).map(msgMap)
     } yield for {
       // TODO: temporary don't expect that all justifications are available in msgMap to satisfy the failing tests

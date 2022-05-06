@@ -6,14 +6,14 @@ import cats.syntax.all._
 final case class DagMessageState[M: Ordering, S: Ordering](
     me: S,
     latestMsgs: Set[Message[M, S]],
-    // Message view - updated when new message is added
-    msgViewMap: Map[M, Message[M, S]] = Map()
+    // Message - updated when new message is added
+    msgMap: Map[M, Message[M, S]] = Map()
 ) {
 
   /**
     * Creates a new message, generates id (hash) and finalization fringe
     */
-  def createMessageView(
+  def createMessage(
       id: M,
       height: Long,
       sender: S,
@@ -22,7 +22,7 @@ final case class DagMessageState[M: Ordering, S: Ordering](
       justifications: Set[Message[M, S]]
   ): Message[M, S] = {
     // Calculate next fringe or continue with parent
-    val finalizer                    = Finalizer(msgViewMap)
+    val finalizer                    = Finalizer(msgMap)
     val (parentFringe, newFringeOpt) = finalizer.calculateFinalization(justifications, finBondsMap)
 
     val newFringe    = newFringeOpt.getOrElse(parentFringe)
@@ -32,9 +32,9 @@ final case class DagMessageState[M: Ordering, S: Ordering](
     val seenByParents = justifications.flatMap(_.seen)
     val newSeen       = seenByParents + id
 
-    // Create message view, an immutable object with all fields calculated
+    // Create message, an immutable object with all fields calculated
     val justificationKeys = justifications.map(_.id)
-    val newMsgView =
+    val newMsg =
       Message(
         id,
         height,
@@ -48,41 +48,41 @@ final case class DagMessageState[M: Ordering, S: Ordering](
 
     /* Debug log */
     if (me == sender) {
-      //        val fringeStr = newFringeOpt.map(ms => s"+ ${showMsgs(ms)}").getOrElse("")
-      //        println(s"${newMsgView.id} $fringeStr")
-      debugLogMessage(finalizer, newMsgView, justifications, parentFringe, newFringeOpt)
+      // val fringeStr = newFringeOpt.map(ms => s"+ ${showMsgs(ms)}").getOrElse("")
+      // println(s"${newMsg.id} $fringeStr")
+      debugLogMessage(finalizer, newMsg, justifications, parentFringe, newFringeOpt)
     }
     /* End Debug log */
 
-    newMsgView
+    newMsg
   }
 
   /**
     * Inserts a message to sender's state
     */
-  def insertMsgView(msgView: Message[M, S]): DagMessageState[M, S] =
-    msgViewMap.get(msgView.id).as(this).getOrElse {
-      // Add message view to a view map
-      val newMsgViewMap = msgViewMap + ((msgView.id, msgView))
+  def insertMsg(msg: Message[M, S]): DagMessageState[M, S] =
+    msgMap.get(msg.id).as(this).getOrElse {
+      // Add message to a message map
+      val newMsgMap = msgMap + ((msg.id, msg))
 
       // Find latest message for sender
-      val latest = latestMsgs.filter(_.sender == msgView.sender)
+      val latest = latestMsgs.filter(_.sender == msg.sender)
 
       // Update latest messages for sender
-      val latestFromSender = msgView.senderSeq > latest
+      val latestFromSender = msg.senderSeq > latest
         .map(_.senderSeq)
         .toList
         .maximumOption
         .getOrElse(-1L)
       val newLatestMsgs =
-        if (latestFromSender) latestMsgs -- latest + msgView
+        if (latestFromSender) latestMsgs -- latest + msg
         else latestMsgs
 
       if (!latestFromSender)
-        println(s"ERROR: add NOT latest message '${msgView.id}' for sender '$me''")
+        println(s"ERROR: add NOT latest message '${msg.id}' for sender '$me''")
 
       // Create new sender state with added message
-      copy(latestMsgs = newLatestMsgs, msgViewMap = newMsgViewMap)
+      copy(latestMsgs = newLatestMsgs, msgMap = newMsgMap)
     }
 
   /**
@@ -97,11 +97,11 @@ final case class DagMessageState[M: Ordering, S: Ordering](
     // Bonds map taken from any latest message (assumes no epoch change happen)
     val bondsMap = latestMsgs.head.bondsMap
 
-    // Create a message view from a new received message
-    val msgId = genMsgId(me, newHeight) // s"$me-$height"
+    // Generate message ID (to be updated with real block hash)
+    val msgId = genMsgId(me, newHeight)
 
-    // Create new message
-    val newMsg = createMessageView(
+    // Create a new message
+    val newMsg = createMessage(
       id = msgId,
       height = newHeight,
       sender = me,
@@ -110,8 +110,8 @@ final case class DagMessageState[M: Ordering, S: Ordering](
       justifications
     )
 
-    // Insert message view to self state
-    (insertMsgView(newMsg), newMsg)
+    // Insert message to self state
+    (insertMsg(newMsg), newMsg)
   }
 
   /**
@@ -119,7 +119,7 @@ final case class DagMessageState[M: Ordering, S: Ordering](
     */
   def debugLogMessage(
       finalizer: Finalizer[M, S],
-      msgView: Message[M, S],
+      msg: Message[M, S],
       justifications: Set[Message[M, S]],
       parentFringe: Set[Message[M, S]],
       newFringeOpt: Option[Set[Message[M, S]]]
@@ -148,7 +148,7 @@ final case class DagMessageState[M: Ordering, S: Ordering](
                 )
 
       // Check if min messages satisfy requirements (senders in bonds map)
-      _ <- finalizer.checkMinMessages(minMsgs, msgView.bondsMap).guard[Option]
+      _ <- finalizer.checkMinMessages(minMsgs, msg.bondsMap).guard[Option]
 
       // Include ancestors of minimum messages as next layer
       nextLayer = finalizer.calculateNextLayer(minMsgs)
@@ -173,7 +173,7 @@ final case class DagMessageState[M: Ordering, S: Ordering](
 
     val printOutputs = Seq(nextLayerStr, fringeSupportStr, minMsgsStr, fringeStr, parentFringeStr)
     if (printOutputs.exists(_ != "")) {
-      println(s"${me}: ${msgView.id}")
+      println(s"${me}: ${msg.id}")
       println(s"SUPPORT:\n$fringeSupportStr")
       println(s"MIN    : $minMsgsStr")
       println(s"NEXT   : $nextLayerStr")

@@ -35,11 +35,11 @@ final case class Message[M, S](
 /**
   * Multi-parent finalization implementation
   *
-  * @param msgViewMap cache of all messages accessed by message id
+  * @param msgMap cache of all messages accessed by message id
   * @tparam M abstract type for identifier of the message
   * @tparam S abstract type for identifier of the sender
   */
-final case class Finalizer[M, S](msgViewMap: Map[M, Message[M, S]]) {
+final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
   // Helper function to lazily unfold iterator function
   def unfold[A](init: A)(f: A => Iterator[A]): LazyList[A] =
     LazyList.unfold(f(init)) { iter =>
@@ -53,7 +53,7 @@ final case class Finalizer[M, S](msgViewMap: Map[M, Message[M, S]]) {
   // Iterate self parent messages
   def selfParents(mv: Message[M, S], finalized: Set[Message[M, S]]): Seq[Message[M, S]] =
     unfold(mv) { m =>
-      m.parents.map(msgViewMap).filter(x => x.sender == mv.sender && !finalized(x)).toIterator
+      m.parents.map(msgMap).filter(x => x.sender == mv.sender && !finalized(x)).toIterator
     }
 
   /**
@@ -69,7 +69,7 @@ final case class Finalizer[M, S](msgViewMap: Map[M, Message[M, S]]) {
   def calculateNextLayer(minMsgs: List[Message[M, S]]): Map[S, Message[M, S]] = {
     val minMessagesMap = minMsgs.map(x => (x.sender, x)).toMap
     minMsgs
-      .flatMap(_.parents.map(msgViewMap))
+      .flatMap(_.parents.map(msgMap))
       .filter(x => minMessagesMap.keySet.contains(x.sender))
       .foldLeft(minMessagesMap) {
         case (acc, m) =>
@@ -96,7 +96,7 @@ final case class Finalizer[M, S](msgViewMap: Map[M, Message[M, S]]) {
             // Search parents of parent if not part of next layer
             val parentsOfParent = mv.parents -- nextLayer.values.map(_.id)
             val seeMinMsg = parentsOfParent
-              .map(msgViewMap)
+              .map(msgMap)
               .map { p =>
                 // Find if next layer message is seen from any parent message
                 val selfMsgs     = p +: selfParents(p, finalized)
@@ -169,10 +169,10 @@ final case class Finalizer[M, S](msgViewMap: Map[M, Message[M, S]]) {
     // - can be empty which means first layer is first message from each sender
     val parentFringe =
       justifications.toList
-        .maximumByOption(_.fringe.map(msgViewMap).toList.map(_.height).maximumOption.getOrElse(-1L))
+        .maximumByOption(_.fringe.map(msgMap).toList.map(_.height).maximumOption.getOrElse(-1L))
         .map(_.fringe)
         .getOrElse(Set())
-        .map(msgViewMap)
+        .map(msgMap)
 
     // Find top most fringe
     // - multiple fringes can be finalized at once
