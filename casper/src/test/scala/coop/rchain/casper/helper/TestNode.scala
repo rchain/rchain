@@ -11,6 +11,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
@@ -500,14 +501,64 @@ object TestNode {
                          r <- d.get
                        } yield r
                  )
+
                  // Block processor
                  blockProcessor = BlockProcessor[F](shardConf)
 
-                 blockProcessingPipe = { in: fs2.Stream[F, BlockMessage] =>
-                   in.evalMap(b => blockProcessor.validateWithEffects(b))
-                 }
+                 // blockProcessingPipe is analogue of BlockProcessorInstance
                  blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
+                 receiverOutputQueue <- Queue.unbounded[F, BlockHash]
+                 finishedProcessing  <- Queue.unbounded[F, BlockHash]
                  blockProcessorState <- Ref.of[F, Set[BlockHash]](Set.empty)
+                 parallelism         = 100
+                 blockProcessingPipe = {
+                   in: fs2.Stream[F, BlockMessage] =>
+                     receiverOutputQueue.dequeue
+                       .evalMap(BlockStore[F].getUnsafe)
+                       .map {
+                         b =>
+                           {
+                             Stream
+                               .eval(
+                                 blockProcessorState
+                                   .modify(s => (s + b.blockHash, s.contains(b.blockHash)))
+                               )
+                               // stop here if hash is in processing already
+                               .filterNot(
+                                 inProcessing => inProcessing
+                               )
+                               .evalMap(_ => blockProcessor.validateWithEffects(b))
+                               .evalTap { _ =>
+                                 for {
+                                   bufferPendants <- blockProcessor.getDependencyFreeFromBuffer
+                                   inProcess      <- blockProcessorState.get
+                                   _ <- bufferPendants
+                                         .filterNot(b => inProcess.contains(b.blockHash))
+                                         .traverse(b => finishedProcessing.enqueue1(b.blockHash))
+                                 } yield ()
+                               }
+                               .evalTap { _ =>
+                                 triggerProposeFOpt.traverse(_(true)) whenA false /* autoPropose */
+                               }
+                               // ensure to remove hash from state
+                               .onFinalize(blockProcessorState.update(s => s - b.blockHash))
+                           }
+                       }
+                       .parJoin(parallelism)
+                 }
+
+                 // BlockReceiver
+                 blockReceiverState <- Ref[F].of(
+                                        BlockReceiverState(Map.empty[BlockHash, RecvStatus])
+                                      )
+                 (incomingBlocksStream, processesBlocksStream) = BlockReceiver.streams(
+                   kvm,
+                   blockProcessorQueue,
+                   receiverOutputQueue,
+                   finishedProcessing.dequeue,
+                   shardConf,
+                   blockReceiverState
+                 )
 
                  // Remove TransportLayer handling in TestNode (too low level for these tests)
                  routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
