@@ -36,14 +36,14 @@ final case class BlockReceiverState[MId](state: Map[MId, RecvStatus]) {
 }
 
 object BlockReceiver {
-  def create[F[_]: Concurrent: Sync: RuntimeManager: RequestedBlocks: RPConfAsk: TransportLayer: BlockStore: BlockDagStorage: CommUtil: Log: Timer: Time: Metrics: Span /*: Concurrent: Sync: RuntimeManager: BlockDagStorage: BlockStore: RequestedBlocks: Timer: Time: RPConfAsk: TransportLayer: CommUtil: Metrics: Log: Span*/ ](
+  def streams[F[_]: Concurrent: Sync: RuntimeManager: RequestedBlocks: RPConfAsk: TransportLayer: BlockStore: BlockDagStorage: CommUtil: Log: Timer: Time: Metrics: Span /*: Concurrent: Sync: RuntimeManager: BlockDagStorage: BlockStore: RequestedBlocks: Timer: Time: RPConfAsk: TransportLayer: CommUtil: Metrics: Log: Span*/ ](
       storeManager: KeyValueStoreManager[F],
       incomingBlocks: Queue[F, BlockMessage],
       receiverOutputQueue: Queue[F, BlockHash],
       finishedProcessingStream: Stream[F, BlockHash],
       casperShardConf: CasperShardConf,
       state: Ref[F, BlockReceiverState[BlockHash]]
-  ): Stream[F, BlockMessage] = {
+  ): (Stream[F, BlockMessage], Stream[F, Unit]) = {
     val casperBufferF = CasperBufferKeyValueStorage.create[F](storeManager)
 
     def blockStr(b: BlockMessage)       = PrettyPrinter.buildString(b, short = true)
@@ -53,60 +53,63 @@ object BlockReceiver {
     def logMalformed(b: BlockMessage) =
       Log[F].info(s"Block ${blockStr(b)} is not of malformed. Dropped")
 
-    // TODO: Should we compile this stream or make some another actions?
-    val _ = finishedProcessingStream.parEvalMapUnorderedProcBounded(
-      _ =>
-        for {
-          casperBuffer   <- casperBufferF
-          blockRetriever = BlockRetriever.of[F]
-          // TODO: Checking and updating state not atomic
-          hashesInReceive <- state.get.map(_.state.keySet)
-          blocksInReceive <- hashesInReceive.toList.traverse(BlockStore[F].getUnsafe)
-          blocksResolved <- {
-            implicit val (br, cb) = (blockRetriever, casperBuffer)
-            blocksInReceive
-              .filterA(
-                block =>
-                  checkDependenciesWithEffects[F](block) >>= { r =>
-                    logMissingDeps(block).unlessA(r).as(r)
-                  }
-              )
-              .map(_.toSet)
-          }
-          hashesResolved   = blocksResolved.map(_.blockHash)
-          hashesUnresolved = hashesInReceive.diff(hashesResolved)
-          _ = state.update { st =>
-            val newSt = hashesResolved.foldLeft(st) {
-              case (st, hash) =>
-                st.remove(hash)
+    def incomingBlocksStream =
+      incomingBlocks.dequeue
+        .parEvalMapUnorderedProcBounded[F, BlockMessage](_.pure)
+        .filter(block => block.shardId == casperShardConf.shardName)
+        .evalFilter(
+          block =>
+            casperBufferF >>= { casperBuffer =>
+              implicit val cb: CasperBufferStorage[F] = casperBuffer
+              checkIfOfInterest(block)
+            } >>= { r =>
+              logNotOfInterest(block).unlessA(r).as(r)
             }
-            newSt
-          }
-          // TODO: Should resolved hashes be pushed atomically or not?
-          _ = hashesResolved.foreach(receiverOutputQueue.enqueue1)
-          // TODO: Should we request dependencies for hashesUnresolved?
-        } yield ()
-    )
+        )
+        .evalFilter(
+          block =>
+            checkIfWellFormedAndStore(block) >>= { r =>
+              logMalformed(block).unlessA(r).as(r)
+            }
+        )
+        .evalMap(block => state.modify(st => (st.add(block.blockHash), block)))
 
-    incomingBlocks.dequeue
-      .parEvalMapUnorderedProcBounded[F, BlockMessage](_.pure)
-      .filter(block => block.shardId == casperShardConf.shardName)
-      .evalFilter(
-        block =>
-          casperBufferF >>= { casperBuffer =>
-            implicit val cb: CasperBufferStorage[F] = casperBuffer
-            checkIfOfInterest(block)
-          } >>= { r =>
-            logNotOfInterest(block).unlessA(r).as(r)
-          }
-      )
-      .evalFilter(
-        block =>
-          checkIfWellFormedAndStore(block) >>= { r =>
-            logMalformed(block).unlessA(r).as(r)
-          }
-      )
-      .evalMap(block => state.modify(st => (st.add(block.blockHash), block)))
+    def processesBlocksStream =
+      finishedProcessingStream
+        .parEvalMapUnorderedProcBounded(
+          _ =>
+            for {
+              casperBuffer   <- casperBufferF
+              blockRetriever = BlockRetriever.of[F]
+              // TODO: Checking and updating state not atomic
+              hashesInReceive <- state.get.map(_.state.keySet)
+              blocksInReceive <- hashesInReceive.toList.traverse(BlockStore[F].getUnsafe)
+              blocksResolved <- {
+                implicit val (br, cb) = (blockRetriever, casperBuffer)
+                blocksInReceive
+                  .filterA(
+                    block =>
+                      checkDependenciesWithEffects[F](block) >>= { r =>
+                        logMissingDeps(block).unlessA(r).as(r)
+                      }
+                  )
+                  .map(_.toSet)
+              }
+              hashesResolved   = blocksResolved.map(_.blockHash)
+              hashesUnresolved = hashesInReceive.diff(hashesResolved)
+              _ = state.update { st =>
+                val newSt = hashesResolved.foldLeft(st) {
+                  case (st, hash) =>
+                    st.remove(hash)
+                }
+                newSt
+              }
+              // TODO: Should resolved hashes be pushed atomically or not?
+              _ = hashesResolved.foreach(receiverOutputQueue.enqueue1)
+              // TODO: Should we request dependencies for hashesUnresolved?
+            } yield ()
+        )
+    (incomingBlocksStream, processesBlocksStream)
   }
 
   // check if block should be processed

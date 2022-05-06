@@ -372,7 +372,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       finishedProcessing  <- Queue.unbounded[F, BlockHash]
       blockReceiverState  <- Ref[F].of(BlockReceiverState(Map.empty[BlockHash, RecvStatus]))
 
-      blockReceiverStream = BlockReceiver.create(
+      (incomingBlocksStream, processesBlocksStream) = BlockReceiver.streams(
         storeManager,
         blockProcessorQueue,
         receiverOutputQueue,
@@ -403,7 +403,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           servers.internalApiServer,
           servers.httpServer,
           servers.adminHttpServer,
-          blockReceiverStream,
+          incomingBlocksStream,
+          processesBlocksStream,
           blockProcessorStream,
           proposerStream,
           casperLoopStream,
