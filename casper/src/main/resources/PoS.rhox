@@ -440,11 +440,9 @@ in {
                           runMVar!(*stateCh, *stateProcessCh, *returnCh) |
                           for (@state, stateUpdateCh <- stateProcessCh) {
                             new valBondCh, valRewardCh, posAuthKeyCh in {
-                              // Flow of logic:
-                              // 0. check if blockHash is the hash of an invalid block
-                              // 1. transfer stake of slashed validator from PoS to Coop vault
-                              // 2. update state
                               // Takes the stake of slashed validator
+                              // - transfer stake of slashed validator from PoS to Coop vault
+                              // - update state
                               valBondCh!(state.get("allBonds").get(slashedValidator)) |
                               @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
                               for (@valBond <- valBondCh ; @posAuthKey <- posAuthKeyCh) {
