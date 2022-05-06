@@ -38,7 +38,7 @@ final case class BlockReceiverState[MId](state: Map[MId, RecvStatus]) {
 object BlockReceiver {
   def create[F[_]: Concurrent: Sync: RuntimeManager: RequestedBlocks: RPConfAsk: TransportLayer: BlockStore: BlockDagStorage: CommUtil: Log: Timer: Time: Metrics: Span /*: Concurrent: Sync: RuntimeManager: BlockDagStorage: BlockStore: RequestedBlocks: Timer: Time: RPConfAsk: TransportLayer: CommUtil: Metrics: Log: Span*/ ](
       storeManager: KeyValueStoreManager[F],
-      incomingBlocks: Queue[F, BlockHash],
+      incomingBlocks: Queue[F, BlockMessage],
       receiverOutputQueue: Queue[F, BlockHash],
       finishedProcessingStream: Stream[F, BlockHash],
       casperShardConf: CasperShardConf,
@@ -89,7 +89,7 @@ object BlockReceiver {
     )
 
     incomingBlocks.dequeue
-      .parEvalMapUnorderedProcBounded(BlockStore[F].getUnsafe)
+      .parEvalMapUnorderedProcBounded[F, BlockMessage](_.pure)
       .filter(block => block.shardId == casperShardConf.shardName)
       .evalFilter(
         block =>

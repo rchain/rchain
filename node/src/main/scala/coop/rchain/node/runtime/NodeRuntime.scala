@@ -180,7 +180,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         storeManager,
         casperShardConf,
         runtimeManager,
-        span
+        span,
+        blockProcessorQueue
       ) = result
 
       // Build main program
@@ -216,7 +217,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           blockProcessorState,
           routingMessageQueue,
           storeManager,
-          casperShardConf
+          casperShardConf,
+          blockProcessorQueue
         )
       }
 
@@ -255,7 +257,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       blockProcessingState: Ref[F, Set[BlockHash]],
       routingMessageQueue: Queue[F, RoutingMessage],
       storeManager: KeyValueStoreManager[F],
-      casperShardConf: CasperShardConf
+      casperShardConf: CasperShardConf,
+      blockProcessorQueue: Queue[F, BlockMessage]
   )(
       implicit
       time: Time[F],
@@ -365,14 +368,13 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       casperLoopStream = fs2.Stream.eval(casperLoop).repeat
 
       // Queues for fill BlockReceiver and for notify BlockReceiver about blocks added to the DAG
-      incomingBlocks      <- Queue.unbounded[F, BlockHash]
       receiverOutputQueue <- Queue.unbounded[F, BlockHash]
       finishedProcessing  <- Queue.unbounded[F, BlockHash]
       blockReceiverState  <- Ref[F].of(BlockReceiverState(Map.empty[BlockHash, RecvStatus]))
 
       blockReceiverStream = BlockReceiver.create(
         storeManager,
-        incomingBlocks,
+        blockProcessorQueue,
         receiverOutputQueue,
         finishedProcessing.dequeue,
         casperShardConf,

@@ -78,7 +78,8 @@ object Setup {
         KeyValueStoreManager[F],
         CasperShardConf,
         RuntimeManager[F],
-        Span[F]
+        Span[F],
+        Queue[F, BlockMessage]
     )
   ] =
     for {
@@ -360,6 +361,7 @@ object Setup {
       rnodeStoreManager,
       casperShardConf,
       runtimeManager,
-      span
+      span,
+      blockProcessorQueue
     )
 }
