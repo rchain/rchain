@@ -72,6 +72,15 @@ object BlockReceiver {
               logMalformed(block).unlessA(r).as(r)
             }
         )
+        .evalMap(
+          block =>
+            casperBufferF >>= { casperBuffer =>
+              {
+                implicit val cb = casperBuffer
+                commitToBuffer(block, None)
+              } *> block.pure
+            }
+        )
         .evalMap(block => state.modify(st => (st.add(block.blockHash), block)))
 
     def processesBlocksStream =
@@ -97,15 +106,18 @@ object BlockReceiver {
               }
               hashesResolved   = blocksResolved.map(_.blockHash)
               hashesUnresolved = hashesInReceive.diff(hashesResolved)
+              removedHashes    <- hashesResolved.toList.traverse(casperBuffer.remove)
               _ = state.update { st =>
-                val newSt = hashesResolved.foldLeft(st) {
-                  case (st, hash) =>
-                    st.remove(hash)
+                // TODO: The pattern (removedHashes.contains) not guarantee atomically removing hash
+                //  from CasperBuffer and state because incomingBlocksStream can push hashes in parallel.
+                val newSt = hashesResolved.filter(removedHashes.contains).foldLeft(st) {
+                  case (st, hash) => st.remove(hash)
                 }
                 newSt
               }
-              // TODO: Should resolved hashes be pushed atomically or not?
-              _ = hashesResolved.foreach(receiverOutputQueue.enqueue1)
+              _ = hashesResolved
+                .filter(removedHashes.contains)
+                .foreach(receiverOutputQueue.enqueue1)
               // TODO: Should we request dependencies for hashesUnresolved?
             } yield ()
         )
