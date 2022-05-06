@@ -30,9 +30,9 @@ object RevGenerator {
          #             new iter in {
          #               contract iter(@[(addr, initialBalance) ... tail]) = {
          #                  iter!(tail) |
-         #                  new vault, setDoneCh in {
+         #                  new vault, setDoneCh, logCh in {
          #                    initVault!(*vault, addr, initialBalance) |
-         #                    TreeHashMap!("set", vaultMap, addr, *vault, *setDoneCh) |
+         #                    TreeHashMap!("set", vaultMap, addr, (addr, *vault, *logCh), *setDoneCh) |
          #                    for (_ <- setDoneCh) { Nil }
          #                  }
          #               } |

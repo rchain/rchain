@@ -4,13 +4,14 @@ import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GInt, GString}
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{Expr, GPrivate, Par, Send}
+import coop.rchain.models.{ETuple, Expr, GPrivate, Par, Send}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 
 import scala.util.Random
+import coop.rchain.models.ETuple
 
 object VaultBalanceGetter {
 
@@ -66,10 +67,19 @@ object VaultBalanceGetter {
         p => p
       )
       result <- extracted.toList.traverse {
-                 case (key, vaultPar) =>
-                   for {
-                     balance <- getBalanceFromVaultPar(vaultPar, runtime)
-                   } yield (key, balance.get)
+                 case (key, v) =>
+                   v.exprs match {
+                     case Seq(tb) =>
+                       tb.exprs match {
+                         case hdExpr +: Nil =>
+                           hdExpr match {
+                             case Expr(ETupleBody(ETuple(List(_, vaultPar, _), _, _))) =>
+                               for {
+                                 balance <- getBalanceFromVaultPar(vaultPar, runtime)
+                               } yield (key, balance.get)
+                           }
+                       }
+                   }
                }
     } yield result
 }
