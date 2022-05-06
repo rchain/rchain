@@ -43,9 +43,9 @@ in {
   @"updateContract"!((`rho:rchain:authKey`, *updateContract, *AuthKey)) |
   stdout!(("propose start!!!!!"))|
   rl!(`rho:registry:systemContractManager`, *rlret)|
-  for(@multiSigReg <- rlret){
-    stdout!(("propose get multisig ok", multiSigReg))|
-    @multiSigReg!("propose",
+  for(@systemContractManager <- rlret){
+    stdout!(("propose get multisig ok", systemContractManager))|
+    @systemContractManager!("propose",
                   "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes(),
                   `rho:rchain:authKey`,
                   *updateContract,

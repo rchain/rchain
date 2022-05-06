@@ -209,9 +209,9 @@ in {
   } |
   stdout!(("update blessed registry start!!!!!"))|
   rl!(`rho:registry:systemContractManager`, *rlret)|
-  for(@multiSigReg <- rlret){
-    stdout!(("update get multisig ok", multiSigReg))|
-    @multiSigReg!("update",
+  for(@systemContractManager <- rlret){
+    stdout!(("update get multisig ok", systemContractManager))|
+    @systemContractManager!("update",
                   *deployerID,
                   `rho:registry:systemContractManager`,
                   *updateContract,

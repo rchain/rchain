@@ -12,9 +12,9 @@ in {
   for (@(`rho:rchain:authKey`, *updateContract, *AuthKey) <- @"updateContract") {
     stdout!(("agree get prpose ok"))|
     rl!(`rho:registry:systemContractManager`, *rlret)|
-    for(@multiSigReg <- rlret){
-      stdout!(("agree get multisig ok", multiSigReg))|
-      @multiSigReg!("agree",
+    for(@systemContractManager <- rlret){
+      stdout!(("agree get multisig ok", systemContractManager))|
+      @systemContractManager!("agree",
                   "043405f36c6cc2327fbbdf1af442a99e9a04f650ccb415bc23d4379e63a5cb5d53f7c7861d5937db32700b001ab2024f1c078b0ba90f47af46c8c4dea33f972d7c".hexToBytes(),
                   `rho:rchain:authKey`,
                   *updateContract,
