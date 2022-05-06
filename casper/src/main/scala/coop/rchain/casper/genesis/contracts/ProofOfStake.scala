@@ -17,7 +17,7 @@ final case class ProofOfStake(
     posMultiSigPublicKeys: List[String],
     posMultiSigQuorum: Int
 ) extends CompiledRholangTemplate(
-      "PoS.rhox",
+      "Pos.rhox",
       NormalizerEnv.Empty,
       "minimumBond"              -> minimumBond,
       "maximumBond"              -> maximumBond,
@@ -36,9 +36,9 @@ final case class ProofOfStake(
 }
 
 object ProofOfStake {
-  // TODO: Determine how the "initial bonds" map can simulate transferring stake into the PoS contract
+  // TODO: Determine how the "initial bonds" map can simulate transferring stake into the Pos contract
   //       when this must be done during genesis, under the authority of the genesisPk, which calls the
-  //       linear receive in PoS.rho
+  //       linear receive in Pos.rho
   def initialBonds(validators: Seq[Validator]): String = {
     import coop.rchain.crypto.util.Sorting.publicKeyOrdering
     val sortedValidators = validators.sortBy(_.pk)

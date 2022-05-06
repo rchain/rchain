@@ -19,7 +19,7 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
-class POSUpdate extends FlatSpec with Matchers with Inspectors {
+class PosUpdate extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 
@@ -41,8 +41,8 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
   private val genesis     = buildGenesis(buildGenesisParameters(validatorKeys, genesisVaults, bonds))
   private val epochLength = 1
 
-  private val updatePOSTerm = CompiledRholangTemplate.loadTemplate(
-    "updatePOS/ProposePOS.rho",
+  private val updatePosTerm = CompiledRholangTemplate.loadTemplate(
+    "updatePos/ProposePos.rho",
     Seq(
       ("minimumBond", 1),
       ("maximumBond", 10000000000L),
@@ -64,7 +64,7 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
   )
   "deploy with correct private key" should "update the rho:rchain:pos right" in effectTest {
     val updateDeploy =
-      ConstructDeploy.sourceDeployNow(updatePOSTerm, p1, 100000000L, 0L, shardId = shardId)
+      ConstructDeploy.sourceDeployNow(updatePosTerm, p1, 100000000L, 0L, shardId = shardId)
 
     val transferAmount = 100000
 
@@ -110,7 +110,7 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
         #  }
         #}""".stripMargin('#')
 
-    val explorePOSNewMethod =
+    val explorePosNewMethod =
       """new return, registryLookup(`rho:registry:lookup`),stdout(`rho:io:stdout`), resCh, ret in {
         #  registryLookup!(`rho:rchain:pos`, *resCh) |
         #  for (@(nonce, pos) <- resCh){
@@ -144,7 +144,7 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
         ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b5.body.state.postStateHash)
         _    = assert(ret3.head.exprs.head.getGInt == epochLength)
-        ret4 <- rm.playExploratoryDeploy(explorePOSNewMethod, b5.body.state.postStateHash)
+        ret4 <- rm.playExploratoryDeploy(explorePosNewMethod, b5.body.state.postStateHash)
         _    = assert(ret4.head.exprs.head.getGString == "hello")
       } yield ()
     }
@@ -153,7 +153,7 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
   "deploy with incorrect private key" should "return auth failure" in effectTest {
     val updateDeploy =
       ConstructDeploy.sourceDeployNow(
-        updatePOSTerm,
+        updatePosTerm,
         noPermissionKey,
         100000000L,
         0L,

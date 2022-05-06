@@ -34,8 +34,8 @@ final case class CloseBlockDeploy(initialRand: Blake2b512Random) extends SystemD
       #  return(`sys:casper:return`)
       #in {
       #  rl!(`rho:rchain:pos`, *poSCh) |
-      #  for(@(_, PoS) <- poSCh) {
-      #    @PoS!("closeBlock", *sysAuthToken, *return)
+      #  for(@(_, Pos) <- poSCh) {
+      #    @Pos!("closeBlock", *sysAuthToken, *return)
       #  }
       #}""".stripMargin('#')
 

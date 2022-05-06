@@ -15,7 +15,7 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
-class POSMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
+class PosMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 
@@ -82,8 +82,8 @@ class POSMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
         )
       )
 
-    val initialTransferToPOSMultiSig = CompiledRholangTemplate.loadTemplate(
-      "MultiSigVault/transferToPOSMultiSig.rho",
+    val initialTransferToPosMultiSig = CompiledRholangTemplate.loadTemplate(
+      "MultiSigVault/transferToPosMultiSig.rho",
       Seq(
         ("from", RevAddress.fromPublicKey(pub1).get.address.toBase58),
         ("amount", transferAmount)
@@ -104,7 +104,7 @@ class POSMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
                        #}""".stripMargin('#')
     // initial transfer to make sure pos multisig vault get some money
     val initialTransfer =
-      ConstructDeploy.sourceDeployNow(initialTransferToPOSMultiSig, p1, 1000000L, shardId = shardId)
+      ConstructDeploy.sourceDeployNow(initialTransferToPosMultiSig, p1, 1000000L, shardId = shardId)
 
     val transferDeploy = ConstructDeploy.sourceDeployNow(transfer, p1, 1000000L, shardId = shardId)
 

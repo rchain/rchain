@@ -9,18 +9,18 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.models.syntax._
 import scala.concurrent.duration._
 
-class PoSSpec
+class PosSpec
     extends RhoSpec(
-      CompiledRholangSource("PoSTest.rho", NormalizerEnv.Empty),
+      CompiledRholangSource("PosTest.rho", NormalizerEnv.Empty),
       Seq.empty,
       400.seconds,
       genesisParameters = {
         val p = GenesisBuilder.buildGenesisParameters()
-        (p._1, p._2, p._3.copy(vaults = p._3.vaults ++ PoSSpec.testVaults))
+        (p._1, p._2, p._3.copy(vaults = p._3.vaults ++ PosSpec.testVaults))
       }
     )
 
-object PoSSpec {
+object PosSpec {
 
   def prepareVault(vaultData: (String, Long)): Vault =
     Vault(RevAddress.fromPublicKey(PublicKey(vaultData._1.unsafeDecodeHex)).get, vaultData._2)

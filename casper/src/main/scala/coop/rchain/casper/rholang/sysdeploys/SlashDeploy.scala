@@ -45,8 +45,8 @@ final case class SlashDeploy(
        #  return(`sys:casper:return`)
        #in {
        #  rl!(`rho:rchain:pos`, *poSCh) |
-       #  for(@(_, PoS) <- poSCh) {
-       #    @PoS!("slash",  *deployerId, *invalidBlockHash.hexToBytes(), *sysAuthToken, *return)
+       #  for(@(_, Pos) <- poSCh) {
+       #    @Pos!("slash",  *deployerId, *invalidBlockHash.hexToBytes(), *sysAuthToken, *return)
        #  }
        #}""".stripMargin('#')
 

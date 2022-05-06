@@ -36,8 +36,8 @@ final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends Sys
        #  return(`sys:casper:return`)
        #in {
        #  rl!(`rho:rchain:pos`, *poSCh) |
-       #  for(@(_, PoS) <- poSCh) {
-       #    @PoS!("refundDeploy", *refundAmount, *sysAuthToken, *return)
+       #  for(@(_, Pos) <- poSCh) {
+       #    @Pos!("refundDeploy", *refundAmount, *sysAuthToken, *return)
        # }
        #}""".stripMargin('#')
 

@@ -4,7 +4,7 @@ import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperBondingSpec extends FlatSpec with Matchers with Inspectors {
 
-  //TODO rewrite this test for the new PoS
+  //TODO rewrite this test for the new Pos
   "MultiParentCasper" should "allow bonding" ignore {}
 
 }
