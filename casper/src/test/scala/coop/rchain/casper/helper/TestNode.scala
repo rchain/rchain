@@ -235,7 +235,9 @@ case class TestNode[F[_]: Sync: Timer](
                       message =>
                         message match {
                           case b: BlockMessage =>
-                            processBlock(b).as(CommunicationResponse.handledWithoutMessage)
+                            processBlock(b)
+                              .as(CommunicationResponse.handledWithoutMessage) <* blockProcessorQueue
+                              .enqueue1(b)
                           case _ => handle[F](p, routingMessageQueue)
                         }
                     )
