@@ -146,6 +146,9 @@ in {
           contract POS(@"getQuarantineLength", returnCh) = {
             returnCh!($$quarantineLength$$)
           } |
+          contract POS(@"sayHello", returnCh) = {
+            returnCh!("hello")
+          } |
           contract POS(@"posVaultTransfer", @targetAddress, @amount, @deployerID, @transferRet) = {
             // human transfer would just use this method
             @humanControlHandle!("transfer", targetAddress, amount, deployerID, transferRet)

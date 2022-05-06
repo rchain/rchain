@@ -12,6 +12,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.syntax._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.build.CompiledRholangTemplate
 import coop.rchain.rholang.interpreter.RhoType.{Boolean, String, Tuple2}
 import coop.rchain.rholang.interpreter.util.RevAddress
@@ -102,12 +103,21 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
 
     val exploreUpdateResultTerm =
       """new return, registryLookup(`rho:registry:lookup`),stdout(`rho:io:stdout`), resCh, ret in {
-                                    #  registryLookup!(`rho:rchain:pos`, *resCh) |
-                                    #  for (@(nonce, pos) <- resCh){
-                                    #    stdout!((pos, "get pos"))|
-                                    #    @pos!("getEpochLength", *return)
-                                    #  }
-                                    #}""".stripMargin('#')
+        #  registryLookup!(`rho:rchain:pos`, *resCh) |
+        #  for (@(nonce, pos) <- resCh){
+        #    stdout!((pos, "get pos"))|
+        #    @pos!("getEpochLength", *return)
+        #  }
+        #}""".stripMargin('#')
+
+    val explorePOSNewMethod =
+      """new return, registryLookup(`rho:registry:lookup`),stdout(`rho:io:stdout`), resCh, ret in {
+        #  registryLookup!(`rho:rchain:pos`, *resCh) |
+        #  for (@(nonce, pos) <- resCh){
+        #    stdout!((pos, "get pos"))|
+        #    @pos!("sayHello", *return)
+        #  }
+        #}""".stripMargin('#')
     TestNode.standaloneEff(genesis).use { node =>
       val rm = node.runtimeManager
       for {
@@ -134,6 +144,8 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
         ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b5.body.state.postStateHash)
         _    = assert(ret3.head.exprs.head.getGInt == epochLength)
+        ret4 <- rm.playExploratoryDeploy(explorePOSNewMethod, b5.body.state.postStateHash)
+        _    = assert(ret4.head.exprs.head.getGString == "hello")
       } yield ()
     }
   }
@@ -150,10 +162,10 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
     TestNode.standaloneEff(genesis).use { node =>
       val rm = node.runtimeManager
       for {
-        b2  <- node.addBlock(updateDeploy)
-        _   = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
-        _   = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
-        _   = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
+        b2 <- node.addBlock(updateDeploy)
+        _  = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _  = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _  = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
         // Get update contract result
         updateResult                               <- rm.getData(b2.body.state.postStateHash)(GDeployId(updateDeploy.sig))
         Tuple2((Boolean(success), String(errMsg))) = updateResult.head
