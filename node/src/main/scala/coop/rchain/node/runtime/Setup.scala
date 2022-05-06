@@ -6,6 +6,7 @@ import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
@@ -110,6 +111,9 @@ object Setup {
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
+      // Casper requesting blocks cache
+      casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
+
       synchronyConstraintChecker = {
         implicit val bs  = blockStore
         implicit val bds = blockDagStorage
@@ -184,9 +188,9 @@ object Setup {
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {
-        implicit val (rm, sp) = (runtimeManager, span)
-        implicit val (bs, bd) = (blockStore, blockDagStorage)
-        implicit val (br, cu) = (blockRetriever, commUtil)
+        implicit val (rm, sp)     = (runtimeManager, span)
+        implicit val (bs, bd)     = (blockStore, blockDagStorage)
+        implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
         BlockProcessor[F](casperShardConf)
       }
 
@@ -198,6 +202,7 @@ object Setup {
       // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
+        implicit val cbs          = casperBufferStorage
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
@@ -245,7 +250,7 @@ object Setup {
 
       nodeLaunch = {
         implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
-        implicit val (br, ep)     = (blockRetriever, eventPublisher)
+        implicit val (br, cb, ep) = (blockRetriever, casperBufferStorage, eventPublisher)
         implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu)     = (runtimeManager, commUtil)

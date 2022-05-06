@@ -4,6 +4,7 @@ import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever
@@ -20,7 +21,7 @@ import coop.rchain.shared.{Log, Time}
   * Logic for processing incoming blocks
   * Blocks created by node itself are not held here, but in Proposer.
   */
-class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CommUtil: Log](
+class BlockProcessor[F[_]: Concurrent: BlockDagStorage: BlockStore: CasperBufferStorage: CommUtil: Log](
     storeBlock: BlockMessage => F[Unit],
     requestMissingDependencies: Set[BlockHash] => F[Unit],
     ackProcessed: (BlockMessage) => F[Unit],
@@ -57,7 +58,7 @@ object BlockProcessor {
   // format: off
   def apply[F[_]
   /* Execution */   : Concurrent: Timer: Time: RuntimeManager
-  /* Storage */     : BlockStore: BlockDagStorage
+  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage
   /* Diagnostics */ : Log: Metrics: Span
   /* Comm */        : CommUtil: BlockRetriever // format: on
   ](casperShardConf: CasperShardConf): BlockProcessor[F] = {

@@ -78,10 +78,10 @@ object MultiParentCasper {
     (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
   }
 
-  def blockReceived[F[_]: Sync: BlockDagStorage](blockHash: BlockHash) =
+  def blockReceived[F[_]: Sync: BlockDagStorage: CasperBufferStorage](blockHash: BlockHash) =
     for {
       dag      <- BlockDagStorage[F].getRepresentation
-      inBuffer <- true.pure // CasperBufferStorage[F].contains(blockHash)
+      inBuffer <- CasperBufferStorage[F].contains(blockHash)
     } yield inBuffer || dag.contains(blockHash)
 
   // TODO: temporary function until multiparent casper is removed
@@ -265,15 +265,16 @@ object MultiParentCasper {
       blockMessage <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
     } yield blockMessage
 
-  def handleValidBlock[F[_]: Sync: BlockDagStorage: BlockStore](
+  def handleValidBlock[F[_]: Sync: BlockDagStorage: BlockStore: CasperBufferStorage](
       block: BlockMessage
   ): F[DagRepresentation] =
     for {
       updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
+      _          <- CasperBufferStorage[F].remove(block.blockHash)
       _          <- lastFinalizedBlock
     } yield updatedDag
 
-  def handleInvalidBlock[F[_]: Sync: BlockDagStorage: Log](
+  def handleInvalidBlock[F[_]: Sync: BlockDagStorage: CasperBufferStorage: Log](
       block: BlockMessage,
       status: InvalidBlock,
       dag: DagRepresentation
@@ -289,6 +290,7 @@ object MultiParentCasper {
             )
         // TODO should be nice to have this transition of a block from casper buffer to dag storage atomic
         r <- BlockDagStorage[F].insert(block, invalid = true)
+        _ <- CasperBufferStorage[F].remove(block.blockHash)
       } yield r
 
     status match {
@@ -296,8 +298,10 @@ object MultiParentCasper {
         handleInvalidBlockEffect(ib, block)
 
       case ib: InvalidBlock =>
-        Log[F]
-          .warn(s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for $ib.")
+        CasperBufferStorage[F].remove(block.blockHash) >> Log[F]
+          .warn(
+            s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for $ib."
+          )
           .as(dag)
     }
   }
@@ -325,9 +329,10 @@ object MultiParentCasper {
     * Check if there are blocks in CasperBuffer available with all dependencies met.
     * @return First from the set of available blocks
     */
-  def getDependencyFreeFromBuffer[F[_]: Sync: BlockDagStorage: BlockStore]: F[List[BlockMessage]] =
+  def getDependencyFreeFromBuffer[F[_]: Sync: BlockDagStorage: BlockStore: CasperBufferStorage]
+      : F[List[BlockMessage]] =
     for {
-      pendants       <- Set.empty[BlockHash].pure // CasperBufferStorage[F].getPendants
+      pendants       <- CasperBufferStorage[F].getPendants
       pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
       depFreePendants <- pendantsStored.filterA { pendant =>
                           for {

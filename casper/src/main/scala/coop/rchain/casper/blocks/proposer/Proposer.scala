@@ -152,7 +152,7 @@ object Proposer {
   def apply[F[_]
     /* Execution */   : Concurrent: Timer: Time
     /* Casper */      : SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage
+    /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
     /* Comm */        : CommUtil: BlockRetriever: RuntimeManager
   ] // format: on
