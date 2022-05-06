@@ -1,19 +1,13 @@
 package coop.rchain.casper.genesis
 
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.ProofOfStake
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.util.ConstructDeploy.defaultSec
-import coop.rchain.casper.rholang.Tools
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GUri}
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
-import coop.rchain.models.{ETuple, Expr, GDeployId, GPrivate, GUnforgeable, Par}
+import coop.rchain.models.GDeployId
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
@@ -23,8 +17,6 @@ import coop.rchain.rholang.interpreter.RhoType.{Boolean, String, Tuple2}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
-
-import scala.io.Source
 
 class POSUpdate extends FlatSpec with Matchers with Inspectors {
 
