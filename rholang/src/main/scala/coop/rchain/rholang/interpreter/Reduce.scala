@@ -1431,6 +1431,39 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       } yield result
   }
 
+  private[this] val explode: Method = new Method() {
+
+    def explode(baseExpr: Expr, sep: Expr): M[Expr] =
+      (baseExpr.exprInstance, sep.exprInstance) match {
+        case (GString(string), GString(sepStr)) =>
+          val split = string.split(sepStr)
+          charge[M](toListCost(split.size) + explodeCost(string, sepStr, split.size)) >>
+            Expr(
+              EListBody(
+                EList(
+                  split.toSeq
+                    .map(t => Par(exprs = Seq(GString(t))): Par)
+                )
+              )
+            ).pure[M]
+
+        case (other, _) =>
+          MethodNotDefined("explode", other.typ).raiseError[M, Expr]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- MethodArgumentNumberMismatch("explode", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
+
+        baseExpr <- evalSingleExpr(p)
+        sep      <- evalSingleExpr(args(0))
+
+        result <- explode(baseExpr, sep)
+      } yield result
+  }
+
   private[this] val take: Method = new Method() {
     def take(baseExpr: Expr, n: Int): M[Par] =
       baseExpr.exprInstance match {
@@ -1587,6 +1620,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       "size"        -> size,
       "length"      -> length,
       "slice"       -> slice,
+      "explode"     -> explode,
       "take"        -> take,
       "toList"      -> toList,
       "toSet"       -> toSet,
