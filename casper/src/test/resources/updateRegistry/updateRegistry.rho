@@ -1,4 +1,5 @@
 new
+  deployId(`rho:rchain:deployId`),
   updateContract,
   AuthKey,
   AuthStateCh,
@@ -219,7 +220,7 @@ in {
                   *updateRet)|
     for (@result <- updateRet){
       stdout!((result, "update result")) |
-      @"updateResult"!(result)
+      deployId!(result)
     }
   }
 }

@@ -13,12 +13,13 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GUri}
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
-import coop.rchain.models.{ETuple, Expr, GPrivate, GUnforgeable, Par}
+import coop.rchain.models.{ETuple, Expr, GDeployId, GPrivate, GUnforgeable, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.build.CompiledRholangTemplate
+import coop.rchain.rholang.interpreter.RhoType.{Boolean, String, Tuple2}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -154,12 +155,6 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
         0L,
         shardId = shardId
       )
-
-    val exploreUpdateResultTerm = """new return,ret in {
-                                    #  for (res <- @"updateResult") {
-                                    #    return!(*res)
-                                    #  }
-                                    #}""".stripMargin('#')
     TestNode.standaloneEff(genesis).use { node =>
       val rm = node.runtimeManager
       for {
@@ -167,8 +162,11 @@ class POSUpdate extends FlatSpec with Matchers with Inspectors {
         _   = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
         _   = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
         _   = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
-        ret <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b2.body.state.postStateHash)
-        _   = assert(ret.head.exprs.head.getGBool == false, "update should fail")
+        // Get update contract result
+        updateResult                               <- rm.getData(b2.body.state.postStateHash)(GDeployId(updateDeploy.sig))
+        Tuple2((Boolean(success), String(errMsg))) = updateResult.head
+        // Expect failed update
+        _ = assert(!success, s"update should fail, instead: $errMsg")
       } yield ()
     }
   }

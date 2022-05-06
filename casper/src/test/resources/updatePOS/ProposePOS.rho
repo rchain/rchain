@@ -1,5 +1,5 @@
-
 new
+  deployId(`rho:rchain:deployId`),
   updateContract,
   POS,
   rl(`rho:registry:lookup`),
@@ -547,7 +547,7 @@ in {
                   *updateRet)|
     for (@result <- updateRet){
       stdout!((result, "pos update result"))|
-      @"updateResult"!(result)
+      deployId!(result)
     }
   }
 }
