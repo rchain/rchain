@@ -562,6 +562,13 @@ object TestNode {
                    blockReceiverState
                  )
 
+                 // TODO: BlockReceiver streams should be used somehow
+                 // _ = fs2
+                 //   .Stream(incomingBlocksStream, processesBlocksStream)
+                 //   .parJoinUnbounded
+                 //   .compile
+                 //   .drain
+
                  // Remove TransportLayer handling in TestNode (too low level for these tests)
                  routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
 
