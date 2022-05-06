@@ -78,11 +78,12 @@ object BlockReceiver {
           _ = state.update { st =>
             val newSt = hashesResolved.foldLeft(st) {
               case (st, hash) =>
-                val _ = receiverOutputQueue.enqueue1(hash)
                 st.remove(hash)
             }
             newSt
           }
+          // TODO: Should resolved hashes be pushed atomically or not?
+          _ = hashesResolved.foreach(receiverOutputQueue.enqueue1)
           // TODO: Should we request dependencies for hashesUnresolved?
         } yield ()
     )
