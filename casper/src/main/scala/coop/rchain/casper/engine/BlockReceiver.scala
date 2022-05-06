@@ -24,14 +24,10 @@ import fs2.Stream
 import fs2.concurrent.Queue
 
 sealed trait RecvStatus
-case object Receiving   extends RecvStatus // Block receiving started
-case object Received    extends RecvStatus // Block fully received
 case object Unvalidated extends RecvStatus // Block received but not validated (put in BlockStore)
-case object Validated   extends RecvStatus // Block received and validated (ready to put in BlockMetadataStore/DAG)
-case object Invalid     extends RecvStatus // Block received but invalid
 
 final case class BlockReceiverState[MId](state: Map[MId, RecvStatus]) {
-  def add(m: MId): BlockReceiverState[MId]    = BlockReceiverState(state + (m -> Receiving))
+  def add(m: MId): BlockReceiverState[MId]    = BlockReceiverState(state + (m -> Unvalidated))
   def remove(m: MId): BlockReceiverState[MId] = BlockReceiverState(state - m)
 }
 
