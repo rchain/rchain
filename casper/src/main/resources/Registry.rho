@@ -642,13 +642,6 @@ in {
                 }
               }
             } |
-            // ExtractState
-            // --------------------------------------------
-            // Returns a map containing the current maps:
-            // "blessed"   - blessed contract location map
-            // "agreement" - agreement map
-            // "propose"   - proposals map
-            // --------------------------------------------
             contract @(bundle+{*systemContractManager}, "extractState")(ret) = {
               for (@blessedContractLocMap <<- blessedContractLocMapCh) {
                 ret!(blessedContractLocMap)
