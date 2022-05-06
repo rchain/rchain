@@ -10,11 +10,12 @@ import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import net.jpountz.lz4.{LZ4CompressorWithLength, LZ4DecompressorWithLength}
 
-object blockStore {
+object BlockStore {
   type BlockStore[F[_]] = KeyValueTypedStore[F, BlockHash, BlockMessage]
-  def BlockStore[F[_]](implicit instance: BlockStore[F]): instance.type = instance
 
-  def create[F[_]: Sync](
+  def apply[F[_]](implicit instance: BlockStore[F]): instance.type = instance
+
+  def apply[F[_]: Sync](
       kvm: KeyValueStoreManager[F]
   ): F[KeyValueTypedStore[F, BlockHash, BlockMessage]] =
     kvm

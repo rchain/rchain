@@ -4,10 +4,11 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.deploy.DeployStorage
+
 import coop.rchain.casper.MultiParentCasper.parsingError
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
@@ -39,7 +40,7 @@ import fs2.Stream
 import scala.collection.immutable.SortedMap
 
 object BlockApiImpl {
-  def apply[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
+  def apply[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
       validatorOpt: Option[ValidatorIdentity],
       networkId: String,
       shardId: String,
@@ -79,7 +80,7 @@ object BlockApiImpl {
   final case class BlockRetrievalError(message: String) extends Exception
 }
 
-class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStorage: BlockStore: Log: Span](
+class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
     validatorOpt: Option[ValidatorIdentity],
     networkId: String,
     shardId: String,
@@ -160,7 +161,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: DeployStor
 
     def addDeploy(deploy: Signed[DeployData]): F[DeployId] =
       for {
-        _ <- DeployStorage[F].add(List(deploy))
+        _ <- BlockDagStorage[F].addDeploy(deploy)
         _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
       } yield deploy.sig
 

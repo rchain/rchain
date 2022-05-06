@@ -4,8 +4,8 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.blockStore
 import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.rholang.Tools
 import coop.rchain.metrics.{Metrics, NoopSpan}
@@ -72,7 +72,7 @@ object StateBalances {
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir)
-      blockStore        <- blockStore.create(rnodeStoreManager)
+      blockStore        <- BlockStore(rnodeStoreManager)
       blockOpt          <- blockStore.get1(blockHash.unsafeHexToByteString)
       block             = blockOpt.get
       store             <- rnodeStoreManager.rSpaceStores

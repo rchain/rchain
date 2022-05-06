@@ -4,8 +4,8 @@ import cats.Monad
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.dag.{DagRepresentation, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
@@ -75,22 +75,22 @@ class ValidateTest
     timeEff.reset()
   }
 
-  def createChain[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+  def createChain[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       length: Int,
       bonds: Seq[Bond] = Seq.empty[Bond]
-  ): F[BlockMessage] =
+  ): F[Vector[BlockMessage]] =
     for {
       genesis <- createGenesis[F](bonds = bonds)
-      _ <- (1 to length).toList.foldLeftM(genesis) {
-            case (block, _) =>
-              createBlock[F](Seq(block.blockHash), genesis, bonds = bonds)
-          }
-    } yield genesis
+      blocks <- (1 to length).toList.foldLeftM(Vector(genesis)) {
+                 case (chain, _) =>
+                   createBlock[F](Seq(chain.last.blockHash), genesis, bonds = bonds).map(chain :+ _)
+               }
+    } yield blocks
 
-  def createChainWithRoundRobinValidators[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
+  def createChainWithRoundRobinValidators[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       length: Int,
       validatorLength: Int
-  ): F[BlockMessage] = {
+  ): F[Vector[BlockMessage]] = {
     val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
     val validators               = List.fill(validatorLength)(generateValidator())
     (0 until length).toList
@@ -99,31 +99,32 @@ class ValidateTest
         for {
           genesis             <- createGenesis[F]()
           emptyLatestMessages <- HashMap.empty[Validator, BlockHash].pure[F]
-        } yield (genesis, genesis, emptyLatestMessages)
+        } yield (Vector(genesis), genesis, emptyLatestMessages)
       ) {
         case (acc, (_, validatorNum)) =>
           val creator = validators(validatorNum)
           for {
-            unwrappedAcc                     <- acc
-            (genesis, block, latestMessages) = unwrappedAcc
+            unwrappedAcc                   <- acc
+            (chain, block, latestMessages) = unwrappedAcc
             bnext <- createBlock[F](
                       Seq(block.blockHash),
-                      genesis,
+                      chain.head,
                       creator = creator,
                       justifications = latestMessages
                     )
             latestMessagesNext = latestMessages.updated(bnext.sender, bnext.blockHash)
-          } yield (genesis, bnext, latestMessagesNext)
+          } yield (chain :+ bnext, bnext, latestMessagesNext)
       }
       .map(_._1)
   }
 
   def signedBlock(
+      chain: Vector[BlockMessage],
       i: Int
-  )(implicit sk: PrivateKey, blockDagStorage: IndexedBlockDagStorage[Task]): Task[BlockMessage] = {
-    val pk = Secp256k1.toPublic(sk)
+  )(implicit sk: PrivateKey, blockDagStorage: BlockDagStorage[Task]): Task[BlockMessage] = {
+    val pk    = Secp256k1.toPublic(sk)
+    val block = chain(i)
     for {
-      block            <- blockDagStorage.lookupByIdUnsafe(i)
       dag              <- blockDagStorage.getRepresentation
       sender           = ByteString.copyFrom(pk.bytes)
       latestMessageOpt <- dag.latestMessage(sender)
@@ -142,11 +143,11 @@ class ValidateTest
   "Block signature validation" should "return false on unknown algorithms" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _                <- createChain[Task](2)
+        chain            <- createChain[Task](2)
         unknownAlgorithm = "unknownAlgorithm"
         rsa              = "RSA"
-        block0           <- blockDagStorage.lookupByIdUnsafe(0).map(_.copy(sigAlgorithm = unknownAlgorithm))
-        block1           <- blockDagStorage.lookupByIdUnsafe(1).map(_.copy(sigAlgorithm = rsa))
+        block0           = chain(0).copy(sigAlgorithm = unknownAlgorithm)
+        block1           = chain(1).copy(sigAlgorithm = rsa)
         _                <- Validate.blockSignature[Task](block0) shouldBeF false
         _ = log.warns.last
           .contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
@@ -161,16 +162,16 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       implicit val (sk, _) = Secp256k1.newKeyPair
       for {
-        _            <- createChain[Task](6)
+        chain        <- createChain[Task](6)
         (_, wrongPk) = Secp256k1.newKeyPair
         empty        = ByteString.EMPTY
         invalidKey   = "abcdef1234567890".unsafeHexToByteString
-        block0       <- signedBlock(0).map(_.copy(sender = empty))
-        block1       <- signedBlock(1).map(_.copy(sender = invalidKey))
-        block2       <- signedBlock(2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))
-        block3       <- signedBlock(3).map(_.copy(sig = empty))
-        block4       <- signedBlock(4).map(_.copy(sig = invalidKey))
-        block5       <- signedBlock(5).map(_.copy(sig = block0.sig)) //wrong sig
+        block0       <- signedBlock(chain, 0).map(_.copy(sender = empty))
+        block1       <- signedBlock(chain, 1).map(_.copy(sender = invalidKey))
+        block2       <- signedBlock(chain, 2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))
+        block3       <- signedBlock(chain, 3).map(_.copy(sig = empty))
+        block4       <- signedBlock(chain, 4).map(_.copy(sig = invalidKey))
+        block5       <- signedBlock(chain, 5).map(_.copy(sig = block0.sig)) //wrong sig
         blocks       = Vector(block0, block1, block2, block3, block4, block5)
         _            <- blocks.existsM[Task](Validate.blockSignature[Task]) shouldBeF false
         _            = log.warns.size should be(blocks.length)
@@ -183,10 +184,10 @@ class ValidateTest
       val n                = 6
       implicit val (sk, _) = Secp256k1.newKeyPair
       for {
-        _ <- createChain[Task](n)
+        chain <- createChain[Task](n)
         condition <- (0 until n).toList.forallM[Task] { i =>
                       for {
-                        block  <- signedBlock(i)
+                        block  <- signedBlock(chain, i)
                         result <- Validate.blockSignature[Task](block)
                       } yield result
                     }
@@ -198,8 +199,8 @@ class ValidateTest
   "Timestamp validation" should "not accept blocks with future time" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _                       <- createChain[Task](1)
-        block                   <- blockDagStorage.lookupByIdUnsafe(0)
+        chain                   <- createChain[Task](1)
+        block                   = chain(0)
         modifiedTimestampHeader = block.header.copy(timestamp = 99999999)
         dag                     <- blockDagStorage.getRepresentation
         _ <- Validate.timestamp[Task](
@@ -214,8 +215,8 @@ class ValidateTest
   it should "not accept blocks that were published before parent time" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _                       <- createChain[Task](2)
-        block                   <- blockDagStorage.lookupByIdUnsafe(1)
+        chain                   <- createChain[Task](2)
+        block                   = chain(1)
         modifiedTimestampHeader = block.header.copy(timestamp = -1)
         dag                     <- blockDagStorage.getRepresentation
         _ <- Validate.timestamp[Task](
@@ -230,8 +231,8 @@ class ValidateTest
   "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _     <- createChain[Task](1)
-        block <- blockDagStorage.lookupByIdUnsafe(0)
+        chain <- createChain[Task](1)
+        block = chain(0)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate
               .blockNumber[Task](block.withBlockNumber(1), mkCasperSnapshot(dag)) shouldBeF Left(
@@ -246,8 +247,8 @@ class ValidateTest
   it should "return false for non-sequential numbering" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _     <- createChain[Task](2)
-        block <- blockDagStorage.lookupByIdUnsafe(1)
+        chain <- createChain[Task](2)
+        block = chain(1)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate
               .blockNumber[Task](block.withBlockNumber(17), mkCasperSnapshot(dag)) shouldBeF Left(
@@ -265,30 +266,11 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val n = 6
       for {
-        _   <- createChain[Task](n)
-        dag <- blockDagStorage.getRepresentation
-        a0 <- blockDagStorage.lookupByIdUnsafe(0) >>= (
-                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
-             )
-        a1 <- blockDagStorage.lookupByIdUnsafe(1) >>= (
-                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
-             )
-        a2 <- blockDagStorage.lookupByIdUnsafe(2) >>= (
-                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
-             )
-        a3 <- blockDagStorage.lookupByIdUnsafe(3) >>= (
-                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
-             )
-        a4 <- blockDagStorage.lookupByIdUnsafe(4) >>= (
-                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
-             )
-        a5 <- blockDagStorage.lookupByIdUnsafe(5) >>= (
-                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
-             )
-        _ <- (0 until n).toList.forallM[Task] { i =>
-              (blockDagStorage.lookupByIdUnsafe(i) >>= (
-                  b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
-              )).map(_ == Right(Valid))
+        chain <- createChain[Task](n)
+        dag   <- blockDagStorage.getRepresentation
+        snap  = mkCasperSnapshot(dag)
+        _ <- chain.forallM[Task] { b =>
+              Validate.blockNumber[Task](b, snap).map(_ == Right(Valid))
             } shouldBeF true
         result = log.warns should be(Nil)
       } yield result
@@ -298,7 +280,6 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       def createBlockWithNumber(
           n: Long,
-          genesis: BlockMessage,
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] =
         for {
@@ -316,9 +297,9 @@ class ValidateTest
 
       for {
         genesis <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
-        b1      <- createBlockWithNumber(3, genesis)
-        b2      <- createBlockWithNumber(7, genesis)
-        b3      <- createBlockWithNumber(8, genesis, Seq(b1.blockHash, b2.blockHash))
+        b1      <- createBlockWithNumber(3)
+        b2      <- createBlockWithNumber(7)
+        b3      <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
         dag     <- blockDagStorage.getRepresentation
         s1      <- Validate.blockNumber[Task](b3, mkCasperSnapshot(dag))
         _       = s1 shouldBe Right(Valid)
@@ -397,8 +378,8 @@ class ValidateTest
   "Sequence number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _     <- createChain[Task](1)
-        block <- blockDagStorage.lookupByIdUnsafe(0)
+        chain <- createChain[Task](1)
+        block = chain(0)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate
               .sequenceNumber[Task](block.copy(seqNum = 1), mkCasperSnapshot(dag)) shouldBeF Left(
@@ -412,8 +393,8 @@ class ValidateTest
   it should "return false for non-sequential numbering" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _     <- createChain[Task](2)
-        block <- blockDagStorage.lookupByIdUnsafe(1)
+        chain <- createChain[Task](2)
+        block = chain(1)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate
               .sequenceNumber[Task](block.copy(seqNum = 1), mkCasperSnapshot(dag)) shouldBeF Left(
@@ -428,12 +409,11 @@ class ValidateTest
       val n              = 20
       val validatorCount = 3
       for {
-        _ <- createChainWithRoundRobinValidators[Task](n, validatorCount)
-        _ <- (0 until n).toList.forallM[Task](
-              i =>
+        chain <- createChainWithRoundRobinValidators[Task](n, validatorCount)
+        _ <- chain.forallM[Task](
+              block =>
                 for {
-                  block <- blockDagStorage.lookupByIdUnsafe(i)
-                  dag   <- blockDagStorage.getRepresentation
+                  dag <- blockDagStorage.getRepresentation
                   result <- Validate.sequenceNumber[Task](
                              block,
                              mkCasperSnapshot(dag)
@@ -447,9 +427,9 @@ class ValidateTest
   "Repeat deploy validation" should "return valid for empty blocks" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _      <- createChain[Task](2)
-        block  <- blockDagStorage.lookupByIdUnsafe(0)
-        block2 <- blockDagStorage.lookupByIdUnsafe(1)
+        chain  <- createChain[Task](2)
+        block  = chain(0)
+        block2 = chain(1)
         dag    <- blockDagStorage.getRepresentation
         _      <- Validate.repeatDeploy[Task](block, mkCasperSnapshot(dag), 50) shouldBeF Right(Valid)
         _      <- Validate.repeatDeploy[Task](block2, mkCasperSnapshot(dag), 50) shouldBeF Right(Valid)
@@ -480,8 +460,8 @@ class ValidateTest
   "Block summary validation" should "short circuit after first invalidity" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        _     <- createChain[Task](2)
-        block <- blockDagStorage.lookupByIdUnsafe(1)
+        chain <- createChain[Task](2)
+        block = chain(1)
         dag   <- blockDagStorage.getRepresentation
 
         (sk, pk)         = Secp256k1.newKeyPair
@@ -515,11 +495,10 @@ class ValidateTest
         b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), v0, bonds, shardId = SHARD_ID)
         b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), v1, bonds, shardId = SHARD_ID)
         b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), v1, bonds, shardId = SHARD_ID)
-        _ <- (0 to 4).toList.forallM[Task](
-              i =>
+        _ <- List(b0, b1, b2, b3, b4).forallM[Task](
+              block =>
                 for {
-                  block <- blockDagStorage.lookupByIdUnsafe(i)
-                  dag   <- blockDagStorage.getRepresentation
+                  dag <- blockDagStorage.getRepresentation
                   result <- Validate.justificationRegressions[Task](
                              block,
                              mkCasperSnapshot(dag)

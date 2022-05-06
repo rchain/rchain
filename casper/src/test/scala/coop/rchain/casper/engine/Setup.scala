@@ -3,7 +3,6 @@ package coop.rchain.casper.engine
 import cats._
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.casper._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.BlockRetriever.RequestState
@@ -96,8 +95,8 @@ object Setup {
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     val kvm = InMemoryStoreManager[Task]()
     implicit val blockStore = {
-      coop.rchain.blockstorage.blockStore
-        .create[Task](kvm)
+      coop.rchain.blockstorage
+        .BlockStore[Task](kvm)
         .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     }
     implicit val approvedStore = {
@@ -107,8 +106,6 @@ object Setup {
     }
     implicit val blockDagStorage = BlockDagKeyValueStorage
       .create(kvm)
-      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val deployStorage = KeyValueDeployStorage[Task](kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
