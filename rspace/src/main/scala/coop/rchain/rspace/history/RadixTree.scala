@@ -308,7 +308,7 @@ object RadixTree {
       lastPrefix: Option[ByteVector],
       skipSize: Int,
       takeSize: Int,
-      getNodeDataFromStore: ByteVector => F[Option[ByteVector]],
+      getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]],
       settings: ExportDataSettings
   ): F[(ExportData, Option[ByteVector])] = {
     final case class NodeData(
@@ -354,7 +354,7 @@ object RadixTree {
         }
       }
       for {
-        nodeOpt <- getNodeDataFromStore(p.hash.bytes)
+        nodeOpt <- getNodeDataFromStore(p.hash)
         node <- nodeOpt.liftTo[F](
                  new Exception(s"Export error: node with key ${p.hash.bytes.toHex} not found.")
                )
@@ -454,7 +454,7 @@ object RadixTree {
         StepData(childPath, p.skip, p.take - 1, newData)
       }
       for {
-        childNodeOpt <- getNodeDataFromStore(ptr.bytes)
+        childNodeOpt <- getNodeDataFromStore(ptr)
         childNV <- childNodeOpt.liftTo[F](
                     new Exception(
                       s"Export error: Node with key ${ptr.bytes.toHex} not found"
@@ -554,7 +554,7 @@ object RadixTree {
 
     for {
       _              <- initConditionsException.whenA((skipSize, takeSize) == (0, 0))
-      rootNodeSerOpt <- getNodeDataFromStore(rootHash.bytes)
+      rootNodeSerOpt <- getNodeDataFromStore(rootHash)
       r              <- rootNodeSerOpt.map(doExport).getOrElse(emptyResult)
     } yield r
   }
@@ -583,13 +583,15 @@ object RadixTree {
     * 1 byte is used as symbol in the path. Such symbol can take 256 values from 0x00 to 0xFF.
     * In this case, the maximum number of children for each node is 256.
     */
-  class RadixTreeImpl[F[_]: Sync: Parallel](store: KeyValueTypedStore[F, ByteVector, ByteVector]) {
+  class RadixTreeImpl[F[_]: Sync: Parallel](
+      store: KeyValueTypedStore[F, Blake2b256Hash, ByteVector]
+  ) {
 
     /**
       * Load and decode serializing data from KVDB.
       */
     private def loadNodeFromStore(nodePtr: Blake2b256Hash): F[Option[Node]] =
-      store.get1(nodePtr.bytes).map(_.map(Codecs.decode))
+      store.get1(nodePtr).map(_.map(Codecs.decode))
 
     /**
       * Cache for storing read and decoded nodes.
@@ -663,15 +665,15 @@ object RadixTree {
         ).raiseError
       for {
         kvPairs           <- Sync[F].delay(cacheW.toList)
-        ifAbsent          <- store.contains(kvPairs.map(_._1.bytes))
+        ifAbsent          <- store.contains(kvPairs.map(_._1))
         kvIfAbsent        = kvPairs zip ifAbsent
         kvExist           = kvIfAbsent.filter(_._2).map(_._1)
-        valueExistInStore <- store.get(kvExist.map(_._1.bytes))
+        valueExistInStore <- store.get(kvExist.map(_._1))
         kvvExist          = kvExist zip valueExistInStore.map(_.getOrElse(ByteVector.empty))
         kvCollision       = kvvExist.filter(kvv => !(kvv._1._2 == kvv._2)).map(_._1)
         _                 <- if (kvCollision.nonEmpty) collisionException(kvCollision) else ().pure
         kvAbsent          = kvIfAbsent.filterNot(_._2).map(_._1)
-        _                 <- store.put(kvAbsent.map { case (k, v) => (k.bytes, v) })
+        _                 <- store.put(kvAbsent)
       } yield ()
     }
 

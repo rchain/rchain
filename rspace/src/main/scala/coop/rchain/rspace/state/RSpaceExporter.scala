@@ -24,7 +24,7 @@ object RSpaceExporter {
       startPath: Seq[(Blake2b256Hash, Option[Byte])],
       skip: Int,
       take: Int,
-      getFromHistory: ByteVector => F[Option[ByteVector]]
+      getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
   ): F[Vector[TrieNode[Blake2b256Hash]]] = {
 
     val settings = ExportDataSettings(

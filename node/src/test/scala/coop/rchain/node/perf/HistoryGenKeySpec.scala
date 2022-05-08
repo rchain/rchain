@@ -3,7 +3,6 @@ package coop.rchain.node.perf
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RadixTree.ExportData
@@ -87,16 +86,16 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   sealed trait HistoryType[F[_]] {
     val history: History[F]
-    def getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+    def getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]]
   }
   case class HistoryWithoutFunc[F[_]](
       history: History[F],
-      getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+      getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]]
   ) extends HistoryType[F]
 
   case class HistoryWithFunc[F[_]](
       history: History[F],
-      getNodeDataFromStore: ByteVector => F[Option[ByteVector]],
+      getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]],
       sizeBytes: () => Long,
       numRecords: () => Int
   ) extends HistoryType[F]
@@ -208,7 +207,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
       def export(
           rootHash: Blake2b256Hash,
           skipSize: Int,
-          getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+          getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]]
       ): F[ExportData] = {
         import coop.rchain.rspace.history.RadixTree._
         if (Settings.typeHistory == Radix) {
@@ -242,7 +241,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
           _ = assert(keysForValid == expData.nodeKeys, "Error 1 of validation")
 
-          localStorage = (expData.nodeKeys.map(_.bytes) zip expData.nodeValues).toMap
+          localStorage = (expData.nodeKeys zip expData.nodeValues).toMap
 
           expDataForValid <- export(rootHash, 0, localStorage.get(_).pure)
           _               = assert(expDataForValid == expData, "Error 2 of validation")

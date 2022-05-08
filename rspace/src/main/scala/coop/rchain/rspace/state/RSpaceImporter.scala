@@ -3,14 +3,6 @@ package coop.rchain.rspace.state
 import cats.effect._
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.{ColdStoreInstances, ContinuationsLeaf, DataLeaf, JoinsLeaf}
-import coop.rchain.rspace.serializers.ScodecSerialize.{
-  decodeContinuations,
-  decodeDatums,
-  decodeJoins
-}
-import coop.rchain.shared.AttemptOps.RichAttempt
-import coop.rchain.shared.Serialize
 import coop.rchain.state.TrieImporter
 import fs2.Stream
 import scodec.bits.ByteVector
@@ -54,11 +46,11 @@ object RSpaceImporter {
     }
 
     // Validate history hashes
-    def getAndValidateHistoryItems: F[List[(ByteVector, ByteVector)]] =
+    def getAndValidateHistoryItems: F[List[(Blake2b256Hash, ByteVector)]] =
       historyItems.toList traverse {
         case (hash, trieBytes) =>
           val trieHash = Blake2b256Hash.create(trieBytes)
-          if (hash == trieHash) (trieHash.bytes, trieBytes).pure[F]
+          if (hash == trieHash) (trieHash, trieBytes).pure[F]
           else
             raiseError(
               s"Trie hash does not match decoded trie, key: ${hash.bytes.toHex}, decoded: ${trieHash.bytes.toHex}."
@@ -84,12 +76,12 @@ object RSpaceImporter {
       )
 
     // Find node by hash. Node must be found in received history items or in previously imported items.
-    def getNode(st: Map[ByteVector, ByteVector])(hash: ByteVector) = {
+    def getNode(st: Map[Blake2b256Hash, ByteVector])(hash: Blake2b256Hash) = {
       val trieOpt = st.get(hash)
       trieOpt.fold {
         for {
-          bytesOpt <- getFromHistory(Blake2b256Hash.fromByteVector(hash))
-          _        <- bytesOpt.liftTo(nodeHashNotFoundError(Blake2b256Hash.fromByteVector(hash)))
+          bytesOpt <- getFromHistory(hash)
+          _        <- bytesOpt.liftTo(nodeHashNotFoundError(hash))
         } yield bytesOpt
       }(_.some.pure[F])
     }

@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RadixTree._
+import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.shared.Base16
 import coop.rchain.shared.syntax.{sharedSyntaxKeyValueStore, sharedSyntaxKeyValueTypedStore}
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueTypedStore}
@@ -506,7 +507,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       (_, rootHash)      = rootNodeAndHashOpt.get
 
       // First data export
-      typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      typedStore = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
       exported1 <- sequentialExport(
                     rootHash,
                     None,
@@ -530,7 +531,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
           None,
           skipSize = 0,
           takeSize = 100,
-          x => Sync[Task].delay(localStorage.get(Blake2b256Hash.fromByteVector(x))),
+          x => Sync[Task].delay(localStorage.get(x)),
           exportSettings
         )
       }
@@ -548,7 +549,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "invalid initial conditions in sequentialExport" should "raise exception" in withImplAndStore {
     (impl, store) =>
-      val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      val typedStore = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
       for {
         // Create tree with 6 leafs
         rootAndHashOpt <- impl.saveAndCommit(RadixTree.emptyNode, referenceInsertActions)
@@ -571,7 +572,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "multipage export with last prefix" should "work correctly" in withImplAndStore { (impl, store) =>
-    val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+    val typedStore = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
     for {
       // Create tree with 6 leafs
       rootNodeAndHashOpt <- impl.saveAndCommit(RadixTree.emptyNode, referenceInsertActions)
@@ -594,7 +595,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "multipage export with skip" should "work correctly" in withImplAndStore { (impl, store) =>
-    val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+    val typedStore = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
     for {
       // Create tree with 6 leafs
       rootNodeAndHashOpt <- impl.saveAndCommit(RadixTree.emptyNode, referenceInsertActions)
@@ -618,7 +619,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "sequentialExport with non-existing tree" should "return empty data" in withImplAndStore {
     (impl, store) =>
-      val typedStore    = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      val typedStore    = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
       val emptyRootHash = impl.saveNode(emptyNode)
       for {
         exported1 <- sequentialExport(
@@ -706,7 +707,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   )
   case class ExportParameters(
       rootHash: Blake2b256Hash, // hash
-      typedStore: KeyValueTypedStore[Task, ByteVector, ByteVector],
+      typedStore: KeyValueTypedStore[Task, Blake2b256Hash, ByteVector],
       takeSize: Int,     // take size
       skipSize: Int,     // skip size
       withSkip: Boolean, // start with skip is true
@@ -721,7 +722,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   def validateMultipageExport(
       rootHash: Blake2b256Hash,
-      store: KeyValueTypedStore[Task, ByteVector, ByteVector],
+      store: KeyValueTypedStore[Task, Blake2b256Hash, ByteVector],
       withSkip: Boolean
   ): Task[MultipageExportResults] = {
 
@@ -788,7 +789,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
                                 takeSize = 100,
                                 x =>
                                   Sync[Task]
-                                    .delay(localStorage.get(Blake2b256Hash.fromByteVector(x))),
+                                    .delay(localStorage.get(x)),
                                 exportSettings
                               )
 
@@ -803,7 +804,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       ) => Task[Unit]
   ): Unit = {
     val store         = InMemoryKeyValueStore[Task]
-    val typedStore    = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+    val typedStore    = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
     val radixTreeImpl = new RadixTreeImpl[Task](typedStore)
     f(radixTreeImpl, store).runSyncUnsafe(20.seconds)
   }

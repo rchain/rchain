@@ -15,10 +15,12 @@ import scodec.bits.ByteVector
   */
 object RadixHistory {
   val emptyRootHash: Blake2b256Hash = RadixTree.emptyRootHash
+  val codecBlakeHash =
+    scodec.codecs.bytes.xmap[Blake2b256Hash](bv => Blake2b256Hash.fromByteVector(bv), _.bytes)
 
   def apply[F[_]: Sync: Parallel](
       root: Blake2b256Hash,
-      store: KeyValueTypedStore[F, ByteVector, ByteVector]
+      store: KeyValueTypedStore[F, Blake2b256Hash, ByteVector]
   ): F[RadixHistory[F]] =
     for {
       impl <- Sync[F].delay(new RadixTreeImpl[F](store))
@@ -27,15 +29,15 @@ object RadixHistory {
 
   def createStore[F[_]: Sync](
       store: KeyValueStore[F]
-  ): KeyValueTypedStore[F, ByteVector, ByteVector] =
-    store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+  ): KeyValueTypedStore[F, Blake2b256Hash, ByteVector] =
+    store.toTypedStore(codecBlakeHash, scodec.codecs.bytes)
 }
 
 final case class RadixHistory[F[_]: Sync: Parallel](
     rootHash: Blake2b256Hash,
     rootNode: Node,
     impl: RadixTreeImpl[F],
-    store: KeyValueTypedStore[F, ByteVector, ByteVector]
+    store: KeyValueTypedStore[F, Blake2b256Hash, ByteVector]
 ) extends History[F] {
   override type HistoryF = History[F]
 
