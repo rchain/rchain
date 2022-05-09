@@ -13,7 +13,7 @@ import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{createRPConfAsk, LogStub, TransportLayerStub}
-import coop.rchain.shared.{Cell, Time}
+import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.BeforeAndAfterEach
@@ -34,7 +34,7 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
   implicit val currentRequests: engine.BlockRetriever.RequestedBlocks[Task] =
     Ref.unsafe[Task, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
   implicit val connectionsCell: ConnectionsCell[Task] =
-    Cell.unsafe[Task, Connections](List(local))
+    Ref.unsafe[Task, Connections](List(local))
   implicit val transportLayer = new TransportLayerStub[Task]
   implicit val rpConf         = createRPConfAsk[Task](local)
   implicit val time           = Time.fromTimer[Task]

@@ -279,7 +279,7 @@ object Setup {
       // Query for network information (address, peers, nodes)
       getNetworkStatus = for {
         address <- rpConfAsk.ask
-        peers   <- rpConnections.read
+        peers   <- rpConnections.get
         nodes   <- NodeDiscovery[F].peers
       } yield (address.local, peers, nodes)
 

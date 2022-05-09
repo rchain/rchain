@@ -1,37 +1,31 @@
 package coop.rchain.casper.engine
 
-import coop.rchain.catscontrib.ski._
-import coop.rchain.casper.protocol._
-import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}
-import CommError._
-import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.rp.{ProtocolHelper, RPConf}
-import ProtocolHelper.toPacket
 import cats.effect.concurrent.Ref
-import coop.rchain.shared._
+import cats.syntax.all._
+import com.google.protobuf.ByteString
+import coop.rchain.casper.engine
+import coop.rchain.casper.engine.BlockRetriever.RequestState
+import coop.rchain.casper.protocol._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError._
+import coop.rchain.comm.protocol.routing.Protocol
+import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
+import coop.rchain.comm.rp.ProtocolHelper.toPacket
+import coop.rchain.comm.rp.{ProtocolHelper, RPConf}
+import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}
+import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{
   createRPConfAsk,
   LogStub,
   LogicalTime,
   TransportLayerStub
 }
-import coop.rchain.models.BlockHash.BlockHash
-import com.google.protobuf.ByteString
-import coop.rchain.casper.engine
-import coop.rchain.casper.engine.BlockRetriever.RequestState
-import coop.rchain.casper.engine.NodeRunning.{
-  BlockIsInCasperBuffer,
-  DoNotIgnore,
-  IgnoreCasperMessageStatus
-}
-import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.metrics.Metrics
 import monix.eval.Task
-import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 import monix.execution.Scheduler.Implicits.global
-import cats.syntax.all._
+import org.scalatest._
 
 class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
@@ -42,7 +36,7 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
   implicit val currentRequests: engine.BlockRetriever.RequestedBlocks[Task] =
     Ref.unsafe[Task, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
   implicit val connectionsCell: ConnectionsCell[Task] =
-    Cell.unsafe[Task, Connections](List(local))
+    Ref.unsafe[Task, Connections](List(local))
   implicit val transportLayer = new TransportLayerStub[Task]
   implicit val rpConf         = createRPConfAsk[Task](local)
   implicit val time           = new LogicalTime[Task]

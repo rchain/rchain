@@ -283,7 +283,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
     def waitForFirstConnection: F[Unit] =
       for {
         _ <- time.sleep(1.second)
-        _ <- ConnectionsCell[F].read
+        _ <- ConnectionsCell[F].get
               .map(_.isEmpty)
               .ifM(waitForFirstConnection, ().pure[F])
       } yield ()

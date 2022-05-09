@@ -1,24 +1,21 @@
 package coop.rchain.comm.rp
 
-import scala.concurrent.duration._
-
+import cats.effect.concurrent.Ref
 import cats.{catsInstancesForId => _, _}
-
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.ski._
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.comm._
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
+import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect._
-import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}
 import coop.rchain.shared._
-
 import org.scalatest._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+
+import scala.concurrent.duration._
 
 class ClearConnectionsSpec
     extends AnyFunSpec
@@ -51,9 +48,9 @@ class ClearConnectionsSpec
         // when
         Connect.clearConnections[Id]
         // then
-        connections.read.size shouldBe 2
-        connections.read should contain(peer("A"))
-        connections.read should contain(peer("B"))
+        connections.get.size shouldBe 2
+        connections.get should contain(peer("A"))
+        connections.get should contain(peer("B"))
       }
       it("should report that 0 connections were cleared") {
         // given
@@ -91,11 +88,11 @@ class ClearConnectionsSpec
         // when
         Connect.clearConnections[Id]
         // then
-        connections.read.size shouldBe 3
-        connections.read should not contain peer("A")
-        connections.read should contain(peer("B"))
-        connections.read should contain(peer("C"))
-        connections.read should contain(peer("D"))
+        connections.get.size shouldBe 3
+        connections.get should not contain peer("A")
+        connections.get should contain(peer("B"))
+        connections.get should contain(peer("C"))
+        connections.get should contain(peer("D"))
       }
 
       it("should put the peers that responded to heartbeat to the end of the list") {
@@ -109,8 +106,8 @@ class ClearConnectionsSpec
         // when
         Connect.clearConnections[Id]
         // then
-        connections.read.size shouldBe 3
-        connections.read shouldEqual List(peer("D"), peer("B"), peer("C"))
+        connections.get.size shouldBe 3
+        connections.get shouldEqual List(peer("D"), peer("B"), peer("C"))
       }
 
       it("should report number of connections that were removed") {
@@ -133,7 +130,7 @@ class ClearConnectionsSpec
     PeerNode(NodeIdentifier(name.getBytes), Endpoint(host, 80, 80))
 
   private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
-    Cell.id[Connections](peers.toList)
+    Ref.unsafe[Id, Connections](peers.toList)
 
   private def conf(
       maxNumOfConnections: Int,

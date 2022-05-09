@@ -1,5 +1,6 @@
 package coop.rchain.comm.rp
 
+import cats.effect.concurrent.Ref
 import cats.{catsInstancesForId => _, _}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
@@ -30,7 +31,7 @@ class ConnectSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with 
   implicit val metricEff         = new Metrics.MetricsNOP[Effect]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
   implicit val transportLayerEff = new TransportLayerStub[Effect]
-  implicit val connectionsCell   = Cell.unsafe[Effect, Connections](Connect.Connections.empty)
+  implicit val connectionsCell   = Ref.unsafe[Effect, Connections](Connect.Connections.empty)
   implicit val rpConfAsk         = createRPConfAsk[Effect](peerNode("src", 40400))
 
   override def beforeEach(): Unit = {

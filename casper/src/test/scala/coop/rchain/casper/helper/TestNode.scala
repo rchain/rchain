@@ -77,7 +77,7 @@ case class TestNode[F[_]: Sync: Timer](
     lastFinalizedHeightCheckerEffect: LastFinalizedHeightConstraintChecker[F],
     timeEffect: Time[F],
     transportLayerEffect: TransportLayerTestImpl[F],
-    connectionsCellEffect: Cell[F, Connections],
+    connectionsCellEffect: Ref[F, Connections],
     rpConfAskEffect: RPConfAsk[F],
     eventPublisherEffect: EventPublisher[F],
     casperShardConf: CasperShardConf,
@@ -106,7 +106,7 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val lfhch: LastFinalizedHeightConstraintChecker[F] = lastFinalizedHeightCheckerEffect
   implicit val t: Time[F]                                     = timeEffect
   implicit val transportLayerEff: TransportLayerTestImpl[F]   = transportLayerEffect
-  implicit val connectionsCell: Cell[F, Connections]          = connectionsCellEffect
+  implicit val connectionsCell: Ref[F, Connections]           = connectionsCellEffect
   implicit val rp: RPConfAsk[F]                               = rpConfAskEffect
   implicit val ep: EventPublisher[F]                          = eventPublisherEffect
 
@@ -378,10 +378,7 @@ object TestNode {
         _ <- pairs.foldLeft(().pure[F]) {
               case (f, (n, m)) =>
                 f.flatMap(
-                  _ =>
-                    n.connectionsCell.flatModify(
-                      _.addConn[F](m.local)
-                    )
+                  _ => n.connectionsCell.update(_.addConn(m.local))
                 )
             }
       } yield nodes
@@ -450,7 +447,7 @@ object TestNode {
                implicit val rhr                        = runtimeManager.getHistoryRepo
                implicit val logEff                     = new LogStub[F](Log.log[F])
                implicit val timeEff                    = logicalTime
-               implicit val connectionsCell            = Cell.unsafe[F, Connections](Connect.Connections.empty)
+               implicit val connectionsCell            = Ref.unsafe[F, Connections](Connect.Connections.empty)
                implicit val transportLayerEff          = tle
                implicit val synchronyConstraintChecker = SynchronyConstraintChecker[F]
                implicit val lastFinalizedHeightConstraintChecker =

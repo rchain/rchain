@@ -25,9 +25,9 @@ class ConnectionsSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach w
           // when
           val connections =
             Connections.empty
-              .addConn[Id](peer("A"))
-              .addConn[Id](peer("B"))
-              .addConn[Id](peer("C"))
+              .addConn(peer("A"))
+              .addConn(peer("B"))
+              .addConn(peer("C"))
           // then
           connections should equal(List(peer("A"), peer("B"), peer("C")))
         }
@@ -39,8 +39,8 @@ class ConnectionsSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach w
           // when
           val connections =
             Connections.empty
-              .addConn[Id](peer("A"))
-              .addConn[Id](peer("A"))
+              .addConn(peer("A"))
+              .addConn(peer("A"))
           // then
           connections should equal(List(peer("A")))
         }
@@ -49,10 +49,10 @@ class ConnectionsSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach w
           // when
           val connections =
             Connections.empty
-              .addConn[Id](peer("A"))
-              .addConn[Id](peer("B"))
-              .addConn[Id](peer("C"))
-              .addConn[Id](peer("A"))
+              .addConn(peer("A"))
+              .addConn(peer("B"))
+              .addConn(peer("C"))
+              .addConn(peer("A"))
           // then
           connections should equal(List(peer("B"), peer("C"), peer("A")))
         }
@@ -61,9 +61,9 @@ class ConnectionsSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach w
           // when
           val connections =
             Connections.empty
-              .addConn[Id](peer("A", host = "10.10.0.1", port = 80))
-              .addConn[Id](peer("B"))
-              .addConn[Id](peer("A", host = "10.11.11.11", port = 8080))
+              .addConn(peer("A", host = "10.10.0.1", port = 80))
+              .addConn(peer("B"))
+              .addConn(peer("A", host = "10.11.11.11", port = 8080))
           // then
           connections should equal(List(peer("B"), peer("A", host = "10.11.11.11", port = 8080)))
         }
@@ -75,9 +75,9 @@ class ConnectionsSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach w
       it("should list unmodifed if connection not in the list") {
         val connections =
           Connections.empty
-            .addConn[Id](peer("A"))
-            .addConn[Id](peer("B"))
-            .removeConn[Id](peer("C"))
+            .addConn(peer("A"))
+            .addConn(peer("B"))
+            .removeConn(peer("C"))
         // then
         connections should equal(List(peer("A"), peer("B")))
       }
@@ -85,10 +85,10 @@ class ConnectionsSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach w
       it("should remove connection from the list if exists") {
         val connections =
           Connections.empty
-            .addConn[Id](peer("A"))
-            .addConn[Id](peer("B"))
-            .addConn[Id](peer("C"))
-            .removeConn[Id](peer("B"))
+            .addConn(peer("A"))
+            .addConn(peer("B"))
+            .addConn(peer("C"))
+            .removeConn(peer("B"))
         // then
         connections should equal(List(peer("A"), peer("C")))
       }

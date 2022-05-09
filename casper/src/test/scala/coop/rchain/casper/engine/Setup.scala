@@ -21,7 +21,7 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared.{Cell, Time}
+import coop.rchain.shared.Time
 import coop.rchain.store.InMemoryStoreManager
 import fs2.concurrent.Queue
 import monix.eval.Task
@@ -89,7 +89,7 @@ object Setup {
 
     implicit val nodeDiscovery = new NodeDiscoveryStub[Task]
     implicit val connectionsCell: ConnectionsCell[Task] =
-      Cell.unsafe[Task, Connections](List(local))
+      Ref.unsafe[Task, Connections](List(local))
     implicit val transportLayer = new TransportLayerStub[Task]
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = Time.fromTimer[Task]

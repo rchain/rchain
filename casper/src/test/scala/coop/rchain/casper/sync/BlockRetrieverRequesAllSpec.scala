@@ -21,7 +21,6 @@ import coop.rchain.p2p.EffectsTestInstances.{
   LogicalTime,
   TransportLayerStub
 }
-import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -43,7 +42,7 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
   implicit val currentRequests: engine.BlockRetriever.RequestedBlocks[Task] =
     Ref.unsafe[Task, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
   implicit val connectionsCell: ConnectionsCell[Task] =
-    Cell.unsafe[Task, Connections](List(local))
+    Ref.unsafe[Task, Connections](List(local))
   implicit val transportLayer = new TransportLayerStub[Task]
   implicit val rpConf         = createRPConfAsk[Task](local)
   implicit val time           = new LogicalTime[Task]
