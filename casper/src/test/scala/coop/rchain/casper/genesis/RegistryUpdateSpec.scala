@@ -37,7 +37,7 @@ class RegistryUpdateSpec extends FlatSpec with Matchers with Inspectors {
     val bonds         = Map(pub1 -> 1000000L, pub2 -> 1000000L, pub3 -> 1000000L)
     val genesis       = buildGenesis(buildGenesisParameters(validatorKeys, genesisVaults, bonds))
 
-    val updateRegistry = Source.fromResource("updateRegistry/updateRegistry.rho").mkString
+    val updateRegistry = Source.fromResource("UpdateRegistry/UpdateRegistry.rho").mkString
     val updateRegistryDeploy =
       ConstructDeploy.sourceDeployNow(updateRegistry, p1, 100000000L, 0, shardId = shardId)
     val transferAmount = 100000

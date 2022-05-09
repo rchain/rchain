@@ -66,7 +66,7 @@ class PosMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
     val (_, targetPub) = Secp256k1.newKeyPair
     val targetAddr     = RevAddress.fromPublicKey(targetPub).get.address.toBase58
     val transfer = CompiledRholangTemplate.loadTemplate(
-      "MultiSigVault/posMultiSigTransfer.rho",
+      "MultiSigVault/PosMultiSigTransfer.rho",
       Seq(
         ("targetAddr", targetAddr),
         ("amount", transferAmount)
@@ -74,7 +74,7 @@ class PosMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
     )
     val confirm =
       CompiledRholangTemplate.loadTemplate(
-        "MultiSigVault/posMultiSigConfirm.rho",
+        "MultiSigVault/PosMultiSigConfirm.rho",
         Seq(
           ("targetAddr", targetAddr),
           ("amount", transferAmount),
@@ -83,7 +83,7 @@ class PosMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
       )
 
     val initialTransferToPosMultiSig = CompiledRholangTemplate.loadTemplate(
-      "MultiSigVault/transferToPosMultiSig.rho",
+      "MultiSigVault/TransferToPosMultiSig.rho",
       Seq(
         ("from", RevAddress.fromPublicKey(pub1).get.address.toBase58),
         ("amount", transferAmount)

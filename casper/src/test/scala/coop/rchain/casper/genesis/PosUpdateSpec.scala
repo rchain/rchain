@@ -42,7 +42,7 @@ class PosUpdateSpec extends FlatSpec with Matchers with Inspectors {
   private val epochLength = 1
 
   private val updatePosTerm = CompiledRholangTemplate.loadTemplate(
-    "updatePos/ProposePos.rho",
+    "UpdatePos/ProposePos.rho",
     Seq(
       ("minimumBond", 1),
       ("maximumBond", 10000000000L),

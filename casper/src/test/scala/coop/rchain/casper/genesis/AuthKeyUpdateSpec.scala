@@ -54,7 +54,7 @@ class AuthKeyUpdateSpec extends FlatSpec with Matchers with Inspectors {
        #""".stripMargin('#')
 
   "deploy with correct private key" should "update the rho:rchain:authKey right" in effectTest {
-    val update = Source.fromResource("updateAuthKey/UpdateAuthKey.rho").mkString
+    val update = Source.fromResource("UpdateAuthKey/UpdateAuthKey.rho").mkString
     val updateDeploy =
       ConstructDeploy.sourceDeployNow(update, p1, 100000000L, 0L, shardId = shardId)
     val transferAmount = 100000
@@ -111,7 +111,7 @@ class AuthKeyUpdateSpec extends FlatSpec with Matchers with Inspectors {
   }
 
   "deploy with incorrect private key" should "return auth failure" in effectTest {
-    val update = Source.fromResource("updateAuthKey/UpdateAuthKey.rho").mkString
+    val update = Source.fromResource("UpdateAuthKey/UpdateAuthKey.rho").mkString
     val updateDeploy =
       ConstructDeploy.sourceDeployNow(update, noPermissionKey, 100000000L, 0L, shardId = shardId)
 
