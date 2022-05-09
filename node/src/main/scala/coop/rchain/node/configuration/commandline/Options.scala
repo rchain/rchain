@@ -440,7 +440,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val bondMinimum = opt[Long](
-      descr = "Minimum bond accepted by the Pos contract in the genesis block."
+      descr = "Minimum bond accepted by the PoS contract in the genesis block."
     )
 
     val genesisBlockNumber = opt[Long](
@@ -448,7 +448,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val bondMaximum = opt[Long](
-      descr = "Maximum bond accepted by the Pos contract in the genesis block."
+      descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )
 
     val epochLength = opt[Int](

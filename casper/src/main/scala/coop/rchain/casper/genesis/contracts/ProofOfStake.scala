@@ -36,7 +36,7 @@ final case class ProofOfStake(
 }
 
 object ProofOfStake {
-  // TODO: Determine how the "initial bonds" map can simulate transferring stake into the Pos contract
+  // TODO: Determine how the "initial bonds" map can simulate transferring stake into the PoS contract
   //       when this must be done during genesis, under the authority of the genesisPk, which calls the
   //       linear receive in Pos.rho
   def initialBonds(validators: Seq[Validator]): String = {

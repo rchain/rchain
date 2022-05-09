@@ -77,7 +77,7 @@ object GenesisBuilder {
           minimumBond = 1L,
           maximumBond = Long.MaxValue,
           // Epoch length is set to large number to prevent trigger of epoch change
-          // in Pos close block method, which causes block merge conflicts
+          // in PoS close block method, which causes block merge conflicts
           // - epoch change can be set as a parameter in Rholang tests (e.g. PosSpec)
           epochLength = 1000,
           quarantineLength = 50000,
@@ -109,7 +109,7 @@ object GenesisBuilder {
           minimumBond = 1L,
           maximumBond = Long.MaxValue,
           // Epoch length is set to large number to prevent trigger of epoch change
-          // in Pos close block method, which causes block merge conflicts
+          // in PoS close block method, which causes block merge conflicts
           // - epoch change can be set as a parameter in Rholang tests (e.g. PosSpec)
           epochLength = 1000,
           quarantineLength = 50000,
