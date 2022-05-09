@@ -278,11 +278,11 @@ in {
           } |
           // Method to extract the current state of the RevVault contract.
           // Returns the current `vaultMap`.
-          contract @(bundle+{*RevVault}, "extractState")(ret) = {
+          contract @(*RevVault, "extractState")(ret) = {
             ret!({"vaultMap":vaultMap, "revVaultUnf": *_revVault})
           } |
           // Insert location channel into the registry location map
-          rb!(`rho:rchain:revVault`, bundle+{*RevVault}, *RevVaultDispatcher) |
+          rb!(`rho:rchain:revVault`, *RevVault, *RevVaultDispatcher) |
           // Insert the signed, write-only dispatcher contract into the registry uri map
           rs!(
             "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e".hexToBytes(),

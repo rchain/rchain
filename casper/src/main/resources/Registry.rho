@@ -642,7 +642,7 @@ in {
                 }
               }
             } |
-            contract @(bundle+{*systemContractManager}, "extractState")(ret) = {
+            contract @(*systemContractManager, "extractState")(ret) = {
               for (@blessedContractLocMap <<- blessedContractLocMapCh) {
                 ret!(blessedContractLocMap)
               }
@@ -656,7 +656,7 @@ in {
                 // add systemContractManager location to location map and the methods' entry point to the location channel
                 for (@blessedContractLocMap <- blessedContractLocMapCh) {
                   blessedContractLocMapCh!(blessedContractLocMap.set(`rho:registry:systemContractManager`, *systemContractManagerLoc)) |
-                  systemContractManagerLoc!(bundle+{*systemContractManager})
+                  systemContractManagerLoc!(*systemContractManager)
                 }
               }
             } |

@@ -153,12 +153,12 @@ in {
     } |
     // No internal state to return.
     // Method required for updates.
-    contract @(bundle+{*MakeMint}, "extractState")(ret) = {
+    contract @(*MakeMint, "extractState")(ret) = {
       ret!(Nil)
     } 
   } |
   // Insert location channel into the registry location map
-  rb!(`rho:rchain:makeMint`, bundle+{*MakeMint}, *MakeMintDispatcher) |
+  rb!(`rho:rchain:makeMint`, *MakeMint, *MakeMintDispatcher) |
   // Insert the signed, write-only dispatcher contract into the registry uri map
   rs!(
     "0470256c078e105d2958b9cf66f2161d83368f483c0219790277fb726a459be7f56a9a48bbecf72bcaed6a3515bd0a144faf6a6a8de8f6c9b3b7dff297eb371f28".hexToBytes(),

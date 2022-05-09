@@ -70,11 +70,11 @@ in {
   } |
   // No internal state to return.
   // Method required for updates.
-  contract @(bundle+{*AuthKey}, "extractState")(ret) = {
+  contract @(*AuthKey, "extractState")(ret) = {
     ret!({"authKeyUnf": *_authKey})
   } |
   // Insert location channel into the registry location map
-  rb!(`rho:rchain:authKey`, bundle+{*AuthKey}, *AuthKeyDispatcher) |
+  rb!(`rho:rchain:authKey`, *AuthKey, *AuthKeyDispatcher) |
   // Inserts signed write-only AuthKey contract into the registry
   rs!(
     "04f4b4417f930e6fab5765ac0defcf9fce169982acfd046e7c27f9b14c0804014623c0439e5c8035e9607599a549303b5b6b90cd9685e6965278bddca65dac7510".hexToBytes(),

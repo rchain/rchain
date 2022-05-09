@@ -307,7 +307,7 @@ in {
                 @humanControlHandle!("transfer", targetAddress, amount, deployerID, transferRet)
               } |
               // Returns current state elements on `ret`.
-              contract @(bundle+{*PoS}, "extractState")(ret) = {
+              contract @(*PoS, "extractState")(ret) = {
                 for (@state <<- stateCh) {
                   ret!({
                     "state"     : state,
@@ -728,7 +728,7 @@ in {
     }
     }|
     // Insert location channel into the registry location map
-     rb!(`rho:rchain:pos`, bundle+{*PoS}, *PosDispatcher) |
+     rb!(`rho:rchain:pos`, *PoS, *PosDispatcher) |
      // Put the contract data on the location channel
      // Insert the signed, write-only dispatcher contract into the registry uri map
     rs!(

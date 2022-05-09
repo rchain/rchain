@@ -49,9 +49,8 @@ object StateBalances {
       Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(unfogeableBytes.toByteString)))))
     }
 
-    val bundleRevVault     = Par(bundles = Seq(Bundle(body = revVault, writeFlag = true)))
     val extractStateString = Par(exprs = Seq(Expr(GString("extractState"))))
-    val e                  = Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(bundleRevVault, extractStateString))))))
+    val e                  = Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(revVault, extractStateString))))))
     for {
       c <- runtime.getContinuation(Seq(e))
       unf = c.head.continuation.taggedCont.parBody.get.body.sends.head.data.head.exprs.head.getEMapBody.ps
