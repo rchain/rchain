@@ -1,16 +1,15 @@
 package coop.rchain.blockstorage.dag
 
-import cats.{Monad, Show}
 import cats.effect.Sync
-import cats.mtl.MonadState
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import cats.{Monad, Show}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
+import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.store.KeyValueTypedStore
-import monix.execution.atomic.AtomicAny
 
 import scala.collection.immutable.SortedMap
 
@@ -25,13 +24,11 @@ object BlockMetadataStore {
                        case (hash, metaData) =>
                          (hash, blockMetadataToInfo(metaData()))
                      }
-      _        <- Log[F].info("Reading data from blockMetadataStore done.")
-      dagState = recreateInMemoryState(blockInfoMap.toMap)
-      _        <- Log[F].info("Successfully built in-memory blockMetadataStore.")
-    } yield new BlockMetadataStore[F](
-      blockMetadataStore,
-      new AtomicMonadState(AtomicAny(dagState))
-    )
+      _           <- Log[F].info("Reading data from blockMetadataStore done.")
+      dagState    = recreateInMemoryState(blockInfoMap.toMap)
+      _           <- Log[F].info("Successfully built in-memory blockMetadataStore.")
+      dagStateRef <- Ref[F].of(dagState)
+    } yield new BlockMetadataStore[F](blockMetadataStore, dagStateRef)
 
   final case class BlockMetadataStoreInconsistencyError(message: String) extends Exception(message)
 
@@ -59,12 +56,12 @@ object BlockMetadataStore {
 
   class BlockMetadataStore[F[_]: Monad](
       private val store: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      private val dagState: MonadState[F, DagState]
+      private val dagState: Ref[F, DagState]
   ) {
     def add(block: BlockMetadata): F[Unit] =
       for {
         // Update DAG state with new block
-        _ <- dagState.modify { st =>
+        _ <- dagState.update { st =>
               val blockInfo   = blockMetadataToInfo(block)
               val newDagState = addBlockToDagState(blockInfo)(st)
               validateDagState(newDagState)
@@ -91,20 +88,18 @@ object BlockMetadataStore {
         newMetaForDF  = (directly, curMetaForDF.copy(finalized = true, directlyFinalized = true))
         newMetasForIF = curMetasForIF.map(v => (v.blockHash, v.copy(finalized = true)))
         // update in memory state
-        _ <- dagState.modify(
-              st => {
-                val newFinalizedSet = st.finalizedBlockSet ++ indirectly + directly
+        _ <- dagState.update { st =>
+              val newFinalizedSet = st.finalizedBlockSet ++ indirectly + directly
 
-                // update lastFinalizedBlock only when current one is lower
-                if (st.lastFinalizedBlock.exists { case (_, h) => h > curMetaForDF.blockNum })
-                  st.copy(finalizedBlockSet = newFinalizedSet)
-                else
-                  st.copy(
-                    finalizedBlockSet = newFinalizedSet,
-                    lastFinalizedBlock = (directly, curMetaForDF.blockNum).some
-                  )
-              }
-            )
+              // update lastFinalizedBlock only when current one is lower
+              if (st.lastFinalizedBlock.exists { case (_, h) => h > curMetaForDF.blockNum })
+                st.copy(finalizedBlockSet = newFinalizedSet)
+              else
+                st.copy(
+                  finalizedBlockSet = newFinalizedSet,
+                  lastFinalizedBlock = (directly, curMetaForDF.blockNum).some
+                )
+            }
         // persist new values all at once
         _ <- store.put(newMetaForDF +: newMetasForIF)
       } yield ()
