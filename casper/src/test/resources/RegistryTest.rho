@@ -5,7 +5,9 @@ match (
   "04db580f781a3759ea92284e8734588c37e3c326049401ad8565da8e25c20287b2c6818b40ec4d8b6455a41d1939e1f1bc75417d95a73172cd4bf4cbeef45e47ab".hexToBytes(),
   "c319f6eee832ea313faf64af6d4ea325fc014d579c4a59d069ee4a1cda4c0078".hexToBytes(),
   "041b5f17da6e7d828ce3890a545725631b6807fd3893b2b984eeb863fc9861e465996d6f403ec570c377a1ea21ada77dd288191fa10d7fadb1b22b8afa637123d5".hexToBytes(),
-  "8171de2528878058f0de32644918fb98240188cdf35a70713e4a3161a6f691e5".hexToBytes()
+  "8171de2528878058f0de32644918fb98240188cdf35a70713e4a3161a6f691e5".hexToBytes(),
+  "0412eea943c13ed3e99d2de048a57dbaf4c977df83a50bf7ec79ae58255cf8d891a1cbe3cd51aeafec34241a1a9c9a54e861aa5b373667793c617c0310eab26653".hexToBytes(),
+  "87369d132ed6a7626dc4c5dfbaf41e954dd0ec55830e613a3f868c74d64a7a22".hexToBytes()
 ) {
   (
     pk1,
@@ -13,7 +15,9 @@ match (
     pk2,
     sk2,
     pk3,
-    sk3
+    sk3,
+    pk4,
+    sk4
   ) => {
 
   new
@@ -31,6 +35,7 @@ match (
     test_insertSignedValidNonce,
     test_insertSignedInvalidNonce,
     test_insertSignedInvalidSig,
+    test_insertSignedLongMaxNonce,
     test_unknownLookup,
     insertSignedHelper
   in {
@@ -43,6 +48,7 @@ match (
           ("InsertArbitrary and lookup should work", *test_insertArbitraryAndLookup),
           ("InsertSigned should work with increased nonce", *test_insertSignedValidNonce),
           ("InsertSigned should return Nil for invalid nonce", *test_insertSignedInvalidNonce),
+          ("InsertSigned with Long.Max + 1", *test_insertSignedLongMaxNonce),
           ("Lookup should return Nil for unknown uri", *test_unknownLookup)
         ])
     } |
@@ -111,6 +117,22 @@ match (
       new retCh in {
         lookup!(`rho:id:unknown`, *retCh) |
         rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
+      }
+    } |
+
+    contract test_insertSignedLongMaxNonce(rhoSpec, _, ackCh) = {
+      new uriCh, retCh, valueCh in {
+        insertSignedHelper!(9223372036854775807, "foo", pk4, *uriCh) |
+        for (@uri <- uriCh) {
+          insertSignedHelper!(9223372036854775807+1, "bar", pk4, *retCh) |
+          for (@res <- retCh){
+            lookup!(uri, *valueCh) |
+            rhoSpec!("assertMany", [
+              ((Nil, "==", res), "Expecting Nil"),
+              (((9223372036854775807 , "foo"), "== <-", *valueCh), "Value foo should not be changed")
+              ], *ackCh)
+          }
+        }
       }
     } |
 
