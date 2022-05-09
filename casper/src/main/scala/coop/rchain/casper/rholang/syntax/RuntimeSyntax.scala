@@ -36,7 +36,6 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.EVarBody
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -96,8 +95,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       startHash: StateHash,
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      blockData: BlockData
   ): F[
     (
         StateHash,
@@ -108,7 +106,6 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
     Span[F].traceI("compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
-        _ <- runtime.setInvalidBlocks(invalidBlocks)
         deployProcessResult <- Span[F].withMarks("play-deploys") {
                                 playDeploys(startHash, terms, playDeployWithCostAccounting)
                               }
@@ -338,12 +335,12 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
                     case Right(result) =>
                       getNumberChannelsData(mergeableChs) map { mcl =>
                         systemDeploy match {
-                          case SlashDeploy(invalidBlockHash, pk, _) =>
+                          case SlashDeploy(slashedValidator, _) =>
                             SystemDeployResult
                               .playSucceeded(
                                 finalStateHash,
                                 eventLog,
-                                SystemDeployData.from(invalidBlockHash, pk),
+                                SystemDeployData.from(slashedValidator),
                                 mcl,
                                 result
                               )
@@ -356,6 +353,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
                                 mcl,
                                 result
                               )
+                          // TODO: what is the purpose of empty system deploy?
                           case _ =>
                             SystemDeployResult
                               .playSucceeded(

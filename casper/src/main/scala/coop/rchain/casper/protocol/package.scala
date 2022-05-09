@@ -9,16 +9,17 @@ package object protocol extends CasperMessageProtocol {
     PacketTypeTag
       .withNameOption(packet.typeId)
       .map {
-        case BlockHashMessage         => convert[BlockHashMessage.type](packet)
-        case BlockMessage             => convert[BlockMessage.type](packet)
+        // Block messages
+        case BlockHashMessage => convert[BlockHashMessage.type](packet)
+        case BlockMessage     => convert[BlockMessage.type](packet)
+        case BlockRequest     => convert[BlockRequest.type](packet)
+        case HasBlockRequest  => convert[HasBlockRequest.type](packet)
+        case HasBlock         => convert[HasBlock.type](packet)
+        // Tips
+        case ForkChoiceTipRequest => convert[ForkChoiceTipRequest.type](packet)
+        // Approved block
         case ApprovedBlock            => convert[ApprovedBlock.type](packet)
         case ApprovedBlockRequest     => convert[ApprovedBlockRequest.type](packet)
-        case BlockRequest             => convert[BlockRequest.type](packet)
-        case HasBlockRequest          => convert[HasBlockRequest.type](packet)
-        case HasBlock                 => convert[HasBlock.type](packet)
-        case ForkChoiceTipRequest     => convert[ForkChoiceTipRequest.type](packet)
-        case BlockApproval            => convert[BlockApproval.type](packet)
-        case UnapprovedBlock          => convert[UnapprovedBlock.type](packet)
         case NoApprovedBlockAvailable => convert[NoApprovedBlockAvailable.type](packet)
         // Last finalized state messages
         case StoreItemsMessageRequest => convert[StoreItemsMessageRequest.type](packet)

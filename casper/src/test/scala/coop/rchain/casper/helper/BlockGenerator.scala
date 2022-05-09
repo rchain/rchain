@@ -7,18 +7,17 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
-import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.InterpreterUtil.computeDeploysCheckpoint
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.types.SystemDeploy
-import coop.rchain.models.block.StateHash._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Signed
+import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash._
+import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.syntax._
@@ -27,8 +26,6 @@ import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
-import scala.language.higherKinds
-import coop.rchain.models.blockImplicits.getRandomBlock
 
 // TODO squash this with block generator in blockimplicits
 object BlockGenerator {
@@ -45,7 +42,6 @@ object BlockGenerator {
       IndexedSeq.empty,
       List.empty,
       Set.empty,
-      Map.empty,
       Set.empty,
       0,
       Map.empty,
@@ -90,8 +86,7 @@ object BlockGenerator {
                  List.empty[SystemDeploy],
                  s,
                  runtimeManager,
-                 BlockData.fromBlock(b),
-                 Map.empty[BlockHash, Validator]
+                 BlockData.fromBlock(b)
                ).attempt
       Right((preStateHash, postStateHash, processedDeploys, rejectedDeploys, _)) = result
     } yield (postStateHash, processedDeploys)

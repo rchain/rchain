@@ -59,7 +59,6 @@ class ValidateTest
       IndexedSeq.empty,
       List.empty,
       Set.empty,
-      Map.empty,
       Set.empty,
       0,
       Map.empty,
@@ -279,27 +278,22 @@ class ValidateTest
   it should "correctly validate a multi-parent block where the parents have different block numbers" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       def createBlockWithNumber(
-          n: Long,
-          parentHashes: Seq[ByteString] = Nil
+          validator: Validator,
+          parents: Seq[BlockMessage] = Nil
       ): Task[BlockMessage] =
         for {
-          timestamp <- Time[Task].currentMillis
-          block = getRandomBlock(
-            setBlockNumber = n.some,
-            setTimestamp = timestamp.some,
-            setParentsHashList = parentHashes.some,
-            hashF = (ProtoUtil.hashBlock _).some
-          )
-
-          _ <- blockStore.put(block.blockHash, block)
-          _ <- blockDagStorage.insert(block, false)
+          block <- createValidatorBlock(parents, genesis, parents, validator, Seq(), shardId = "")
         } yield block
+
+      def genSender(id: Int) = List.fill(65)(id.toByte).toArray.toByteString
 
       for {
         genesis <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
-        b1      <- createBlockWithNumber(3)
-        b2      <- createBlockWithNumber(7)
-        b3      <- createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
+        v1      = genSender(1)
+        v2      = genSender(2)
+        b1      <- createBlockWithNumber(v1)
+        b2      <- createBlockWithNumber(v2)
+        b3      <- createBlockWithNumber(v2, Seq(b1, b2))
         dag     <- blockDagStorage.getRepresentation
         s1      <- Validate.blockNumber[Task](b3, mkCasperSnapshot(dag))
         _       = s1 shouldBe Right(Valid)
@@ -498,11 +492,7 @@ class ValidateTest
         _ <- List(b0, b1, b2, b3, b4).forallM[Task](
               block =>
                 for {
-                  dag <- blockDagStorage.getRepresentation
-                  result <- Validate.justificationRegressions[Task](
-                             block,
-                             mkCasperSnapshot(dag)
-                           )
+                  result <- Validate.justificationRegressions[Task](block)
                 } yield result == Right(Valid)
             ) shouldBeF true
         // The justification block for validator 0 should point to b2 or above.
@@ -515,12 +505,8 @@ class ValidateTest
           setJustifications = justificationsWithRegression.some,
           hashF = (ProtoUtil.hashBlock _).some
         )
-        dag <- blockDagStorage.getRepresentation
-        _ <- Validate.justificationRegressions[Task](
-              blockWithJustificationRegression,
-              mkCasperSnapshot(dag)
-            ) shouldBeF Left(JustificationRegression)
-        result = log.warns.size shouldBe 1
+        result <- Validate.justificationRegressions[Task](blockWithJustificationRegression) shouldBeF
+                   Left(JustificationRegression)
       } yield result
   }
 
@@ -557,11 +543,8 @@ class ValidateTest
           setValidator = v1.some,
           setJustifications = justificationsWithInvalidBlock.some
         )
-        dag <- blockDagStorage.getRepresentation
-        _ <- Validate.justificationRegressions[Task](
-              blockWithInvalidJustification,
-              mkCasperSnapshot(dag)
-            ) shouldBeF Right(Valid)
+        _ <- Validate.justificationRegressions[Task](blockWithInvalidJustification) shouldBeF
+              Right(Valid)
       } yield ()
   }
 

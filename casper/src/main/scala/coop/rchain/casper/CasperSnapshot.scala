@@ -18,7 +18,6 @@ final case class CasperSnapshot(
     tips: IndexedSeq[BlockHash],
     parents: List[BlockMessage],
     justifications: Set[Justification],
-    invalidBlocks: Map[Validator, BlockHash],
     deploysInScope: Set[Signed[DeployData]],
     maxBlockNum: Long,
     maxSeqNums: Map[Validator, Int],

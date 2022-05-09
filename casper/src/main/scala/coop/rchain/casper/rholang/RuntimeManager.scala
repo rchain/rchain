@@ -11,7 +11,6 @@ import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.models.syntax._
@@ -45,14 +44,12 @@ trait RuntimeManager[F[_]] {
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator],
-      isGenesis: Boolean
+      withCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
@@ -108,12 +105,11 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   def computeState(startHash: StateHash)(
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     for {
       runtime                                 <- spawnRuntime
-      computed                                <- runtime.computeState(startHash, terms, systemDeploys, blockData, invalidBlocks)
+      computed                                <- runtime.computeState(startHash, terms, systemDeploys, blockData)
       (stateHash, usrDeployRes, sysDeployRes) = computed
       (usrProcessed, usrMergeable)            = usrDeployRes.unzip
       (sysProcessed, sysMergeable)            = sysDeployRes.unzip
@@ -153,12 +149,11 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
-      isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      withCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
       val replayOp = replayRuntime
-        .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
+        .replayComputeState(startHash)(terms, systemDeploys, blockData, withCostAccounting)
       EitherT(replayOp).semiflatMap {
         case (stateHash, mergeableChs) =>
           // Block data used for mergeable key
@@ -233,7 +228,7 @@ object RuntimeManager {
 
   /**
     * This is a hard-coded value for `emptyStateHash` which is calculated by
-    * [[RuntimeOps.emptyStateHash]].
+    * [[coop.rchain.casper.rholang.syntax.RuntimeOps.emptyStateHash]].
     * Because of the value is actually the same all
     * the time. For some situations, we can just use the value directly for better performance.
     */

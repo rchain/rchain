@@ -19,10 +19,6 @@ trait CasperMessageProtocol {
   implicit final val hasBlockFromPacket = protoImpl[PacketTypeTag.HasBlock.type, HasBlockProto]
   implicit final val forkChoiceTipRequestFromPacket =
     protoImpl[PacketTypeTag.ForkChoiceTipRequest.type, ForkChoiceTipRequestProto]
-  implicit final val blockApprovalFromPacket =
-    protoImpl[PacketTypeTag.BlockApproval.type, BlockApprovalProto]
-  implicit final val unapprovedBlockFromPacket =
-    protoImpl[PacketTypeTag.UnapprovedBlock.type, UnapprovedBlockProto]
   implicit final val noApprovedBlockFromPacket =
     protoImpl[PacketTypeTag.NoApprovedBlockAvailable.type, NoApprovedBlockAvailableProto]
   // Last finalized state messages
@@ -47,10 +43,6 @@ trait CasperMessageProtocol {
   implicit final val hasBlockToPacket = protoSerde[PacketTypeTag.HasBlock.type, HasBlockProto]
   implicit final val forkChoiceTipRequestToPacket =
     protoSerde[PacketTypeTag.ForkChoiceTipRequest.type, ForkChoiceTipRequestProto]
-  implicit final val blockApprovalToPacket =
-    protoSerde[PacketTypeTag.BlockApproval.type, BlockApprovalProto]
-  implicit final val unapprovedBlockToPacket =
-    protoSerde[PacketTypeTag.UnapprovedBlock.type, UnapprovedBlockProto]
   implicit final val noApprovedBlockToPacket =
     protoSerde[PacketTypeTag.NoApprovedBlockAvailable.type, NoApprovedBlockAvailableProto]
   // Last finalized state messages

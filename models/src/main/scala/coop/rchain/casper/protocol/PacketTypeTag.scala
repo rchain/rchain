@@ -10,16 +10,17 @@ import scala.util.Try
 sealed abstract class PacketTypeTag extends EnumEntry
 
 object PacketTypeTag extends Enum[PacketTypeTag] {
-  case object BlockHashMessage         extends PacketTypeTag
-  case object BlockMessage             extends PacketTypeTag
-  case object HasBlockRequest          extends PacketTypeTag
-  case object HasBlock                 extends PacketTypeTag
-  case object BlockRequest             extends PacketTypeTag
-  case object ForkChoiceTipRequest     extends PacketTypeTag
+  // Blocks messages
+  case object BlockHashMessage extends PacketTypeTag
+  case object BlockMessage     extends PacketTypeTag
+  case object HasBlockRequest  extends PacketTypeTag
+  case object HasBlock         extends PacketTypeTag
+  case object BlockRequest     extends PacketTypeTag
+  // Tips messages
+  case object ForkChoiceTipRequest extends PacketTypeTag
+  // Approved block
   case object ApprovedBlock            extends PacketTypeTag
   case object ApprovedBlockRequest     extends PacketTypeTag
-  case object BlockApproval            extends PacketTypeTag
-  case object UnapprovedBlock          extends PacketTypeTag
   case object NoApprovedBlockAvailable extends PacketTypeTag
   // Last finalized state messages
   case object StoreItemsMessageRequest extends PacketTypeTag
@@ -42,8 +43,6 @@ object PacketTypeTag extends Enum[PacketTypeTag] {
     implicit val valueOfHasBlock: ValueOf[HasBlock.type]                 = summon(HasBlock)
     implicit val valueOfBlockRequest: ValueOf[BlockRequest.type]         = summon(BlockRequest)
     implicit val valueOfApprovedBlock: ValueOf[ApprovedBlock.type]       = summon(ApprovedBlock)
-    implicit val valueOfBlockApproval: ValueOf[BlockApproval.type]       = summon(BlockApproval)
-    implicit val valueOfUnapprovedBlock: ValueOf[UnapprovedBlock.type]   = summon(UnapprovedBlock)
     implicit val valueOfForkChoiceTipRequest: ValueOf[ForkChoiceTipRequest.type] = summon(
       ForkChoiceTipRequest
     )

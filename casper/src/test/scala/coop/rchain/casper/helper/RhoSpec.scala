@@ -122,13 +122,6 @@ class RhoSpec(
           3,
           107L,
           ctx => BlockDataContract.set(ctx)(_)
-        ),
-        SystemProcesses.Definition[F](
-          "rho:test:casper:invalidBlocks:set",
-          SystemProcesses.byteName(108),
-          2,
-          108L,
-          ctx => CasperInvalidBlocksContract.set(ctx)(_)
         )
       )
     testResultCollectorService

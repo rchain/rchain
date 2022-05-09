@@ -698,7 +698,7 @@ match (
           } |
 
           contract getPosBalance(retCh) = {
-              @posVault!("balance", *retCh) 
+              @posVault!("balance", *retCh)
           } |
 
           contract closeBlock(ackCh) = {
@@ -769,9 +769,7 @@ match (
           // Checks that the slashed validator's bond and rewards are moved from the PoS vault to the Coop vault and
           // reduced to 0 in the bond and committedRewards maps and that they are immediately moved to the withdrawers map.
           contract test_slashing_vaults_and_state(rhoSpec, _, ackCh) = {
-            new setInvalidBlocks(`rho:test:casper:invalidBlocks:set`),
-                computeHash(`rho:crypto:keccak256Hash`), hashCh, invalidBlocksSetCh,
-                initialBondSumCh, chargeCh, refundCh, initialCoopBalanceCh, finalCoopBalanceCh,
+            new initialBondSumCh, chargeCh, refundCh, initialCoopBalanceCh, finalCoopBalanceCh,
                 setupCh, slashCh, activeValidatorsCh, withdrawersCh,
                 initialPosBalanceCh, finalPosBalanceCh,
                 initialUserBalanceCh, finalUserBalanceCh,
@@ -794,41 +792,36 @@ match (
                            @(true, _) <- refundCh) {
                         match activeValidators.toList().nth(3) {
                           slashedValidator => {
-                            computeHash!(slashedValidator, *hashCh) |
-                            for (@hash <- hashCh) {
-                              getPosBalance!(*initialPosBalanceCh) |
-                              @PoS!("getRewards", *initialRewardsCh) |
-                              @userVault!("balance", *initialUserBalanceCh) |
-                              setInvalidBlocks!({hash : slashedValidator}, *invalidBlocksSetCh) |
-                              for (_                   <- invalidBlocksSetCh &
-                                   @initialUserBalance <- initialUserBalanceCh &
-                                   @initialRewards     <- initialRewardsCh &
-                                   @initialPosBalance  <- initialPosBalanceCh) {
-                                @PoS!("slash", userDeployerId, hash, sysAuthToken, *slashCh) |
-                                for (@(true, _) <- slashCh) {
-                                  @PoS!("getBonds", *finalBondsCh) |
-                                  getPosBalance!(*finalPosBalanceCh) |
-                                  @userVault!("balance", *finalUserBalanceCh) |
-                                  @PoS!("getRewards", *finalRewardsCh) |
-                                  @PoS!("getWithdrawers", *withdrawersCh) |
-                                  getCoopBalance!(*finalCoopBalanceCh) |
-                                  for (@finalPosBalance  <- finalPosBalanceCh &
-                                       @finalUserBalance <- finalUserBalanceCh &
-                                       @finalBonds       <- finalBondsCh &
-                                       @finalRewards     <- finalRewardsCh &
-                                       @withdrawers      <- withdrawersCh &
-                                       @finalCoopBalance <- finalCoopBalanceCh) {
-                                    stdlog!("info", (initialBonds, finalBonds,slashedValidator)) |
-                                    rhoSpec!("assertMany",
-                                      [
-                                        ((finalBonds, "==", initialBonds.set(slashedValidator, 0)), "Slashed validator's bond is reduced to 0"),
-                                        ((0, "==", finalRewards.get(slashedValidator)), "Slashed validator's rewards are reduced to 0"),
-                                        ((finalPosBalance, "==", initialPosBalance - initialBonds.get(slashedValidator)), "Slashed validator's funds are transferred out of the PoS vault"),
-                                        ((finalCoopBalance, "==", initialCoopBalance + initialBonds.get(slashedValidator)), "Slashed validator's funds are transferred to the Coop vault")
-                                      ],
-                                      *ackCh
-                                    )
-                                  }
+                            getPosBalance!(*initialPosBalanceCh) |
+                            @PoS!("getRewards", *initialRewardsCh) |
+                            @userVault!("balance", *initialUserBalanceCh) |
+                            for (@initialUserBalance <- initialUserBalanceCh &
+                                  @initialRewards     <- initialRewardsCh &
+                                  @initialPosBalance  <- initialPosBalanceCh) {
+                              @PoS!("slash", slashedValidator, sysAuthToken, *slashCh) |
+                              for (@(true, _) <- slashCh) {
+                                @PoS!("getBonds", *finalBondsCh) |
+                                getPosBalance!(*finalPosBalanceCh) |
+                                @userVault!("balance", *finalUserBalanceCh) |
+                                @PoS!("getRewards", *finalRewardsCh) |
+                                @PoS!("getWithdrawers", *withdrawersCh) |
+                                getCoopBalance!(*finalCoopBalanceCh) |
+                                for (@finalPosBalance  <- finalPosBalanceCh &
+                                      @finalUserBalance <- finalUserBalanceCh &
+                                      @finalBonds       <- finalBondsCh &
+                                      @finalRewards     <- finalRewardsCh &
+                                      @withdrawers      <- withdrawersCh &
+                                      @finalCoopBalance <- finalCoopBalanceCh) {
+                                  stdlog!("info", (initialBonds, finalBonds,slashedValidator)) |
+                                  rhoSpec!("assertMany",
+                                    [
+                                      ((finalBonds, "==", initialBonds.set(slashedValidator, 0)), "Slashed validator's bond is reduced to 0"),
+                                      ((0, "==", finalRewards.get(slashedValidator)), "Slashed validator's rewards are reduced to 0"),
+                                      ((finalPosBalance, "==", initialPosBalance - initialBonds.get(slashedValidator)), "Slashed validator's funds are transferred out of the PoS vault"),
+                                      ((finalCoopBalance, "==", initialCoopBalance + initialBonds.get(slashedValidator)), "Slashed validator's funds are transferred to the Coop vault")
+                                    ],
+                                    *ackCh
+                                  )
                                 }
                               }
                             }

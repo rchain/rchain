@@ -5,7 +5,6 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.PrettyPrinter
@@ -17,17 +16,14 @@ import coop.rchain.casper.protocol.{
   SystemDeployData
 }
 import coop.rchain.casper.reporting.ReportingCasper.RhoReportingRspace
-import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, createRhoEnv}
-import coop.rchain.rholang.interpreter.SystemProcesses.{BlockData, Definition, InvalidBlocks}
+import coop.rchain.rholang.interpreter.SystemProcesses.{BlockData, Definition}
 import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.RSpace.RSpaceStore
@@ -87,61 +83,45 @@ object ReportingCasper {
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: ApprovedStore: BlockDagStorage](
+  def rhoReporter[F[_]: Concurrent: ContextShift: Parallel: BlockDagStorage: Log: Metrics: Span](
       rspaceStore: RSpaceStore[F]
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
-      override def trace(
-          block: BlockMessage
-      ): F[ReplayResult] =
+      override def trace(block: BlockMessage): F[ReplayResult] =
         for {
           reportingRspace  <- ReportingRuntime.createReportingRSpace(rspaceStore)
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
-          // TODO approvedBlock is not equal to genesisBlock
-          genesis          <- ApprovedStore[F].getApprovedBlock
-          isGenesis        = genesis.exists(a => block.blockHash == a.candidate.block.blockHash)
-          invalidBlocksSet <- dag.invalidBlocks
-          invalidBlocks = invalidBlocksSet
-            .map(block => (block.blockHash, block.sender))
-            .toMap
           preStateHash     = ProtoUtil.preStateHash(block)
-          blockdata        = BlockData.fromBlock(block)
-          _                <- reportingRuntime.setBlockData(blockdata)
-          _                <- reportingRuntime.setInvalidBlocks(invalidBlocks)
-          invalidBlocksSet <- dag.invalidBlocks
-          unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
-          seenInvalidBlocksSet = invalidBlocksSet.filterNot(
-            block => unseenBlocksSet.contains(block.blockHash)
-          )
-          invalidBlocks = seenInvalidBlocksSet
-            .map(block => (block.blockHash, block.sender))
-            .toMap
+
+          // Block with empty justifications is genesis which is build with turned off cost accounting
+          withCostAccounting = block.justifications.nonEmpty || block.header.parentsHashList.nonEmpty
+
+          // Set Rholang runtime data
+          blockdata = BlockData.fromBlock(block)
+          _         <- reportingRuntime.setBlockData(blockdata)
+
+          // Reset runtime (in-memory) state
+          _ <- reportingRuntime.reset(Blake2b256Hash.fromByteString(preStateHash))
+
+          // Replay block deploys with reporting
           res <- replayDeploys(
                   reportingRuntime,
-                  preStateHash,
                   block.body.deploys,
                   block.body.systemDeploys,
-                  !isGenesis,
                   blockdata,
-                  invalidBlocks
+                  withCostAccounting
                 )
         } yield res
 
       private def replayDeploys(
           runtime: ReportingRuntime[F],
-          startHash: StateHash,
           terms: Seq[ProcessedDeploy],
           systemDeploys: Seq[ProcessedSystemDeploy],
-          withCostAccounting: Boolean,
           blockData: BlockData,
-          invalidBlocks: Map[BlockHash, Validator]
+          withCostAccounting: Boolean
       ): F[ReplayResult] =
         for {
-          _ <- runtime.reset(Blake2b256Hash.fromByteString(startHash))
-          _ <- runtime.setBlockData(blockData)
-          _ <- runtime.setInvalidBlocks(invalidBlocks)
-
           res <- terms.toList.traverse { term =>
                   Log[F].info(s"Replay user deploy ${PrettyPrinter.buildString(term.deploy.sig)}") *>
                     runtime
@@ -171,16 +151,8 @@ class ReportingRuntime[F[_]: Sync: Span](
     override val space: RhoReportingRspace[F],
     override val cost: _cost[F],
     override val blockDataRef: Ref[F, BlockData],
-    override val invalidBlocksParam: InvalidBlocks[F],
     override val mergeChs: Ref[F, Set[Par]]
-) extends ReplayRhoRuntimeImpl[F](
-      reducer,
-      space,
-      cost,
-      blockDataRef,
-      invalidBlocksParam,
-      mergeChs
-    ) {
+) extends ReplayRhoRuntimeImpl[F](reducer, space, cost, blockDataRef, mergeChs) {
   def getReport: F[Seq[Seq[ReportingEvent]]] = space.getReport
 }
 
@@ -210,8 +182,8 @@ object ReportingRuntime {
         implicit val c = cost
         createRhoEnv(reporting, mergeChs, Genesis.NonNegativeMergeableTagName, extraSystemProcesses)
       }
-      (reducer, blockRef, invalidBlocks) = rhoEnv
-      runtime                            = new ReportingRuntime[F](reducer, reporting, cost, blockRef, invalidBlocks, mergeChs)
-      _                                  <- bootstrapRegistry(runtime)
+      (reducer, blockRef) = rhoEnv
+      runtime             = new ReportingRuntime[F](reducer, reporting, cost, blockRef, mergeChs)
+      _                   <- bootstrapRegistry(runtime)
     } yield runtime
 }

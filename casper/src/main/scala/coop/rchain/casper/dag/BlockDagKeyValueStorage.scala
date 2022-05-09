@@ -137,26 +137,56 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         // TODO BlockDagStore inset method should be rewritten to only save to disk,
         //  all logic should be done on the state.
         //  This update of the state as a result of insert method should be removed.
-        val representation =
-          for {
-            // Take current DAG state / view of the DAG
-            latestMessages     <- latestMessagesIndex.toMap
-            dagSet             <- blockMetadataIndex.dagSet
-            childMap           <- blockMetadataIndex.childMapData
-            heightMap          <- blockMetadataIndex.heightMap
-            invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
-            lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
-            finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
-          } yield DagRepresentation(
-            dagSet,
-            latestMessages,
-            childMap,
-            heightMap,
-            invalidBlocks.map(_.blockHash),
-            lastFinalizedBlock,
-            finalizedBlocksSet
-          )
-        representation.flatTap(representationState.set)
+        for {
+          // Take current DAG state / view of the DAG
+          latestMessages     <- latestMessagesIndex.toMap
+          dagSet             <- blockMetadataIndex.dagSet
+          childMap           <- blockMetadataIndex.childMapData
+          heightMap          <- blockMetadataIndex.heightMap
+          invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
+          lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
+          finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
+          dag <- representationState.updateAndGet {
+                  dr =>
+                    val dagMsgSt = dr.dagMessageState
+
+                    // Update DAG messages state
+                    // TODO: temporary don't expect that all justifications are available in msgMap to satisfy the failing tests
+                    //  - with multi-parent finalizer all messages should be available
+                    val justificationsOpt =
+                      block.justifications
+                        .map(_.latestBlockHash)
+                        .map(dagMsgSt.msgMap.get)
+                        .sequence
+                        .map(_.toSet)
+
+                    val newDagMsgState = justificationsOpt
+                      .map { justifications =>
+                        val newMsg = dagMsgSt.createMessage(
+                          block.blockHash,
+                          block.body.state.blockNumber,
+                          block.sender,
+                          block.seqNum.toLong,
+                          block.body.state.bonds.map(b => (b.validator, b.stake)).toMap,
+                          justifications
+                        )
+                        dagMsgSt.insertMsg(newMsg)
+                      }
+                      .getOrElse(dagMsgSt)
+
+                    // Updated DagRepresentation
+                    dr.copy(
+                      dagSet,
+                      latestMessages,
+                      childMap,
+                      heightMap,
+                      invalidBlocks.map(_.blockHash),
+                      lastFinalizedBlock,
+                      finalizedBlocksSet,
+                      newDagMsgState
+                    )
+                }
+        } yield dag
       }
     )
   }

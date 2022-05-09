@@ -320,7 +320,7 @@ class NodeRunning[F[_]
         // Create approved block from last finalized block
         lastFinalizedBlock = for {
           lfBlock           <- BlockStore[F].getUnsafe(lfBlockHash)
-          lastApprovedBlock = ApprovedBlock(ApprovedBlockCandidate(lfBlock, 0), List.empty)
+          lastApprovedBlock = ApprovedBlock(lfBlock)
         } yield lastApprovedBlock
 
         // TODO: fix finalized block depending if trim state requested
