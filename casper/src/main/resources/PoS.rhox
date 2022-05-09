@@ -85,7 +85,8 @@ new PoS,
     PendingRewards, MergeIntMaps, treeHashMapCh,
     sysAuthTokenOps(`sys:authToken:ops`),
     multiSigRevVaultCh, coopVaultCh,
-    uriOut, sumFromPair
+    uriOut, sumFromPair,
+    deployerId(`rho:rchain:deployerId`)
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -707,9 +708,8 @@ in {
     }|
     // Registers signed write-only PoS contract bundle.
     rs!(
-      "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),
       (9223372036854775807, bundle+{*PoS}),
-      "3044022054ff4bae3984252b116e41e28d98bb5533eaa39aec2729228159166e2784f641022066a0fd99e7ea33df812fab095cbe61250f9548bce6da3ec4c6a90c741b94087f".hexToBytes(),
+      *deployerId,
       *uriOut)
   }
 }

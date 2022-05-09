@@ -22,6 +22,7 @@ match (
     insertSigned(`rho:registry:insertSigned:secp256k1`),
     insertArbitrary(`rho:registry:insertArbitrary`),
     sign(`rho:test:crypto:secp256k1Sign`),
+    makeDeployerID(`rho:test:deployerId:make`),
     secpVerify(`rho:crypto:secp256k1Verify`),
     blake2b256(`rho:crypto:blake2b256Hash`),
     test_secp,
@@ -40,9 +41,8 @@ match (
           ("Verifying a signature should work", *test_secp),
           ("InsertSigned and lookup should work", *test_insertSignedAndLookup),
           ("InsertArbitrary and lookup should work", *test_insertArbitraryAndLookup),
-          ("InsertArbitrary should work with increased nonce", *test_insertSignedValidNonce),
-          ("InsertArbitrary should return Nil for invalid nonce", *test_insertSignedInvalidNonce),
-          ("InsertArbitrary should return Nil for invalid signature", *test_insertSignedInvalidSig),
+          ("InsertSigned should work with increased nonce", *test_insertSignedValidNonce),
+          ("InsertSigned should return Nil for invalid nonce", *test_insertSignedInvalidNonce),
           ("Lookup should return Nil for unknown uri", *test_unknownLookup)
         ])
     } |
@@ -69,7 +69,7 @@ match (
 
     contract test_insertSignedAndLookup(rhoSpec, _, ackCh) = {
       new uriCh, valueCh in {
-        insertSignedHelper!(1, "foo", pk1, sk1, *uriCh) |
+        insertSignedHelper!(1, "foo", pk1, *uriCh) |
         for (@uri <- uriCh) {
           lookup!(uri, *valueCh) |
           rhoSpec!("assert", ((1, "foo"), "== <-", *valueCh), "Expecting a tuple with the inserted nonce and data", *ackCh)
@@ -89,9 +89,9 @@ match (
 
     contract test_insertSignedValidNonce(rhoSpec, _, ackCh) = {
       new uriCh, retCh in {
-        insertSignedHelper!(42, "foo", pk2, sk2, *uriCh) |
+        insertSignedHelper!(42, "foo", pk2, *uriCh) |
         for (@uri <- uriCh) {
-          insertSignedHelper!(43, "bar", pk2, sk2, *retCh) |
+          insertSignedHelper!(43, "bar", pk2, *retCh) |
           rhoSpec!("assert", (uri, "== <-", *retCh), "Expecting the uris to be the same", *ackCh)
         }
       }
@@ -99,18 +99,11 @@ match (
 
     contract test_insertSignedInvalidNonce(rhoSpec, _, ackCh) = {
       new uriCh, retCh in {
-        insertSignedHelper!(42, "foo", pk3, sk3, *uriCh) |
+        insertSignedHelper!(42, "foo", pk3, *uriCh) |
         for (@uri <- uriCh) {
-          insertSignedHelper!(42, "bar", pk3, sk3, *retCh) |
+          insertSignedHelper!(42, "bar", pk3, *retCh) |
           rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
         }
-      }
-    } |
-
-    contract test_insertSignedInvalidSig(rhoSpec, _, ackCh) = {
-      new retCh in {
-        insertSigned!(pk3, (1, "foo"), "foo".toByteArray(), *retCh) |
-        rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
       }
     } |
 
@@ -121,14 +114,11 @@ match (
       }
     } |
 
-    contract insertSignedHelper(@nonce, @data, @pk, @sk, ret) = {
-      new hashCh, signCh in {
-        blake2b256!((nonce, data).toByteArray(), *hashCh) |
-        for (@hash <- hashCh) {
-          sign!(hash, sk, *signCh) |
-          for (@sig <- signCh) {
-            insertSigned!(pk, (nonce, data), sig, *ret)
-          }
+    contract insertSignedHelper(@nonce, @data, @pubkey, ret) = {
+      new deployerCh, signCh in {
+        makeDeployerID!("deployerId", pubkey, *deployerCh) |
+        for (@deployerID <- deployerCh) {
+          insertSigned!((nonce, data), deployerID, *ret)
         }
       }
     }

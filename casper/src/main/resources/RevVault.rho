@@ -23,7 +23,8 @@ new
   _create,
   _revVault,
   _transferTemplate,
-  _depositTemplate
+  _depositTemplate,
+  deployerId(`rho:rchain:deployerId`)
 in {
   rl!(`rho:rchain:makeMint`, *MakeMintCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
@@ -270,9 +271,8 @@ in {
           } |
 
           rs!(
-            "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e".hexToBytes(),
             (9223372036854775807, bundle+{*RevVault}),
-            "30450221008af89d676c4cd6b3d41e90da89b03a1e83f161fc8c4ad22c9edc903db3a9f4c402204e35e29e40a5f2b2f431d3cc63b87fb52c33716b3ce331a2a19b9660c3690c18".hexToBytes(),
+            *deployerId,
             *uriOut
           )
         }
