@@ -17,7 +17,7 @@ import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 import scala.io.Source
 
-class AuthKeyUpdate extends FlatSpec with Matchers with Inspectors {
+class AuthKeyUpdateSpec extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 

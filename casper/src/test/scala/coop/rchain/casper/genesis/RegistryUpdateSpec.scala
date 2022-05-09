@@ -15,7 +15,7 @@ import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 import scala.io.Source
 
-class RegistryUpdate extends FlatSpec with Matchers with Inspectors {
+class RegistryUpdateSpec extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 

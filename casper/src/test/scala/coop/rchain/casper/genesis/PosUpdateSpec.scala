@@ -19,7 +19,7 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
-class PosUpdate extends FlatSpec with Matchers with Inspectors {
+class PosUpdateSpec extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 
