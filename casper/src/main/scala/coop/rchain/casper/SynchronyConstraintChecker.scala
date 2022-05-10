@@ -7,7 +7,6 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper.blocks.proposer.{CheckProposeConstraintsResult, NotEnoughNewBlocks}
-import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
@@ -22,16 +21,20 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: 
   ): F[Set[Validator]] =
     for {
       latestMessages <- dag.latestMessageHashes
-      seenSendersSince = lastProposed.justifications.flatMap {
-        case Justification(validator, latestBlockHash) =>
-          if (validator != lastProposed.sender && latestMessages(validator) != latestBlockHash) {
-            // Since we would have fetched missing justifications initially, it can only mean
-            // that we have received at least one new block since then
-            Some(validator)
-          } else {
-            None
-          }
-      }.toSet
+      seenSendersSince <- lastProposed.justifications
+                           .traverse(hash => dag.lookupUnsafe(hash).map(b => (b.sender, hash)))
+                           .map { justifications =>
+                             justifications.flatMap {
+                               case (validator, latestBlockHash) =>
+                                 if (validator != lastProposed.sender && latestMessages(validator) != latestBlockHash) {
+                                   // Since we would have fetched missing justifications initially, it can only mean
+                                   // that we have received at least one new block since then
+                                   Some(validator)
+                                 } else {
+                                   None
+                                 }
+                             }.toSet
+                           }
     } yield seenSendersSince
 
   def check(
