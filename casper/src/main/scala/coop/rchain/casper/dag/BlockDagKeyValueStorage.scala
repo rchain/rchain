@@ -245,19 +245,39 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   // Map of deploys being executed and execution results
   private val execMap    = TrieMap.empty[DeployId, Option[String]]
   private val expiredMap = TrieMap.empty[DeployId, Unit]
-  def deployStatus(d: DeployId): F[String] =
-    for {
-      finSet <- blockMetadataIndex.finalizedBlockSet
-      r <- BlockDagKeyValueStorage.deployStatus(
-            d,
-            deployStore,
-            deployIndex,
-            invalidBlocksIndex,
-            finSet,
-            execMap.toMap,
-            expiredMap.toMap.keySet
-          )
-    } yield r
+
+  def deployStatus(d: DeployId): F[String] = blockMetadataIndex.finalizedBlockSet.flatMap {
+    finalizedSet =>
+      val pooledF   = deployStore.contains(d)
+      val expiredF  = Sync[F].delay(execMap.contains(d))
+      val includedF = deployIndex.contains(d)
+      val orphanedF = invalidBlocksIndex.contains(d)
+      val finalizedF = deployIndex.get1(d).map { hashOpt =>
+        hashOpt.exists(h => finalizedSet.contains(h))
+      }
+      val inProgress = if (execMap.contains(d)) {
+        val done = execMap(d).nonEmpty
+        val r =
+          if (done) s"Executed, result: ${execMap(d).get}"
+          else "Execution is in progress."
+        r.some
+      } else none[String]
+
+      Stream(
+        inProgress.pure,
+        pooledF.map(v => v.guard[Option].as("Pooled")),
+        expiredF.map(v => v.guard[Option].as("Expired")),
+        orphanedF.map(v => v.guard[Option].as("Orphaned")),
+        includedF.map(v => v.guard[Option].as("Included")),
+        finalizedF.map(v => v.guard[Option].as("Finalized"))
+      ).covary[F]
+        .map(Stream.eval)
+        .flatten
+        .collectFirst { case Some(status) => status }
+        .compile
+        .last
+        .map(_.getOrElse("Unknown"))
+  }
 
   def commitExecutionStarted(
       d: DeployId
@@ -363,46 +383,6 @@ object BlockDagKeyValueStorage {
       stores.deployPool,
       stores.invalidBlocks
     )
-
-  def deployStatus[F[_]: Sync](
-      d: DeployId,
-      deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]],
-      deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
-      invalidBlocksIndex: KeyValueTypedStore[F, DeployId, BlockMetadata],
-      finalizedSet: Set[BlockHash],
-      executedMap: Map[DeployId, Option[String]],
-      expiredSet: Set[DeployId]
-  ): F[String] = {
-    val pooledF   = deployStore.collect { case (dId, _) => dId }.map(_.contains(d))
-    val expiredF  = Sync[F].delay(expiredSet.contains(d))
-    val includedF = deployIndex.collect { case (dId, _) => dId }.map(_.contains(d))
-    val orphanedF = invalidBlocksIndex.collect { case (dId, _) => dId }.map(_.contains(d))
-    val finalizedF = deployIndex.get1(d).map { hashOpt =>
-      hashOpt.exists(h => finalizedSet.contains(h))
-    }
-    val inProgress = if (executedMap.contains(d)) {
-      val done = executedMap(d).nonEmpty
-      val r =
-        if (done) s"Executed, result: ${executedMap(d).get}"
-        else "Execution is in progress."
-      r.some
-    } else none[String]
-
-    Stream(
-      inProgress.pure,
-      pooledF.map(v => v.guard[Option].as("Pooled")),
-      expiredF.map(v => v.guard[Option].as("Expired")),
-      orphanedF.map(v => v.guard[Option].as("Orphaned")),
-      includedF.map(v => v.guard[Option].as("Included")),
-      finalizedF.map(v => v.guard[Option].as("Finalized"))
-    ).covary[F]
-      .map(Stream.eval)
-      .flatten
-      .collectFirst { case Some(status) => status }
-      .compile
-      .last
-      .map(_.getOrElse("Unknown"))
-  }
 
   def removeExpiredFromPool[F[_]: Monad](
       deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]],
