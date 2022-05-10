@@ -9,6 +9,7 @@ import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.syntax.RuntimeSyntax.UserTransition
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -61,7 +62,9 @@ trait ComputeMerge {
             baseDeploysRes <- baseDeploySources.toList.traverse(
                                runtime.processDeployWithMergeableData
                              )
-            (baseDeploys, baseMergeChs) = baseDeploysRes.unzip
+            (baseDeploys, baseMergeChs, _) = baseDeploysRes
+              .map(UserTransition.unapply(_).get)
+              .unzip3
             _ <- Sync[F]
                   .raiseError(
                     new Exception(s"Process deploy ${baseDeploys.filter(_.isFailed)} failed")
@@ -71,7 +74,9 @@ trait ComputeMerge {
             leftDeploysRes <- leftDeploySources.toList.traverse(
                                runtime.processDeployWithMergeableData
                              )
-            (leftDeploys, leftMergeChs) = leftDeploysRes.unzip
+            (leftDeploys, leftMergeChs, _) = leftDeploysRes
+              .map(UserTransition.unapply(_).get)
+              .unzip3
             _ <- Sync[F]
                   .raiseError(
                     new Exception(s"Process deploy ${leftDeploys.filter(_.isFailed)} failed")
@@ -82,7 +87,9 @@ trait ComputeMerge {
             rightDeploysRes <- rightDeploySources.toList.traverse(
                                 runtime.processDeployWithMergeableData
                               )
-            (rightDeploys, rightMergeChs) = rightDeploysRes.unzip
+            (rightDeploys, rightMergeChs, _) = rightDeploysRes
+              .map(UserTransition.unapply(_).get)
+              .unzip3
             _ <- Sync[F]
                   .raiseError(
                     new Exception(s"Process deploy ${rightDeploys.filter(_.isFailed)} failed")

@@ -153,7 +153,8 @@ object GenesisBuilder {
       kvsManager     <- mkTestRNodeStoreManager[Task](storageDirectory)
       rStore         <- kvsManager.rSpaceStores
       mStore         <- RuntimeManager.mergeableStore(kvsManager)
-      runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName)
+      t              = RuntimeManager.noOpExecutionTracker[Task]
+      runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName, t)
       genesis <- {
         implicit val rm = runtimeManager
         Genesis.createGenesisBlock[Task](genesisParameters)

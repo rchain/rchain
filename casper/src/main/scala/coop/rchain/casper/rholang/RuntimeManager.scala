@@ -1,12 +1,15 @@
 package coop.rchain.casper.rholang
 
-import cats.Parallel
+import cats.{Applicative, Parallel}
 import cats.data.EitherT
 import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
+import coop.rchain.casper.rholang.RuntimeManager.{ExecutionTracker, MergeableStore, StateHash}
+import coop.rchain.casper.rholang.syntax.RuntimeSyntax.{SystemTransition, UserTransition}
 import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.signatures.Signed
@@ -20,7 +23,7 @@ import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{
   deployMergeableDataSeqCodec,
   DeployMergeableData
 }
-import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
+import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -75,7 +78,8 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     replaySpace: RhoReplayISpace[F],
     historyRepo: RhoHistoryRepository[F],
     mergeableStore: MergeableStore[F],
-    mergeableTagName: Par
+    mergeableTagName: Par,
+    executionTracker: ExecutionTracker[F]
 ) extends RuntimeManager[F] {
 
   def spawnRuntime: F[RhoRuntime[F]] =
@@ -108,8 +112,13 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     for {
-      runtime                                 <- spawnRuntime
-      computed                                <- runtime.computeState(startHash, terms, systemDeploys, blockData)
+      runtime  <- spawnRuntime
+      _        <- terms.map(_.sig).toList.traverse(executionTracker.callbackExecutionStarted)
+      computed <- runtime.computeState(startHash, terms, systemDeploys, blockData)
+      _ <- {
+        val v = computed._2.map(tx => (tx.deploy.deploy.sig, tx.evalResult))
+        v.toList.traverse((executionTracker.callbackExecutionComplete _).tupled)
+      }
       (stateHash, usrDeployRes, sysDeployRes) = computed
       (usrProcessed, usrMergeable, _) = usrDeployRes
         .map(UserTransition.unapply(_).get)
@@ -139,7 +148,8 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       .flatMap(_.computeGenesis(terms, blockTime, blockNumber))
       .flatMap {
         case (preState, stateHash, processed) =>
-          val (processedDeploys, mergeableChs) = processed.unzip
+          val (processedDeploys, mergeableChs, _) =
+            processed.map(UserTransition.unapply(_).get).unzip3
 
           // Convert from final to diff values and persist mergeable (number) channels for post-state hash
           val preStateHash  = preState.toBlake2b256Hash
@@ -157,7 +167,12 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
       val replayOp = replayRuntime
-        .replayComputeState(startHash)(terms, systemDeploys, blockData, withCostAccounting)
+        .replayComputeState(startHash)(
+          terms,
+          systemDeploys,
+          blockData,
+          withCostAccounting
+        )
       EitherT(replayOp).semiflatMap {
         case (stateHash, mergeableChs) =>
           // Block data used for mergeable key
@@ -246,24 +261,38 @@ object RuntimeManager {
       replayRSpace: RhoReplayISpace[F],
       historyRepo: RhoHistoryRepository[F],
       mergeableStore: MergeableStore[F],
-      mergeableTagName: Par
+      mergeableTagName: Par,
+      executionTracker: ExecutionTracker[F]
   ): F[RuntimeManagerImpl[F]] =
     Sync[F].delay(
-      RuntimeManagerImpl(rSpace, replayRSpace, historyRepo, mergeableStore, mergeableTagName)
+      RuntimeManagerImpl(
+        rSpace,
+        replayRSpace,
+        historyRepo,
+        mergeableStore,
+        mergeableTagName,
+        executionTracker
+      )
     )
 
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
-      mergeableTagName: Par
-  )(implicit ec: ExecutionContext): F[RuntimeManagerImpl[F]] =
-    createWithHistory(store, mergeableStore, mergeableTagName).map(_._1)
+      mergeableTagName: Par,
+      executionTracker: ExecutionTracker[F]
+  )(
+      implicit ec: ExecutionContext
+  ): F[RuntimeManagerImpl[F]] =
+    createWithHistory(store, mergeableStore, mergeableTagName, executionTracker).map(_._1)
 
   def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
-      mergeableTagName: Par
-  )(implicit ec: ExecutionContext): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
+      mergeableTagName: Par,
+      executionTracker: ExecutionTracker[F]
+  )(
+      implicit ec: ExecutionContext
+  ): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
@@ -272,8 +301,14 @@ object RuntimeManager {
       .flatMap {
         case (rSpacePlay, rSpaceReplay) =>
           val historyRepo = rSpacePlay.historyRepo
-          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo, mergeableStore, mergeableTagName)
-            .map((_, historyRepo))
+          RuntimeManager[F](
+            rSpacePlay,
+            rSpaceReplay,
+            historyRepo,
+            mergeableStore,
+            mergeableTagName,
+            executionTracker
+          ).map((_, historyRepo))
       }
   }
 
@@ -289,4 +324,16 @@ object RuntimeManager {
       scodec.codecs.bytes,
       deployMergeableDataSeqCodec
     )
+
+  // TODO add more callbacks (system deploys, maybe something else)
+  trait ExecutionTracker[F[_]] {
+    def callbackExecutionStarted(d: DeployId): F[Unit]
+    def callbackExecutionComplete(d: DeployId, res: EvaluateResult): F[Unit]
+  }
+
+  def noOpExecutionTracker[F[_]: Applicative]: ExecutionTracker[F] =
+    new ExecutionTracker[F] {
+      override def callbackExecutionStarted(d: DeployId): F[Unit]                       = ().pure[F]
+      override def callbackExecutionComplete(d: DeployId, res: EvaluateResult): F[Unit] = ().pure[F]
+    }
 }
