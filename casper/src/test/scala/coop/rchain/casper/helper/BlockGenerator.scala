@@ -125,7 +125,7 @@ trait BlockGenerator {
       postStateHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0
+      seqNum: Long = 0L
   ): F[BlockMessage] =
     getRandomBlock(
       setParentsHashList = parentsHashList.some,
@@ -148,7 +148,7 @@ trait BlockGenerator {
       tsHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0
+      seqNum: Long = 0
   ): F[BlockMessage] =
     for {
       now <- Time[F].currentMillis
@@ -177,7 +177,7 @@ trait BlockGenerator {
       postStateHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0,
+      seqNum: Long = 0,
       invalid: Boolean = false
   ): F[BlockMessage] =
     for {
@@ -195,15 +195,15 @@ trait BlockGenerator {
                 seqNum
               )
       dag <- BlockDagStorage[F].getRepresentation
-      nextCreatorSeqNum <- if (block.seqNum == 0)
-                            dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
+      nextCreatorSeqNum <- if (block.seqNum == 0L)
+                            dag.latestMessage(block.sender).map(_.fold(-1L)(_.seqNum) + 1L)
                           else block.seqNum.pure[F]
       nextId <- parentsHashList.toList
                  .filterNot(dag.invalidBlocksSet)
                  .traverse(
                    BlockStore[F].getUnsafe(_).map(_.body.state.blockNumber)
                  )
-                 .map(_.maximumOption.getOrElse(0L) + 1)
+                 .map(_.maximumOption.getOrElse(0L) + 1L)
       newPostState = block.body.state.copy(blockNumber = nextId)
       modifiedBlock = block
         .copy(
@@ -219,7 +219,7 @@ trait BlockGenerator {
       justifications: Seq[BlockMessage],
       validator: Validator,
       bonds: Seq[Bond],
-      seqNum: Int = 0,
+      seqNum: Long = 0,
       invalid: Boolean = false,
       shardId: String
   ): F[BlockMessage] =

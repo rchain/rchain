@@ -382,7 +382,6 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         ) // Invalid seq num
 
         blockWithInvalidJustification <- buildBlockWithInvalidJustification(
-                                          nodes,
                                           deploysWithCost,
                                           signedInvalidBlock
                                         )
@@ -491,7 +490,6 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
   }
 
   private def buildBlockWithInvalidJustification(
-      nodes: IndexedSeq[TestNode[Effect]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
@@ -523,16 +521,10 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         sigAlgorithm = "",
         shardId = "root"
       )
-    nodes(1).blockDagStorage.getRepresentation.flatMap { dag =>
-      val sender       = blockThatPointsToInvalidBlock.sender
-      implicit val bds = nodes(1).blockDagStorage
-      for {
-        latestMessageOpt <- dag.latestMessage(sender)
-        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        block = ValidatorIdentity(defaultValidatorSks(1)).signBlock(
-          blockThatPointsToInvalidBlock
-        )
-      } yield block
-    }
+    ValidatorIdentity(defaultValidatorSks(1))
+      .signBlock(
+        blockThatPointsToInvalidBlock
+      )
+      .pure[Task]
   }
 }

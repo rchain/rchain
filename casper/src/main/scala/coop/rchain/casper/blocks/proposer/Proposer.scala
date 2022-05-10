@@ -22,16 +22,16 @@ import fs2.Stream
 sealed abstract class ProposerResult
 object ProposerEmpty                                                         extends ProposerResult
 final case class ProposerSuccess(status: ProposeStatus, block: BlockMessage) extends ProposerResult
-final case class ProposerFailure(status: ProposeStatus, seqNumber: Int)      extends ProposerResult
-final case class ProposerStarted(seqNumber: Int)                             extends ProposerResult
+final case class ProposerFailure(status: ProposeStatus, seqNumber: Long)     extends ProposerResult
+final case class ProposerStarted(seqNumber: Long)                            extends ProposerResult
 
 object ProposerResult {
   def empty: ProposerResult = ProposerEmpty
   def success(status: ProposeStatus, block: BlockMessage): ProposerResult =
     ProposerSuccess(status, block)
-  def failure(status: ProposeStatus, seqNumber: Int): ProposerResult =
+  def failure(status: ProposeStatus, seqNumber: Long): ProposerResult =
     ProposerFailure(status, seqNumber)
-  def started(seqNumber: Int): ProposerResult = ProposerStarted(seqNumber)
+  def started(seqNumber: Long): ProposerResult = ProposerStarted(seqNumber)
 }
 
 class Proposer[F[_]: Concurrent: Log: Span](
@@ -112,9 +112,9 @@ class Proposer[F[_]: Concurrent: Log: Span](
       isAsync: Boolean,
       proposeIdDef: Deferred[F, ProposerResult]
   ): F[(ProposeResult, Option[BlockMessage])] = {
-    def getValidatorNextSeqNumber(cs: CasperSnapshot): Int = {
+    def getValidatorNextSeqNumber(cs: CasperSnapshot): Long = {
       val valBytes = ByteString.copyFrom(validator.publicKey.bytes)
-      cs.maxSeqNums.getOrElse(valBytes, 0) + 1
+      cs.maxSeqNums.getOrElse(valBytes, 0L) + 1L
     }
     for {
       // get snapshot to serve as a base for propose

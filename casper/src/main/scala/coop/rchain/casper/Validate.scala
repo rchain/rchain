@@ -316,9 +316,9 @@ object Validate {
       dag                           <- BlockDagStorage[F].getRepresentation
       justifications                <- b.justifications.traverse(dag.lookupUnsafe(_))
       creatorJustificationOpt       = justifications.find(_.sender == b.sender)
-      creatorJustificationSeqNumber = creatorJustificationOpt.map(_.seqNum).getOrElse(-1)
+      creatorJustificationSeqNumber = creatorJustificationOpt.map(_.seqNum).getOrElse(-1L)
       number                        = b.seqNum
-      result                        = creatorJustificationSeqNumber + 1 == number
+      result                        = creatorJustificationSeqNumber + 1L == number
       status <- if (result) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
                } else {

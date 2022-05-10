@@ -7,7 +7,7 @@ final case class BlockMetadata(
     blockHash: ByteString,
     blockNum: Long,
     sender: ByteString,
-    seqNum: Int,
+    seqNum: Long,
     justifications: List[ByteString],
     weightMap: Map[ByteString, Long],
     invalid: Boolean,

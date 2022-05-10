@@ -2,7 +2,7 @@ package coop.rchain.casper.util
 
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.{ByteString, Int32Value, StringValue}
+import com.google.protobuf.{ByteString, Int64Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
@@ -88,13 +88,13 @@ object ProtoUtil {
     Header(parentHashes.toList, timestamp)
 
   def unsignedBlockProto(
+      version: Int,
       sender: PublicKey,
       body: Body,
       header: Header,
       justifications: List[BlockHash],
       shardId: String,
-      version: Int,
-      seqNum: Int = 0
+      seqNum: Long
   ): BlockMessage = {
     val block = BlockMessage(
       version,
@@ -121,7 +121,7 @@ object ProtoUtil {
       blockMessage.body.toProto.toByteArray,
       blockMessage.sender.toByteArray,
       StringValue.of(blockMessage.sigAlgorithm).toByteArray,
-      Int32Value.of(blockMessage.seqNum).toByteArray,
+      Int64Value.of(blockMessage.seqNum).toByteArray,
       StringValue.of(blockMessage.shardId).toByteArray,
       blockMessage.extraBytes.toByteArray
     )

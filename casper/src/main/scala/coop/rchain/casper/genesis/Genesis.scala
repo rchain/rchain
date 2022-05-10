@@ -103,9 +103,10 @@ object Genesis {
       systemDeploys = List.empty
     )
     val version = 1 //FIXME make this part of Genesis, and pass it from upstream
+    val seqNum  = 0L
     val header  = Header(List.empty[StateHash], genesis.blockTimestamp)
 
-    unsignedBlockProto(genesis.sender, body, header, List.empty, genesis.shardId, version)
+    unsignedBlockProto(version, genesis.sender, body, header, List.empty, genesis.shardId, seqNum)
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {

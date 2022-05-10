@@ -73,8 +73,8 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
       baseState: StateHash,
       payerKey: PrivateKey,
       validator: PublicKey,
-      seqNum: Int = 0,
-      blockNum: Long = 0
+      seqNum: Long = 0L,
+      blockNum: Long = 0L
   ): Task[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] = {
     val payerAddr = RevAddress.fromPublicKey(Secp256k1.toPublic(payerKey)).get.address.toBase58
     // random address for recipient
@@ -95,7 +95,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
     } yield r
   }
 
-  def mkBlocksSteams(preStateHash: StateHash, seqNum: Int, blockNum: Long)(
+  def mkBlocksSteams(preStateHash: StateHash, seqNum: Long, blockNum: Long)(
       implicit runtimeManager: RuntimeManager[Task]
   ) = {
     val pksWithSingleConflict = {
@@ -134,17 +134,17 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
     }.toList
   }
 
-  def mkBlocks(stateHash: StateHash, seqNum: Int, blockNum: Long, n: Int)(
+  def mkBlocks(stateHash: StateHash, seqNum: Long, blockNum: Long, n: Int)(
       implicit runtimeManager: RuntimeManager[Task]
   ) =
     mkBlocksSteams(stateHash, seqNum, blockNum).get(n.toLong).get.compile.lastOrError
 
-  def mkHeadBlock(stateHash: StateHash, seqNum: Int, blockNum: Long)(
+  def mkHeadBlock(stateHash: StateHash, seqNum: Long, blockNum: Long)(
       implicit runtimeManager: RuntimeManager[Task]
   ) =
     mkBlocksSteams(stateHash, seqNum, blockNum).head.compile.lastOrError
 
-  def mkTailBlocks(stateHash: StateHash, seqNum: Int, blockNum: Long)(
+  def mkTailBlocks(stateHash: StateHash, seqNum: Long, blockNum: Long)(
       implicit runtimeManager: RuntimeManager[Task]
   ) =
     Stream

@@ -116,7 +116,7 @@ final case class BlockMessage(
     version: Int,
     blockHash: ByteString,
     sender: ByteString,
-    seqNum: Int,
+    seqNum: Long,
     header: Header,
     body: Body,
     justifications: List[BlockHash],

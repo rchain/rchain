@@ -55,7 +55,7 @@ object SystemProcesses {
       timeStamp: Long,
       blockNumber: Long,
       sender: PublicKey,
-      seqNum: Int
+      seqNum: Long
   )
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))

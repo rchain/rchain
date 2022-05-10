@@ -43,7 +43,7 @@ object BlockCreator {
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-      val nextSeqNum     = s.maxSeqNums.get(selfId).map(_ + 1).getOrElse(0)
+      val nextSeqNum     = s.maxSeqNums.get(selfId).map(_ + 1L).getOrElse(0L)
       val nextBlockNum   = s.maxBlockNum + 1
       val parents        = s.parents
       val justifications = s.justifications
@@ -61,7 +61,7 @@ object BlockCreator {
           validUnique = valid -- s.deploysInScope
         } yield validUnique
 
-      def prepareSlashingDeploys(seqNum: Int): F[Seq[SlashDeploy]] =
+      def prepareSlashingDeploys(seqNum: Long): F[Seq[SlashDeploy]] =
         for {
           ilm <- s.dag.invalidLatestMessages
           // if the node is already not active as per main parent, the node won't slash once more
@@ -195,7 +195,15 @@ object BlockCreator {
         systemDeploys.toList
       )
     val header = Header(parents.toList, blockData.timeStamp)
-    ProtoUtil.unsignedBlockProto(sender, body, header, justifications, shardId, blockData.seqNum)
+    ProtoUtil.unsignedBlockProto(
+      version,
+      sender,
+      body,
+      header,
+      justifications,
+      shardId,
+      blockData.seqNum
+    )
   }
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =

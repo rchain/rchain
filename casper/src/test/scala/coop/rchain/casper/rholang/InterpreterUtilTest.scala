@@ -67,7 +67,7 @@ class InterpreterUtilTest
       dag: DagRepresentation,
       runtimeManager: RuntimeManager[F],
       blockNumber: Long = 0L,
-      seqNum: Int = 0
+      seqNum: Long = 0
   ): F[
     Either[
       Throwable,
@@ -621,8 +621,8 @@ class InterpreterUtilTest
                                 deploys,
                                 dag1,
                                 runtimeManager,
-                                (i + 1).toLong,
-                                (i + 1)
+                                i + 1L,
+                                i + 1L
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
           block <- createBlock[Task](
@@ -631,7 +631,7 @@ class InterpreterUtilTest
                     deploys = processedDeploys,
                     postStateHash = computedTsHash,
                     preStateHash = preStateHash,
-                    seqNum = i + 1
+                    seqNum = i + 1L
                   )
           dag2 <- blockDagStorage.getRepresentation
 
@@ -710,8 +710,8 @@ class InterpreterUtilTest
                                 deploys,
                                 dag1,
                                 runtimeManager,
-                                (i + 1).toLong,
-                                (i + 1)
+                                i + 1L,
+                                i + 1L
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
           block <- createBlock[Task](
@@ -720,7 +720,7 @@ class InterpreterUtilTest
                     deploys = processedDeploys,
                     postStateHash = computedTsHash,
                     preStateHash = preStateHash,
-                    seqNum = i + 1
+                    seqNum = i + 1L
                   )
           dag2 <- blockDagStorage.getRepresentation
           validateResult <- validateBlockCheckpoint[Task](

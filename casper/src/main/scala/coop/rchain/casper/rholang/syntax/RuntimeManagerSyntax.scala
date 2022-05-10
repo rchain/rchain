@@ -29,7 +29,7 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
   /**
     * Load mergeable channels from store
     */
-  def loadMergeableChannels(stateHashBS: StateHash, creator: Array[Byte], seqNum: Int)(
+  def loadMergeableChannels(stateHashBS: StateHash, creator: Array[Byte], seqNum: Long)(
       implicit s: Sync[F]
   ): F[Seq[NumberChannelsDiff]] = {
     val stateHash = stateHashBS.toBlake2b256Hash
@@ -60,7 +60,7 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
   def saveMergeableChannels(
       postStateHash: Blake2b256Hash,
       creator: Array[Byte],
-      seqNum: Int,
+      seqNum: Long,
       channelsData: Seq[NumberChannelsEndVal],
       // Used to calculate value difference from final values
       preStateHash: Blake2b256Hash

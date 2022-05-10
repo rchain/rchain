@@ -20,7 +20,7 @@ final case class CasperSnapshot(
     justifications: Set[Justification],
     deploysInScope: Set[Signed[DeployData]],
     maxBlockNum: Long,
-    maxSeqNums: Map[Validator, Int],
+    maxSeqNums: Map[Validator, Long],
     onChainState: OnChainCasperState
 )
 

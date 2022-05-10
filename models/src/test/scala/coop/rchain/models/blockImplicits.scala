@@ -111,7 +111,7 @@ object blockImplicits {
 
   def blockElementGen(
       setBlockNumber: Option[Long] = Some(0L),
-      setSeqNumber: Option[Int] = Some(0),
+      setSeqNumber: Option[Long] = Some(0L),
       setPreStateHash: Option[StateHash] = None,
       setPostStateHash: Option[StateHash] = None,
       setValidator: Option[Validator] = None,
@@ -206,7 +206,7 @@ object blockImplicits {
 
   def getRandomBlock(
       setBlockNumber: Option[Long] = Some(0L),
-      setSeqNumber: Option[Int] = Some(0),
+      setSeqNumber: Option[Long] = Some(0L),
       setPreStateHash: Option[StateHash] = None,
       setPostStateHash: Option[StateHash] = None,
       setValidator: Option[Validator] = None,

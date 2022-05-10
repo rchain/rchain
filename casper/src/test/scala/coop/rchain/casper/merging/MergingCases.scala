@@ -45,7 +45,7 @@ class MergingCases extends AnyFlatSpec with Matchers {
         val payer1Key              = genesisContext.genesisVaults.head._1
         val payer2Key              = genesisContext.genesisVaults.tail.head._1
         val stateTransitionCreator = genesisContext.validatorKeyPairs.head._2
-        val seqNum                 = 1
+        val seqNum                 = 1L
         val blockNum               = 1L
 
         for {
