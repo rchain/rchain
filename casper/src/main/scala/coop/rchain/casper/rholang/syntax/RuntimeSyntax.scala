@@ -105,7 +105,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       startHash: StateHash,
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      blockData: BlockData,
+      blockData: BlockData
   )(
       implicit s: Sync[F],
       span: Span[F],
