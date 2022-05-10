@@ -97,22 +97,16 @@ object RadixTree {
       val calcSize = node.foldLeft(0) {
         case (size, EmptyItem) => size
 
-        case (size, Leaf(leafPrefix, value)) =>
+        case (size, Leaf(leafPrefix, _)) =>
           val sizePrefix = leafPrefix.size.toInt
           assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
-          assert(
-            value.bytes.size == defSize,
-            "Error during serialization: size of leafValue not equal 32."
-          )
+          // No need for validation size of value because the size of Blake2b256Hash is always 32 bytes
           size + headSize + sizePrefix + defSize
 
-        case (size, NodePtr(ptrPrefix, ptr)) =>
+        case (size, NodePtr(ptrPrefix, _)) =>
           val sizePrefix = ptrPrefix.size.toInt
           assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
-          assert(
-            ptr.bytes.size == defSize,
-            "Error during serialization: size of ptrPrefix not equal 32."
-          )
+          // No need for validation size of value because the size of Blake2b256Hash is always 32 bytes
           size + headSize + sizePrefix + defSize
       }
 
