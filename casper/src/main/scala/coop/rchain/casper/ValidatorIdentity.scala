@@ -1,10 +1,7 @@
 package coop.rchain.casper
 
 import cats.Applicative
-import cats.syntax.applicative._
-import cats.syntax.functor._
-import cats.syntax.option._
-import com.google.protobuf.ByteString
+import cats.syntax.all._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
@@ -22,14 +19,10 @@ final case class ValidatorIdentity(
     Signature(publicKey, sigAlgorithm, sig)
   }
 
-  def signBlock(
-      block: BlockMessage
-  ): BlockMessage = {
-
-    val sender = ByteString.copyFrom(publicKey.bytes)
-
-    // Hash should include sigAlgorithm and sender
-    val b = block.copy(sigAlgorithm = sigAlgorithm, sender = sender)
+  def signBlock(block: BlockMessage): BlockMessage = {
+    // Hash should include sigAlgorithm
+    // TODO: signing a block should not change block hash!!!
+    val b = block.copy(sigAlgorithm = sigAlgorithm)
 
     val blockHash = ProtoUtil.hashBlock(b)
 
