@@ -65,6 +65,8 @@ object NodeRunning {
     * To mitigate this issue we can update fork choice tips if current fork-choice tip has old timestamp,
     * which means node does not propose new blocks and no new blocks were received recently.
     */
+  // TODO: functionality to request DAG tips should be reimplemented in NodeRunning
+  //  with internal timer to track when new blocks are received from the network
   def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: BlockDagStorage](
       delayThreshold: FiniteDuration
   ): F[Unit] =
@@ -76,10 +78,10 @@ object NodeRunning {
         .fromIterator(latestMessages.iterator)
         .evalMap(BlockStore[F].getUnsafe)
         // filter only blocks that are recent
-        .filter { b =>
-          val blockTimestamp = b.header.timestamp
-          (now - blockTimestamp) < delayThreshold.toMillis
-        }
+//        .filter { b =>
+//          val blockTimestamp = b.header.timestamp
+//          (now - blockTimestamp) < delayThreshold.toMillis
+//        }
         .head
         .compile
         .last

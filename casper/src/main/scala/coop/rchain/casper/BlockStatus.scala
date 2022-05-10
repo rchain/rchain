@@ -8,7 +8,6 @@ object BlockStatus {
   def invalidFormat: BlockError            = InvalidBlock.InvalidFormat
   def invalidSender: BlockError            = InvalidBlock.InvalidSender
   def invalidVersion: BlockError           = InvalidBlock.InvalidVersion
-  def invalidTimestamp: BlockError         = InvalidBlock.InvalidTimestamp
   def invalidBlockNumber: BlockError       = InvalidBlock.InvalidBlockNumber
   def invalidRepeatDeploy: BlockError      = InvalidBlock.InvalidRepeatDeploy
   def invalidSequenceNumber: BlockError    = InvalidBlock.InvalidSequenceNumber
@@ -34,10 +33,9 @@ object BlockError {
 
 sealed trait InvalidBlock extends BlockError
 object InvalidBlock {
-  case object InvalidFormat    extends InvalidBlock
-  case object InvalidSender    extends InvalidBlock
-  case object InvalidVersion   extends InvalidBlock
-  case object InvalidTimestamp extends InvalidBlock
+  case object InvalidFormat  extends InvalidBlock
+  case object InvalidSender  extends InvalidBlock
+  case object InvalidVersion extends InvalidBlock
 
   case object InvalidBlockNumber      extends InvalidBlock
   case object InvalidRepeatDeploy     extends InvalidBlock

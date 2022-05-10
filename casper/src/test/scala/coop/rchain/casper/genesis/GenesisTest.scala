@@ -308,8 +308,7 @@ object GenesisTest {
                          ),
                          registry = Registry(GenesisBuilder.defaultSystemContractPubKey),
                          vaults = vaults,
-                         blockNumber = blockNumber,
-                         blockTimestamp = blockTimestamp
+                         blockNumber = blockNumber
                        )
                      )
     } yield genesisBlock

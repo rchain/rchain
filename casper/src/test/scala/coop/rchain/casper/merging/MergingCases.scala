@@ -60,7 +60,6 @@ class MergingCases extends AnyFlatSpec with Matchers {
               )
           ) :: Nil
           blockData = BlockData(
-            d1.data.timestamp,
             blockNum,
             stateTransitionCreator,
             seqNum

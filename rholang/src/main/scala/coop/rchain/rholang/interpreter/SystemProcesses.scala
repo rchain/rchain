@@ -52,7 +52,6 @@ object SystemProcesses {
   type BodyRef              = Long
 
   final case class BlockData private (
-      timeStamp: Long,
       blockNumber: Long,
       sender: PublicKey,
       seqNum: Long
@@ -126,10 +125,9 @@ object SystemProcesses {
       (fixedChannel, arity, remainder, bodyRef)
   }
   object BlockData {
-    def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")), 0)
+    def empty: BlockData = BlockData(0, PublicKey(Base16.unsafeDecode("00")), 0)
     def fromBlock(template: BlockMessage) =
       BlockData(
-        template.header.timestamp,
         template.body.state.blockNumber,
         PublicKey(template.sender),
         template.seqNum
@@ -356,7 +354,6 @@ object SystemProcesses {
             _ <- produce(
                   Seq(
                     RhoType.Number(data.blockNumber),
-                    RhoType.Number(data.timeStamp),
                     RhoType.ByteArray(data.sender.bytes)
                   ),
                   ack

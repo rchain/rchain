@@ -111,10 +111,9 @@ object BlockCreator {
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
         deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
-        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
+        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
+              val blockData = BlockData(nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
               for {
-                now                 <- Time[F].currentMillis
-                blockData           = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
                 computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
@@ -154,7 +153,7 @@ object BlockCreator {
                 signedBlock = validatorIdentity.signBlock(unsignedBlock)
                 _           <- Span[F].mark("block-signed")
               } yield BlockCreatorResult.created(signedBlock)
-            else
+            } else
               BlockCreatorResult.noNewDeploys.pure[F]
       } yield r
 
@@ -194,7 +193,7 @@ object BlockCreator {
         rejectedDeploys.map(r => RejectedDeploy(r)).toList,
         systemDeploys.toList
       )
-    val header = Header(parents.toList, blockData.timeStamp)
+    val header = Header(parents.toList)
     ProtoUtil.unsignedBlockProto(
       version,
       sender,

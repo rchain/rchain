@@ -195,38 +195,6 @@ class ValidateTest
       } yield result
   }
 
-  "Timestamp validation" should "not accept blocks with future time" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        chain                   <- createChain[Task](1)
-        block                   = chain(0)
-        modifiedTimestampHeader = block.header.copy(timestamp = 99999999)
-        dag                     <- blockDagStorage.getRepresentation
-        _ <- Validate.timestamp[Task](
-              block.copy(header = modifiedTimestampHeader)
-            ) shouldBeF InvalidTimestamp.asLeft[ValidBlock]
-        _      <- Validate.timestamp[Task](block) shouldBeF Valid.asRight[InvalidBlock]
-        _      = log.warns.size should be(1)
-        result = log.warns.head.contains("block timestamp") should be(true)
-      } yield result
-  }
-
-  it should "not accept blocks that were published before parent time" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        chain                   <- createChain[Task](2)
-        block                   = chain(1)
-        modifiedTimestampHeader = block.header.copy(timestamp = -1)
-        dag                     <- blockDagStorage.getRepresentation
-        _ <- Validate.timestamp[Task](
-              block.copy(header = modifiedTimestampHeader)
-            ) shouldBeF Left(InvalidTimestamp)
-        _      <- Validate.timestamp[Task](block) shouldBeF Right(Valid)
-        _      = log.warns.size should be(1)
-        result = log.warns.head.contains("block timestamp") should be(true)
-      } yield result
-  }
-
   "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {

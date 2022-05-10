@@ -81,11 +81,8 @@ object ProtoUtil {
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
-  def blockHeader(
-      parentHashes: Seq[ByteString],
-      timestamp: Long
-  ): Header =
-    Header(parentHashes.toList, timestamp)
+  def blockHeader(parentHashes: Seq[ByteString]): Header =
+    Header(parentHashes.toList)
 
   def unsignedBlockProto(
       version: Int,

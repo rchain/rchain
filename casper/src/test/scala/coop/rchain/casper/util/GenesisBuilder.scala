@@ -112,7 +112,6 @@ object GenesisBuilder {
       Genesis(
         sender = defaultPub, // First key as genesis sender
         shardId = "root",
-        blockTimestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
           maximumBond = Long.MaxValue,

@@ -51,7 +51,6 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
       Genesis(
         sender = pub1, // First key as genesis creator
         shardId = shardId,
-        blockTimestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
           maximumBond = Long.MaxValue,

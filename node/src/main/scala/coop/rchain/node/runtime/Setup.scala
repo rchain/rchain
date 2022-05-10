@@ -62,7 +62,6 @@ object Setup {
         Queue[F, RoutingMessage],
         APIServers,
         CasperLoop[F],
-        CasperLoop[F],
         F[Unit], // Node startup process (protocol messages handling)
         ReportingHttpRoutes[F],
         WebApi[F],
@@ -340,16 +339,6 @@ object Setup {
         } yield ()
       }
 
-      // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
-      // For why - look at updateForkChoiceTipsIfStuck method description.
-      updateForkChoiceLoop = {
-        implicit val (bs, cu, bds) = (blockStore, commUtil, blockDagStorage)
-        for {
-          _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
-          _ <- NodeRunning.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
-        } yield ()
-      }
-
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
@@ -357,7 +346,6 @@ object Setup {
       routingMessageQueue,
       apiServers,
       casperLoop,
-      updateForkChoiceLoop,
       nodeLaunch,
       reportingRoutes,
       webApi,

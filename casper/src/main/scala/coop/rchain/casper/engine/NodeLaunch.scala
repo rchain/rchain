@@ -136,7 +136,7 @@ object NodeLaunch {
     } yield ()
   }
 
-  def createGenesisBlockFromConfig[F[_]: Concurrent: ContextShift: Time: RuntimeManager: Log](
+  def createGenesisBlockFromConfig[F[_]: Concurrent: ContextShift: RuntimeManager: Log](
       validator: PublicKey,
       conf: CasperConf
   ): F[BlockMessage] =
@@ -158,7 +158,7 @@ object NodeLaunch {
       conf.genesisBlockData.systemContractPubKey
     )
 
-  def createGenesisBlock[F[_]: Concurrent: ContextShift: Time: RuntimeManager: Log](
+  def createGenesisBlock[F[_]: Concurrent: ContextShift: RuntimeManager: Log](
       sender: PublicKey,
       shardId: String,
       blockNumber: Long,
@@ -176,8 +176,6 @@ object NodeLaunch {
       systemContractPubkey: String
   ): F[BlockMessage] =
     for {
-      blockTimestamp <- Time[F].currentMillis
-
       // Initial REV vaults
       vaults <- VaultParser.parse[F](vaultsPath)
 
@@ -190,7 +188,6 @@ object NodeLaunch {
                        Genesis(
                          sender = sender,
                          shardId = shardId,
-                         blockTimestamp = blockTimestamp,
                          proofOfStake = ProofOfStake(
                            minimumBond = minimumBond,
                            maximumBond = maximumBond,

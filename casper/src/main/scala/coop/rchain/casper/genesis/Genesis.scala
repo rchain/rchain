@@ -16,7 +16,6 @@ import coop.rchain.models.{GPrivate, Par}
 final case class Genesis(
     sender: PublicKey,
     shardId: String,
-    blockTimestamp: Long,
     blockNumber: Long,
     proofOfStake: ProofOfStake,
     registry: Registry,
@@ -72,7 +71,7 @@ object Genesis {
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
 
     RuntimeManager[F]
-      .computeGenesis(blessedTerms, genesis.blockTimestamp, genesis.blockNumber, genesis.sender)
+      .computeGenesis(blessedTerms, genesis.blockNumber, genesis.sender)
       .map {
         case (startHash, stateHash, processedDeploys) =>
           createProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
@@ -104,7 +103,7 @@ object Genesis {
     )
     val version = 1 //FIXME make this part of Genesis, and pass it from upstream
     val seqNum  = 0L
-    val header  = Header(List.empty[StateHash], genesis.blockTimestamp)
+    val header  = Header(List.empty[StateHash])
 
     unsignedBlockProto(version, genesis.sender, body, header, List.empty, genesis.shardId, seqNum)
   }

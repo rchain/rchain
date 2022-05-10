@@ -118,7 +118,6 @@ trait BlockGenerator {
   def buildBlock[F[_]: Applicative](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
-      now: Long,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
@@ -130,7 +129,6 @@ trait BlockGenerator {
     getRandomBlock(
       setParentsHashList = parentsHashList.some,
       setValidator = creator.some,
-      setTimestamp = now.some,
       setBonds = bonds.some,
       setJustifications = justifications.some,
       setDeploys = deploys.some,
@@ -140,7 +138,7 @@ trait BlockGenerator {
       setSeqNumber = seqNum.some
     ).pure[F]
 
-  def createGenesis[F[_]: Monad: Time: BlockStore: BlockDagStorage](
+  def createGenesis[F[_]: Monad: BlockStore: BlockDagStorage](
       creator: Validator = BlockUtil.generateValidator("Validator genesis"),
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
@@ -151,11 +149,9 @@ trait BlockGenerator {
       seqNum: Long = 0
   ): F[BlockMessage] =
     for {
-      now <- Time[F].currentMillis
       genesis <- buildBlock[F](
                   Seq.empty,
                   creator,
-                  now,
                   bonds,
                   justifications,
                   deploys,
@@ -168,7 +164,7 @@ trait BlockGenerator {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
     } yield genesis
 
-  def createBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
+  def createBlock[F[_]: Sync: BlockStore: BlockDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = BlockUtil.generateValidator("Validator"),
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -181,11 +177,9 @@ trait BlockGenerator {
       invalid: Boolean = false
   ): F[BlockMessage] =
     for {
-      now <- Time[F].currentMillis
       block <- buildBlock[F](
                 parentsHashList,
                 creator,
-                now,
                 bonds,
                 justifications,
                 deploys,

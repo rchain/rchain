@@ -84,7 +84,6 @@ message BlockHashMessageProto {
 
 message HeaderProto {
   repeated bytes parentsHashList = 1; //list of parent block hashes
-  int64 timestamp  = 5;
 }
 
 /**

@@ -500,10 +500,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         bonds = ProtoUtil.bonds(genesis.genesisBlock).toList,
         blockNumber = 1
       )
-    val header = Header(
-      parentsHashList = signedInvalidBlock.header.parentsHashList,
-      timestamp = 0L
-    )
+    val header                   = Header(parentsHashList = signedInvalidBlock.header.parentsHashList)
     val blockHash                = Blake2b256.hash(header.toProto.toByteArray)
     val body                     = Body(postState, deploys.toList, List.empty, List.empty)
     val serializedJustifications = List(signedInvalidBlock.blockHash)

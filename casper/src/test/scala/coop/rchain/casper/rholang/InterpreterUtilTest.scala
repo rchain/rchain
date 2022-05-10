@@ -74,31 +74,22 @@ class InterpreterUtilTest
       (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])
     ]
   ] =
-    Time[F].currentMillis >>= (
-        now =>
-          computeParentsPostState(
-            parents,
-            mkCasperSnapshot(dag),
-            runtimeManager
-          ).flatMap(
-              preState =>
-                InterpreterUtil
-                  .computeDeploysCheckpoint[F](
-                    deploys,
-                    List.empty[SystemDeploy],
-                    runtimeManager,
-                    BlockData(
-                      now,
-                      // TODO this should be blockNumber
-                      blockNumber,
-                      genesisContext.validatorPks.head,
-                      seqNum
-                    ),
-                    preState
-                  )
+    computeParentsPostState(
+      parents,
+      mkCasperSnapshot(dag),
+      runtimeManager
+    ).flatMap(
+        preState =>
+          InterpreterUtil
+            .computeDeploysCheckpoint[F](
+              deploys,
+              List.empty[SystemDeploy],
+              runtimeManager,
+              BlockData(blockNumber, genesisContext.validatorPks.head, seqNum),
+              preState
             )
-            .attempt
       )
+      .attempt
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in effectTest {
     val time    = 0L
@@ -250,13 +241,9 @@ class InterpreterUtilTest
      *         genesis
      */
     for {
-      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost, now = 100)
-      b2 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost, now = 200)
-      b3 <- buildBlock[Task](
-             Seq(b1.blockHash, b2.blockHash),
-             deploys = b3DeploysWithCost,
-             now = 300
-           )
+      b1        <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+      b2        <- buildBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+      b3        <- buildBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
       _         <- step(runtimeManager)(b1, genesis)
       _         <- step(runtimeManager)(b2, genesis)
       dag       <- blockDagStorage.getRepresentation
@@ -293,19 +280,15 @@ class InterpreterUtilTest
      *         genesis
      */
     for {
-      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost, now = 100)
-      b2 <- buildBlock[Task](Seq(b1.blockHash), deploys = b2DeploysWithCost, now = 200)
-      b3 <- buildBlock[Task](Seq(b1.blockHash), deploys = b3DeploysWithCost, now = 200)
-      b4 <- buildBlock[Task](Seq(b3.blockHash), deploys = b4DeploysWithCost, now = 300)
-      b5 <- buildBlock[Task](
-             Seq(b2.blockHash, b4.blockHash),
-             deploys = b5DeploysWithCost,
-             now = 500
-           )
-      _ <- step(runtimeManager)(b1, genesis)
-      _ <- step(runtimeManager)(b2, genesis)
-      _ <- step(runtimeManager)(b3, genesis)
-      _ <- step(runtimeManager)(b4, genesis)
+      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+      b2 <- buildBlock[Task](Seq(b1.blockHash), deploys = b2DeploysWithCost)
+      b3 <- buildBlock[Task](Seq(b1.blockHash), deploys = b3DeploysWithCost)
+      b4 <- buildBlock[Task](Seq(b3.blockHash), deploys = b4DeploysWithCost)
+      b5 <- buildBlock[Task](Seq(b2.blockHash, b4.blockHash), deploys = b5DeploysWithCost)
+      _  <- step(runtimeManager)(b1, genesis)
+      _  <- step(runtimeManager)(b2, genesis)
+      _  <- step(runtimeManager)(b3, genesis)
+      _  <- step(runtimeManager)(b4, genesis)
 
       dag       <- blockDagStorage.getRepresentation
       postState <- validateBlockCheckpoint[Task](b5, mkCasperSnapshot(dag), runtimeManager)

@@ -94,7 +94,6 @@ class BlockQueryResponseAPITest
               b.sigAlgorithm should be(secondBlock.sigAlgorithm)
               b.shardId should be(secondBlock.toProto.shardId)
               b.version should be(secondBlock.version)
-              b.timestamp should be(secondBlock.header.timestamp)
               b.parentsHashList should be(
                 secondBlock.header.parentsHashList.map(_.toHexString)
               )
@@ -184,7 +183,6 @@ class BlockQueryResponseAPITest
               blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
               blockInfo.shardId should be(secondBlock.toProto.shardId)
               blockInfo.version should be(secondBlock.version)
-              blockInfo.timestamp should be(secondBlock.header.timestamp)
               blockInfo.parentsHashList should be(
                 secondBlock.header.parentsHashList.map(_.toHexString)
               )

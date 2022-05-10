@@ -123,7 +123,6 @@ message LightBlockInfo {
   string shardId      = 7;
 
   // HeaderProto message
-  int64 timestamp                 = 9;
   repeated string parentsHashList = 11;
 
   // BodyProto message

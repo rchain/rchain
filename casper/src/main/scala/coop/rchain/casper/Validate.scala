@@ -100,8 +100,6 @@ object Validate {
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
     (for {
-      _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
-      _ <- EitherT(Validate.timestamp(block))
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
       _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
@@ -185,41 +183,6 @@ object Validate {
                        }
                      )
     } yield maybeError.toLeft(BlockStatus.valid)
-  }
-
-  // This is not a slashable offence
-  def timestamp[F[_]: Sync: Log: Time: BlockStore](
-      b: BlockMessage
-  ): F[ValidBlockProcessing] = {
-    import cats.instances.list._
-
-    for {
-      currentTime  <- Time[F].currentMillis
-      timestamp    = b.header.timestamp
-      beforeFuture = currentTime + DRIFT >= timestamp
-      latestParentTimestamp <- ProtoUtil.parentHashes(b).foldM(0L) {
-                                case (latestTimestamp, parentHash) =>
-                                  BlockStore[F]
-                                    .getUnsafe(parentHash)
-                                    .map(parent => {
-                                      val timestamp = parent.header.timestamp
-                                      math.max(latestTimestamp, timestamp)
-                                    })
-                              }
-      afterLatestParent = timestamp >= latestParentTimestamp
-      result <- if (beforeFuture && afterLatestParent) {
-                 BlockStatus.valid.asRight[BlockError].pure[F]
-               } else {
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(
-                           b,
-                           s"block timestamp $timestamp is not between latest parent block time and current time."
-                         )
-                       )
-                 } yield BlockStatus.invalidTimestamp.asLeft[ValidBlock]
-               }
-    } yield result
   }
 
   // Agnostic of non-parent justifications

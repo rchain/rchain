@@ -163,22 +163,16 @@ object BlockMessage {
 }
 
 final case class Header(
-    parentsHashList: List[ByteString],
-    timestamp: Long
+    parentsHashList: List[ByteString]
 ) {
   def toProto: HeaderProto = Header.toProto(this)
 }
 
 object Header {
-  def from(h: HeaderProto): Header = Header(
-    h.parentsHashList.toList,
-    h.timestamp
-  )
+  def from(h: HeaderProto): Header = Header(h.parentsHashList.toList)
 
   def toProto(h: Header): HeaderProto =
-    HeaderProto()
-      .withParentsHashList(h.parentsHashList)
-      .withTimestamp(h.timestamp)
+    HeaderProto().withParentsHashList(h.parentsHashList)
 }
 
 final case class RejectedDeploy(

@@ -15,10 +15,9 @@ in {
   contract test_get_block_data(rhoSpec, _, ackCh) = {
     new retCh in {
       getBlockData!(*retCh) |
-      for (@blockNumber, @timestamp, @sender <- retCh) {
+      for (@blockNumber, @sender <- retCh) {
         rhoSpec!("assertMany",
           [
-            ((0, "==", timestamp), "timestamp is zero"),
             ((0, "==", blockNumber), "the blocknumber is zero"),
             (("00".hexToBytes(), "==", sender), "sender is 0x00")
           ], *ackCh)

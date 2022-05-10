@@ -1,8 +1,7 @@
 new blockData(`rho:block:data`), stdout(`rho:io:stdout`), retCh in {
   blockData!(*retCh) |
-  for(@blockNumber, @timestamp, @sender <- retCh) {
+  for(@blockNumber, @sender <- retCh) {
       stdout!({"block number": blockNumber}) |
-      stdout!({"block time": timestamp})|
       stdout!({"block sender": sender})
   }
 }
