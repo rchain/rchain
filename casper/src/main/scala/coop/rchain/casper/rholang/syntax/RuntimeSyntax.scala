@@ -63,7 +63,15 @@ trait RuntimeSyntax {
 
 object RuntimeSyntax {
   type SysEvalResult[S <: SystemDeploy] = (Either[SystemDeployUserError, S#Result], EvaluateResult)
-}
+  final case class UserTransition(
+      deploy: ProcessedDeploy,
+      mergeable: NumberChannelsEndVal,
+      evalResult: EvaluateResult
+  )
+  final case class SystemTransition(
+      deploy: ProcessedSystemDeploy,
+      mergeable: NumberChannelsEndVal
+  )
 
   implicit val RuntimeMetricsSource = Metrics.Source(CasperMetricsSource, "rho-runtime")
 
@@ -102,13 +110,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       implicit s: Sync[F],
       span: Span[F],
       log: Log[F]
-  ): F[
-    (
-        StateHash,
-        Seq[(ProcessedDeploy, NumberChannelsEndVal)],
-        Seq[(ProcessedSystemDeploy, NumberChannelsEndVal)]
-    )
-  ] =
+  ): F[(StateHash, Seq[UserTransition], Seq[SystemTransition])] =
     Span[F].traceI("compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
@@ -117,20 +119,17 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
                               }
         (startHash, processedDeploys) = deployProcessResult
         systemDeployProcessResult <- {
-          systemDeploys.toList.foldM(
-            (startHash, Vector.empty[(ProcessedSystemDeploy, NumberChannelsEndVal)])
-          ) {
+          systemDeploys.toList.foldM((startHash, Vector.empty[SystemTransition])) {
             case ((startHash, processedSystemDeploys), sd) =>
               playSystemDeploy(startHash)(sd) >>= {
-                case PlaySucceeded(stateHash, processedSystemDeploy, mergeChs, _) =>
-                  (stateHash, processedSystemDeploys :+ (processedSystemDeploy, mergeChs)).pure[F]
-                case PlayFailed(Failed(_, errorMsg)) =>
-                  new Exception(
-                    "Unexpected system error during play of system deploy: " + errorMsg
-                  ).raiseError[
-                    F,
-                    (StateHash, Vector[(ProcessedSystemDeploy, NumberChannelsEndVal)])
-                  ]
+                case PlaySucceeded(stateHash, processedSystemDeploy, mergeChs, _) => {
+                  val result = SystemTransition(processedSystemDeploy, mergeChs)
+                  (stateHash, processedSystemDeploys :+ result).pure[F]
+                }
+                case PlayFailed(Failed(_, errorMsg)) => {
+                  val errStr = "Unexpected system error during play of system deploy: " + errorMsg
+                  new Exception(errStr).raiseError[F, (StateHash, Vector[SystemTransition])]
+                }
               }
           }
         }
@@ -149,7 +148,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       implicit s: Sync[F],
       span: Span[F],
       log: Log[F]
-  ): F[(StateHash, StateHash, Seq[(ProcessedDeploy, NumberChannelsEndVal)])] =
+  ): F[(StateHash, StateHash, Seq[UserTransition])] =
     Span[F].traceI("compute-genesis") {
       for {
         _ <- runtime.setBlockData(
@@ -229,38 +228,46 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
           Span[F].traceI("refund")(execAndSave[RefundDeploy](refundF(amount)))
 
       // Creates user deploy evaluator with diagnostics
-      val userDeployDiag: F[ProcessedDeploy] = Span[F].traceI("user-deploy")(
+      val userDeployDiag = Span[F].traceI("user-deploy")(
         // Evaluates user deploy and append event log to local state
-        processDeploy(deploy).flatMap { case (pd, mc) => st.update(_.add(pd.deployLog, mc)).as(pd) }
+        processDeploy(deploy).flatTap {
+          case (pd, r) => st.update(_.add(pd.deployLog, r.mergeable))
+        }
       )
 
       // Evaluates Pre-charge system deploy
       EitherT(preChargeDiag)
       // Evaluates user deploy
         .semiflatMap(_ => userDeployDiag)
-        .flatTap { pd =>
-          // Evaluates Refund system deploy
-          EitherT(refundDiag(pd.refundAmount))
-            .leftSemiflatTap { error =>
-              // If Pre-charge succeeds and Refund fails, it's a platform error and we should signal it with raiseError
-              Log[F].warn(s"Refund failure '${error.errorMessage}'") *>
-                GasRefundFailure(error.errorMessage).raiseError[F, Unit]
-            }
+        .flatTap {
+          case (pd, _) =>
+            // Evaluates Refund system deploy
+            EitherT(refundDiag(pd.refundAmount))
+              .leftSemiflatTap { error =>
+                // If Pre-charge succeeds and Refund fails, it's a platform error and we should signal it with raiseError
+                Log[F].warn(s"Refund failure '${error.errorMessage}'") *>
+                  GasRefundFailure(error.errorMessage).raiseError[F, Unit]
+              }
         }
         .valueOr {
           // Handle evaluation errors from PreCharge or Refund
           // - assigning 0 cost - replay should reach the same state
           case SystemDeployUserError(errorMsg) =>
-            ProcessedDeploy
-              .empty(deploy)
-              .copy(systemDeployError = Some(errorMsg))
+            val pd = ProcessedDeploy.empty(deploy).copy(systemDeployError = Some(errorMsg))
+            val er = EvaluateResult(cost = Cost(0), errors = Vector(), mergeable = Set())
+            (pd, er)
         }
-        .flatMap { pd =>
-          // Update result with accumulated event logs (if evaluation failed also)
-          for {
-            collected             <- st.get
-            mergeableChannelsData <- getNumberChannelsData(collected.mergeableChannels)
-          } yield pd.copy(deployLog = collected.eventLog.toList) -> mergeableChannelsData
+        .flatMap {
+          case (pd, evalResult) =>
+            // Update result with accumulated event logs (if evaluation failed also)
+            for {
+              collected             <- st.get
+              mergeableChannelsData <- getNumberChannelsData(collected.mergeableChannels)
+            } yield UserTransition(
+              pd.copy(deployLog = collected.eventLog.toList),
+              mergeableChannelsData,
+              evalResult
+            )
         }
     }
   }
@@ -291,17 +298,17 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
         _ <- (runtime.revertToSoftCheckpoint(fallback) *>
               printDeployErrors(deploy.sig, evaluateResult.errors)).whenA(!evalSucceeded)
 
-      } yield (deployResult, evaluateResult.mergeable)
+      } yield (deployResult, evaluateResult)
     }
 
   def processDeployWithMergeableData(
       deploy: Signed[DeployData]
   )(implicit s: Sync[F], span: Span[F], log: Log[F]): F[UserTransition] =
     processDeploy(deploy) flatMap {
-      case (pd, mergeChs) =>
+      case (pd, result @ EvaluateResult(_, _, mergeChs)) =>
         for {
           mergeableData <- getNumberChannelsData(mergeChs)
-        } yield (pd, mergeableData)
+        } yield UserTransition(pd, mergeableData, result)
     }
 
   def getNumberChannelsData(
