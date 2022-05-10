@@ -78,7 +78,7 @@ object Validate {
     }
 
   def version[F[_]: Monad: Log](b: BlockMessage, version: Long): F[Boolean] = {
-    val blockVersion = b.header.version
+    val blockVersion = b.version
     if (blockVersion == version) {
       true.pure
     } else {

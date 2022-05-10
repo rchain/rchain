@@ -95,7 +95,7 @@ class BlockQueryResponseAPITest
               b.sigAlgorithm should be(secondBlock.sigAlgorithm)
               b.shardId should be(secondBlock.toProto.shardId)
               b.extraBytes should be(secondBlock.toProto.extraBytes)
-              b.version should be(secondBlock.header.version)
+              b.version should be(secondBlock.version)
               b.timestamp should be(secondBlock.header.timestamp)
               b.headerExtraBytes should be(secondBlock.header.extraBytes)
               b.parentsHashList should be(
@@ -188,7 +188,7 @@ class BlockQueryResponseAPITest
               blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
               blockInfo.shardId should be(secondBlock.toProto.shardId)
               blockInfo.extraBytes should be(secondBlock.toProto.extraBytes)
-              blockInfo.version should be(secondBlock.header.version)
+              blockInfo.version should be(secondBlock.version)
               blockInfo.timestamp should be(secondBlock.header.timestamp)
               blockInfo.headerExtraBytes should be(secondBlock.header.extraBytes)
               blockInfo.parentsHashList should be(

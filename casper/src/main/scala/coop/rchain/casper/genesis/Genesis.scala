@@ -5,10 +5,10 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.{RuntimeManager, Tools}
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
-import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.{RuntimeManager, Tools}
+import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
+import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.{GPrivate, Par}
@@ -102,10 +102,10 @@ object Genesis {
       rejectedDeploys = List.empty,
       systemDeploys = List.empty
     )
-    val version = 1L //FIXME make this part of Genesis, and pass it from upstream
-    val header  = blockHeader(List.empty[StateHash], version, genesis.blockTimestamp)
+    val version = 1 //FIXME make this part of Genesis, and pass it from upstream
+    val header  = Header(List.empty[StateHash], genesis.blockTimestamp)
 
-    unsignedBlockProto(genesis.sender, body, header, List.empty, genesis.shardId)
+    unsignedBlockProto(genesis.sender, body, header, List.empty, genesis.shardId, version)
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {

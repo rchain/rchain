@@ -132,7 +132,7 @@ object BlockCreator {
                 )             = checkpointData
                 newBonds      <- runtimeManager.computeBonds(postStateHash)
                 _             <- Span[F].mark("before-packing-block")
-                casperVersion = s.onChainState.shardConf.casperVersion
+                casperVersion = s.onChainState.shardConf.blockVersion
                 // unsignedBlock got blockHash(hashed without signature)
                 unsignedBlock = packageBlock(
                   validatorIdentity.publicKey,
@@ -184,7 +184,7 @@ object BlockCreator {
       systemDeploys: Seq[ProcessedSystemDeploy],
       bondsMap: Seq[Bond],
       shardId: String,
-      version: Long
+      version: Int
   ): BlockMessage = {
     val state = RChainState(preStateHash, postStateHash, bondsMap.toList, blockData.blockNumber)
     val body =
@@ -194,7 +194,7 @@ object BlockCreator {
         rejectedDeploys.map(r => RejectedDeploy(r)).toList,
         systemDeploys.toList
       )
-    val header = Header(parents.toList, blockData.timeStamp, version)
+    val header = Header(parents.toList, blockData.timeStamp)
     ProtoUtil.unsignedBlockProto(sender, body, header, justifications, shardId, blockData.seqNum)
   }
 

@@ -430,7 +430,7 @@ object TestNode {
         // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
         // Required to enable protection from re-submitting duplicate deploys
         deployLifespan = 50,
-        casperVersion = 1,
+        blockVersion = 1,
         configVersion = 1,
         bondMinimum = 0,
         bondMaximum = Long.MaxValue,

@@ -83,14 +83,9 @@ object ProtoUtil {
 
   def blockHeader(
       parentHashes: Seq[ByteString],
-      version: Long,
       timestamp: Long
   ): Header =
-    Header(
-      parentHashes.toList,
-      timestamp,
-      version
-    )
+    Header(parentHashes.toList, timestamp)
 
   def unsignedBlockProto(
       sender: PublicKey,
@@ -98,15 +93,17 @@ object ProtoUtil {
       header: Header,
       justifications: List[BlockHash],
       shardId: String,
+      version: Int,
       seqNum: Int = 0
   ): BlockMessage = {
     val block = BlockMessage(
+      version,
       blockHash = ByteString.EMPTY,
+      sender = sender.bytes.toByteString,
+      seqNum = seqNum,
       header,
       body,
       justifications,
-      sender = sender.bytes.toByteString,
-      seqNum = seqNum,
       sig = ByteString.EMPTY,
       sigAlgorithm = "",
       shardId,

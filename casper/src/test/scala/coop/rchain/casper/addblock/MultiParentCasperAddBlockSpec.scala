@@ -504,8 +504,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
       )
     val header = Header(
       parentsHashList = signedInvalidBlock.header.parentsHashList,
-      timestamp = 0L,
-      version = 0L
+      timestamp = 0L
     )
     val blockHash                = Blake2b256.hash(header.toProto.toByteArray)
     val body                     = Body(postState, deploys.toList, List.empty, List.empty)
@@ -513,12 +512,13 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
     val serializedBlockHash      = ByteString.copyFrom(blockHash)
     val blockThatPointsToInvalidBlock =
       BlockMessage(
+        version = 0,
         serializedBlockHash,
+        sender = ByteString.EMPTY,
+        seqNum = 0,
         header,
         body,
         serializedJustifications,
-        sender = ByteString.EMPTY,
-        seqNum = 0,
         sig = ByteString.EMPTY,
         sigAlgorithm = "",
         shardId = "root"

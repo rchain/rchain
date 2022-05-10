@@ -114,16 +114,16 @@ message DeployInfo{
 
 message LightBlockInfo {
   // BlockMessageProto message
-  string blockHash    = 1;
-  string sender       = 2;
-  int64 seqNum        = 3;
-  string sig          = 4;
-  string sigAlgorithm = 5;
-  string shardId      = 6;
-  bytes  extraBytes   = 7;
+  int32 version       = 1;
+  string blockHash    = 2;
+  string sender       = 3;
+  int64 seqNum        = 4;
+  string sig          = 5;
+  string sigAlgorithm = 6;
+  string shardId      = 7;
+  bytes  extraBytes   = 8;
 
   // HeaderProto message
-  int64 version                   = 8;
   int64 timestamp                 = 9;
   bytes headerExtraBytes          = 10;
   repeated string parentsHashList = 11;

@@ -113,12 +113,13 @@ object BlockHashMessage {
 }
 
 final case class BlockMessage(
+    version: Int,
     blockHash: ByteString,
+    sender: ByteString,
+    seqNum: Int,
     header: Header,
     body: Body,
     justifications: List[BlockHash],
-    sender: ByteString,
-    seqNum: Int,
     sig: ByteString,
     sigAlgorithm: String,
     shardId: String,
@@ -135,12 +136,13 @@ object BlockMessage {
     for {
       body <- Body.from(bm.body)
     } yield BlockMessage(
+      bm.version,
       bm.blockHash,
+      bm.sender,
+      bm.seqNum,
       Header.from(bm.header),
       body,
       bm.justifications,
-      bm.sender,
-      bm.seqNum,
       bm.sig,
       bm.sigAlgorithm,
       bm.shardId,
@@ -149,12 +151,13 @@ object BlockMessage {
 
   def toProto(bm: BlockMessage): BlockMessageProto =
     BlockMessageProto()
+      .withVersion(bm.version)
       .withBlockHash(bm.blockHash)
+      .withSender(bm.sender)
+      .withSeqNum(bm.seqNum)
       .withHeader(Header.toProto(bm.header))
       .withBody(Body.toProto(bm.body))
       .withJustifications(bm.justifications)
-      .withSender(bm.sender)
-      .withSeqNum(bm.seqNum)
       .withSig(bm.sig)
       .withSigAlgorithm(bm.sigAlgorithm)
       .withShardId(bm.shardId)
@@ -165,7 +168,6 @@ object BlockMessage {
 final case class Header(
     parentsHashList: List[ByteString],
     timestamp: Long,
-    version: Long,
     extraBytes: ByteString = ByteString.EMPTY
 ) {
   def toProto: HeaderProto = Header.toProto(this)
@@ -175,7 +177,6 @@ object Header {
   def from(h: HeaderProto): Header = Header(
     h.parentsHashList.toList,
     h.timestamp,
-    h.version,
     h.extraBytes
   )
 
@@ -183,7 +184,6 @@ object Header {
     HeaderProto()
       .withParentsHashList(h.parentsHashList)
       .withTimestamp(h.timestamp)
-      .withVersion(h.version)
       .withExtraBytes(h.extraBytes)
 }
 

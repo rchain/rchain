@@ -115,7 +115,7 @@ object blockImplicits {
       setPreStateHash: Option[StateHash] = None,
       setPostStateHash: Option[StateHash] = None,
       setValidator: Option[Validator] = None,
-      setVersion: Option[Long] = None,
+      setVersion: Option[Int] = None,
       setTimestamp: Option[Long] = None,
       setParentsHashList: Option[Seq[BlockHash]] = None,
       setJustifications: Option[Seq[BlockHash]] = None,
@@ -150,15 +150,15 @@ object blockImplicits {
                       Random.shuffle(bonds).headOption.getOrElse(bondGen.sample.get).validator
                     )
                   else Gen.const(setValidator.get)
-      version   = if (setVersion.isEmpty) 1L else setVersion.get
+      version   = if (setVersion.isEmpty) 1 else setVersion.get
       timestamp <- if (setTimestamp.isEmpty) arbitrary[Long] else Gen.const(setTimestamp.get)
       shardId   = if (setShardId.isEmpty) "root" else setShardId.get
       block = BlockMessage(
+        version = version,
         blockHash = ByteString.EMPTY,
         header = Header(
           parentsHashList = parentsHashList.toList,
-          timestamp = timestamp,
-          version = version
+          timestamp = timestamp
         ),
         body = Body(
           state = RChainState(
@@ -210,7 +210,7 @@ object blockImplicits {
       setPreStateHash: Option[StateHash] = None,
       setPostStateHash: Option[StateHash] = None,
       setValidator: Option[Validator] = None,
-      setVersion: Option[Long] = None,
+      setVersion: Option[Int] = None,
       setTimestamp: Option[Long] = None,
       setParentsHashList: Option[Seq[BlockHash]] = None,
       setJustifications: Option[Seq[BlockHash]] = None,

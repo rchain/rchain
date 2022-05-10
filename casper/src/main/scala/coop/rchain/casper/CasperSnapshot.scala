@@ -41,7 +41,7 @@ final case class CasperShardConf(
     // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
     // Required to enable protection from re-submitting duplicate deploys
     deployLifespan: Int,
-    casperVersion: Long,
+    blockVersion: Int,
     configVersion: Long,
     bondMinimum: Long,
     bondMaximum: Long,

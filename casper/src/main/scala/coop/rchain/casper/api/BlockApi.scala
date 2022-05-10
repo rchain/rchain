@@ -104,14 +104,14 @@ object BlockApi {
       faultTolerance: Float
   ): LightBlockInfo =
     LightBlockInfo(
+      shardId = block.shardId,
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       sender = PrettyPrinter.buildStringNoLimit(block.sender),
       seqNum = block.seqNum.toLong,
       sig = PrettyPrinter.buildStringNoLimit(block.sig),
       sigAlgorithm = block.sigAlgorithm,
-      shardId = block.shardId,
+      version = block.version,
       extraBytes = block.extraBytes,
-      version = block.header.version,
       timestamp = block.header.timestamp,
       headerExtraBytes = block.header.extraBytes,
       parentsHashList = block.header.parentsHashList.map(PrettyPrinter.buildStringNoLimit),
