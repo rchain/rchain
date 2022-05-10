@@ -12,6 +12,7 @@ import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
@@ -57,7 +58,8 @@ trait RuntimeManager[F[_]] {
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
-      blockNumber: Long
+      blockNumber: Long,
+      sender: PublicKey
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]]
@@ -142,7 +144,8 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
-      blockNumber: Long
+      blockNumber: Long,
+      sender: PublicKey
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
     spawnRuntime
       .flatMap(_.computeGenesis(terms, blockTime, blockNumber))
@@ -155,7 +158,13 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
           val preStateHash  = preState.toBlake2b256Hash
           val postStateHash = stateHash.toBlake2b256Hash
           this
-            .saveMergeableChannels(postStateHash, Array(), seqNum = 0, mergeableChs, preStateHash)
+            .saveMergeableChannels(
+              postStateHash,
+              sender.bytes,
+              seqNum = 0,
+              mergeableChs,
+              preStateHash
+            )
             .as((preState, stateHash, processedDeploys))
       }
 

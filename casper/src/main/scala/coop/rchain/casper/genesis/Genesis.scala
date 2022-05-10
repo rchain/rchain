@@ -68,12 +68,11 @@ object Genesis {
   }
 
   def createGenesisBlock[F[_]: Concurrent: RuntimeManager](genesis: Genesis): F[BlockMessage] = {
-    import genesis._
-
-    val blessedTerms = defaultBlessedTerms(proofOfStake, registry, vaults, genesis.shardId)
+    val blessedTerms =
+      defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
 
     RuntimeManager[F]
-      .computeGenesis(blessedTerms, blockTimestamp, genesis.blockNumber)
+      .computeGenesis(blessedTerms, genesis.blockTimestamp, genesis.blockNumber, genesis.sender)
       .map {
         case (startHash, stateHash, processedDeploys) =>
           createProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
@@ -86,13 +85,11 @@ object Genesis {
       stateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
   ): BlockMessage = {
-    import genesis._
-
     val state = RChainState(
       preStateHash = startHash,
       postStateHash = stateHash,
       blockNumber = genesis.blockNumber,
-      bonds = bondsProto(proofOfStake).toList
+      bonds = bondsProto(genesis.proofOfStake).toList
     )
 
     //FIXME any failures here should terminate the genesis ceremony
@@ -106,9 +103,9 @@ object Genesis {
       systemDeploys = List.empty
     )
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
-    val header  = blockHeader(List.empty[StateHash], version, blockTimestamp)
+    val header  = blockHeader(List.empty[StateHash], version, genesis.blockTimestamp)
 
-    unsignedBlockProto(genesis.sender, body, header, List.empty, shardId)
+    unsignedBlockProto(genesis.sender, body, header, List.empty, genesis.shardId)
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {
