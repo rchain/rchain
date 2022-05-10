@@ -22,7 +22,8 @@ new
   ListOpsCh,
   assert(`rho:test:assertAck`),
   testSuiteCompleted(`rho:test:testSuiteCompleted`),
-  uriOut
+  uriOut,
+  deployerId(`rho:rchain:deployerId`)
 in {
   stdlog!("debug", "Loading RhoSpec") |
   rl!(`rho:lang:listOps`, *ListOpsCh) |
@@ -149,9 +150,8 @@ in {
   } |
 
   rs!(
-    "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac".hexToBytes(),
     (9223372036854775807, bundle+{*RhoSpec}),
-    "3045022100da7b26ef5f88fa5fd52f01d58a5b8d997b82fd8850a4f8a1683d0474a80203ed02205d95090a6915f45c8e4241558775831049d48b8a9d9103a0c0a3e34ede4a007c".hexToBytes(),
+    *deployerId,
     *uriOut
   )
 }

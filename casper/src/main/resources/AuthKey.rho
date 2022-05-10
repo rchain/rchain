@@ -19,7 +19,8 @@ new
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
   _authKey,
-  stdout(`rho:io:stdout`)
+  stdout(`rho:io:stdout`),
+  deployerId(`rho:rchain:deployerId`)
 in {
 
   // An `AuthKey` is a means for creating a safe authentication token based on a process / unfograble name
@@ -68,9 +69,8 @@ in {
   } |
 
   rs!(
-    "04f4b4417f930e6fab5765ac0defcf9fce169982acfd046e7c27f9b14c0804014623c0439e5c8035e9607599a549303b5b6b90cd9685e6965278bddca65dac7510".hexToBytes(),
     (9223372036854775807, bundle+{*AuthKey}),
-    "304402205d2dc163a40804a445237ef6bd181249a68598d146e66d0c96484c6cfeaaaffd02205e537f1e7bae82b99abbdc25c8472c44f5848085a3a3f23357507c05524be4a7".hexToBytes(),
+    *deployerId,
     *uriOut
   )
 }
