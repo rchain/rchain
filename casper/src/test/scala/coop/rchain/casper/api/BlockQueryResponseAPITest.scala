@@ -18,7 +18,6 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Log
-import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -94,10 +93,8 @@ class BlockQueryResponseAPITest
               b.sig should be(secondBlock.sig.toHexString)
               b.sigAlgorithm should be(secondBlock.sigAlgorithm)
               b.shardId should be(secondBlock.toProto.shardId)
-              b.extraBytes should be(secondBlock.toProto.extraBytes)
               b.version should be(secondBlock.version)
               b.timestamp should be(secondBlock.header.timestamp)
-              b.headerExtraBytes should be(secondBlock.header.extraBytes)
               b.parentsHashList should be(
                 secondBlock.header.parentsHashList.map(_.toHexString)
               )
@@ -108,7 +105,6 @@ class BlockQueryResponseAPITest
               b.postStateHash should be(
                 secondBlock.body.state.postStateHash.toHexString
               )
-              b.bodyExtraBytes should be(secondBlock.body.extraBytes)
               b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
               b.blockSize should be(secondBlock.toProto.serializedSize.toString)
               b.deployCount should be(secondBlock.body.deploys.length)
@@ -187,10 +183,8 @@ class BlockQueryResponseAPITest
               blockInfo.sig should be(secondBlock.sig.toHexString)
               blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
               blockInfo.shardId should be(secondBlock.toProto.shardId)
-              blockInfo.extraBytes should be(secondBlock.toProto.extraBytes)
               blockInfo.version should be(secondBlock.version)
               blockInfo.timestamp should be(secondBlock.header.timestamp)
-              blockInfo.headerExtraBytes should be(secondBlock.header.extraBytes)
               blockInfo.parentsHashList should be(
                 secondBlock.header.parentsHashList.map(_.toHexString)
               )
@@ -201,7 +195,6 @@ class BlockQueryResponseAPITest
               blockInfo.postStateHash should be(
                 secondBlock.body.state.postStateHash.toHexString
               )
-              blockInfo.bodyExtraBytes should be(secondBlock.body.extraBytes)
               blockInfo.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
               blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
               blockInfo.deployCount should be(secondBlock.body.deploys.length)

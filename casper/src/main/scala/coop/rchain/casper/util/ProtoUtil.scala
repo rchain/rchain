@@ -106,8 +106,7 @@ object ProtoUtil {
       justifications,
       sig = ByteString.EMPTY,
       sigAlgorithm = "",
-      shardId,
-      extraBytes = ByteString.EMPTY
+      shardId
     )
 
     val hash = hashBlock(block)
@@ -122,8 +121,7 @@ object ProtoUtil {
       blockMessage.sender.toByteArray,
       StringValue.of(blockMessage.sigAlgorithm).toByteArray,
       Int64Value.of(blockMessage.seqNum).toByteArray,
-      StringValue.of(blockMessage.shardId).toByteArray,
-      blockMessage.extraBytes.toByteArray
+      StringValue.of(blockMessage.shardId).toByteArray
     )
 
   def dependenciesHashesOf(b: BlockMessage): Set[BlockHash] = {

@@ -80,8 +80,6 @@ object WebApiRoutes {
 
     // TODO: Create generic encoders/decoders for
     // ADT's with discriminator field
-    implicit val encodeByteString: Encoder[ByteString] =
-      Encoder.encodeString.contramap[ByteString](PrettyPrinter.buildStringNoLimit)
     implicit val encodeLightBlockInfo: Encoder[LightBlockInfo] = deriveEncoder[LightBlockInfo]
 
     implicit val encodeBlockInfo: Encoder[BlockInfo] = deriveEncoder[BlockInfo]

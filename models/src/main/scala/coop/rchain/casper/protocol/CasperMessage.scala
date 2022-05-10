@@ -122,8 +122,7 @@ final case class BlockMessage(
     justifications: List[BlockHash],
     sig: ByteString,
     sigAlgorithm: String,
-    shardId: String,
-    extraBytes: ByteString = ByteString.EMPTY
+    shardId: String
 ) extends CasperMessage {
   def toProto: BlockMessageProto = BlockMessage.toProto(this)
 
@@ -145,8 +144,7 @@ object BlockMessage {
       bm.justifications,
       bm.sig,
       bm.sigAlgorithm,
-      bm.shardId,
-      bm.extraBytes
+      bm.shardId
     )
 
   def toProto(bm: BlockMessage): BlockMessageProto =
@@ -161,14 +159,12 @@ object BlockMessage {
       .withSig(bm.sig)
       .withSigAlgorithm(bm.sigAlgorithm)
       .withShardId(bm.shardId)
-      .withExtraBytes(bm.extraBytes)
 
 }
 
 final case class Header(
     parentsHashList: List[ByteString],
-    timestamp: Long,
-    extraBytes: ByteString = ByteString.EMPTY
+    timestamp: Long
 ) {
   def toProto: HeaderProto = Header.toProto(this)
 }
@@ -176,15 +172,13 @@ final case class Header(
 object Header {
   def from(h: HeaderProto): Header = Header(
     h.parentsHashList.toList,
-    h.timestamp,
-    h.extraBytes
+    h.timestamp
   )
 
   def toProto(h: Header): HeaderProto =
     HeaderProto()
       .withParentsHashList(h.parentsHashList)
       .withTimestamp(h.timestamp)
-      .withExtraBytes(h.extraBytes)
 }
 
 final case class RejectedDeploy(
@@ -203,8 +197,7 @@ final case class Body(
     state: RChainState,
     deploys: List[ProcessedDeploy],
     rejectedDeploys: List[RejectedDeploy],
-    systemDeploys: List[ProcessedSystemDeploy],
-    extraBytes: ByteString = ByteString.EMPTY
+    systemDeploys: List[ProcessedSystemDeploy]
 ) {
   def toProto: BodyProto = Body.toProto(this)
 }
@@ -215,7 +208,7 @@ object Body {
       deploys         <- b.deploys.toList.traverse(ProcessedDeploy.from)
       systemDeploys   <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
       rejectedDeploys = b.rejectedDeploys.toList.map(RejectedDeploy.from)
-    } yield Body(RChainState.from(b.state), deploys, rejectedDeploys, systemDeploys, b.extraBytes)
+    } yield Body(RChainState.from(b.state), deploys, rejectedDeploys, systemDeploys)
 
   def toProto(b: Body): BodyProto =
     BodyProto()
@@ -223,7 +216,6 @@ object Body {
       .withDeploys(b.deploys.map(ProcessedDeploy.toProto))
       .withRejectedDeploys(b.rejectedDeploys.map(RejectedDeploy.toProto))
       .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))
-      .withExtraBytes(b.extraBytes)
 
 }
 
