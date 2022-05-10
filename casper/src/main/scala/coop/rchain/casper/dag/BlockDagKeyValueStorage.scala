@@ -1,6 +1,7 @@
 package coop.rchain.casper.dag
 
-import cats.effect.Concurrent
+import cats.{Alternative, Applicative, Monad}
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -11,7 +12,7 @@ import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.dag.{BlockDagStorage, BlockMetadataStore, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
-import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
@@ -21,8 +22,12 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
 import coop.rchain.shared.syntax._
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper.dag.BlockDagKeyValueStorage._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
+import fs2.Stream
+
+import scala.collection.concurrent.TrieMap
 
 final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     representationState: Ref[F, DagRepresentation],
@@ -186,6 +191,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                       newDagMsgState
                     )
                 }
+          _ <- removeExpiredFromPool(deployStore, dag).map(
+                _.map((_, ())).map((expiredMap.update _).tupled)
+              )
         } yield dag
       }
     )
@@ -236,6 +244,20 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   // Map of deploys being executed and execution results
   private val execMap    = TrieMap.empty[DeployId, Option[String]]
+  private val expiredMap = TrieMap.empty[DeployId, Unit]
+  def deployStatus(d: DeployId): F[String] =
+    for {
+      finSet <- blockMetadataIndex.finalizedBlockSet
+      r <- BlockDagKeyValueStorage.deployStatus(
+            d,
+            deployStore,
+            deployIndex,
+            invalidBlocksIndex,
+            finSet,
+            execMap.toMap,
+            expiredMap.toMap.keySet
+          )
+    } yield r
 
   def commitExecutionStarted(
       d: DeployId
@@ -304,7 +326,9 @@ object BlockDagKeyValueStorage {
     )
   }
 
-  def create[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]): F[BlockDagStorage[F]] =
+  def create[F[_]: Concurrent: Log: Metrics](
+      kvm: KeyValueStoreManager[F]
+  ): F[BlockDagKeyValueStorage[F]] =
     for {
       lock   <- MetricsSemaphore.single[F]
       stores <- createStores(kvm)
@@ -339,4 +363,62 @@ object BlockDagKeyValueStorage {
       stores.deployPool,
       stores.invalidBlocks
     )
+
+  def deployStatus[F[_]: Sync](
+      d: DeployId,
+      deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]],
+      deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
+      invalidBlocksIndex: KeyValueTypedStore[F, DeployId, BlockMetadata],
+      finalizedSet: Set[BlockHash],
+      executedMap: Map[DeployId, Option[String]],
+      expiredSet: Set[DeployId]
+  ): F[String] = {
+    val pooledF   = deployStore.collect { case (dId, _) => dId }.map(_.contains(d))
+    val expiredF  = Sync[F].delay(expiredSet.contains(d))
+    val includedF = deployIndex.collect { case (dId, _) => dId }.map(_.contains(d))
+    val orphanedF = invalidBlocksIndex.collect { case (dId, _) => dId }.map(_.contains(d))
+    val finalizedF = deployIndex.get1(d).map { hashOpt =>
+      hashOpt.exists(h => finalizedSet.contains(h))
+    }
+    val inProgress = if (executedMap.contains(d)) {
+      val done = executedMap(d).nonEmpty
+      val r =
+        if (done) s"Executed, result: ${executedMap(d).get}"
+        else "Execution is in progress."
+      r.some
+    } else none[String]
+
+    Stream(
+      inProgress.pure,
+      pooledF.map(v => v.guard[Option].as("Pooled")),
+      expiredF.map(v => v.guard[Option].as("Expired")),
+      orphanedF.map(v => v.guard[Option].as("Orphaned")),
+      includedF.map(v => v.guard[Option].as("Included")),
+      finalizedF.map(v => v.guard[Option].as("Finalized"))
+    ).covary[F]
+      .map(Stream.eval)
+      .flatten
+      .collectFirst { case Some(status) => status }
+      .compile
+      .last
+      .map(_.getOrElse("Unknown"))
+  }
+
+  def removeExpiredFromPool[F[_]: Monad](
+      deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]],
+      dag: DagRepresentation
+  ): F[List[DeployId]] = {
+    val expiredF = deployStore
+      .collect {
+        case (_, v) =>
+          val d       = v()
+          val expired = dag.latestBlockNumber - d.data.validAfterBlockNumber > MultiParentCasper.deployLifespan
+          expired.guard[Option].as(d)
+      }
+      .map(_.flatten.toList)
+    expiredF.flatMap { v =>
+      val sigs = v.map(_.sig)
+      deployStore.delete(sigs).as(sigs)
+    }
+  }
 }
