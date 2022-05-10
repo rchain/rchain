@@ -415,7 +415,6 @@ class InterpreterUtilTest
       Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
       block <- createBlock[Task](
                 Seq(genesis.blockHash),
-                genesis,
                 ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                 deploys = processedDeploys,
                 postStateHash = computedTsHash,
@@ -466,7 +465,6 @@ class InterpreterUtilTest
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
-                  genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   postStateHash = computedTsHash,
@@ -525,7 +523,6 @@ class InterpreterUtilTest
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
-                  genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   postStateHash = computedTsHash,
@@ -581,7 +578,6 @@ class InterpreterUtilTest
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
-                  genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   postStateHash = computedTsHash,
@@ -631,7 +627,6 @@ class InterpreterUtilTest
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
-                    genesis,
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
                     postStateHash = computedTsHash,
@@ -670,7 +665,6 @@ class InterpreterUtilTest
         )
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
-                  genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = Seq(badProcessedDeploy, processedDeploys.last),
                   postStateHash = computedTsHash,
@@ -722,7 +716,6 @@ class InterpreterUtilTest
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
-                    genesis,
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
                     postStateHash = computedTsHash,

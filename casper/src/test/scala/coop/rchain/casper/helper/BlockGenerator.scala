@@ -141,7 +141,7 @@ trait BlockGenerator {
     ).pure[F]
 
   def createGenesis[F[_]: Monad: Time: BlockStore: BlockDagStorage](
-      creator: Validator = ByteString.EMPTY,
+      creator: Validator = BlockUtil.generateValidator("Validator genesis"),
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
@@ -170,8 +170,7 @@ trait BlockGenerator {
 
   def createBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       parentsHashList: Seq[BlockHash],
-      genesis: BlockMessage,
-      creator: Validator = ByteString.EMPTY,
+      creator: Validator = BlockUtil.generateValidator("Validator"),
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
@@ -217,7 +216,6 @@ trait BlockGenerator {
 
   def createValidatorBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       parents: Seq[BlockMessage],
-      genesis: BlockMessage,
       justifications: Seq[BlockMessage],
       validator: Validator,
       bonds: Seq[Bond],
@@ -229,7 +227,6 @@ trait BlockGenerator {
       deploy <- ConstructDeploy.basicProcessedDeploy[F](0, shardId)
       result <- createBlock[F](
                  parents.map(_.blockHash),
-                 genesis,
                  creator = validator,
                  bonds = bonds,
                  deploys = Seq(deploy),

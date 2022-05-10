@@ -82,7 +82,7 @@ class ValidateTest
       genesis <- createGenesis[F](bonds = bonds)
       blocks <- (1 to length).toList.foldLeftM(Vector(genesis)) {
                  case (chain, _) =>
-                   createBlock[F](Seq(chain.last.blockHash), genesis, bonds = bonds).map(chain :+ _)
+                   createBlock[F](Seq(chain.last.blockHash), bonds = bonds).map(chain :+ _)
                }
     } yield blocks
 
@@ -107,7 +107,6 @@ class ValidateTest
             (chain, block, latestMessages) = unwrappedAcc
             bnext <- createBlock[F](
                       Seq(block.blockHash),
-                      chain.head,
                       creator = creator,
                       justifications = latestMessages.values.toSeq
                     )
@@ -180,13 +179,14 @@ class ValidateTest
 
   it should "return true on valid secp256k1 signatures" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val n                = 6
-      implicit val (sk, _) = Secp256k1.newKeyPair
+      val n                 = 6
+      implicit val (sk, pk) = Secp256k1.newKeyPair
       for {
         chain <- createChain[Task](n)
         condition <- (0 until n).toList.forallM[Task] { i =>
+                      val chainWithSender = chain.map(_.copy(sender = pk.bytes.toByteString))
                       for {
-                        block  <- signedBlock(chain, i)
+                        block  <- signedBlock(chainWithSender, i)
                         result <- Validate.blockSignature[Task](block)
                       } yield result
                     }
@@ -282,7 +282,7 @@ class ValidateTest
           parents: Seq[BlockMessage] = Nil
       ): Task[BlockMessage] =
         for {
-          block <- createValidatorBlock(parents, genesis, parents, validator, Seq(), shardId = "")
+          block <- createValidatorBlock(parents, parents, validator, Seq(), shardId = "")
         } yield block
 
       def genSender(id: Int) = List.fill(65)(id.toByte).toArray.toByteString
@@ -415,12 +415,8 @@ class ValidateTest
       for {
         deploy  <- ConstructDeploy.basicProcessedDeploy[Task](0)
         genesis <- createGenesis[Task](deploys = Seq(deploy))
-        block1 <- createBlock[Task](
-                   Seq(genesis.blockHash),
-                   genesis,
-                   deploys = Seq(deploy)
-                 )
-        dag <- blockDagStorage.getRepresentation
+        block1  <- createBlock[Task](Seq(genesis.blockHash), deploys = Seq(deploy))
+        dag     <- blockDagStorage.getRepresentation
         _ <- Validate.repeatDeploy[Task](block1, mkCasperSnapshot(dag), 50) shouldBeF Left(
               InvalidRepeatDeploy
             )
@@ -465,10 +461,10 @@ class ValidateTest
 
       for {
         b0 <- createGenesis[Task](bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, shardId = SHARD_ID)
-        b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), v0, bonds, shardId = SHARD_ID)
-        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), v1, bonds, shardId = SHARD_ID)
-        b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), v1, bonds, shardId = SHARD_ID)
+        b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0, b0), v0, bonds, shardId = SHARD_ID)
+        b2 <- createValidatorBlock[Task](Seq(b1), Seq(b1, b0), v0, bonds, shardId = SHARD_ID)
+        b3 <- createValidatorBlock[Task](Seq(b0), Seq(b2, b0), v1, bonds, shardId = SHARD_ID)
+        b4 <- createValidatorBlock[Task](Seq(b3), Seq(b2, b3), v1, bonds, shardId = SHARD_ID)
         _ <- List(b0, b1, b2, b3, b4).forallM[Task](
               block =>
                 for {
@@ -497,13 +493,12 @@ class ValidateTest
 
       for {
         b0 <- createGenesis[Task](bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, 1, shardId = SHARD_ID)
-        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b0), v1, bonds, 1, shardId = SHARD_ID)
-        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b2), v0, bonds, 2, shardId = SHARD_ID)
-        b4 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b2), v1, bonds, 2, shardId = SHARD_ID)
+        b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0, b0), v0, bonds, 1, shardId = SHARD_ID)
+        b2 <- createValidatorBlock[Task](Seq(b0), Seq(b1, b0), v1, bonds, 1, shardId = SHARD_ID)
+        b3 <- createValidatorBlock[Task](Seq(b0), Seq(b1, b2), v0, bonds, 2, shardId = SHARD_ID)
+        b4 <- createValidatorBlock[Task](Seq(b0), Seq(b3, b2), v1, bonds, 2, shardId = SHARD_ID)
         b5 <- createValidatorBlock[Task](
                Seq(b0),
-               b0,
                Seq(b3, b4),
                v0,
                bonds,

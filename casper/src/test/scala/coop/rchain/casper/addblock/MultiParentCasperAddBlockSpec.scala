@@ -201,24 +201,18 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
   }
    */
 
-  it should "reject blocks not from bonded validators" ignore effectTest {
+  it should "reject blocks not from bonded validators" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
-      implicit val bds     = node.blockDagStorage
 
       for {
-        basicDeployData  <- ConstructDeploy.basicDeployData[Effect](0)
-        block            <- node.createBlockUnsafe(basicDeployData)
-        dag              <- node.blockDagStorage.getRepresentation
-        (sk, pk)         = Secp256k1.newKeyPair
-        validatorId      = ValidatorIdentity(sk)
-        sender           = ByteString.copyFrom(pk.bytes)
-        latestMessageOpt <- dag.latestMessage(sender)
-        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        illSignedBlock = validatorId
-          .signBlock(block)
-        status <- node.addBlock(illSignedBlock)
-      } yield (status shouldBe Left(InvalidSender))
+        basicDeployData <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
+        block           <- node.createBlockUnsafe(basicDeployData)
+        (sk, _)         = Secp256k1.newKeyPair
+        validatorId     = ValidatorIdentity(sk)
+        illSignedBlock  = validatorId.signBlock(block)
+        status          <- node.addBlock(illSignedBlock)
+      } yield status shouldBe Left(InvalidSender)
     }
   }
 
