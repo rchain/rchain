@@ -136,24 +136,6 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
     }
   }
 
-  it should "be able to restore latest messages with genesis with empty sender field" in {
-    forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
-      val blockElementsWithGenesis = blockElements match {
-        case x :: xs =>
-          val genesis = x.copy(sender = ByteString.EMPTY)
-          genesis :: xs
-        case Nil =>
-          Nil
-      }
-      withDagStorage { storage =>
-        for {
-          _      <- blockElementsWithGenesis.traverse_(storage.insert(_, false))
-          result <- lookupElements(blockElementsWithGenesis, storage)
-        } yield testLookupElementsResult(result, blockElementsWithGenesis)
-      }
-    }
-  }
-
   it should "be able to restore state from the previous two instances" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { firstBlockElements =>
       forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) {
