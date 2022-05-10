@@ -244,24 +244,19 @@ class NodeSyncing[F[_]
     for {
       _ <- Log[F].info(s"Adding blocks for approved state to DAG.")
 
-      // Latest messages from slashed validators / invalid blocks
-      slashedValidators = startBlock.body.state.bonds.filter(_.stake == 0L).map(_.validator)
-      invalidBlocks = startBlock.justifications
-        .filter(v => slashedValidators.contains(v.validator))
-        .map(_.latestBlockHash)
-        .toSet
-
       // Add sorted DAG in order from approved block to oldest
       _ <- heightMap.flatMap(_._2).toList.reverse.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
+              // TODO: blocks added to DAG without validation will have flag `processed=false`
+              //  so invalid flag is not applicable
               // If sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
-              isInvalid = invalidBlocks(block.blockHash)
+//              isInvalid = invalidBlocks(block.blockHash)
               // Filter older not necessary blocks
               blockHeight   = ProtoUtil.blockNumber(block)
               blockHeightOk = blockHeight >= minHeight
               // Add block to DAG
-              _ <- addBlockToDag(block, isInvalid).whenA(blockHeightOk)
+              _ <- addBlockToDag(block, false).whenA(blockHeightOk)
             } yield ()
           }
 

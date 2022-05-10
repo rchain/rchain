@@ -55,49 +55,49 @@ class BlocksResponseAPITest
              genesis,
              v2,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             Seq(genesis.blockHash)
            )
       b3 <- createBlock[Task](
              Seq(genesis.blockHash),
              genesis,
              v1,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             Seq(genesis.blockHash)
            )
       b4 <- createBlock[Task](
              Seq(b2.blockHash),
              genesis,
              v3,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
+             Seq(genesis.blockHash, b2.blockHash)
            )
       b5 <- createBlock[Task](
              Seq(b3.blockHash),
              genesis,
              v2,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
+             Seq(b3.blockHash, b2.blockHash, genesis.blockHash)
            )
       b6 <- createBlock[Task](
              Seq(b4.blockHash),
              genesis,
              v1,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
+             Seq(b3.blockHash, b2.blockHash, b4.blockHash)
            )
       b7 <- createBlock[Task](
              Seq(b5.blockHash),
              genesis,
              v3,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+             Seq(b3.blockHash, b5.blockHash, b4.blockHash)
            )
       b8 <- createBlock[Task](
              Seq(b6.blockHash),
              genesis,
              v2,
              bonds,
-             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+             Seq(b6.blockHash, b5.blockHash, b4.blockHash)
            )
     } yield genesis
 

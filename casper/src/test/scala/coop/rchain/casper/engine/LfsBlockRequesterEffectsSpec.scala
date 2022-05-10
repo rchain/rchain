@@ -23,14 +23,13 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
   def mkHash(s: String) = ByteString.copyFromUtf8(s)
 
   def getBlock(hash: BlockHash, number: Long, latestMessages: Seq[BlockHash]) = {
-    val justifications                     = latestMessages.map(Justification(ByteString.EMPTY, _))
     val hashFun: BlockMessage => BlockHash = _ => hash
     blockImplicits.getRandomBlock(
       hashF = hashFun.some,
       setBlockNumber = number.some,
-      setJustifications = justifications.some,
+      setJustifications = latestMessages.some,
       // Parents must be set also to prevent auto generation
-      setParentsHashList = justifications.map(_.latestBlockHash).some
+      setParentsHashList = latestMessages.some
     )
   }
 

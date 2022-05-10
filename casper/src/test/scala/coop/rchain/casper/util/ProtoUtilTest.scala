@@ -9,11 +9,9 @@ class ProtoUtilTest extends AnyFlatSpec with Matchers with ScalaCheckDrivenPrope
 
   "dependenciesHashesOf" should "return hashes of all justifications and parents of a block" in {
     forAll(blockElementGen()) { blockElement =>
-      val result = ProtoUtil.dependenciesHashesOf(blockElement)
-      val justificationsHashes = blockElement.justifications.map(
-        _.latestBlockHash
-      )
-      val parentsHashes = blockElement.header.parentsHashList
+      val result               = ProtoUtil.dependenciesHashesOf(blockElement)
+      val justificationsHashes = blockElement.justifications
+      val parentsHashes        = blockElement.header.parentsHashList
       result should contain allElementsOf (justificationsHashes)
       result should contain allElementsOf (parentsHashes)
       result should contain theSameElementsAs ((justificationsHashes ++ parentsHashes).toSet)

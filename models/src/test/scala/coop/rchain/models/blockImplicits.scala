@@ -81,18 +81,9 @@ object blockImplicits {
   val arbitraryStateHash: Arbitrary[StateHash] = Arbitrary(stateHashGen)
   val arbitraryValidator: Arbitrary[Validator] = Arbitrary(validatorGen)
 
-  val arbitraryJustification: Arbitrary[Justification] = Arbitrary(
-    justificationGen
-  )
   val arbitraryProcessedDeploy: Arbitrary[ProcessedDeploy] = Arbitrary(
     processedDeployGen
   )
-  val arbitraryJustifications: Arbitrary[Seq[Justification]] =
-    Arbitrary.arbContainer[Seq, Justification](
-      arbitraryJustification,
-      Buildable.buildableCanBuildFrom,
-      identity
-    )
   val arbitraryProcessedDeploys: Arbitrary[Seq[ProcessedDeploy]] =
     Arbitrary.arbContainer[Seq, ProcessedDeploy](
       arbitraryProcessedDeploy,
@@ -127,7 +118,7 @@ object blockImplicits {
       setVersion: Option[Long] = None,
       setTimestamp: Option[Long] = None,
       setParentsHashList: Option[Seq[BlockHash]] = None,
-      setJustifications: Option[Seq[Justification]] = None,
+      setJustifications: Option[Seq[BlockHash]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
       setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
       setBonds: Option[Seq[Bond]] = None,
@@ -145,7 +136,7 @@ object blockImplicits {
                           arbitrary[Seq[BlockHash]](arbitraryBlockHashes)
                         else Gen.const(setParentsHashList.get)
       justifications <- if (setJustifications.isEmpty)
-                         arbitrary[Seq[Justification]](arbitraryJustifications)
+                         arbitrary[Seq[BlockHash]](arbitraryBlockHashes)
                        else Gen.const(setJustifications.get)
       deploys <- if (setDeploys.isEmpty)
                   arbitrary[Seq[ProcessedDeploy]](arbitraryProcessedDeploys)
@@ -222,7 +213,7 @@ object blockImplicits {
       setVersion: Option[Long] = None,
       setTimestamp: Option[Long] = None,
       setParentsHashList: Option[Seq[BlockHash]] = None,
-      setJustifications: Option[Seq[Justification]] = None,
+      setJustifications: Option[Seq[BlockHash]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
       setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
       setBonds: Option[Seq[Bond]] = None,

@@ -140,7 +140,9 @@ message LightBlockInfo {
   int32 deployCount    = 18;
   float faultTolerance = 19;
 
-  repeated JustificationInfo justifications   = 20;
+  repeated string justifications = 20;
+
+  // Rejected data
   repeated RejectedDeployInfo rejectedDeploys = 21;
 }
 

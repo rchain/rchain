@@ -106,7 +106,7 @@ object Genesis {
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
     val header  = blockHeader(List.empty[StateHash], version, blockTimestamp)
 
-    unsignedBlockProto(body, header, List.empty[Justification], shardId)
+    unsignedBlockProto(body, header, List.empty, shardId)
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {

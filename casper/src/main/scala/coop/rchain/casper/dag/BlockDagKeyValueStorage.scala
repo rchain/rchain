@@ -78,11 +78,14 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         .map(lmSeqNumOpt => lmSeqNumOpt.isEmpty || lmSeqNumOpt.exists(block.seqNum >= _))
 
     def newLatestMessages: F[Map[Validator, BlockHash]] = {
-      val newlyBondedSet = bonds(block)
-        .map(_.validator)
-        .toSet
-        .diff(block.justifications.map(_.validator).toSet)
+      val bondedSet    = bonds(block).map(_.validator).toSet
+      implicit val bds = this
       for {
+        dag <- getRepresentation
+        justificationsSenders <- block.justifications
+                                  .traverse(dag.lookupUnsafe(_).map(_.sender))
+                                  .map(_.toSet)
+        newlyBondedSet = bondedSet diff justificationsSenders
         // This filter is required to enable adding blocks backward from higher height to lower
         newlyBondedUnseen <- newlyBondedSet.toList.filterA(latestMessagesIndex.contains(_).not)
       } yield newlyBondedUnseen.map((_, block.blockHash)).toMap
@@ -160,7 +163,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                     //  - with multi-parent finalizer all messages should be available
                     val justificationsOpt =
                       block.justifications
-                        .map(_.latestBlockHash)
                         .map(dagMsgSt.msgMap.get)
                         .sequence
                         .map(_.toSet)

@@ -137,7 +137,7 @@ object BlockCreator {
                 unsignedBlock = packageBlock(
                   blockData,
                   parents.map(_.blockHash),
-                  justifications.toSeq,
+                  justifications.map(_.latestBlockHash).toList,
                   preStateHash,
                   postStateHash,
                   processedDeploys,
@@ -174,7 +174,7 @@ object BlockCreator {
   private def packageBlock(
       blockData: BlockData,
       parents: Seq[BlockHash],
-      justifications: Seq[Justification],
+      justifications: List[BlockHash],
       preStateHash: StateHash,
       postStateHash: StateHash,
       deploys: Seq[ProcessedDeploy],

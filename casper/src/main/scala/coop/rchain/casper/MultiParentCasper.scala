@@ -63,8 +63,7 @@ object MultiParentCasper {
     val parentHashes =
       block.header.parentsHashList.map(_.toHexString)
     val justificationHashes =
-      block.justifications.toList
-        .map(j => (j.validator.toHexString, j.latestBlockHash.toHexString))
+      block.justifications.map(_.toHexString)
     val deployIds: List[String] =
       block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
     val creator = block.sender.toHexString
@@ -101,7 +100,7 @@ object MultiParentCasper {
                   parents = blocks
                     .filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
                     .filterNot { b =>
-                      blocks.flatMap(_.justifications.map(_.latestBlockHash)).contains(b.blockHash)
+                      blocks.flatMap(_.justifications).contains(b.blockHash)
                     }
                 } yield parents.distinct
       onChainState <- getOnChainState(parents.head)

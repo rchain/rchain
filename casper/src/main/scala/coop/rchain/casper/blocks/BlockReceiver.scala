@@ -246,7 +246,6 @@ object BlockReceiver {
               // Save block to block store, resolve parents to request
               _ <- BlockStore[F].put(block)
               parents <- block.justifications
-                          .map(_.latestBlockHash)
                           .traverse { hash =>
                             BlockStore[F].contains(hash).not.map((hash, _))
                           }
@@ -258,7 +257,7 @@ object BlockReceiver {
               // Check if block have all dependencies in the DAG
               dag <- BlockDagStorage[F].getRepresentation
               hasAllDeps = pendingRequests.isEmpty &&
-                block.justifications.map(_.latestBlockHash).forall(dag.contains)
+                block.justifications.forall(dag.contains)
 
               _ <- receiverOutputQueue.enqueue1(block.blockHash).whenA(hasAllDeps)
             } yield ()
@@ -274,7 +273,7 @@ object BlockReceiver {
     // Process validated blocks
     def validatedBlocks(receiverOutputQueue: Queue[F, BlockHash]) =
       finishedProcessingStream.parEvalMapUnorderedProcBounded { block =>
-        val parents = block.justifications.map(_.latestBlockHash).toSet
+        val parents = block.justifications.toSet
         for {
           // Update state with finalized block and get next for validation
           next <- state.modify(_.finished(block.blockHash, parents))

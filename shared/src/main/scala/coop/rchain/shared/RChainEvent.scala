@@ -7,7 +7,7 @@ sealed trait RChainEvent {}
 final case class BlockCreated(
     blockHash: String,
     parentHashes: List[String],
-    justificationHashes: List[(String, String)],
+    justificationHashes: List[String],
     deployIds: List[String],
     creator: String,
     seqNum: Int
@@ -16,7 +16,7 @@ final case class BlockCreated(
 final case class BlockAdded(
     blockHash: String,
     parentHashes: List[String],
-    justificationHashes: List[(String, String)],
+    justificationHashes: List[String],
     deployIds: List[String],
     creator: String,
     seqNum: Int
@@ -28,7 +28,7 @@ object RChainEvent {
   def blockCreated(
       bs: String,
       parents: List[String],
-      justifications: List[(String, String)],
+      justifications: List[String],
       deployIds: List[String],
       creator: String,
       seqNum: Int
@@ -38,7 +38,7 @@ object RChainEvent {
   def blockAdded(
       bs: String,
       parents: List[String],
-      justifications: List[(String, String)],
+      justifications: List[String],
       deployIds: List[String],
       creator: String,
       seqNum: Int

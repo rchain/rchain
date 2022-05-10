@@ -113,7 +113,7 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
-      _ <- EitherT(Validate.sequenceNumber(block, s))
+      _ <- EitherT(Validate.sequenceNumber(block))
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
       s <- EitherT(Validate.justificationRegressions(block))
     } yield s).value
@@ -311,27 +311,14 @@ object Validate {
     * creator justification, this check will fail as expected. The exception is when
     * B's creator justification is the genesis block.
     */
-  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def sequenceNumber[F[_]: Monad: BlockDagStorage: Log](
-      b: BlockMessage,
-      s: CasperSnapshot
-  ): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
+  def sequenceNumber[F[_]: Sync: BlockDagStorage: Log](b: BlockMessage): F[ValidBlockProcessing] =
     for {
-      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
-                                        case (_, Justification(_, latestBlockHash)) =>
-                                          s.dag.lookup(latestBlockHash).map {
-                                            case Some(block) =>
-                                              block.seqNum
-                                            case None =>
-                                              throw new Exception(
-                                                s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
-                                              )
-                                          }
-                                      }
-      number = b.seqNum
-      result = creatorJustificationSeqNumber + 1 == number
+      dag                           <- BlockDagStorage[F].getRepresentation
+      justifications                <- b.justifications.traverse(dag.lookupUnsafe(_))
+      creatorJustificationOpt       = justifications.find(_.sender == b.sender)
+      creatorJustificationSeqNumber = creatorJustificationOpt.map(_.seqNum).getOrElse(0)
+      number                        = b.seqNum
+      result                        = creatorJustificationSeqNumber + 1 == number
       status <- if (result) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
                } else {
@@ -345,7 +332,6 @@ object Validate {
                  } yield BlockStatus.invalidSequenceNumber.asLeft[ValidBlock]
                }
     } yield status
-  }
 
   // Validator should only process deploys from its own shard
   def deploysShardIdentifier[F[_]: Monad: Log](
@@ -397,11 +383,11 @@ object Validate {
   ): F[Option[Boolean]] =
     for {
       msgMap <- BlockDagStorage[F].getRepresentation.map(_.dagMessageState.msgMap)
-//      justifications = b.justifications.map(_.latestBlockHash).map(msgMap)
+//      justifications = b.justifications.map(msgMap)
     } yield for {
       // TODO: temporary don't expect that all justifications are available in msgMap to satisfy the failing tests
       //  - with multi-parent finalizer all messages should be available
-      justifications <- b.justifications.map(_.latestBlockHash).map(msgMap.get).sequence
+      justifications <- b.justifications.map(msgMap.get).sequence
       prevMsg        <- justifications.find(_.sender == b.sender)
       res = justifications.forall { just =>
         val justPrevMsgOpt = prevMsg.parents.map(msgMap).find(_.sender == just.sender)
@@ -423,13 +409,10 @@ object Validate {
       s: CasperSnapshot
   ): F[ValidBlockProcessing] =
     for {
-      invalidJustifications <- block.justifications.filterA { justification =>
-                                for {
-                                  latestBlockOpt <- s.dag.lookup(justification.latestBlockHash)
-                                } yield latestBlockOpt.exists(_.invalid)
-                              }
-      neglectedInvalidJustification = invalidJustifications.exists { justification =>
-        val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
+      justifications    <- block.justifications.flatTraverse(s.dag.lookup(_).map(_.toList))
+      invalidValidators = justifications.filter(_.invalid).map(b => b.sender)
+      neglectedInvalidJustification = invalidValidators.exists { invalidValidator =>
+        val slashedValidatorBond = bonds(block).find(_.validator == invalidValidator)
         slashedValidatorBond match {
           case Some(bond) => bond.stake > 0
           case None       => false

@@ -116,7 +116,7 @@ final case class BlockMessage(
     blockHash: ByteString,
     header: Header,
     body: Body,
-    justifications: List[Justification],
+    justifications: List[BlockHash],
     sender: ByteString,
     seqNum: Int,
     sig: ByteString,
@@ -138,7 +138,7 @@ object BlockMessage {
       bm.blockHash,
       Header.from(bm.header),
       body,
-      bm.justifications.toList.map(Justification.from),
+      bm.justifications,
       bm.sender,
       bm.seqNum,
       bm.sig,
@@ -152,7 +152,7 @@ object BlockMessage {
       .withBlockHash(bm.blockHash)
       .withHeader(Header.toProto(bm.header))
       .withBody(Body.toProto(bm.body))
-      .withJustifications(bm.justifications.map(Justification.toProto))
+      .withJustifications(bm.justifications)
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
       .withSig(bm.sig)

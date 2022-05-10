@@ -16,9 +16,6 @@ import coop.rchain.models._
 
 object ProtoUtil {
 
-  def creatorJustification(block: BlockMessage): Option[Justification] =
-    block.justifications.find(_.validator == block.sender)
-
   def parentHashes(b: BlockMessage): List[ByteString] =
     b.header.parentsHashList
 
@@ -96,7 +93,7 @@ object ProtoUtil {
   def unsignedBlockProto(
       body: Body,
       header: Header,
-      justifications: Seq[Justification],
+      justifications: List[BlockHash],
       shardId: String,
       seqNum: Int = 0
   ): BlockMessage = {
@@ -104,7 +101,7 @@ object ProtoUtil {
       blockHash = ByteString.EMPTY,
       header,
       body,
-      justifications.toList,
+      justifications,
       sender = ByteString.EMPTY,
       seqNum = seqNum,
       sig = ByteString.EMPTY,
@@ -129,11 +126,9 @@ object ProtoUtil {
       blockMessage.extraBytes.toByteArray
     )
 
-  def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
-    val missingParents = parentHashes(b).toSet
-    val missingJustifications = b.justifications
-      .map(_.latestBlockHash)
-      .toSet
-    (missingParents union missingJustifications).toList
+  def dependenciesHashesOf(b: BlockMessage): Set[BlockHash] = {
+    val missingParents        = parentHashes(b).toSet
+    val missingJustifications = b.justifications.toSet
+    missingParents union missingJustifications
   }
 }

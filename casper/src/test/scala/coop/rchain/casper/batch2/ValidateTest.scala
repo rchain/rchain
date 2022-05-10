@@ -1,6 +1,5 @@
 package coop.rchain.casper.batch2
 
-import cats.Monad
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -28,7 +27,6 @@ import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
-import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -111,7 +109,7 @@ class ValidateTest
                       Seq(block.blockHash),
                       chain.head,
                       creator = creator,
-                      justifications = latestMessages
+                      justifications = latestMessages.values.toSeq
                     )
             latestMessagesNext = latestMessages.updated(bnext.sender, bnext.blockHash)
           } yield (chain :+ bnext, bnext, latestMessagesNext)
@@ -371,29 +369,13 @@ class ValidateTest
       } yield ()
   }
 
-  "Sequence number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        chain <- createChain[Task](1)
-        block = chain(0)
-        dag   <- blockDagStorage.getRepresentation
-        _ <- Validate
-              .sequenceNumber[Task](block.copy(seqNum = 1), mkCasperSnapshot(dag)) shouldBeF Left(
-              InvalidSequenceNumber
-            )
-        _      <- Validate.sequenceNumber[Task](block, mkCasperSnapshot(dag)) shouldBeF Right(Valid)
-        result = log.warns.size should be(1)
-      } yield result
-  }
-
   it should "return false for non-sequential numbering" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         chain <- createChain[Task](2)
         block = chain(1)
-        dag   <- blockDagStorage.getRepresentation
         _ <- Validate
-              .sequenceNumber[Task](block.copy(seqNum = 1), mkCasperSnapshot(dag)) shouldBeF Left(
+              .sequenceNumber[Task](block.copy(seqNum = 1)) shouldBeF Left(
               InvalidSequenceNumber
             )
         result = log.warns.size should be(1)
@@ -409,11 +391,7 @@ class ValidateTest
         _ <- chain.forallM[Task](
               block =>
                 for {
-                  dag <- blockDagStorage.getRepresentation
-                  result <- Validate.sequenceNumber[Task](
-                             block,
-                             mkCasperSnapshot(dag)
-                           )
+                  result <- Validate.sequenceNumber[Task](block)
                 } yield result == Right(Valid)
             ) shouldBeF true
         result = log.warns should be(Nil)
@@ -498,10 +476,7 @@ class ValidateTest
                 } yield result == Right(Valid)
             ) shouldBeF true
         // The justification block for validator 0 should point to b2 or above.
-        justificationsWithRegression = Seq(
-          Justification(v0, b1.blockHash),
-          Justification(v1, b4.blockHash)
-        )
+        justificationsWithRegression = Seq(b1.blockHash, b4.blockHash)
         blockWithJustificationRegression = getRandomBlock(
           setValidator = v1.some,
           setJustifications = justificationsWithRegression.some,
@@ -537,10 +512,7 @@ class ValidateTest
                shardId = SHARD_ID
              )
 
-        justificationsWithInvalidBlock = Seq(
-          Justification(v0, b5.blockHash),
-          Justification(v1, b4.blockHash)
-        )
+        justificationsWithInvalidBlock = Seq(b5.blockHash, b4.blockHash)
         blockWithInvalidJustification = getRandomBlock(
           setValidator = v1.some,
           setJustifications = justificationsWithInvalidBlock.some

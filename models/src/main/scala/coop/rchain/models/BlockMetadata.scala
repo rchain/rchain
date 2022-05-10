@@ -64,7 +64,7 @@ object BlockMetadata {
       b.body.state.blockNumber,
       b.sender,
       b.seqNum,
-      b.justifications.map(_.latestBlockHash),
+      b.justifications,
       weightMap(b.body.state),
       invalid,
       directlyFinalized,

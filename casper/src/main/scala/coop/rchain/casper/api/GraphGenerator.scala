@@ -99,7 +99,6 @@ object GraphzGenerator {
         val parents = b.header.parentsHashList
           .map(PrettyPrinter.buildString)
         val justifications = b.justifications
-          .map(_.latestBlockHash)
           .map(PrettyPrinter.buildString)
           .distinct
         val validatorBlocks =

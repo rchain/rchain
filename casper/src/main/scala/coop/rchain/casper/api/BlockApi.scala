@@ -123,7 +123,7 @@ object BlockApi {
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.body.deploys.length,
       faultTolerance = faultTolerance,
-      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
+      justifications = block.justifications.map(PrettyPrinter.buildStringNoLimit),
       rejectedDeploys = block.body.rejectedDeploys.map(
         r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
       )
