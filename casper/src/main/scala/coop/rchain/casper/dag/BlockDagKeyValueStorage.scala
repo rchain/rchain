@@ -59,9 +59,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     val logAlreadyStored =
       Log[F].warn(s"Block ${PrettyPrinter.buildString(block, short = true)} is already stored.")
 
-    val logEmptySender =
-      Log[F].warn(s"Block ${PrettyPrinter.buildString(block, short = true)} sender is empty.")
-
     // Add LM either if there is no existing message for the sender, or if sequence number advances
     // - assumes block sender is not valid hash
     def shouldAddAsLatest: F[Boolean] =
@@ -77,35 +74,20 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         // - is found with seq num greater then existing
         .map(lmSeqNumOpt => lmSeqNumOpt.isEmpty || lmSeqNumOpt.exists(block.seqNum >= _))
 
-    def newLatestMessages: F[Map[Validator, BlockHash]] = {
-      val bondedSet    = bonds(block).map(_.validator).toSet
-      implicit val bds = this
-      for {
-        dag <- getRepresentation
-        justificationsSenders <- block.justifications
-                                  .traverse(dag.lookupUnsafe(_).map(_.sender))
-                                  .map(_.toSet)
-        newlyBondedSet = bondedSet diff justificationsSenders
-        // This filter is required to enable adding blocks backward from higher height to lower
-        newlyBondedUnseen <- newlyBondedSet.toList.filterA(latestMessagesIndex.contains(_).not)
-      } yield newlyBondedUnseen.map((_, block.blockHash)).toMap
-    }
-
     def doInsert: F[Unit] = {
       val blockMetadata      = BlockMetadata.fromBlock(block, invalid)
       val blockHashIsInvalid = !(block.blockHash.size == BlockHash.Length)
 
       for {
+        // TODO: remove these checks, block hash and sender should be checked when block is received
         // Basic validation of input hash values
         _ <- BlockSenderIsMalformed(block).raiseError[F, Unit].whenA(senderHasInvalidFormat)
-        // TODO: should we have special error type for block hash error also?
-        //  Should this be checked before calling insert? Is DAG storage responsible for that?
         _ <- new Exception(
               s"Block hash (${PrettyPrinter.buildString(block.blockHash)}) is not correct length."
-            ).raiseError[F, Unit]
-              .whenA(blockHashIsInvalid)
-
-        _ <- logEmptySender.whenA(senderIsEmpty)
+            ).raiseError[F, Unit].whenA(blockHashIsInvalid)
+        _ <- new Exception(
+              s"Block ${PrettyPrinter.buildString(block, short = true)} sender is empty."
+            ).raiseError[F, Unit].whenA(senderIsEmpty)
 
         // Add block metadata
         _ <- blockMetadataIndex.add(blockMetadata)
@@ -118,16 +100,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         _ <- invalidBlocksIndex.put(blockMetadata.blockHash, blockMetadata).whenA(invalid)
 
         // Resolve if block should be added as the latest message for the block sender
-        emptyLM = Map.empty[Validator, BlockHash].pure[F]
-        newLatestFromSender <- if (!senderIsEmpty)
-                                shouldAddAsLatest.ifM(Map(sendersNewLM).pure[F], emptyLM)
-                              else emptyLM
-
-        // Add/update validators latest messages
-        newLatestFromNewValidators <- newLatestMessages
-
-        // All new latest messages to add
-        newLatestToAdd = newLatestFromNewValidators ++ newLatestFromSender
+        isLatestFromSender <- shouldAddAsLatest
+        newLatestToAdd     = if (isLatestFromSender) Map(sendersNewLM) else Map[Validator, BlockHash]()
 
         // Add latest messages to DB
         _ <- latestMessagesIndex.put(newLatestToAdd.toList)

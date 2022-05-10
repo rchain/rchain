@@ -43,7 +43,7 @@ object BlockCreator {
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-      val nextSeqNum     = s.maxSeqNums(selfId) + 1
+      val nextSeqNum     = s.maxSeqNums.get(selfId).map(_ + 1).getOrElse(0)
       val nextBlockNum   = s.maxBlockNum + 1
       val parents        = s.parents
       val justifications = s.justifications
