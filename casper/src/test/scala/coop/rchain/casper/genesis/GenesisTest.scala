@@ -290,8 +290,10 @@ object GenesisTest {
               )
       validators     = bonds.toSeq.map(Validator.tupled)
       blockTimestamp <- Time[Task].currentMillis
+      firstValidator = validators.head.pk
       genesisBlock <- createGenesisBlock(
                        Genesis(
+                         sender = firstValidator,
                          shardId = shardId,
                          proofOfStake = ProofOfStake(
                            minimumBond = minimumBond,

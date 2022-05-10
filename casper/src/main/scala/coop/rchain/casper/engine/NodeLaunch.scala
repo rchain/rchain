@@ -19,6 +19,7 @@ import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
@@ -50,6 +51,9 @@ object NodeLaunch {
       standalone: Boolean
   ): F[Unit] = {
 
+    def noValidatorIdentityError =
+      new Exception("To create genesis block node must provide validator private key")
+
     def createStoreBroadcastGenesis: F[Unit] =
       for {
         _ <- Log[F]
@@ -62,9 +66,12 @@ object NodeLaunch {
                 "Public key for system - contract is not set (config 'system-contract-pub-key')"
               )
               .whenA(conf.genesisBlockData.systemContractPubKey.isEmpty)
-        genesisBlock <- createGenesisBlockFromConfig(conf)
-        genBlockStr  = PrettyPrinter.buildString(genesisBlock)
-        _            <- Log[F].info(s"Sending ApprovedBlock $genBlockStr to peers...")
+
+        // Get creator public key
+        validatorIdentity <- validatorIdentityOpt.liftTo(noValidatorIdentityError)
+        genesisBlock      <- createGenesisBlockFromConfig(validatorIdentity.publicKey, conf)
+        genBlockStr       = PrettyPrinter.buildString(genesisBlock)
+        _                 <- Log[F].info(s"Sending ApprovedBlock $genBlockStr to peers...")
 
         // Store genesis block
         _  <- BlockStore[F].put(genesisBlock)
@@ -130,9 +137,11 @@ object NodeLaunch {
   }
 
   def createGenesisBlockFromConfig[F[_]: Concurrent: ContextShift: Time: RuntimeManager: Log](
+      validator: PublicKey,
       conf: CasperConf
   ): F[BlockMessage] =
     createGenesisBlock[F](
+      validator,
       conf.shardName,
       conf.genesisBlockData.genesisBlockNumber,
       conf.genesisBlockData.bondsFile,
@@ -150,6 +159,7 @@ object NodeLaunch {
     )
 
   def createGenesisBlock[F[_]: Concurrent: ContextShift: Time: RuntimeManager: Log](
+      sender: PublicKey,
       shardId: String,
       blockNumber: Long,
       bondsPath: String,
@@ -178,6 +188,7 @@ object NodeLaunch {
       // Run genesis deploys and create block
       genesisBlock <- Genesis.createGenesisBlock(
                        Genesis(
+                         sender = sender,
                          shardId = shardId,
                          blockTimestamp = blockTimestamp,
                          proofOfStake = ProofOfStake(

@@ -9,10 +9,12 @@ import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol._
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 
 object ProtoUtil {
 
@@ -91,6 +93,7 @@ object ProtoUtil {
     )
 
   def unsignedBlockProto(
+      sender: PublicKey,
       body: Body,
       header: Header,
       justifications: List[BlockHash],
@@ -102,7 +105,7 @@ object ProtoUtil {
       header,
       body,
       justifications,
-      sender = ByteString.EMPTY,
+      sender = sender.bytes.toByteString,
       seqNum = seqNum,
       sig = ByteString.EMPTY,
       sigAlgorithm = "",

@@ -49,6 +49,7 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
       validatorKeys,
       validatorKeys,
       Genesis(
+        sender = pub1, // First key as genesis creator
         shardId = shardId,
         blockTimestamp = 0L,
         proofOfStake = ProofOfStake(

@@ -110,6 +110,7 @@ object GenesisBuilder {
       validatorKeyPairs,
       genesisVaults,
       Genesis(
+        sender = defaultPub, // First key as genesis sender
         shardId = "root",
         blockTimestamp = 0L,
         proofOfStake = ProofOfStake(

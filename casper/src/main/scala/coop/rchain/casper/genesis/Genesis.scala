@@ -9,10 +9,12 @@ import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.{GPrivate, Par}
 
 final case class Genesis(
+    sender: PublicKey,
     shardId: String,
     blockTimestamp: Long,
     blockNumber: Long,
@@ -106,7 +108,7 @@ object Genesis {
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
     val header  = blockHeader(List.empty[StateHash], version, blockTimestamp)
 
-    unsignedBlockProto(body, header, List.empty, shardId)
+    unsignedBlockProto(genesis.sender, body, header, List.empty, shardId)
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {

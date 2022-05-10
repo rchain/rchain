@@ -14,7 +14,7 @@ import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -135,6 +135,7 @@ object BlockCreator {
                 casperVersion = s.onChainState.shardConf.casperVersion
                 // unsignedBlock got blockHash(hashed without signature)
                 unsignedBlock = packageBlock(
+                  validatorIdentity.publicKey,
                   blockData,
                   parents.map(_.blockHash),
                   justifications.map(_.latestBlockHash).toList,
@@ -172,6 +173,7 @@ object BlockCreator {
     }
 
   private def packageBlock(
+      sender: PublicKey,
       blockData: BlockData,
       parents: Seq[BlockHash],
       justifications: List[BlockHash],
@@ -193,7 +195,7 @@ object BlockCreator {
         systemDeploys.toList
       )
     val header = Header(parents.toList, blockData.timeStamp, version)
-    ProtoUtil.unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
+    ProtoUtil.unsignedBlockProto(sender, body, header, justifications, shardId, blockData.seqNum)
   }
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =

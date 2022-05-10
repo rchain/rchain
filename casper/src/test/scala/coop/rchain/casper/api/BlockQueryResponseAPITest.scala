@@ -45,7 +45,7 @@ class BlockQueryResponseAPITest
   val badTestHashQuery = "1234acd"
   val invalidHexQuery  = "No such a hash"
 
-  val genesisBlock: BlockMessage = getRandomBlock()
+  val genesisBlock: BlockMessage = getRandomBlock(setJustifications = Seq().some)
 
   val deployCount = 10
   val randomDeploys =
@@ -113,7 +113,7 @@ class BlockQueryResponseAPITest
               b.blockSize should be(secondBlock.toProto.serializedSize.toString)
               b.deployCount should be(secondBlock.body.deploys.length)
               b.faultTolerance should be(faultTolerance)
-              b.justifications should be(secondBlock.justifications)
+              b.justifications should be(secondBlock.justifications.map(_.toHexString))
           }
         } yield ()
       }
@@ -206,7 +206,7 @@ class BlockQueryResponseAPITest
               blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
               blockInfo.deployCount should be(secondBlock.body.deploys.length)
               blockInfo.faultTolerance should be(faultTolerance)
-              blockInfo.justifications should be(secondBlock.justifications)
+              blockInfo.justifications should be(secondBlock.justifications.map(_.toHexString))
           }
         } yield ()
       }
@@ -232,9 +232,9 @@ class BlockQueryResponseAPITest
   private def prepareDagStorage[F[_]: Sync: BlockDagStorage: BlockStore]: F[Unit] = {
     import coop.rchain.blockstorage.syntax._
     for {
+      _ <- List(genesisBlock, secondBlock).traverse(BlockStore[F].put(_))
       _ <- BlockDagStorage[F].insert(genesisBlock, false, approved = true)
       _ <- BlockDagStorage[F].insert(secondBlock, false)
-      _ <- List(genesisBlock, secondBlock).traverse(BlockStore[F].put(_))
     } yield ()
   }
 }
