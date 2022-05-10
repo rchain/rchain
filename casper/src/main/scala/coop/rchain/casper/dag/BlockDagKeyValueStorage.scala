@@ -233,6 +233,18 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   override def addDeploy(d: Signed[DeployData]): F[Unit] = deployStore.put(d.sig, d)
 
   override def pooledDeploys: F[Map[DeployId, Signed[DeployData]]] = deployStore.toMap
+
+  // Map of deploys being executed and execution results
+  private val execMap    = TrieMap.empty[DeployId, Option[String]]
+
+  def commitExecutionStarted(
+      d: DeployId
+  ): F[Unit] = Sync[F].delay { execMap.update(d, none[String]) }
+
+  def commitExecutionComplete(
+      d: DeployId,
+      status: String
+  ): F[Unit] = Sync[F].delay { execMap.update(d, status.some) }
 }
 
 object BlockDagKeyValueStorage {
