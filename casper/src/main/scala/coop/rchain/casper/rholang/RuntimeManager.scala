@@ -111,8 +111,12 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       runtime                                 <- spawnRuntime
       computed                                <- runtime.computeState(startHash, terms, systemDeploys, blockData)
       (stateHash, usrDeployRes, sysDeployRes) = computed
-      (usrProcessed, usrMergeable)            = usrDeployRes.unzip
-      (sysProcessed, sysMergeable)            = sysDeployRes.unzip
+      (usrProcessed, usrMergeable, _) = usrDeployRes
+        .map(UserTransition.unapply(_).get)
+        .unzip3
+      (sysProcessed, sysMergeable) = sysDeployRes
+        .map(SystemTransition.unapply(_).get)
+        .unzip
 
       // Concat user and system deploys mergeable channel maps
       mergeableChs = usrMergeable ++ sysMergeable
