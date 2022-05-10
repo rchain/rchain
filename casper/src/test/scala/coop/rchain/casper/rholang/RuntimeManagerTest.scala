@@ -3,7 +3,7 @@ package coop.rchain.casper.rholang
 import cats.data.EitherT
 import cats.effect.{Resource, Sync}
 import cats.syntax.all._
-import cats.{Functor, Id}
+import cats.{Applicative, Functor, Id}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
@@ -82,7 +82,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       (hash, Seq(result), _) = res
     } yield (hash, result)
 
-  private def replayComputeState[F[_]: Functor](runtimeManager: RuntimeManager[F])(
+  private def replayComputeState[F[_]: Applicative](runtimeManager: RuntimeManager[F])(
       stateHash: StateHash,
       processedDeploy: ProcessedDeploy
   ): F[Either[ReplayFailure, StateHash]] =
@@ -97,7 +97,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       ),
       withCostAccounting = true
     )
-
   "computeState" should "charge for deploys" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       val genPostState = genesis.body.state.postStateHash

@@ -322,7 +322,8 @@ object GenesisTest {
       kvsManager     <- Resources.mkTestRNodeStoreManager[F](storePath)
       rStore         <- kvsManager.rSpaceStores
       mStore         <- RuntimeManager.mergeableStore(kvsManager)
-      runtimeManager <- RuntimeManager[F](rStore, mStore, Genesis.NonNegativeMergeableTagName)
+      t              = RuntimeManager.noOpExecutionTracker
+      runtimeManager <- RuntimeManager[F](rStore, mStore, Genesis.NonNegativeMergeableTagName, t)
       result         <- body(runtimeManager, genesisPath, log, time)
       _              <- Sync[F].delay { storePath.recursivelyDelete() }
       _              <- Sync[F].delay { gp.recursivelyDelete() }

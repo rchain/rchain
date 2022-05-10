@@ -68,8 +68,14 @@ object Setup {
 
     val mStore = RuntimeManager.mergeableStore(spaceKVManager).unsafeRunSync(scheduler)
     implicit val runtimeManager =
-      RuntimeManager[Task](rspace, replay, historyRepo, mStore, Genesis.NonNegativeMergeableTagName)
-        .unsafeRunSync(scheduler)
+      RuntimeManager[Task](
+        rspace,
+        replay,
+        historyRepo,
+        mStore,
+        Genesis.NonNegativeMergeableTagName,
+        RuntimeManager.noOpExecutionTracker[Task]
+      ).unsafeRunSync(scheduler)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
