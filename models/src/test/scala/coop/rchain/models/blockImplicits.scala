@@ -189,6 +189,8 @@ object blockImplicits {
       ret = block.copy(blockHash = blockHash)
     } yield ret
 
+  val arbBlockMessage = Arbitrary(blockElementGen())
+
   def blockElementsWithParentsGen(genesis: BlockMessage): Gen[List[BlockMessage]] =
     Gen.sized { size =>
       (0 until size).foldLeft(Gen.listOfN(0, blockElementGen())) {
