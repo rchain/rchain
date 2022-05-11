@@ -16,9 +16,7 @@
  */
 
 new
-  MultiSigRevVaultDispatcher,
   MultiSigRevVault,
-  rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`),
   _multiSigRevVault,
@@ -269,11 +267,9 @@ in {
       ret!({"multiSigVaultUnf": *_multiSigRevVault})
     }
   } |
-  // Insert location channel into the registry location map
-  rb!(`rho:rchain:multiSigRevVault`, *MultiSigRevVault, *MultiSigRevVaultDispatcher) |
   // Insert the signed, write-only dispatcher contract into the registry uri map
   rs!(
-    (9223372036854775807, bundle+{*MultiSigRevVaultDispatcher}),
+    (9223372036854775807, *MultiSigRevVault),
     *deployerId,
     *uriOut
   )

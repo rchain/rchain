@@ -79,6 +79,7 @@ object RhoTrieTraverser {
     val rand =
       Tools.unforgeableNameRng(StandardDeploys.registryPubKey, StandardDeploys.registryTimestamp)
     val target = LazyList.continually(rand.next()).drop(11).head
+    println(s"ASDasdas ${target.toHexString}")
     Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target))))))
   }
 

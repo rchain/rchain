@@ -16,9 +16,7 @@
  */
 
 new
-  AuthKeyDispatcher,
   AuthKey,
-  rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
   _authKey,
@@ -74,11 +72,9 @@ in {
   contract @(*AuthKey, "extractState")(ret) = {
     ret!({"authKeyUnf": *_authKey})
   } |
-  // Insert location channel into the registry location map
-  rb!(`rho:rchain:authKey`, *AuthKey, *AuthKeyDispatcher) |
   // Inserts signed write-only AuthKey contract into the registry
   rs!(
-    (9223372036854775807, bundle+{*AuthKeyDispatcher}),
+    (9223372036854775807, *AuthKey),
     *deployerId,
     *uriOut
   )

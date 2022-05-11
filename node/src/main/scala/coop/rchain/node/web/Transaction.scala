@@ -250,7 +250,7 @@ object Transaction {
       StandardDeploys.revVaultPubKey,
       StandardDeploys.revVaultTimestamp
     )
-    val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(11).next()
+    val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(10).next()
     GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(unfogeableBytes))))
   }
 

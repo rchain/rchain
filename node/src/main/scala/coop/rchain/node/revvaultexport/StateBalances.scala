@@ -45,7 +45,7 @@ object StateBalances {
         StandardDeploys.revVaultPubKey,
         StandardDeploys.revVaultTimestamp
       )
-      val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(1).next()
+      val unfogeableBytes = seedForRevVault.next()
       Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(unfogeableBytes.toByteString)))))
     }
 

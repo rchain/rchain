@@ -6,8 +6,7 @@ new
   bootstrapInsertArbitrary(`rho:registry:insertArbitrary`),
   insertSignedCh,
   bootstrapInsertSigned(`rho:registry:insertSigned:secp256k1`),
-  insertBlessedCh,
-  bootstrapInsertBlessed(`rho:registry:insertBlessed`),
+  insertBlessed,
   blessedContractLocMapCh,
   buildUri,
   ops(`rho:registry:ops`),
@@ -19,7 +18,8 @@ new
   secpVerify(`rho:crypto:secp256k1Verify`),
   blake2b256(`rho:crypto:blake2b256Hash`),
   hashVerify,
-  storeToken
+  storeToken,
+  normalInsertSigned
 in {
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
@@ -342,7 +342,7 @@ in {
           }
         } |
         // Returns the current map
-        contract @(bundle+{*TreeHashMap}, "extractState")(ret) = {
+        contract @(*TreeHashMap, "extractState")(ret) = {
           for (@map <<- _registryStore) {
             ret!({"registryMap": map, "storeToken": *storeToken})
           }
@@ -398,7 +398,7 @@ in {
     }
   } |
   // blessed contract uri shorthand map
-  match {
+  let @shorthands, @shortHandsRevert <- {
     `rho:lang:either`             : `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn`,
     `rho:lang:listOps`            : `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks`,
     `rho:lang:nonNegativeNumber`  : `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9`,
@@ -407,8 +407,16 @@ in {
     `rho:rchain:pos`              : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
     `rho:rchain:revVault`         : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
     `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
-    } {
-    shorthands => {
+    }, {
+    `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn` : `rho:lang:either`,
+    `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks` : `rho:lang:listOps`,
+    `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9` : `rho:lang:nonNegativeNumber` ,
+    `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i` : `rho:rchain:authKey`,
+    `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc` : `rho:rchain:makeMint`,
+    `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr` : `rho:rchain:pos`,
+    `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j` : `rho:rchain:revVault`,
+    `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn` : `rho:rchain:multiSigRevVault`
+    } in {
       contract hashVerify(@data, @sig, @pubKey, ret) = {
         new hashCh in {
           // hash the data
@@ -431,7 +439,7 @@ in {
           // add TreeHashMap location to location map
           for (@blessedContractLocMap <- blessedContractLocMapCh) {
             blessedContractLocMapCh!(blessedContractLocMap.set(`rho:lang:treeHashMap`, *TreeHashMapLoc)) |
-            TreeHashMapLoc!(bundle+{*TreeHashMap})
+            TreeHashMapLoc!(*TreeHashMap)
           } |
           // Registers `lookupCh` as a lookup channel for the registry
           bootstrapLookup!(*lookupCh) | // this will work only once
@@ -467,6 +475,37 @@ in {
           }
         }
       } |
+      contract normalInsertSigned(@uri, @nonce, @data, ret) = {
+        for (@map <<- _registryStore) {
+          new responseCh in {
+            TreeHashMap!("get", map, uri, *responseCh) |
+            for (@response <- responseCh) {
+              match response {
+                Nil => {
+                  new ack in {
+                    TreeHashMap!("set", map, uri, (nonce, data), *ack) |
+                    for (_ <- ack) {
+                      ret!(uri)
+                    }
+                  }
+                }
+                (oldNonce, _) => {
+                  if (nonce > oldNonce) {
+                    new ack in {
+                      TreeHashMap!("set", map, uri, (nonce, data), *ack) |
+                      for (_ <- ack) {
+                        ret!(uri)
+                      }
+                    }
+                  } else {
+                    ret!(Nil)
+                  }
+                }
+              }
+            }
+          }
+        }
+      } |
       // Registers `insertSignedCh` as an insertSigned channel in the registry
       bootstrapInsertSigned!(*insertSignedCh) | // this will work only once
       for (insertSigned <- insertSignedCh) {
@@ -479,32 +518,19 @@ in {
               ops!("buildUri", pubKeyBytes, *uriCh) |
               for (@uri <- uriCh) {
                 for (@map <<- _registryStore) {
-                  new responseCh in {
-                    TreeHashMap!("get", map, uri, *responseCh) |
-                    for (@response <- responseCh) {
-                      match response {
-                        Nil => {
-                          new ack in {
-                            TreeHashMap!("set", map, uri, (nonce, data), *ack) |
-                            for (_ <- ack) {
-                              ret!(uri)
-                            }
-                          }
-                        }
-                        (oldNonce, _) => {
-                          if (nonce > oldNonce) {
-                            new ack in {
-                              TreeHashMap!("set", map, uri, (nonce, data), *ack) |
-                              for (_ <- ack) {
-                                ret!(uri)
-                              }
-                            }
-                          } else {
-                            ret!(Nil)
-                          }
-                        }
-                      }
-                    }
+                  match uri {
+                    //
+                    // AuthKey
+                    `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i` => {insertBlessed!(uri, nonce, data, *ret)}
+                    // MakeMint
+                    `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc` => {insertBlessed!(uri, nonce, data, *ret)}
+                    // PoS
+                    `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr` => {insertBlessed!(uri, nonce, data, *ret)}
+                    // RevVault
+                    `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j` => {insertBlessed!(uri, nonce, data, *ret)}
+                    // MultiSigVault
+                    `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn` => {insertBlessed!(uri, nonce, data, *ret)}
+                    _ => {normalInsertSigned!(uri, nonce, data, *ret)}
                   }
                 }
               }
@@ -514,13 +540,10 @@ in {
       } |
       // blessedContractMap: uriShorthand -> location
       blessedContractLocMapCh!({}) |
-      // Registers `insertBlessedCh` as an insertBlessed channel in the registry
-      bootstrapInsertBlessed!(*insertBlessedCh) |
-      for (insertBlessed <- insertBlessedCh) {
-        // A consume is included for each (updatable) blessed contract
-        new newInsert in {
-          contract newInsert(@lib, @uri, dispatcher) = {
-            new loc in {
+      contract insertBlessed(@uri, @nonce, @lib, ret) = {
+        for (@blessedContractLocMap <<- blessedContractLocMapCh){
+          if (blessedContractLocMap.getOrElse(shortHandsRevert.get(uri), Nil) == Nil){
+            new loc, dispatcher in {
               loc!(lib) |
               contract dispatcher(@arg1) = {
                 for (realAK <<- loc) {
@@ -567,27 +590,16 @@ in {
                   realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
                 }
               } |
-              for (@bcMap <- blessedContractLocMapCh) {
-                blessedContractLocMapCh!(bcMap.set(uri, *loc))
-              } 
-            } 
-          }|
-          for (@`rho:rchain:authKey`, @lib, @dispatcher <- insertBlessed) {
-            newInsert!(lib, `rho:rchain:authKey`, dispatcher)
-          } |
-          for (@`rho:rchain:makeMint`, @lib, @dispatcher <- insertBlessed) {
-            newInsert!(lib, `rho:rchain:makeMint`, dispatcher)
-          } |
-          for (@`rho:rchain:multiSigRevVault`, @lib, @dispatcher <- insertBlessed) {
-            newInsert!(lib, `rho:rchain:multiSigRevVault`, dispatcher)
-          } |
-          for (@`rho:rchain:pos`, @lib, @dispatcher <- insertBlessed) {
-            newInsert!(lib, `rho:rchain:pos`, dispatcher)
-          } |
-          for (@`rho:rchain:revVault`, @lib, @dispatcher <- insertBlessed) {
-            newInsert!(lib, `rho:rchain:revVault`, dispatcher)
+              normalInsertSigned!(uri, nonce, bundle+{*dispatcher}, *ret) |
+              for (@blessedContractLocMap <- blessedContractLocMapCh){
+                blessedContractLocMapCh!(blessedContractLocMap.set(shortHandsRevert.get(uri), *loc))
+              }
+            }
+          } else {
+            ret!(Nil)
           }
-        } 
+        }
+         
       } |
       {
         let @pubKey <- 
@@ -629,7 +641,7 @@ in {
                       } 
                     }
                   } else {
-                    ret!((false, "You have not permissions to update system contract!"))
+                    ret!((false, "You have no permissions to update system contract!"))
                   }
                 }
               }
@@ -702,6 +714,6 @@ in {
           }
         }
       }
-    }
+
   }
 }

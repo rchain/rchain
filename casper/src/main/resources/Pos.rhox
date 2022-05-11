@@ -71,9 +71,7 @@ User transfer the bonding amount directly to posVault. `allBonds` would update w
 */
 
 new
-  PosDispatcher,
   PoS,
-  rb(`rho:registry:insertBlessed`),
   registryLookup(`rho:registry:lookup`),
   revAddressOps(`rho:rev:address`),
   getUser,
@@ -126,7 +124,7 @@ in {
       // ret: the return channel of the create
       // pubKey: the pubkey which control the unforgeable name
       contract createUnfVault(ret, @pubkey) = {
-        new unf, unfAddrRet, createRetCh, unfVaultHandle, stdout(`rho:io:stdout`) in {
+        new unf, unfAddrRet, createRetCh, unfVaultHandle in {
           revAddressOps!("fromUnforgeable", *unf, *unfAddrRet) |
           for (@unfAddr <- unfAddrRet){
             @RevVault!("findOrCreate", unfAddr, *createRetCh) |
@@ -525,12 +523,12 @@ in {
                                     // 2. Accumulate `committedRewards` with the result of step 1
                                     commitCurrentEpochRewards!(state, currentRewards, *updatedRewardsCh) |
                                     for (@newCommittedState <- updatedRewardsCh) {
-                                      // 3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` 
+                                      // 3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers`
                                       // when pendingWithdrawers is not empty, remove the validator in `allBonds`
                                       movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
                                       for (@newMovedPendingState <- movePendingWithdrawCh){
                                         // 4. When the block number reaches the quantinue of `withdrawers` ,
-                                        //  transfer the corresponding bonds+ rewards to the corresponding validator from posVault. 
+                                        //  transfer the corresponding bonds+ rewards to the corresponding validator from posVault.
                                         // 5. update `pendingWithdrawers` to empty Map {}.
                                         removeQuarantinedWithdrawers!(blockNumber, newMovedPendingState, *removeQuarantinedCh) |
                                         for (@newRemovedQuantinueState <- removeQuarantinedCh) {
@@ -543,7 +541,7 @@ in {
                                       }
                                     }
                                   }
-                                } | 
+                                } |
                                 // Transfers withdrawing validator's bond + accumulated rewards from PoS vault to their vault.
                                 contract payWithdrawer(@(pk, amount), returnCh) = {
                                   new vaultCh, revAddressCh, createCh, posAuthKeyCh in {
@@ -568,7 +566,7 @@ in {
                                 } |
                                 contract movePendingWithdrawer(@state, returnCh) = {
                                   new movePending in {
-                                    @ListOps!("fold", state.get("pendingWithdrawers").toList(), state, *movePending, *returnCh) | 
+                                    @ListOps!("fold", state.get("pendingWithdrawers").toList(), state, *movePending, *returnCh) |
                                     contract movePending(@(pk, quantine), @updatedState, resultCh) = {
                                       resultCh!(updatedState
                                                 .set("withdrawers", updatedState.get("withdrawers").set(pk, (updatedState.get("allBonds").get(pk), quantine)))
@@ -583,8 +581,8 @@ in {
                                 // updates the committed rewards map.
                                 contract removeQuarantinedWithdrawers(@currentBlockNumber, @state, returnCh) = {
                                   new quarantinedValidatorsCh, validatorsToWithdrawListCh,
-                                      isQuarantineFinished, notWithdrawn, payWithdraw, 
-                                      newBondsListCh, newWithdrawersListCh, 
+                                      isQuarantineFinished, notWithdrawn, payWithdraw,
+                                      newBondsListCh, newWithdrawersListCh,
                                       computeRemove, payRet
                                   in {
                                     // Calculate rewards by taking PoS balance on PoS vault and subtract all active stake + newly bonded
@@ -620,7 +618,7 @@ in {
                       }
                     }
                   }
-                } 
+                }
               } |
               //
               contract PoS(@"commitRandomImage", @deployerId, @hash, ackCh) = {
@@ -718,12 +716,10 @@ in {
       }
     }
     }|
-    // Insert location channel into the registry location map
-     rb!(`rho:rchain:pos`, *PoS, *PosDispatcher) |
      // Put the contract data on the location channel
      // Insert the signed, write-only dispatcher contract into the registry uri map
     rs!(
-      (9223372036854775807, bundle+{*PosDispatcher}),
+      (9223372036854775807, *PoS),
       *deployerId,
       *uriOut)
   }
