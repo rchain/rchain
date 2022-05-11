@@ -24,7 +24,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
       emptyHistory <- emptyHistoryF
       newHistory   <- emptyHistory.process(data)
       readValue    <- newHistory.read(_zeros)
-      _            = readValue shouldBe data.head.hash.bytes.some
+      _            = readValue shouldBe data.head.hash.some
     } yield ()
   }
 
@@ -35,7 +35,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
       newHistory      <- emptyHistory.process(data)
       historyOneReset <- emptyHistory.reset(newHistory.root)
       readValue       <- historyOneReset.read(_zeros)
-      _               = readValue shouldBe data.head.hash.bytes.some
+      _               = readValue shouldBe data.head.hash.some
     } yield ()
   }
 
@@ -45,7 +45,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
       emptyHistory <- emptyHistoryF
       newHistory   <- emptyHistory.process(data)
       readValues   <- data.traverse(action => newHistory.read(action.key))
-      _            = readValues shouldBe data.map(_.hash.bytes.some)
+      _            = readValues shouldBe data.map(_.hash.some)
     } yield ()
   }
 
@@ -57,7 +57,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
         emptyHistory <- emptyHistoryF
         newHistory   <- emptyHistory.process(data)
         readValues   <- data.traverse(action => newHistory.read(action.key))
-        _            = readValues shouldBe data.map(_.hash.bytes.some)
+        _            = readValues shouldBe data.map(_.hash.some)
       } yield ()
   }
 
@@ -255,7 +255,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
                           for {
                             re <- newHistory.read(k)
                             _ = re match {
-                              case Some(v) => assert(v == value.bytes)
+                              case Some(v) => assert(v == value)
                               case _       => fail("Can not get value")
                             }
                           } yield ()

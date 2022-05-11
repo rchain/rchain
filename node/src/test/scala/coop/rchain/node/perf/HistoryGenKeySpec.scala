@@ -3,7 +3,6 @@ package coop.rchain.node.perf
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RadixTree.ExportData
@@ -87,16 +86,16 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   sealed trait HistoryType[F[_]] {
     val history: History[F]
-    def getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+    def getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]]
   }
   case class HistoryWithoutFunc[F[_]](
       history: History[F],
-      getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+      getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]]
   ) extends HistoryType[F]
 
   case class HistoryWithFunc[F[_]](
       history: History[F],
-      getNodeDataFromStore: ByteVector => F[Option[ByteVector]],
+      getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]],
       sizeBytes: () => Long,
       numRecords: () => Int
   ) extends HistoryType[F]
@@ -196,7 +195,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
       def readAndVerify(h: History[F], tasks: List[Blake2b256Hash]) =
         tasks.traverse { t =>
-          h.read(t.bytes).map(readVal => assert(readVal.contains(t.bytes), "Test read not passed"))
+          h.read(t.bytes).map(readVal => assert(readVal.contains(t), "Test read not passed"))
         }
 
       def calcSizeBytesAndNumRecords(h: HistoryType[F]): Option[(Long, Int)] =
@@ -208,7 +207,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
       def export(
           rootHash: Blake2b256Hash,
           skipSize: Int,
-          getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+          getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]]
       ): F[ExportData] = {
         import coop.rchain.rspace.history.RadixTree._
         if (Settings.typeHistory == Radix) {
@@ -220,7 +219,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
             flagLeafValues = true
           )
           sequentialExport[F](
-            rootHash.bytes,
+            rootHash,
             None,
             skipSize,
             1000000,
@@ -237,7 +236,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
       ): F[Unit] =
         for {
           keysForValid <- Sync[F].delay(
-                           expData.nodeValues.map(bytes => ByteVector(Blake2b256.hash(bytes)))
+                           expData.nodeValues.map(bytes => Blake2b256Hash.create(bytes))
                          )
 
           _ = assert(keysForValid == expData.nodeKeys, "Error 1 of validation")

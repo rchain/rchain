@@ -24,7 +24,7 @@ object RSpaceExporter {
       startPath: Seq[(Blake2b256Hash, Option[Byte])],
       skip: Int,
       take: Int,
-      getFromHistory: ByteVector => F[Option[ByteVector]]
+      getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
   ): F[Vector[TrieNode[Blake2b256Hash]]] = {
 
     val settings = ExportDataSettings(
@@ -46,16 +46,9 @@ object RSpaceExporter {
         prefix128.take(sizePrefix.toLong).some
       }
 
-    def constructNodes(leafKeys: Seq[ByteVector], nodeKeys: Seq[ByteVector]) = {
-      val dataKeys = leafKeys.map { key =>
-        val hash = Blake2b256Hash.fromByteVector(key)
-        TrieNode(hash, isLeaf = true, Vector())
-      }.toVector
-
-      val historyKeys = nodeKeys.map { key =>
-        val hash = Blake2b256Hash.fromByteVector(key)
-        TrieNode(hash, isLeaf = false, Vector())
-      }.toVector
+    def constructNodes(leafKeys: Seq[Blake2b256Hash], nodeKeys: Seq[Blake2b256Hash]) = {
+      val dataKeys    = leafKeys.map(TrieNode(_, isLeaf = true, Vector())).toVector
+      val historyKeys = nodeKeys.map(TrieNode(_, isLeaf = false, Vector())).toVector
 
       dataKeys ++ historyKeys
     }
@@ -83,12 +76,10 @@ object RSpaceExporter {
     }
 
     def constructLastNode(
-        lastKey: ByteVector,
+        lastHash: Blake2b256Hash,
         lastPath: Vector[(Blake2b256Hash, None.type)]
-    ) = {
-      val hash = Blake2b256Hash.fromByteVector(lastKey)
-      Vector(TrieNode(hash, isLeaf = false, lastPath))
-    }
+    ) =
+      Vector(TrieNode(lastHash, isLeaf = false, lastPath))
 
     if (startPath.isEmpty) Vector[TrieNode[Blake2b256Hash]]().pure
     else
@@ -99,7 +90,7 @@ object RSpaceExporter {
         // TODO: Implemented a temporary solution with lastPrefix coding in 5 blake256 hashes.
         lastPrefix = createLastPrefix(prefixSeq)
 
-        expRes <- sequentialExport(rootHash.bytes, lastPrefix, skip, take, getFromHistory, settings)
+        expRes <- sequentialExport(rootHash, lastPrefix, skip, take, getFromHistory, settings)
 
         (data, newLastPrefixOpt)                = expRes
         ExportData(_, nodeKeys, _, _, leafKeys) = data

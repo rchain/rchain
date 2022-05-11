@@ -15,27 +15,29 @@ import scodec.bits.ByteVector
   */
 object RadixHistory {
   val emptyRootHash: Blake2b256Hash = RadixTree.emptyRootHash
+  val codecBlakeHash =
+    scodec.codecs.bytes.xmap[Blake2b256Hash](bv => Blake2b256Hash.fromByteVector(bv), _.bytes)
 
   def apply[F[_]: Sync: Parallel](
       root: Blake2b256Hash,
-      store: KeyValueTypedStore[F, ByteVector, ByteVector]
+      store: KeyValueTypedStore[F, Blake2b256Hash, ByteVector]
   ): F[RadixHistory[F]] =
     for {
       impl <- Sync[F].delay(new RadixTreeImpl[F](store))
-      node <- impl.loadNode(root.bytes, noAssert = true)
+      node <- impl.loadNode(root, noAssert = true)
     } yield RadixHistory(root, node, impl, store)
 
   def createStore[F[_]: Sync](
       store: KeyValueStore[F]
-  ): KeyValueTypedStore[F, ByteVector, ByteVector] =
-    store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+  ): KeyValueTypedStore[F, Blake2b256Hash, ByteVector] =
+    store.toTypedStore(codecBlakeHash, scodec.codecs.bytes)
 }
 
 final case class RadixHistory[F[_]: Sync: Parallel](
     rootHash: Blake2b256Hash,
     rootNode: Node,
     impl: RadixTreeImpl[F],
-    store: KeyValueTypedStore[F, ByteVector, ByteVector]
+    store: KeyValueTypedStore[F, Blake2b256Hash, ByteVector]
 ) extends History[F] {
   override type HistoryF = History[F]
 
@@ -44,10 +46,10 @@ final case class RadixHistory[F[_]: Sync: Parallel](
   override def reset(root: Blake2b256Hash): F[History[F]] =
     for {
       impl <- Sync[F].delay(new RadixTreeImpl[F](store))
-      node <- impl.loadNode(root.bytes, noAssert = true)
+      node <- impl.loadNode(root, noAssert = true)
     } yield this.copy(root, node, impl, store)
 
-  override def read(key: ByteVector): F[Option[ByteVector]] =
+  override def read(key: ByteVector): F[Option[Blake2b256Hash]] =
     impl.read(rootNode, key)
 
   override def process(actions: List[HistoryAction]): F[History[F]] =
@@ -60,8 +62,7 @@ final case class RadixHistory[F[_]: Sync: Parallel](
       newRootDataOpt <- impl.saveAndCommit(rootNode, actions)
       newHistoryOpt = newRootDataOpt.map { newRootData =>
         val (newRootNode, newRootHash) = newRootData
-        val blakeHash                  = Blake2b256Hash.fromByteVector(newRootHash)
-        this.copy(blakeHash, newRootNode, impl, store)
+        this.copy(newRootHash, newRootNode, impl, store)
       }
       _ = impl.clearReadCache()
     } yield newHistoryOpt.getOrElse(this)
