@@ -91,7 +91,6 @@ object Genesis {
       bonds = bondsProto(genesis.proofOfStake).toList
     )
 
-    //FIXME any failures here should terminate the genesis ceremony
     val blockDeploys = processedDeploys.filterNot(_.isFailed)
     val sortedDeploys =
       blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
@@ -103,9 +102,8 @@ object Genesis {
     )
     val version = 1 //FIXME make this part of Genesis, and pass it from upstream
     val seqNum  = 0L
-    val header  = Header(List.empty[StateHash])
 
-    unsignedBlockProto(version, genesis.sender, body, header, List.empty, genesis.shardId, seqNum)
+    unsignedBlockProto(version, genesis.sender, body, List.empty, genesis.shardId, seqNum)
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {

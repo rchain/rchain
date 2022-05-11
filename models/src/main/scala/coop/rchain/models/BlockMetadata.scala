@@ -69,6 +69,6 @@ object BlockMetadata {
       invalid,
       directlyFinalized,
       finalized,
-      b.header.parentsHashList
+      List()
     )
 }

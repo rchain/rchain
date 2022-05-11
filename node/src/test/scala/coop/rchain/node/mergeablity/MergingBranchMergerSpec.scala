@@ -397,7 +397,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             // create children blocks
             r <- mkTailBlocks(baseState, seqNum, mergingBlocksNum)
             mergingBlocks = r.map(
-              b => b.copy(header = b.header.copy(parentsHashList = List(baseBlock.blockHash)))
+              b => b.copy(justifications = List(baseBlock.blockHash))
             )
             _ <- mergingBlocks.traverse(dagStore.insert(_, false))
 
@@ -442,12 +442,10 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             _                            = assert(mergedState != baseBlock.body.state.postStateHash)
 
             // create next base block (merge block)
-            r <- mkHeadBlock(mergedState, seqNum, nexBaseBlockNum)
-            nextBaseBlock = r.copy(
-              header = r.header.copy(parentsHashList = mergingBlocks.map(_.blockHash))
-            )
-            _ <- dagStore.insert(nextBaseBlock, false)
-            _ <- dagStore.recordDirectlyFinalized(nextBaseBlock.blockHash, _ => ().pure[Task])
+            r             <- mkHeadBlock(mergedState, seqNum, nexBaseBlockNum)
+            nextBaseBlock = r.copy(justifications = mergingBlocks.map(_.blockHash))
+            _             <- dagStore.insert(nextBaseBlock, false)
+            _             <- dagStore.recordDirectlyFinalized(nextBaseBlock.blockHash, _ => ().pure[Task])
           } yield nextBaseBlock
         }
 

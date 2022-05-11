@@ -13,6 +13,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
+import coop.rchain.shared.syntax.sharedSyntaxKeyValueTypedStore
 
 final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: Log] {
   private def calculateSeenSendersSince(
@@ -44,13 +45,15 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: 
   ): F[CheckProposeConstraintsResult] = {
     val synchronyConstraintThreshold = s.onChainState.shardConf.synchronyConstraintThreshold
     val validator                    = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-    val mainParentOpt                = s.parents.headOption
 
     s.dag.latestMessageHash(validator).flatMap {
       case Some(lastProposedBlockHash) =>
         for {
           lastProposedBlockMeta <- s.dag.lookupUnsafe(lastProposedBlockHash)
           checkConstraint = for {
+            // TODO: replaced when parents are removed from BlockMessage
+            mainParentOpt <- BlockStore[F].get1(s.justifications.head.latestBlockHash)
+
             mainParent     <- mainParentOpt.liftTo[F](new Exception(s"Parent blocks not found.}"))
             mainParentMeta <- s.dag.lookupUnsafe(mainParent.blockHash)
 

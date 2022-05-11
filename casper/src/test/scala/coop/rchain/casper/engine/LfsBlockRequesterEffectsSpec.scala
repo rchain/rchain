@@ -27,9 +27,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     blockImplicits.getRandomBlock(
       hashF = hashFun.some,
       setBlockNumber = number.some,
-      setJustifications = latestMessages.some,
-      // Parents must be set also to prevent auto generation
-      setParentsHashList = latestMessages.some
+      setJustifications = latestMessages.some
     )
   }
 

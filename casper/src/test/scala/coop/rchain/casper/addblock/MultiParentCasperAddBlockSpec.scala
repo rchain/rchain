@@ -404,10 +404,8 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
     }
   }
 
-  it should "estimate parent properly" in effectTest {
-
-    val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
-    val (_, validatorPks) = validatorKeyPairs.unzip
+  // TODO: ignored when parents are removed from BlockMessage
+  it should "estimate parent properly" ignore effectTest {
 
     def deployment(ts: Long) =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts, shardId = SHARD_ID)
@@ -424,42 +422,27 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         node.addBlock(signed)
       )
 
-    TestNode
-      .networkEff(
-        buildGenesis(
-          buildGenesisParameters(
-            validatorKeyPairs,
-            Map(
-              validatorPks(0) -> 3L,
-              validatorPks(1) -> 1L,
-              validatorPks(2) -> 5L,
-              validatorPks(3) -> 2L,
-              validatorPks(4) -> 4L
-            )
-          )
-        ),
-        networkSize = 3
-      )
-      .map(_.toList)
-      .use { nodes =>
-        val v1 = nodes(0)
-        val v2 = nodes(1)
-        val v3 = nodes(2)
-        for {
-          _    <- v1.deploy(deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
-          v2c1 <- v2.deploy(deployment(2)) >> create(v2) //V2#1
-          _    <- v2.handleReceive()
-          _    <- v3.handleReceive()
-          _    <- v1.deploy(deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
-          v3c2 <- v3.deploy(deployment(5)) >> create(v3) //V3#2
-          _    <- v3.handleReceive()
-          _    <- add(v3, v3c2) //V3#2
-          _    <- add(v2, v2c1) //V2#1
-          _    <- v3.handleReceive()
-          r    <- v3.deploy(deployment(6)) >> create(v3) >>= (b => add(v3, b))
-          _    = r shouldBe Right(Right(Valid))
-        } yield ()
-      }
+    val genesis = buildGenesis(buildGenesisParametersFromBonds(List(3L, 1L, 5L, 2L, 4L)))
+
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+      val v1 = nodes(0)
+      val v2 = nodes(1)
+      val v3 = nodes(2)
+      for {
+        _    <- v1.deploy(deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
+        v2c1 <- v2.deploy(deployment(2)) >> create(v2) //V2#1
+        _    <- v2.handleReceive()
+        _    <- v3.handleReceive()
+        _    <- v1.deploy(deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
+        v3c2 <- v3.deploy(deployment(5)) >> create(v3) //V3#2
+        _    <- v3.handleReceive()
+        _    <- add(v3, v3c2) //V3#2
+        _    <- add(v2, v2c1) //V2#1
+        _    <- v3.handleReceive()
+        r    <- v3.deploy(deployment(6)) >> create(v3) >>= (b => add(v3, b))
+        _    = r shouldBe Right(Right(Valid))
+      } yield ()
+    }
   }
 
   it should "succeed at slashing" in effectTest {
@@ -500,25 +483,23 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         bonds = ProtoUtil.bonds(genesis.genesisBlock).toList,
         blockNumber = 1
       )
-    val header                   = Header(parentsHashList = signedInvalidBlock.header.parentsHashList)
-    val blockHash                = Blake2b256.hash(header.toProto.toByteArray)
+    val blockHash                = ProtoUtil.hashBlock(signedInvalidBlock)
     val body                     = Body(postState, deploys.toList, List.empty, List.empty)
     val serializedJustifications = List(signedInvalidBlock.blockHash)
-    val serializedBlockHash      = ByteString.copyFrom(blockHash)
+    val serializedBlockHash      = blockHash
     val blockThatPointsToInvalidBlock =
       BlockMessage(
         version = 0,
         serializedBlockHash,
         sender = ByteString.EMPTY,
         seqNum = 0,
-        header,
         body,
         serializedJustifications,
         sig = ByteString.EMPTY,
         sigAlgorithm = "",
         shardId = "root"
       )
-    ValidatorIdentity(defaultValidatorSks(1))
+    ValidatorIdentity(randomValidatorSks(1))
       .signBlock(
         blockThatPointsToInvalidBlock
       )

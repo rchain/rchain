@@ -62,7 +62,6 @@ class BlockQueryResponseAPITest
       setValidator = sender.some,
       setDeploys = randomDeploys.some,
       setJustifications = List(genesisBlock.blockHash).some,
-      setParentsHashList = List(genesisBlock.blockHash).some,
       setBonds = List(bondsValidator).some
     )
 
@@ -94,9 +93,6 @@ class BlockQueryResponseAPITest
               b.sigAlgorithm should be(secondBlock.sigAlgorithm)
               b.shardId should be(secondBlock.toProto.shardId)
               b.version should be(secondBlock.version)
-              b.parentsHashList should be(
-                secondBlock.header.parentsHashList.map(_.toHexString)
-              )
               b.blockNumber should be(secondBlock.body.state.blockNumber)
               b.preStateHash should be(
                 secondBlock.body.state.preStateHash.toHexString
@@ -183,9 +179,6 @@ class BlockQueryResponseAPITest
               blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
               blockInfo.shardId should be(secondBlock.toProto.shardId)
               blockInfo.version should be(secondBlock.version)
-              blockInfo.parentsHashList should be(
-                secondBlock.header.parentsHashList.map(_.toHexString)
-              )
               blockInfo.blockNumber should be(secondBlock.body.state.blockNumber)
               blockInfo.preStateHash should be(
                 secondBlock.body.state.preStateHash.toHexString

@@ -26,7 +26,6 @@ trait BlockDagStorageTest
 
   val genesis = getRandomBlock(
     setBonds = Some(List.empty),
-    setParentsHashList = List.empty.some,
     setBlockNumber = 0L.some
   )
 

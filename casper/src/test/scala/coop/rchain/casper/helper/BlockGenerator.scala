@@ -43,7 +43,6 @@ object BlockGenerator {
       ByteString.EMPTY,
       ByteString.EMPTY,
       IndexedSeq.empty,
-      List.empty,
       Set.empty,
       Set.empty,
       0,
@@ -61,14 +60,12 @@ object BlockGenerator {
       dag <- BlockDagStorage[F].getRepresentation
       computeBlockCheckpointResult <- computeBlockCheckpoint(
                                        block,
-                                       genesis,
                                        mkCasperSnapshot(dag),
                                        runtimeManager
                                      )
       (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
       result <- injectPostStateHash[F](
                  block,
-                 genesis,
                  postB1StateHash,
                  postB1ProcessedDeploys
                )
@@ -76,15 +73,13 @@ object BlockGenerator {
 
   private def computeBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: Metrics: Span](
       b: BlockMessage,
-      genesis: BlockMessage,
       s: CasperSnapshot,
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
+    val deploys = ProtoUtil.deploys(b).map(_.deploy)
     for {
-      parents <- ProtoUtil.getParents[F](b)
-      deploys = ProtoUtil.deploys(b).map(_.deploy)
       computedParentsInfo <- computeParentsPostState(
-                              parents,
+                              b.justifications,
                               s,
                               runtimeManager
                             )
@@ -101,7 +96,6 @@ object BlockGenerator {
 
   private def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
       b: BlockMessage,
-      genesis: BlockMessage,
       postGenStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
   ): F[Unit] = {
@@ -116,7 +110,6 @@ object BlockGenerator {
 
 trait BlockGenerator {
   def buildBlock[F[_]: Applicative](
-      parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
@@ -127,7 +120,6 @@ trait BlockGenerator {
       seqNum: Long = 0L
   ): F[BlockMessage] =
     getRandomBlock(
-      setParentsHashList = parentsHashList.some,
       setValidator = creator.some,
       setBonds = bonds.some,
       setJustifications = justifications.some,
@@ -150,7 +142,6 @@ trait BlockGenerator {
   ): F[BlockMessage] =
     for {
       genesis <- buildBlock[F](
-                  Seq.empty,
                   creator,
                   bonds,
                   justifications,
@@ -165,7 +156,6 @@ trait BlockGenerator {
     } yield genesis
 
   def createBlock[F[_]: Sync: BlockStore: BlockDagStorage](
-      parentsHashList: Seq[BlockHash],
       creator: Validator = BlockUtil.generateValidator("Validator"),
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
@@ -178,7 +168,6 @@ trait BlockGenerator {
   ): F[BlockMessage] =
     for {
       block <- buildBlock[F](
-                parentsHashList,
                 creator,
                 bonds,
                 justifications,
@@ -192,7 +181,7 @@ trait BlockGenerator {
       nextCreatorSeqNum <- if (block.seqNum == 0L)
                             dag.latestMessage(block.sender).map(_.fold(-1L)(_.seqNum) + 1L)
                           else block.seqNum.pure[F]
-      nextId <- parentsHashList.toList
+      nextId <- justifications.toList
                  .filterNot(dag.invalidBlocksSet)
                  .traverse(
                    BlockStore[F].getUnsafe(_).map(_.body.state.blockNumber)
@@ -209,7 +198,6 @@ trait BlockGenerator {
     } yield modifiedBlock
 
   def createValidatorBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
-      parents: Seq[BlockMessage],
       justifications: Seq[BlockMessage],
       validator: Validator,
       bonds: Seq[Bond],
@@ -220,7 +208,6 @@ trait BlockGenerator {
     for {
       deploy <- ConstructDeploy.basicProcessedDeploy[F](0, shardId)
       result <- createBlock[F](
-                 parents.map(_.blockHash),
                  creator = validator,
                  bonds = bonds,
                  deploys = Seq(deploy),

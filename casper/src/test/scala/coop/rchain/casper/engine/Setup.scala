@@ -47,7 +47,7 @@ object Setup {
     implicit val scheduler        = Scheduler.Implicits.global
     import coop.rchain.rholang.interpreter.storage._
     implicit val m                     = matchListPar[Task]
-    val params @ (_, _, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val params @ (_, _, genesisParams) = GenesisBuilder.buildGenesisParametersSize(4)
     val context                        = GenesisBuilder.buildGenesis(params)
 
     val networkId = "test"

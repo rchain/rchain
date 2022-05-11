@@ -32,7 +32,7 @@ class RhoSpec(
     testObject: CompiledRholangSource[_],
     extraNonGenesisDeploys: Seq[Signed[DeployData]],
     executionTimeout: FiniteDuration,
-    genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParameters()
+    genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParametersSize(4)
 ) extends AnyFlatSpec
     with AppendedClues
     with Matchers {

@@ -142,7 +142,6 @@ object EqualM extends EqualMDerivation {
   implicit val BodyHash                  = gen[BodyProto]
   implicit val BondHash                  = gen[BondProto]
   implicit val DeployDataHash            = gen[DeployDataProto]
-  implicit val HeaderHash                = gen[HeaderProto]
   implicit val ProcessedDeployHash       = gen[ProcessedDeployProto]
   implicit val ProcessedSystemDeployHash = gen[ProcessedSystemDeployProto]
   implicit val RChainStateHash           = gen[RChainStateProto]

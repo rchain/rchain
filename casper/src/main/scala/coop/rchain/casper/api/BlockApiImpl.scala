@@ -500,7 +500,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   override def machineVerifiableDag(depth: Int): F[ApiErr[String]] =
     toposortDag[String](depth, maxDepthLimit) { topoSort =>
       val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
-        BlockStore[F].getUnsafe(blockHash) map (_.header.parentsHashList)
+        BlockStore[F].getUnsafe(blockHash) map (_.justifications)
       }
 
       MachineVerifiableDag[F](topoSort, fetchParents)

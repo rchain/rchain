@@ -2,14 +2,13 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ConstructDeploy._
-import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -22,38 +21,38 @@ import coop.rchain.shared.syntax._
 import monix.eval.Task
 
 import java.nio.file.{Files, Path}
+import scala.collection.compat.immutable.LazyList
 import scala.collection.mutable
 
 object GenesisBuilder {
 
-  def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
-    validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
+  def createBonds(validators: Iterable[PublicKey]): Iterable[(PublicKey, Long)] =
+    validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }
 
   def createGenesis(): BlockMessage =
     buildGenesis().genesisBlock
 
-  val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
-  val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip
+  val fixedValidatorKeyPairs = List((defaultSec, defaultPub), (defaultSec2, defaultPub2))
 
-  def buildGenesisParameters(
-      bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
-      validatorsNum: Int = 4
-  ): GenesisParameters = buildGenesisParameters(
-    defaultValidatorKeyPairs.take(validatorsNum),
-    bondsFunction(defaultValidatorPks.take(validatorsNum))
-  )
+  val randomValidatorKeyPairs                  = LazyList.continually(Secp256k1.newKeyPair)
+  val (randomValidatorSks, randomValidatorPks) = randomValidatorKeyPairs.unzip
 
-  def buildGenesisParametersWithRandom(
-      bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
-      validatorsNum: Int = 4
-  ): GenesisParameters = {
-    // 4 default fixed validators, others are random generated
-    val randomValidatorKeyPairs = (5 to validatorsNum).map(_ => Secp256k1.newKeyPair)
-    val (_, randomValidatorPks) = randomValidatorKeyPairs.unzip
-    buildGenesisParameters(
-      defaultValidatorKeyPairs ++ randomValidatorKeyPairs,
-      bondsFunction(defaultValidatorPks ++ randomValidatorPks)
-    )
+  /*
+   * buildGenesisParameters and buildGenesis functions have very strange combinations with TestNode
+   *  to create network based on number of validators (and read-only nodes).
+   * TestNode network creation function accepts number of nodes to create together with result from
+   *  buildGenesis function which also accepts genesis parameters with specific number of nodes.
+   */
+
+  def buildGenesisParametersSize(numOfValidators: Int): GenesisParameters = {
+    val validators = randomValidatorKeyPairs.take(numOfValidators).toList
+    buildGenesisParameters(validators)()
+  }
+
+  def buildGenesisParametersFromBonds(bonds: List[Long]): GenesisParameters = {
+    val validators = randomValidatorKeyPairs.take(bonds.size).toList
+    val bondsPair  = validators.map(_._2).zip(bonds)
+    buildGenesisParameters(validators)(bondsPair)
   }
 
   val defaultPosMultiSigPublicKeys = List(
@@ -71,13 +70,14 @@ object GenesisBuilder {
       validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
       genesisVaults: Seq[(PrivateKey, Long)],
       bonds: Map[PublicKey, Long]
-  ): GenesisParameters =
+  ): GenesisParameters = {
+    val (_, firstValidatorPubKey) = validatorKeyPairs.head
     (
       validatorKeyPairs,
       genesisVaults.map { case (k, _) => (k, Secp256k1.toPublic(k)) },
       Genesis(
+        sender = firstValidatorPubKey,
         shardId = "root",
-        blockTimestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
           maximumBond = Long.MaxValue,
@@ -99,18 +99,21 @@ object GenesisBuilder {
         blockNumber = 0
       )
     )
+  }
+
   def buildGenesisParameters(
-      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
-      bonds: Map[PublicKey, Long]
+      validatorKeyPairs: List[(PrivateKey, PublicKey)] = randomValidatorKeyPairs.take(4).toList
+  )(
+      bonds: Iterable[(PublicKey, Long)] = createBonds(validatorKeyPairs.map(_._2))
   ): GenesisParameters = {
-    val genesisVaults: Seq[(PrivateKey, PublicKey)] =
-      IndexedSeq((defaultSec, defaultPub), (defaultSec2, defaultPub2)) ++ (3 to validatorKeyPairs.size)
-        .map(_ => Secp256k1.newKeyPair)
+    val (_, firstValidatorPubKey) = validatorKeyPairs.head
+    // Genesis vaults includes fixed keys to be always accessible for deploys
+    val genesisVaults = fixedValidatorKeyPairs ++ validatorKeyPairs
     (
       validatorKeyPairs,
       genesisVaults,
       Genesis(
-        sender = defaultPub, // First key as genesis sender
+        sender = firstValidatorPubKey,
         shardId = "root",
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
@@ -150,20 +153,16 @@ object GenesisBuilder {
   private var cacheAccesses = 0
   private var cacheMisses   = 0
 
-  def buildGenesis(
-      parameters: GenesisParameters = buildGenesisParameters()
-  ): GenesisContext =
+  def buildGenesis(parameters: GenesisParameters = buildGenesisParametersSize(4)): GenesisContext =
     genesisCache.synchronized {
       cacheAccesses += 1
       genesisCache.getOrElseUpdate(parameters, doBuildGenesis(parameters))
     }
 
-  def buildGenesis(
-      validatorsNum: Int
-  ): GenesisContext =
+  def buildGenesis(validatorsNum: Int): GenesisContext =
     genesisCache.synchronized {
       cacheAccesses += 1
-      val parameters = buildGenesisParametersWithRandom(validatorsNum = validatorsNum)
+      val parameters = buildGenesisParametersSize(validatorsNum + 5)
       genesisCache.getOrElseUpdate(
         parameters,
         doBuildGenesis(parameters)

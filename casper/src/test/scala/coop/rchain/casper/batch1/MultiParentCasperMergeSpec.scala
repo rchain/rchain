@@ -1,6 +1,5 @@
 package coop.rchain.casper.batch1
 
-import cats.effect.Sync
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
@@ -10,8 +9,6 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
 import org.scalatest.matchers.should.Matchers
-import coop.rchain.blockstorage.syntax._
-import monix.eval.Task
 
 class MultiParentCasperMergeSpec extends AnyFlatSpec with Matchers with Inspectors {
 
@@ -20,7 +17,7 @@ class MultiParentCasperMergeSpec extends AnyFlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesisParams = buildGenesisParameters(validatorsNum = 3)
+  val genesisParams = buildGenesisParametersSize(3)
   val genesis       = buildGenesis(genesisParams)
 
   // TODO: this test will be replaced with the new finalizer
@@ -56,9 +53,9 @@ class MultiParentCasperMergeSpec extends AnyFlatSpec with Matchers with Inspecto
         //multiparent block joining block0 and block1 since they do not conflict
         multiparentBlock <- nodes(0).propagateBlock(deploys(2))(nodes: _*)
 
-        _ = block0.header.parentsHashList shouldBe Seq(genesis.genesisBlock.blockHash)
-        _ = block1.header.parentsHashList shouldBe Seq(genesis.genesisBlock.blockHash)
-        _ = multiparentBlock.header.parentsHashList.size shouldBe 2
+        _ = block0.justifications shouldBe Seq(genesis.genesisBlock.blockHash)
+        _ = block1.justifications shouldBe Seq(genesis.genesisBlock.blockHash)
+        _ = multiparentBlock.justifications.size shouldBe 2
         _ <- nodes(0).contains(multiparentBlock.blockHash) shouldBeF true
         _ <- nodes(1).contains(multiparentBlock.blockHash) shouldBeF true
         _ = multiparentBlock.body.rejectedDeploys.size shouldBe 0
@@ -193,7 +190,7 @@ class MultiParentCasperMergeSpec extends AnyFlatSpec with Matchers with Inspecto
         singleParentBlock <- nodes(0).addBlock(deploys(2))
         _                 <- nodes(1).handleReceive()
 
-        _ = singleParentBlock.header.parentsHashList.size shouldBe 1
+        _ = singleParentBlock.justifications.size shouldBe 1
         _ <- nodes(0).contains(singleParentBlock.blockHash) shouldBeF true
         _ <- nodes(1).knowsAbout(singleParentBlock.blockHash) shouldBeF true
       } yield ()

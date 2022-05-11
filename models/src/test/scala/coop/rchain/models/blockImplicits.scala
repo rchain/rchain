@@ -2,18 +2,16 @@ package coop.rchain.models
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
-import coop.rchain.crypto.{signatures, PrivateKey, PublicKey}
-import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash
 import coop.rchain.models.block.StateHash.StateHash
-import coop.rchain.shared.Base16
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.listOfN
 import org.scalacheck.util.Buildable
+import org.scalacheck.{Arbitrary, Gen}
 
 import scala.util.Random
 
@@ -116,7 +114,6 @@ object blockImplicits {
       setPostStateHash: Option[StateHash] = None,
       setValidator: Option[Validator] = None,
       setVersion: Option[Int] = None,
-      setParentsHashList: Option[Seq[BlockHash]] = None,
       setJustifications: Option[Seq[BlockHash]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
       setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
@@ -131,9 +128,6 @@ object blockImplicits {
       postStatehash <- if (setPostStateHash.isEmpty)
                         arbitrary[StateHash](arbitraryStateHash)
                       else Gen.const(setPostStateHash.get)
-      parentsHashList <- if (setParentsHashList.isEmpty)
-                          arbitrary[Seq[BlockHash]](arbitraryBlockHashes)
-                        else Gen.const(setParentsHashList.get)
       justifications <- if (setJustifications.isEmpty)
                          arbitrary[Seq[BlockHash]](arbitraryBlockHashes)
                        else Gen.const(setJustifications.get)
@@ -154,7 +148,6 @@ object blockImplicits {
       block = BlockMessage(
         version = version,
         blockHash = ByteString.EMPTY,
-        header = Header(parentsHashList = parentsHashList.toList),
         body = Body(
           state = RChainState(
             preStateHash = preStatehash,
@@ -183,11 +176,11 @@ object blockImplicits {
       (0 until size).foldLeft(Gen.listOfN(0, blockElementGen())) {
         case (gen, _) =>
           for {
-            blocks       <- gen
-            b            <- blockElementGen(setBonds = Some(genesis.body.state.bonds))
-            parents      <- Gen.someOf(blocks)
-            parentHashes = parents.map(_.blockHash).toList
-            newBlock     = b.copy(header = b.header.copy(parentsHashList = parentHashes))
+            blocks              <- gen
+            b                   <- blockElementGen(setBonds = Some(genesis.body.state.bonds))
+            justifications      <- Gen.someOf(blocks)
+            justificationHashes = justifications.map(_.blockHash).toList
+            newBlock            = b.copy(justifications = justificationHashes)
           } yield newBlock :: blocks
       }
     }
@@ -206,7 +199,6 @@ object blockImplicits {
       setPostStateHash: Option[StateHash] = None,
       setValidator: Option[Validator] = None,
       setVersion: Option[Int] = None,
-      setParentsHashList: Option[Seq[BlockHash]] = None,
       setJustifications: Option[Seq[BlockHash]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
       setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
@@ -221,7 +213,6 @@ object blockImplicits {
       setPostStateHash,
       setValidator,
       setVersion,
-      setParentsHashList,
       setJustifications,
       setDeploys,
       setSysDeploys,

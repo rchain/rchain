@@ -78,8 +78,9 @@ final case class DagMessageState[M: Ordering, S: Ordering](
         if (latestFromSender) latestMsgs -- latest + msg
         else latestMsgs
 
-      if (!latestFromSender)
-        println(s"ERROR: add NOT latest message '${msg.id}' for sender '$me''")
+      // TODO: temp disabled until working finalizer
+//      if (!latestFromSender)
+//        println(s"ERROR: add NOT latest message '${msg.id}' for sender '$me''")
 
       // Create new sender state with added message
       copy(latestMsgs = newLatestMsgs, msgMap = newMsgMap)

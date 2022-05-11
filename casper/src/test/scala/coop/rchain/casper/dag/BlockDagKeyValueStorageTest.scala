@@ -1,6 +1,5 @@
 package coop.rchain.casper.dag
 
-import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
@@ -95,7 +94,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         children shouldBe
           Some(
             blockElements
-              .filter(_.header.parentsHashList.contains(b.blockHash))
+              .filter(_.justifications.contains(b.blockHash))
               .map(_.blockHash)
               .toSet
           )
@@ -214,15 +213,15 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
       for {
         _ <- storage.insert(genesis, false, true)
         b1 = getRandomBlock(
-          setParentsHashList = List(genesis.blockHash).some,
+          setJustifications = List(genesis.blockHash).some,
           setBlockNumber = 1L.some
         )
         _   <- storage.insert(b1, false)
-        b2  = getRandomBlock(setParentsHashList = List(b1.blockHash).some, setBlockNumber = 2L.some)
+        b2  = getRandomBlock(setJustifications = List(b1.blockHash).some, setBlockNumber = 2L.some)
         _   <- storage.insert(b2, false)
-        b3  = getRandomBlock(setParentsHashList = List(b2.blockHash).some, setBlockNumber = 3L.some)
+        b3  = getRandomBlock(setJustifications = List(b2.blockHash).some, setBlockNumber = 3L.some)
         _   <- storage.insert(b3, false)
-        b4  = getRandomBlock(setParentsHashList = List(b3.blockHash).some, setBlockNumber = 4L.some)
+        b4  = getRandomBlock(setJustifications = List(b3.blockHash).some, setBlockNumber = 4L.some)
         dag <- storage.insert(b4, false)
 
         // only genesis is finalized

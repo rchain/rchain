@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.Resources._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Expr.ExprInstance.GBool
@@ -45,7 +45,7 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  val genesisContext = buildGenesis(buildGenesisParameters())
+  val genesisContext = buildGenesis(GenesisBuilder.buildGenesisParametersSize(4))
 
   it should "make drain vault attacks impossible" in effectTest {
     val deployer = ConstructDeploy.defaultSec

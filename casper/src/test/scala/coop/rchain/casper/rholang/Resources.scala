@@ -111,7 +111,6 @@ object Resources {
       ByteString.EMPTY,
       ByteString.EMPTY,
       IndexedSeq.empty,
-      List.empty,
       Set.empty,
       Set.empty,
       0,

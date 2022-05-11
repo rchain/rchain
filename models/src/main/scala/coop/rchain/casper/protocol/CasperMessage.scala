@@ -117,7 +117,6 @@ final case class BlockMessage(
     blockHash: ByteString,
     sender: ByteString,
     seqNum: Long,
-    header: Header,
     body: Body,
     justifications: List[BlockHash],
     sig: ByteString,
@@ -139,7 +138,6 @@ object BlockMessage {
       bm.blockHash,
       bm.sender,
       bm.seqNum,
-      Header.from(bm.header),
       body,
       bm.justifications,
       bm.sig,
@@ -153,26 +151,12 @@ object BlockMessage {
       .withBlockHash(bm.blockHash)
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
-      .withHeader(Header.toProto(bm.header))
       .withBody(Body.toProto(bm.body))
       .withJustifications(bm.justifications)
       .withSig(bm.sig)
       .withSigAlgorithm(bm.sigAlgorithm)
       .withShardId(bm.shardId)
 
-}
-
-final case class Header(
-    parentsHashList: List[ByteString]
-) {
-  def toProto: HeaderProto = Header.toProto(this)
-}
-
-object Header {
-  def from(h: HeaderProto): Header = Header(h.parentsHashList.toList)
-
-  def toProto(h: Header): HeaderProto =
-    HeaderProto().withParentsHashList(h.parentsHashList)
 }
 
 final case class RejectedDeploy(

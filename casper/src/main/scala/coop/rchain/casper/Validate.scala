@@ -189,31 +189,17 @@ object Validate {
   def blockNumber[F[_]: Sync: BlockDagStorage: Log](
       b: BlockMessage,
       s: CasperSnapshot
-  ): F[ValidBlockProcessing] = {
-    import cats.instances.list._
-
+  ): F[ValidBlockProcessing] =
     for {
-      parents <- ProtoUtil.parentHashes(b).traverse { parentHash =>
-                  s.dag.lookup(parentHash).flatMap {
-                    case Some(p) => p.pure[F]
-                    case None =>
-                      Sync[F].raiseError[BlockMetadata](
-                        new Exception(
-                          s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
-                        )
-                      )
-                  }
-                }
-      maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, p.blockNum)
-      }
-      number = ProtoUtil.blockNumber(b)
-      result = maxBlockNumber + 1 == number
+      justifications <- b.justifications.traverse(s.dag.lookupUnsafe(_))
+      maxBlockNumber = justifications.map(_.blockNum).maximumOption.getOrElse(-1L)
+      number         = ProtoUtil.blockNumber(b)
+      result         = maxBlockNumber + 1 == number
       status <- if (result) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
                } else {
                  val logMessage =
-                   if (parents.isEmpty)
+                   if (justifications.isEmpty)
                      s"block number $number is not zero, but block has no parents."
                    else
                      s"block number $number is not one more than maximum parent number $maxBlockNumber."
@@ -222,7 +208,6 @@ object Validate {
                  } yield BlockStatus.invalidBlockNumber.asLeft[ValidBlock]
                }
     } yield status
-  }
 
   def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
     import cats.instances.option._

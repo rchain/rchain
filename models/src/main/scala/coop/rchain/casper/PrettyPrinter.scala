@@ -17,23 +17,19 @@ object PrettyPrinter {
       case _               => "Unknown consensus protocol message"
     }
 
-  // TODO shouldn header.parentsHashList be nonempty list?
   private def buildString(b: BlockMessage, short: Boolean): String =
-    b.header.parentsHashList.headOption
-      .fold(
-        s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) with empty parents (supposedly genesis)"
-      )(
-        mainParent =>
-          if (short) {
-            s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"
-          } else {
-            s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
-              s"-- Sender ID ${buildString(b.sender)} " +
-              s"-- M Parent Hash ${buildString(mainParent)} " +
-              s"-- Contents ${buildString(b.body.state)}" +
-              s"-- Shard ID ${limit(b.shardId, 10)}"
-          }
-      )
+    if (short) {
+      s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"
+    } else {
+      s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
+        s"-- Sender ID ${buildString(b.sender)} " +
+        s"-- Contents ${buildString(b.body.state)}" +
+        s"-- Shard ID ${limit(b.shardId, maxLength = 10)}" +
+        s"-- Justifications ${buildJustifications(b.justifications)} "
+    }
+
+  private def buildJustifications(hashes: List[BlockHash]): String =
+    hashes.map(h => Base16.encode(h.toByteArray)).map(limit(_, maxLength = 5)).mkString(" ")
 
   def buildString(bh: BlockHashMessage): String =
     s"Block hash: ${buildString(bh.blockHash)}"

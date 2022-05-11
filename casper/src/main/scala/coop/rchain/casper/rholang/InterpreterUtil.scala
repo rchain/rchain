@@ -5,7 +5,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
@@ -23,7 +23,6 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
@@ -61,8 +60,9 @@ object InterpreterUtil {
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
     for {
-      _                   <- Span[F].mark("before-unsafe-get-parents")
-      parents             <- ProtoUtil.getParents(block)
+      _ <- Span[F].mark("before-unsafe-get-parents")
+      // TODO: filter invalid justifications
+      parents             = block.justifications
       _                   <- Span[F].mark("before-compute-parents-post-state")
       computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager).attempt
       _                   <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
@@ -109,7 +109,7 @@ object InterpreterUtil {
       for {
         _                  <- Span[F].mark("before-process-pre-state-hash")
         blockData          = BlockData.fromBlock(block)
-        withCostAccounting = block.justifications.nonEmpty || block.header.parentsHashList.nonEmpty
+        withCostAccounting = block.justifications.nonEmpty
         replayResultF = runtimeManager
           .replayComputeState(initialStateHash)(
             internalDeploys,
@@ -241,7 +241,7 @@ object InterpreterUtil {
     }
 
   def computeParentsPostState[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
-      parents: Seq[BlockMessage],
+      parents: Seq[BlockHash],
       s: CasperSnapshot,
       runtimeManager: RuntimeManager[F]
   )(implicit spanF: Span[F]): F[(StateHash, Seq[ByteString])] =
@@ -253,7 +253,10 @@ object InterpreterUtil {
 
         // For single parent, get itd post state hash
         case Seq(parent) =>
-          (ProtoUtil.postStateHash(parent), Seq.empty[ByteString]).pure[F]
+          BlockStore[F]
+            .getUnsafe(parent)
+            .map(ProtoUtil.postStateHash)
+            .map((_, Seq.empty[ByteString]))
 
         // we might want to take some data from the parent with the most stake,
         // e.g. bonds map, slashing deploys, bonding deploys.

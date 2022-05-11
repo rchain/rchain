@@ -45,8 +45,7 @@ object BlockCreator {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
       val nextSeqNum     = s.maxSeqNums.get(selfId).map(_ + 1L).getOrElse(0L)
       val nextBlockNum   = s.maxBlockNum + 1
-      val parents        = s.parents
-      val justifications = s.justifications
+      val justifications = s.justifications.map(_.latestBlockHash).toList
 
       def prepareUserDeploys(blockNumber: Long): F[Set[Signed[DeployData]]] =
         for {
@@ -114,7 +113,7 @@ object BlockCreator {
         r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
               val blockData = BlockData(nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
               for {
-                computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
+                computedParentsInfo <- computeParentsPostState(justifications, s, runtimeManager)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
                                    systemDeploys,
@@ -136,8 +135,7 @@ object BlockCreator {
                 unsignedBlock = packageBlock(
                   validatorIdentity.publicKey,
                   blockData,
-                  parents.map(_.blockHash),
-                  justifications.map(_.latestBlockHash).toList,
+                  justifications,
                   preStateHash,
                   postStateHash,
                   processedDeploys,
@@ -174,7 +172,6 @@ object BlockCreator {
   private def packageBlock(
       sender: PublicKey,
       blockData: BlockData,
-      parents: Seq[BlockHash],
       justifications: List[BlockHash],
       preStateHash: StateHash,
       postStateHash: StateHash,
@@ -193,12 +190,10 @@ object BlockCreator {
         rejectedDeploys.map(r => RejectedDeploy(r)).toList,
         systemDeploys.toList
       )
-    val header = Header(parents.toList)
     ProtoUtil.unsignedBlockProto(
       version,
       sender,
       body,
-      header,
       justifications,
       shardId,
       blockData.seqNum

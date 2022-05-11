@@ -35,10 +35,9 @@ object MultiParentCasper {
   val deployLifespan = 50
 
   def addedEvent(block: BlockMessage): RChainEvent = {
-    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(block)
+    val (blockHash, justifications, deployIds, creator, seqNum) = blockEvent(block)
     RChainEvent.blockAdded(
       blockHash,
-      parents,
       justifications,
       deployIds,
       creator,
@@ -47,10 +46,9 @@ object MultiParentCasper {
   }
 
   def createdEvent(b: BlockMessage): RChainEvent = {
-    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(b)
+    val (blockHash, justifications, deployIds, creator, seqNum) = blockEvent(b)
     RChainEvent.blockCreated(
       blockHash,
-      parents,
       justifications,
       deployIds,
       creator,
@@ -59,16 +57,13 @@ object MultiParentCasper {
   }
 
   private def blockEvent(block: BlockMessage) = {
-    val blockHash = block.blockHash.toHexString
-    val parentHashes =
-      block.header.parentsHashList.map(_.toHexString)
-    val justificationHashes =
-      block.justifications.map(_.toHexString)
+    val blockHash           = block.blockHash.toHexString
+    val justificationHashes = block.justifications.map(_.toHexString)
     val deployIds: List[String] =
       block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
     val creator = block.sender.toHexString
     val seqNum  = block.seqNum
-    (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
+    (blockHash, justificationHashes, deployIds, creator, seqNum)
   }
 
   // TODO: temporary function until multiparent casper is removed
@@ -91,19 +86,14 @@ object MultiParentCasper {
           )
       (lca, tips)   = (ByteString.EMPTY, t.map(_.blockHash))
       invalidBlocks <- dag.invalidBlocksMap
-      parents <- for {
-                  // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
-                  // bond maps that has biggest cumulative stake.
-                  blocks <- tips.toList
-                             .traverse(BlockStore[F].getUnsafe)
-                             .map(_.filterNot(b => invalidBlocks.keySet.contains(b.blockHash)))
-                  parents = blocks
-                    .filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
-                    .filterNot { b =>
-                      blocks.flatMap(_.justifications).contains(b.blockHash)
-                    }
-                } yield parents.distinct
-      onChainState <- getOnChainState(parents.head)
+
+      // TODO: replaced when parents are removed from BlockMessage
+      onChainState <- for {
+                       lms            <- dag.latestMessages
+                       mainParentHash = lms.head._2.blockHash
+                       mainParent     <- BlockStore[F].getUnsafe(mainParentHash)
+                       res            <- getOnChainState(mainParent)
+                     } yield res
 
       /**
         * We ensure that only the justifications given in the block are those
@@ -121,7 +111,8 @@ object MultiParentCasper {
             .filter(j => onChainState.bondsMap.keySet.contains(j.validator))
         } yield r.toSet
       }
-      parentMetas <- parents.traverse(b => dag.lookupUnsafe(b.blockHash))
+
+      parentMetas <- justifications.toList.traverse(j => dag.lookupUnsafe(j.latestBlockHash))
       maxBlockNum = ProtoUtil.maxBlockNumberMetadata(parentMetas)
       maxSeqNums  <- dag.latestMessages.map(m => m.map { case (k, v) => k -> v.seqNum })
       deploysInScope <- {
@@ -152,7 +143,6 @@ object MultiParentCasper {
       lfb,
       lca,
       tips,
-      parents,
       justifications,
       deploysInScope,
       maxBlockNum,

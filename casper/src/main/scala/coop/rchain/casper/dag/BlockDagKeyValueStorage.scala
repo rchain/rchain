@@ -147,7 +147,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                           block.blockHash,
                           block.body.state.blockNumber,
                           block.sender,
-                          block.seqNum.toLong,
+                          block.seqNum,
                           block.body.state.bonds.map(b => (b.validator, b.stake)).toMap,
                           justifications
                         )

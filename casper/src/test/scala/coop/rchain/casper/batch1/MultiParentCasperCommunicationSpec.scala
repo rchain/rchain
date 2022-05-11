@@ -121,7 +121,7 @@ class MultiParentCasperCommunicationSpec extends AnyFlatSpec with Matchers with 
 
         // Casper in node2 should contain block and its parents, requested as dependencies
         _ <- nodes(2).contains(br.blockHash) shouldBeF true
-        _ <- br.header.parentsHashList.traverse(p => nodes(2).contains(p) shouldBeF true)
+        _ <- br.justifications.traverse(p => nodes(2).contains(p) shouldBeF true)
       } yield ()
     }
   }

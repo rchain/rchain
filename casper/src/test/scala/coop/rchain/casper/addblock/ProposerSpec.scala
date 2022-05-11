@@ -8,7 +8,7 @@ import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.Resources
-import coop.rchain.casper.util.GenesisBuilder.defaultValidatorSks
+import coop.rchain.casper.util.GenesisBuilder.randomValidatorSks
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.blockImplicits.getRandomBlock
@@ -59,7 +59,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
     (_: CasperSnapshot, _: ValidatorIdentity) =>
       BlockCreatorResult.created(getRandomBlock()).pure[F]
 
-  val dummyValidatorIdentity = ValidatorIdentity(defaultValidatorSks(1))
+  val dummyValidatorIdentity = ValidatorIdentity(randomValidatorSks(1))
 
   /** implicits for creating Proposer instance  */
   implicit val logEff: Log[Task]   = Log.log[Task]

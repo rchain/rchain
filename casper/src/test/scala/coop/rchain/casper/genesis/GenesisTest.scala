@@ -43,7 +43,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
       ByteString.EMPTY,
       ByteString.EMPTY,
       IndexedSeq.empty,
-      List.empty,
       Set.empty,
       Set.empty,
       0,

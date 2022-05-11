@@ -51,43 +51,36 @@ class BlocksResponseAPITest
       _       <- dagstore.insert(genesis, invalid = false, approved = true)
       _       <- blockstore.put(genesis)
       b2 <- createBlock[Task](
-             Seq(genesis.blockHash),
              v2,
              bonds,
              Seq(genesis.blockHash)
            )
       b3 <- createBlock[Task](
-             Seq(genesis.blockHash),
              v1,
              bonds,
              Seq(genesis.blockHash)
            )
       b4 <- createBlock[Task](
-             Seq(b2.blockHash),
              v3,
              bonds,
              Seq(genesis.blockHash, b2.blockHash)
            )
       b5 <- createBlock[Task](
-             Seq(b3.blockHash),
              v2,
              bonds,
              Seq(b3.blockHash, b2.blockHash, genesis.blockHash)
            )
       b6 <- createBlock[Task](
-             Seq(b4.blockHash),
              v1,
              bonds,
              Seq(b3.blockHash, b2.blockHash, b4.blockHash)
            )
       b7 <- createBlock[Task](
-             Seq(b5.blockHash),
              v3,
              bonds,
              Seq(b3.blockHash, b5.blockHash, b4.blockHash)
            )
       b8 <- createBlock[Task](
-             Seq(b6.blockHash),
              v2,
              bonds,
              Seq(b6.blockHash, b5.blockHash, b4.blockHash)

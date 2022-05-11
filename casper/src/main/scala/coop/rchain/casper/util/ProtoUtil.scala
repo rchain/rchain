@@ -3,8 +3,6 @@ package coop.rchain.casper.util
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.{ByteString, Int64Value, StringValue}
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
@@ -18,19 +16,12 @@ import coop.rchain.models.syntax._
 
 object ProtoUtil {
 
-  def parentHashes(b: BlockMessage): List[ByteString] =
-    b.header.parentsHashList
-
-  def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
-    parentHashes(b).traverse(BlockStore[F].getUnsafe)
-
   def getParentsMetadata[F[_]: Sync: BlockDagStorage](
       b: BlockMetadata,
       dag: DagRepresentation
-  ): F[List[BlockMetadata]] = {
-    import cats.instances.list._
-    b.parents.traverse(dag.lookupUnsafe(_))
-  }
+  ): F[List[BlockMetadata]] =
+    // TODO: filter invalid blocks
+    b.justifications.traverse(dag.lookupUnsafe(_))
 
   def getParentMetadatasAboveBlockNumber[F[_]: Sync: BlockDagStorage](
       b: BlockMetadata,
@@ -81,14 +72,10 @@ object ProtoUtil {
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
-  def blockHeader(parentHashes: Seq[ByteString]): Header =
-    Header(parentHashes.toList)
-
   def unsignedBlockProto(
       version: Int,
       sender: PublicKey,
       body: Body,
-      header: Header,
       justifications: List[BlockHash],
       shardId: String,
       seqNum: Long
@@ -98,7 +85,6 @@ object ProtoUtil {
       blockHash = ByteString.EMPTY,
       sender = sender.bytes.toByteString,
       seqNum = seqNum,
-      header,
       body,
       justifications,
       sig = ByteString.EMPTY,
@@ -113,7 +99,6 @@ object ProtoUtil {
 
   def hashBlock(blockMessage: BlockMessage): BlockHash =
     ProtoUtil.hashByteArrays(
-      blockMessage.header.toProto.toByteArray,
       blockMessage.body.toProto.toByteArray,
       blockMessage.sender.toByteArray,
       StringValue.of(blockMessage.sigAlgorithm).toByteArray,
@@ -121,9 +106,5 @@ object ProtoUtil {
       StringValue.of(blockMessage.shardId).toByteArray
     )
 
-  def dependenciesHashesOf(b: BlockMessage): Set[BlockHash] = {
-    val missingParents        = parentHashes(b).toSet
-    val missingJustifications = b.justifications.toSet
-    missingParents union missingJustifications
-  }
+  def dependenciesHashesOf(b: BlockMessage): Set[BlockHash] = b.justifications.toSet
 }

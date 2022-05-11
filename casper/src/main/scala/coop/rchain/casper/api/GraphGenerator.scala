@@ -1,9 +1,8 @@
 package coop.rchain.casper.api
 
-import cats.{Monad, _}
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import cats.{Monad, _}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper._
@@ -15,7 +14,6 @@ import coop.rchain.shared.Log
 
 final case class ValidatorBlock(
     blockHash: String,
-    parentsHashes: List[String],
     justifications: List[String]
 )
 
@@ -50,7 +48,7 @@ object GraphzGenerator {
       allAncestors = validatorsList
         .flatMap {
           case (_, blocks) =>
-            blocks.get(firstTs).map(_.flatMap(b => b.parentsHashes)).getOrElse(List.empty[String])
+            blocks.get(firstTs).map(_.flatMap(_.justifications)).getOrElse(List.empty[String])
         }
         .distinct
         .sorted
@@ -96,13 +94,11 @@ object GraphzGenerator {
       validators = blocks.toList.map { b =>
         val blockHash       = PrettyPrinter.buildString(b.blockHash)
         val blockSenderHash = PrettyPrinter.buildString(b.sender)
-        val parents = b.header.parentsHashList
-          .map(PrettyPrinter.buildString)
         val justifications = b.justifications
           .map(PrettyPrinter.buildString)
           .distinct
         val validatorBlocks =
-          Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
+          Map(timeEntry -> List(ValidatorBlock(blockHash, justifications)))
         Map(blockSenderHash -> validatorBlocks)
       }
     } yield acc.copy(
@@ -130,8 +126,8 @@ object GraphzGenerator {
     validators
       .flatMap(_.values.toList.flatten)
       .traverse {
-        case ValidatorBlock(blockHash, parentsHashes, _) =>
-          parentsHashes.traverse(p => g.edge(blockHash, p, constraint = Some(false)))
+        case ValidatorBlock(blockHash, justifications) =>
+          justifications.traverse(p => g.edge(blockHash, p, constraint = Some(false)))
       }
       .as(())
 
@@ -142,7 +138,7 @@ object GraphzGenerator {
     validators.values.toList
       .flatMap(_.values.toList.flatten)
       .traverse {
-        case ValidatorBlock(blockHash, _, justifications) =>
+        case ValidatorBlock(blockHash, justifications) =>
           justifications.traverse(
             j =>
               g.edge(
@@ -165,7 +161,7 @@ object GraphzGenerator {
     blocks.get(ts) match {
       case Some(tsBlocks) =>
         tsBlocks.map {
-          case ValidatorBlock(blockHash, _, _) =>
+          case ValidatorBlock(blockHash, _) =>
             blockHash -> styleFor(blockHash, lastFinalizedBlockHash)
         }.toMap
       case None => Map(s"${ts.show}_$validatorId" -> Some(Invis))

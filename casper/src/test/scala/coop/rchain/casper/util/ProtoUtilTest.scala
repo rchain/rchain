@@ -7,14 +7,12 @@ import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 class ProtoUtilTest extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
-  "dependenciesHashesOf" should "return hashes of all justifications and parents of a block" in {
+  "dependenciesHashesOf" should "return hashes of all justifications" in {
     forAll(blockElementGen()) { blockElement =>
       val result               = ProtoUtil.dependenciesHashesOf(blockElement)
       val justificationsHashes = blockElement.justifications
-      val parentsHashes        = blockElement.header.parentsHashList
-      result should contain allElementsOf (justificationsHashes)
-      result should contain allElementsOf (parentsHashes)
-      result should contain theSameElementsAs ((justificationsHashes ++ parentsHashes).toSet)
+      result should contain allElementsOf justificationsHashes
+      result should contain theSameElementsAs justificationsHashes.toSet
     }
   }
 }
