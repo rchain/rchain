@@ -79,13 +79,13 @@ object InterpreterUtil {
                            .buildString(incomingPreStateHash)}"
                        )
                        .as(none[StateHash].asRight[BlockError])
-                   } else if (rejectedDeployIds != block.body.rejectedDeploys.map(_.sig).toSet) {
+                   } else if (rejectedDeployIds != block.state.rejectedDeploys.map(_.sig).toSet) {
                      Log[F]
                        .warn(
                          s"Computed rejected deploys " +
                            s"${rejectedDeployIds.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
                            s"block's rejected deploy " +
-                           s"${block.body.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
+                           s"${block.state.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
                        )
                        .as(InvalidRejectedDeploy.asLeft)
                    } else {
@@ -276,8 +276,8 @@ object InterpreterUtil {
 
                 blockIndex <- BlockIndex(
                                b.blockHash,
-                               b.body.deploys,
-                               b.body.systemDeploys,
+                               b.state.deploys,
+                               b.state.systemDeploys,
                                preState.toBlake2b256Hash,
                                postState.toBlake2b256Hash,
                                runtimeManager.getHistoryRepo,

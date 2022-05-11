@@ -60,7 +60,7 @@ object MultiParentCasper {
     val blockHash           = block.blockHash.toHexString
     val justificationHashes = block.justifications.map(_.toHexString)
     val deployIds: List[String] =
-      block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
+      block.state.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
     val creator = block.sender.toHexString
     val seqNum  = block.seqNum
     (blockHash, justificationHashes, deployIds, creator, seqNum)
@@ -196,8 +196,8 @@ object MultiParentCasper {
 
       index <- BlockIndex(
                 b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
+                b.state.deploys,
+                b.state.systemDeploys,
                 blockPreState.toBlake2b256Hash,
                 blockPostState.toBlake2b256Hash,
                 RuntimeManager[F].getHistoryRepo,
@@ -213,7 +213,7 @@ object MultiParentCasper {
       _ <- valResult
             .map { status =>
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
-              val deployCount = b.body.deploys.size
+              val deployCount = b.state.deploys.size
               Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
                 indexBlock.whenA(s.onChainState.shardConf.maxNumberOfParents > 1)
             }

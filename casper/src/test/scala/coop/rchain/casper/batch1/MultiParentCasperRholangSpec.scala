@@ -29,7 +29,7 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
       for {
         deploy         <- ConstructDeploy.basicDeployData[Effect](0)
         block          <- node.createBlockUnsafe(deploy)
-        deploys        = block.body.deploys.map(_.deploy)
+        deploys        = block.state.deploys.map(_.deploy)
         justifications = block.justifications
 
         _      = justifications.size should be(1)

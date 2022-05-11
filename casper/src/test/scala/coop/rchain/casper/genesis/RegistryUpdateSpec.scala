@@ -88,20 +88,20 @@ class RegistryUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
       val rm = node.runtimeManager
       for {
         b1      <- node.addBlock(updateRegistryDeploy)
-        _       = assert(b1.body.deploys.head.cost.cost > 0L, s"$b1 deploy cost is 0L")
-        _       = assert(b1.body.deploys.head.systemDeployError.isEmpty, s"$b1 system deploy failed")
-        _       = assert(!b1.body.deploys.head.isFailed, s"$b1 deploy failed")
         ret     <- rm.playExploratoryDeploy(getBalanceTerm, b1.postStateHash)
+        _       = assert(b1.state.deploys.head.cost.cost > 0L, s"$b1 deploy cost is 0L")
+        _       = assert(b1.state.deploys.head.systemDeployError.isEmpty, s"$b1 system deploy failed")
+        _       = assert(!b1.state.deploys.head.isFailed, s"$b1 deploy failed")
         balance = ret.head.exprs.head.getGInt
         b2 <- node
                .addBlock(
                  ConstructDeploy
                    .sourceDeployNow(transferTerm, sec = p1, shardId = shardId, phloLimit = 900000L)
                )
-        _    = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
-        _    = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
-        _    = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
         ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b2.postStateHash)
+        _    = assert(b2.state.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _    = assert(b2.state.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _    = assert(!b2.state.deploys.head.isFailed, s"$b2 deploy failed")
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
         ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b2.postStateHash)
         _    = assert(ret3.head.exprs.head.getGString == "hello")

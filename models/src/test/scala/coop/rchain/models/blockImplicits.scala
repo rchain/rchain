@@ -136,7 +136,7 @@ object blockImplicits {
         version = version,
         blockHash = ByteString.EMPTY,
         blockNumber = setBlockNumber.get,
-        body = Body(
+        state = RholangState(
           deploys = deploys.toList,
           systemDeploys = setSysDeploys.toList.flatten,
           rejectedDeploys = List.empty

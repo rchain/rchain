@@ -106,8 +106,8 @@ object ReportingCasper {
           // Replay block deploys with reporting
           res <- replayDeploys(
                   reportingRuntime,
-                  block.body.deploys,
-                  block.body.systemDeploys,
+                  block.state.deploys,
+                  block.state.systemDeploys,
                   blockdata,
                   withCostAccounting
                 )

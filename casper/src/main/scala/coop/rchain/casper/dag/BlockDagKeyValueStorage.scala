@@ -91,7 +91,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         _ <- blockMetadataIndex.add(blockMetadata)
 
         // Add deploys to deploy index storage
-        deployHashes = block.body.deploys.map(_.deploy.sig)
+        deployHashes = block.state.deploys.map(_.deploy.sig)
         _            <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
 
         // Update invalid index

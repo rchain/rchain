@@ -100,8 +100,8 @@ object BlockGenerator {
       processedDeploys: Seq[ProcessedDeploy]
   ): F[Unit] = {
     val updatedBlockBody =
-      b.body.copy(deploys = processedDeploys.toList)
-    val updatedBlock = b.copy(postStateHash = postGenStateHash, body = updatedBlockBody)
+      b.state.copy(deploys = processedDeploys.toList)
+    val updatedBlock = b.copy(postStateHash = postGenStateHash, state = updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) >>
       BlockDagStorage[F].insert(updatedBlock, invalid = false).void
   }

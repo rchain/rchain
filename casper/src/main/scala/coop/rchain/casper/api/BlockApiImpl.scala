@@ -178,7 +178,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         val deployIdCh = DeployId(deployId.toByteArray)
         for {
           block     <- BlockStore[F].getUnsafe(blockHash)
-          deployOpt = block.body.deploys.find(_.deploy.sig == deployId)
+          deployOpt = block.state.deploys.find(_.deploy.sig == deployId)
           deploy <- deployOpt.liftTo {
                      val blockHashStr = PrettyPrinter.buildString(blockHash)
                      val deploySigStr = PrettyPrinter.buildString(deployId)
@@ -414,7 +414,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       block: BlockMessage,
       sortedListeningName: Seq[Par]
   ): Boolean = {
-    val eventLog = block.body.deploys.flatMap(_.deployLog).map(EventConverter.toRspaceEvent)
+    val eventLog = block.state.deploys.flatMap(_.deployLog).map(EventConverter.toRspaceEvent)
     eventLog.exists {
       case Produce(channelHash, _, _) =>
         assert(sortedListeningName.size == 1, "Produce can have only one channel")

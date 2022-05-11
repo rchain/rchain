@@ -104,7 +104,7 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
       val rm = node.runtimeManager
       for {
         b2 <- node.addBlock(updateDeploy)
-        _ = inside(b2.body.deploys) {
+        _ = inside(b2.state.deploys) {
           case Seq(deploy) =>
             assert(deploy.cost.cost > 0L, s"$b2 deploy cost is 0L")
             assert(deploy.systemDeployError.isEmpty, s"$b2 system deploy failed")
@@ -125,9 +125,9 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
                  ConstructDeploy
                    .sourceDeployNow(transferTerm, sec = p1, shardId = shardId, phloLimit = 9000000L)
                )
-        _ = assert(b5.body.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
-        _ = assert(b5.body.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
-        _ = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
+        _ = assert(b5.state.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
+        _ = assert(b5.state.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
+        _ = assert(!b5.state.deploys.head.isFailed, s"$b5 deploy failed")
 
         ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b5.postStateHash)
         _    = inside(ret2) { case Seq(Number(n)) => n shouldBe balance + transferAmount.toLong }
@@ -151,9 +151,9 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
       val rm = node.runtimeManager
       for {
         b2 <- node.addBlock(updateDeploy)
-        _  = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
-        _  = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
-        _  = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
+        _  = assert(b2.state.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _  = assert(b2.state.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _  = assert(!b2.state.deploys.head.isFailed, s"$b2 deploy failed")
 
         // Get update contract result
         updateResult <- rm.getData(b2.postStateHash)(GDeployId(updateDeploy.sig))

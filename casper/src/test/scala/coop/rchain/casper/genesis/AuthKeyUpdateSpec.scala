@@ -91,20 +91,20 @@ class AuthKeyUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
       val rm = node.runtimeManager
       for {
         b2      <- node.addBlock(updateDeploy)
-        _       = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
-        _       = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
-        _       = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
         ret     <- rm.playExploratoryDeploy(getBalanceTerm(pub2RevAddr), b2.postStateHash)
+        _       = assert(b2.state.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _       = assert(b2.state.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _       = assert(!b2.state.deploys.head.isFailed, s"$b2 deploy failed")
         balance = ret.head.exprs.head.getGInt
         b5 <- node
                .addBlock(
                  ConstructDeploy
                    .sourceDeployNow(transferTerm, sec = p1, shardId = shardId, phloLimit = 900000L)
                )
-        _    = assert(b5.body.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
-        _    = assert(b5.body.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
-        _    = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
         ret2 <- rm.playExploratoryDeploy(getBalanceTerm(pub2RevAddr), b5.postStateHash)
+        _    = assert(b5.state.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
+        _    = assert(b5.state.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
+        _    = assert(!b5.state.deploys.head.isFailed, s"$b5 deploy failed")
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
         ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b2.postStateHash)
         _    = assert(ret3.head.exprs.head.getGInt == 100)
@@ -121,9 +121,9 @@ class AuthKeyUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
       val rm = node.runtimeManager
       for {
         b2 <- node.addBlock(updateDeploy)
-        _  = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
-        _  = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
-        _  = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
+        _  = assert(b2.state.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _  = assert(b2.state.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _  = assert(!b2.state.deploys.head.isFailed, s"$b2 deploy failed")
 
         // Get update contract result
         updateResult                               <- rm.getData(b2.postStateHash)(GDeployId(updateDeploy.sig))

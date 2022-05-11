@@ -87,7 +87,7 @@ object Genesis {
     val blockDeploys = processedDeploys.filterNot(_.isFailed)
     val sortedDeploys =
       blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
-    val body = Body(
+    val state = RholangState(
       deploys = sortedDeploys.toList,
       rejectedDeploys = List.empty,
       systemDeploys = List.empty
@@ -97,15 +97,15 @@ object Genesis {
 
     unsignedBlockProto(
       version,
+      genesis.shardId,
       genesis.blockNumber,
       genesis.sender,
+      seqNum,
       preStateHash = startHash,
       postStateHash = stateHash,
-      body,
-      List.empty,
+      justifications = List.empty,
       bonds = buildBondsMap(genesis.proofOfStake),
-      genesis.shardId,
-      seqNum
+      state = state
     )
   }
 

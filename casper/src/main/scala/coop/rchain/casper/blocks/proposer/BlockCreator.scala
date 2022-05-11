@@ -163,7 +163,7 @@ object BlockCreator {
         _ <- blockStatus match {
               case Created(block) =>
                 val blockInfo   = PrettyPrinter.buildString(block, short = true)
-                val deployCount = block.body.deploys.size
+                val deployCount = block.state.deploys.size
                 Log[F].info(s"Block created: $blockInfo (${deployCount}d) [$elapsed]")
               case _ => ().pure[F]
             }
@@ -183,23 +183,23 @@ object BlockCreator {
       shardId: String,
       version: Int
   ): BlockMessage = {
-    val body =
-      Body(
+    val state =
+      RholangState(
         deploys.toList,
-        rejectedDeploys.map(r => RejectedDeploy(r)).toList,
+        rejectedDeploys.map(RejectedDeploy(_)).toList,
         systemDeploys.toList
       )
     ProtoUtil.unsignedBlockProto(
       version,
+      shardId,
       blockData.blockNumber,
       sender,
+      blockData.seqNum,
       preStateHash,
       postStateHash,
-      body,
       justifications,
       bondsMap,
-      shardId,
-      blockData.seqNum
+      state
     )
   }
 

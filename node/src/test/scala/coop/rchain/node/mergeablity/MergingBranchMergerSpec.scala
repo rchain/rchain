@@ -417,8 +417,8 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
 
                             blockIndex <- BlockIndex(
                                            b.blockHash,
-                                           b.body.deploys,
-                                           b.body.systemDeploys,
+                                           b.state.deploys,
+                                           b.state.systemDeploys,
                                            preStateHash.toBlake2b256Hash,
                                            postStateHash.toBlake2b256Hash,
                                            runtimeManager.getHistoryRepo,

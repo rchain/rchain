@@ -9,6 +9,7 @@ import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
@@ -32,10 +33,10 @@ object ProtoUtil {
       .map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
-    b.body.deploys
+    b.state.deploys
 
   def systemDeploys(b: BlockMessage): Seq[ProcessedSystemDeploy] =
-    b.body.systemDeploys
+    b.state.systemDeploys
 
   def bondToBondInfo(bond: (Validator, Long)): BondInfo =
     BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond._1), stake = bond._2)
@@ -46,30 +47,33 @@ object ProtoUtil {
 
   def unsignedBlockProto(
       version: Int,
+      shardId: String,
       blockNumber: Long,
       sender: PublicKey,
+      seqNum: Long,
       preStateHash: ByteString,
       postStateHash: ByteString,
-      body: Body,
       justifications: List[BlockHash],
       bonds: Map[Validator, Long],
-      shardId: String,
-      seqNum: Long
+      state: RholangState
   ): BlockMessage = {
     val block = BlockMessage(
       version,
+      shardId,
       blockHash = ByteString.EMPTY,
       blockNumber = blockNumber,
       sender = sender.bytes.toByteString,
       seqNum = seqNum,
       preStateHash = preStateHash,
       postStateHash = postStateHash,
-      body,
       justifications,
       bonds,
-      sig = ByteString.EMPTY,
-      sigAlgorithm = "",
-      shardId
+      state,
+      // Signature algorithm is now part of the block hash
+      //  so it should be set immediately.
+      // [TG] I couldn't find a reason why is part of block hash.
+      sigAlgorithm = Secp256k1.name,
+      sig = ByteString.EMPTY
     )
 
     val hash = hashBlock(block)
@@ -84,6 +88,10 @@ object ProtoUtil {
     assert(blockMessage.sig.isEmpty, {
       val blockStr = PrettyPrinter.buildString(blockMessage)
       s"Signature must be empty to hash a BlockMessage $blockStr"
+    })
+    assert(blockMessage.blockHash.isEmpty, {
+      val blockStr = PrettyPrinter.buildString(blockMessage)
+      s"BlockHash must be empty to hash a BlockMessage $blockStr"
     })
     Blake2b256.hash(blockMessage.toProto.toByteArray).toByteString
   }

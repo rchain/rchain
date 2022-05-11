@@ -58,7 +58,7 @@ class MultiParentCasperMergeSpec extends AnyFlatSpec with Matchers with Inspecto
         _ = multiparentBlock.justifications.size shouldBe 2
         _ <- nodes(0).contains(multiparentBlock.blockHash) shouldBeF true
         _ <- nodes(1).contains(multiparentBlock.blockHash) shouldBeF true
-        _ = multiparentBlock.body.rejectedDeploys.size shouldBe 0
+        _ = multiparentBlock.state.rejectedDeploys.size shouldBe 0
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 0).map(_ shouldBe Seq("0"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 1).map(_ shouldBe Seq("1"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 2).map(_ shouldBe Seq("2"))

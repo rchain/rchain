@@ -95,7 +95,7 @@ object BlockApi {
       faultTolerance: Float
   ): BlockInfo = {
     val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
-    val deploys        = block.body.deploys.map(_.toDeployInfo)
+    val deploys        = block.state.deploys.map(_.toDeployInfo)
     BlockInfo(blockInfo = lightBlockInfo, deploys = deploys)
   }
 
@@ -116,10 +116,10 @@ object BlockApi {
       postStateHash = PrettyPrinter.buildStringNoLimit(block.postStateHash),
       bonds = block.bonds.map(ProtoUtil.bondToBondInfo).toList,
       blockSize = block.toProto.serializedSize.toString,
-      deployCount = block.body.deploys.length,
+      deployCount = block.state.deploys.length,
       faultTolerance = faultTolerance,
       justifications = block.justifications.map(PrettyPrinter.buildStringNoLimit),
-      rejectedDeploys = block.body.rejectedDeploys.map(
+      rejectedDeploys = block.state.rejectedDeploys.map(
         r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
       )
     )

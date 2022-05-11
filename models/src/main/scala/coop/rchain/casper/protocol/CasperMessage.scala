@@ -114,18 +114,18 @@ object BlockHashMessage {
 
 final case class BlockMessage(
     version: Int,
+    shardId: String,
     blockHash: BlockHash,
     blockNumber: Long,
     sender: Validator,
     seqNum: Long,
     preStateHash: ByteString,
     postStateHash: ByteString,
-    body: Body,
     justifications: List[BlockHash],
     bonds: Map[Validator, Long],
-    sig: ByteString,
+    state: RholangState,
     sigAlgorithm: String,
-    shardId: String
+    sig: ByteString
 ) extends CasperMessage {
   def toProto: BlockMessageProto = BlockMessage.toProto(this)
 
@@ -136,21 +136,21 @@ object BlockMessage {
 
   def from(bm: BlockMessageProto): Either[String, BlockMessage] =
     for {
-      body <- Body.from(bm.body)
+      state <- RholangState.from(bm.state)
     } yield BlockMessage(
       bm.version,
+      bm.shardId,
       bm.blockHash,
       bm.blockNumber,
       bm.sender,
       bm.seqNum,
       bm.preStateHash,
       bm.postStateHash,
-      body,
       bm.justifications,
       bm.bonds.map(b => (b.validator, b.stake)).toMap,
-      bm.sig,
+      state,
       bm.sigAlgorithm,
-      bm.shardId
+      bm.sig
     )
 
   def toProto(bm: BlockMessage): BlockMessageProto = {
@@ -166,18 +166,18 @@ object BlockMessage {
     // Build proto message
     BlockMessageProto()
       .withVersion(bm.version)
+      .withShardId(bm.shardId)
       .withBlockHash(bm.blockHash)
       .withBlockNumber(bm.blockNumber)
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
       .withPreStateHash(bm.preStateHash)
       .withPostStateHash(bm.postStateHash)
-      .withBody(Body.toProto(bm.body))
       .withJustifications(sortedJustifications)
       .withBonds(sortedBonds)
-      .withSig(bm.sig)
+      .withState(RholangState.toProto(bm.state))
       .withSigAlgorithm(bm.sigAlgorithm)
-      .withShardId(bm.shardId)
+      .withSig(bm.sig)
   }
 
 }
@@ -194,24 +194,24 @@ object RejectedDeploy {
     RejectedDeployProto().withSig(r.sig)
 }
 
-final case class Body(
+final case class RholangState(
     deploys: List[ProcessedDeploy],
     rejectedDeploys: List[RejectedDeploy],
     systemDeploys: List[ProcessedSystemDeploy]
 ) {
-  def toProto: BodyProto = Body.toProto(this)
+  def toProto: RholangStateProto = RholangState.toProto(this)
 }
 
-object Body {
-  def from(b: BodyProto): Either[String, Body] =
+object RholangState {
+  def from(b: RholangStateProto): Either[String, RholangState] =
     for {
       deploys         <- b.deploys.toList.traverse(ProcessedDeploy.from)
       systemDeploys   <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
       rejectedDeploys = b.rejectedDeploys.toList.map(RejectedDeploy.from)
-    } yield Body(deploys, rejectedDeploys, systemDeploys)
+    } yield RholangState(deploys, rejectedDeploys, systemDeploys)
 
-  def toProto(b: Body): BodyProto =
-    BodyProto()
+  def toProto(b: RholangState): RholangStateProto =
+    RholangStateProto()
       .withDeploys(b.deploys.map(ProcessedDeploy.toProto))
       .withRejectedDeploys(b.rejectedDeploys.map(RejectedDeploy.toProto))
       .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))

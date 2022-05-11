@@ -99,47 +99,41 @@ message JustificationInfo{
 }
 
 message DeployInfo{
-  string deployer             = 1;
-  string term                 = 2;
-  int64  timestamp            = 3;
-  string  sig                 = 4;
-  string sigAlgorithm         = 5;
-  int64 phloPrice             = 7;
-  int64 phloLimit             = 8;
-  int64 validAfterBlockNumber = 9;
-  uint64 cost                 = 10;
-  bool errored                = 11;
-  string systemDeployError    = 12;
+  string deployer              =  1;
+  string term                  =  2;
+  int64  timestamp             =  3;
+  string sig                   =  4;
+  string sigAlgorithm          =  5;
+  int64  phloPrice             =  6;
+  int64  phloLimit             =  7;
+  int64  validAfterBlockNumber =  8;
+  uint64 cost                  =  9;
+  bool   errored               = 10;
+  string systemDeployError     = 11;
 }
 
 message LightBlockInfo {
   // BlockMessageProto message
-  int32 version       = 1;
-  string blockHash    = 2;
-  string sender       = 3;
-  int64 seqNum        = 4;
-  string sig          = 5;
-  string sigAlgorithm = 6;
-  string shardId      = 7;
-
-  // HeaderProto message
-  repeated string parentsHashList = 11;
-
-  // BodyProto message
-  int64 blockNumber       = 12;
-  string preStateHash     = 13;
-  string postStateHash    = 14;
-  repeated BondInfo bonds = 16;
+  int32  version                 =  1;
+  string shardId                 =  2;
+  string blockHash               =  3;
+  int64  blockNumber             =  4;
+  string sender                  =  5;
+  int64  seqNum                  =  6;
+  string preStateHash            =  7;
+  string postStateHash           =  8;
+  repeated string justifications =  9;
+  repeated BondInfo bonds        = 10;
+  string sigAlgorithm            = 11;
+  string sig                     = 12;
 
   // extra
-  string blockSize     = 17;
-  int32 deployCount    = 18;
-  float faultTolerance = 19;
-
-  repeated string justifications = 20;
+  string blockSize      = 13;
+  int32  deployCount    = 14;
+  float  faultTolerance = 15;
 
   // Rejected data
-  repeated RejectedDeployInfo rejectedDeploys = 21;
+  repeated RejectedDeployInfo rejectedDeploys = 16;
 }
 
 message RejectedDeployInfo{
