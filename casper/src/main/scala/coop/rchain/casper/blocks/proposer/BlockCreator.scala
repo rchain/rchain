@@ -45,7 +45,7 @@ object BlockCreator {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
       val nextSeqNum     = s.maxSeqNums.get(selfId).map(_ + 1L).getOrElse(0L)
       val nextBlockNum   = s.maxBlockNum + 1
-      val justifications = s.justifications.map(_.latestBlockHash).toList
+      val justifications = s.justifications.map(_.blockHash).toList
 
       def prepareUserDeploys(blockNumber: Long): F[Set[Signed[DeployData]]] =
         for {

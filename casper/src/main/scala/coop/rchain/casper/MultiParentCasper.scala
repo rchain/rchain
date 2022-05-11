@@ -105,14 +105,12 @@ object MultiParentCasper {
         for {
           lms <- dag.latestMessages
           r = lms.toList
-            .map {
-              case (validator, blockMetadata) => Justification(validator, blockMetadata.blockHash)
-            }
-            .filter(j => onChainState.bondsMap.keySet.contains(j.validator))
+            .map { case (_, blockMetadata) => blockMetadata }
+            .filter(b => onChainState.bondsMap.keySet.contains(b.sender))
         } yield r.toSet
       }
 
-      parentMetas <- justifications.toList.traverse(j => dag.lookupUnsafe(j.latestBlockHash))
+      parentMetas <- justifications.toList.traverse(j => dag.lookupUnsafe(j.blockHash))
       maxBlockNum = ProtoUtil.maxBlockNumberMetadata(parentMetas)
       maxSeqNums  <- dag.latestMessages.map(m => m.map { case (k, v) => k -> v.seqNum })
       deploysInScope <- {

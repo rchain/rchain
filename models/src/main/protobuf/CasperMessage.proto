@@ -137,11 +137,6 @@ message RejectedDeployProto{
   bytes sig = 1;
 }
 
-message JustificationProto {
-  bytes validator       = 1;
-  bytes latestBlockHash = 2;
-}
-
 message RChainStateProto {
   bytes preStateHash  = 1; //hash of the tuplespace contents before new deploys
   bytes postStateHash = 2; //hash of the tuplespace contents after new deploys

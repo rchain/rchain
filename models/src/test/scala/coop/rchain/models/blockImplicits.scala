@@ -36,12 +36,6 @@ object blockImplicits {
     stake     <- Gen.chooseNum(1L, 1024L)
   } yield Bond(validator, stake)
 
-  val justificationGen: Gen[Justification] = for {
-    latestBlockHash <- arbitrary[BlockHash](Arbitrary(blockHashGen))
-    byteArray       <- listOfN(Validator.Length, arbitrary[Byte])
-    validator       = ByteString.copyFrom(byteArray.toArray)
-  } yield Justification(validator, latestBlockHash)
-
   val signedDeployDataGen: Gen[Signed[DeployData]] =
     for {
       termLength <- Gen.choose(32, 1024)

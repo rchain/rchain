@@ -4,6 +4,7 @@ import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 
 /**
@@ -16,7 +17,7 @@ final case class CasperSnapshot(
     lastFinalizedBlock: BlockHash,
     lca: BlockHash,
     tips: IndexedSeq[BlockHash],
-    justifications: Set[Justification],
+    justifications: Set[BlockMetadata],
     deploysInScope: Set[Signed[DeployData]],
     maxBlockNum: Long,
     maxSeqNums: Map[Validator, Long],

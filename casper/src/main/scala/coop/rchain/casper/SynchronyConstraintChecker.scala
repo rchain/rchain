@@ -50,12 +50,11 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: 
       case Some(lastProposedBlockHash) =>
         for {
           lastProposedBlockMeta <- s.dag.lookupUnsafe(lastProposedBlockHash)
-          checkConstraint = for {
-            // TODO: replaced when parents are removed from BlockMessage
-            mainParentOpt <- BlockStore[F].get1(s.justifications.head.latestBlockHash)
+          // TODO: replaced when parents are removed from BlockMessage
+          mainParentOpt = s.justifications.headOption
 
-            mainParent     <- mainParentOpt.liftTo[F](new Exception(s"Parent blocks not found.}"))
-            mainParentMeta <- s.dag.lookupUnsafe(mainParent.blockHash)
+          checkConstraint = for {
+            mainParentMeta <- mainParentOpt.liftTo[F](new Exception(s"Parent blocks not found.}"))
 
             // Loading the whole block is only needed to get post-state hash
             mainParentBlock     <- BlockStore[F].getUnsafe(mainParentMeta.blockHash)

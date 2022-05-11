@@ -56,19 +56,6 @@ object ProtoUtil {
     case (acc, b) => math.max(acc, b.blockNum)
   }
 
-  def justificationsToJustificationInfos(justification: Justification) =
-    JustificationInfo(
-      PrettyPrinter.buildStringNoLimit(justification.validator),
-      PrettyPrinter.buildStringNoLimit(justification.latestBlockHash)
-    )
-
-  def toJustification(
-      latestMessages: collection.Map[Validator, BlockMetadata]
-  ): Seq[Justification] =
-    latestMessages.toSeq.map {
-      case (validator, blockMetadata) => Justification(validator, blockMetadata.blockHash)
-    }
-
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 

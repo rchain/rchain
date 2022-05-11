@@ -197,23 +197,6 @@ object Body {
 
 }
 
-final case class Justification(
-    validator: ByteString,
-    latestBlockHash: ByteString
-) {
-  def toProto: JustificationProto = Justification.toProto(this)
-}
-
-object Justification {
-  def from(j: JustificationProto): Justification = Justification(
-    j.validator,
-    j.latestBlockHash
-  )
-
-  def toProto(j: Justification): JustificationProto =
-    JustificationProto(j.validator, j.latestBlockHash)
-}
-
 final case class RChainState(
     preStateHash: ByteString,
     postStateHash: ByteString,
