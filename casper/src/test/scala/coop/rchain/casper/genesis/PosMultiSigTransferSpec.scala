@@ -135,7 +135,7 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
         b3   <- node.addBlock(confirmDeploy)
         _    = assert(b3.body.deploys.head.systemDeployError.isEmpty)
         _    = assert(!b3.body.deploys.head.isFailed)
-        ret2 <- rm.playExploratoryDeploy(getBalance, b3.body.state.postStateHash)
+        ret2 <- rm.playExploratoryDeploy(getBalance, b3.postStateHash)
         _    = assert(ret2.head.exprs.head.getGInt == transferAmount)
       } yield ()
     }

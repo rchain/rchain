@@ -382,7 +382,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   ): F[Option[DataWithBlockInfo]] =
     // TODO: For Produce it doesn't make sense to have multiple names
     if (isListeningNameReduced(block, Seq(sortedListeningName))) {
-      val stateHash = ProtoUtil.postStateHash(block)
+      val stateHash = block.postStateHash
       for {
         data      <- RuntimeManager[F].getData(stateHash)(sortedListeningName)
         blockInfo = getLightBlockInfo(block)
@@ -396,7 +396,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       block: BlockMessage
   ): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
-      val stateHash = ProtoUtil.postStateHash(block)
+      val stateHash = block.postStateHash
       for {
         continuations <- RuntimeManager[F].getContinuation(stateHash)(sortedListeningNames)
         continuationInfos = continuations.map(
@@ -599,7 +599,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     for {
       dag                <- BlockDagStorage[F].getRepresentation
       lastFinalizedBlock <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
-      postStateHash      = ProtoUtil.postStateHash(targetBlock.getOrElse(lastFinalizedBlock))
+      postStateHash      = targetBlock.getOrElse(lastFinalizedBlock).postStateHash
       bonds              <- RuntimeManager[F].computeBonds(postStateHash)
       validatorBondOpt   = bonds.get(publicKey)
     } yield validatorBondOpt.isDefined.asRight[Error]
@@ -637,7 +637,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         res <- targetBlock.traverse(b => {
                 val postStateHash =
                   if (usePreStateHash) b.preStateHash
-                  else ProtoUtil.postStateHash(b)
+                  else b.postStateHash
                 for {
                   res            <- RuntimeManager[F].playExploratoryDeploy(term, postStateHash)
                   lightBlockInfo = getLightBlockInfo(b)
@@ -686,7 +686,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       block     <- BlockStore[F].getUnsafe(blockHash)
       sortedPar <- parSortable.sortMatch[F](par).map(_.term)
       stateHash = if (usePreStateHash) block.preStateHash
-      else block.body.state.postStateHash
+      else block.postStateHash
       data <- RuntimeManager[F].getData(stateHash)(sortedPar)
       lbi  = getLightBlockInfo(block)
     } yield (data, lbi)

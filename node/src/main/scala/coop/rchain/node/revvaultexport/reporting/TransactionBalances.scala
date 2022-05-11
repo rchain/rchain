@@ -108,7 +108,7 @@ object TransactionBalances {
     for {
       perValidatorVaults <- runtime.playExploratoryDeploy(
                              contract,
-                             block.body.state.postStateHash
+                             block.postStateHash
                            )
       perValidatorVaultAddr = perValidatorVaults.head.exprs.head.getEListBody.ps
         .map(p => p.exprs.head.getETupleBody.ps(1).exprs.head.getGString)

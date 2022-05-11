@@ -19,13 +19,13 @@ object RSpaceUtil {
 
   def getDataAtPublicChannel[F[_]: FlatMap](block: BlockMessage, channel: Long)(
       implicit runtimeManager: RuntimeManager[F]
-  ): F[Seq[String]] = getDataAtPublicChannel[F](ProtoUtil.postStateHash(block), channel)
+  ): F[Seq[String]] = getDataAtPublicChannel[F](block.postStateHash, channel)
 
   def getDataAtPrivateChannel[F[_]: FlatMap](block: BlockMessage, channel: String)(
       implicit runtimeManager: RuntimeManager[F]
   ) = {
     val name = channel.unsafeHexToByteString
-    getDataAt[F](ProtoUtil.postStateHash(block), GPrivate().withId(name))
+    getDataAt[F](block.postStateHash, GPrivate().withId(name))
   }
 
   def getDataAt[F[_]: FlatMap](hash: ByteString, channel: Par)(

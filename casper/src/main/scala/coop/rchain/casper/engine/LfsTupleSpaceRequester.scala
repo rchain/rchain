@@ -227,9 +227,7 @@ object LfsTupleSpaceRequester {
         .terminateAfter(_.isFinished) concurrently responseStream
     }
 
-    val stateHash = Blake2b256Hash.fromByteString(
-      ProtoUtil.postStateHash(approvedBlock.block)
-    )
+    val stateHash                   = Blake2b256Hash.fromByteString(approvedBlock.block.postStateHash)
     val startRequest: StatePartPath = Seq((stateHash, None))
     for {
       // Write last finalized state root

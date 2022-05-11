@@ -119,6 +119,7 @@ final case class BlockMessage(
     sender: Validator,
     seqNum: Long,
     preStateHash: ByteString,
+    postStateHash: ByteString,
     body: Body,
     justifications: List[BlockHash],
     bonds: Map[Validator, Long],
@@ -143,6 +144,7 @@ object BlockMessage {
       bm.sender,
       bm.seqNum,
       bm.preStateHash,
+      bm.postStateHash,
       body,
       bm.justifications,
       bm.bonds.map(b => (b.validator, b.stake)).toMap,
@@ -169,6 +171,7 @@ object BlockMessage {
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
       .withPreStateHash(bm.preStateHash)
+      .withPostStateHash(bm.postStateHash)
       .withBody(Body.toProto(bm.body))
       .withJustifications(sortedJustifications)
       .withBonds(sortedBonds)
@@ -192,7 +195,6 @@ object RejectedDeploy {
 }
 
 final case class Body(
-    state: RChainState,
     deploys: List[ProcessedDeploy],
     rejectedDeploys: List[RejectedDeploy],
     systemDeploys: List[ProcessedSystemDeploy]
@@ -206,30 +208,14 @@ object Body {
       deploys         <- b.deploys.toList.traverse(ProcessedDeploy.from)
       systemDeploys   <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
       rejectedDeploys = b.rejectedDeploys.toList.map(RejectedDeploy.from)
-    } yield Body(RChainState.from(b.state), deploys, rejectedDeploys, systemDeploys)
+    } yield Body(deploys, rejectedDeploys, systemDeploys)
 
   def toProto(b: Body): BodyProto =
     BodyProto()
-      .withState(RChainState.toProto(b.state))
       .withDeploys(b.deploys.map(ProcessedDeploy.toProto))
       .withRejectedDeploys(b.rejectedDeploys.map(RejectedDeploy.toProto))
       .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))
 
-}
-
-final case class RChainState(
-    postStateHash: ByteString
-) {
-  def toProto: RChainStateProto = RChainState.toProto(this)
-}
-
-object RChainState {
-  def from(rchs: RChainStateProto): RChainState =
-    RChainState(rchs.postStateHash)
-
-  def toProto(rchsp: RChainState): RChainStateProto =
-    RChainStateProto()
-      .withPostStateHash(rchsp.postStateHash)
 }
 
 final case class ProcessedDeploy(

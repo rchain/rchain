@@ -98,7 +98,7 @@ class BlockQueryResponseAPITest
                 secondBlock.preStateHash.toHexString
               )
               b.postStateHash should be(
-                secondBlock.body.state.postStateHash.toHexString
+                secondBlock.postStateHash.toHexString
               )
               b.bonds should be(secondBlock.bonds.map(ProtoUtil.bondToBondInfo))
               b.blockSize should be(secondBlock.toProto.serializedSize.toString)
@@ -184,7 +184,7 @@ class BlockQueryResponseAPITest
                 secondBlock.preStateHash.toHexString
               )
               blockInfo.postStateHash should be(
-                secondBlock.body.state.postStateHash.toHexString
+                secondBlock.postStateHash.toHexString
               )
               blockInfo.bonds should be(secondBlock.bonds.map(ProtoUtil.bondToBondInfo))
               blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)

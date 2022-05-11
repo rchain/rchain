@@ -183,10 +183,8 @@ object BlockCreator {
       shardId: String,
       version: Int
   ): BlockMessage = {
-    val state = RChainState(postStateHash)
     val body =
       Body(
-        state,
         deploys.toList,
         rejectedDeploys.map(r => RejectedDeploy(r)).toList,
         systemDeploys.toList
@@ -196,6 +194,7 @@ object BlockCreator {
       blockData.blockNumber,
       sender,
       preStateHash,
+      postStateHash,
       body,
       justifications,
       bondsMap,

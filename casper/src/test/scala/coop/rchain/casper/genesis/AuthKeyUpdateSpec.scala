@@ -94,7 +94,7 @@ class AuthKeyUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
         _       = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
         _       = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
         _       = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
-        ret     <- rm.playExploratoryDeploy(getBalanceTerm(pub2RevAddr), b2.body.state.postStateHash)
+        ret     <- rm.playExploratoryDeploy(getBalanceTerm(pub2RevAddr), b2.postStateHash)
         balance = ret.head.exprs.head.getGInt
         b5 <- node
                .addBlock(
@@ -104,9 +104,9 @@ class AuthKeyUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
         _    = assert(b5.body.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
         _    = assert(b5.body.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
         _    = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
-        ret2 <- rm.playExploratoryDeploy(getBalanceTerm(pub2RevAddr), b5.body.state.postStateHash)
+        ret2 <- rm.playExploratoryDeploy(getBalanceTerm(pub2RevAddr), b5.postStateHash)
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
-        ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b2.body.state.postStateHash)
+        ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b2.postStateHash)
         _    = assert(ret3.head.exprs.head.getGInt == 100)
       } yield ()
     }
@@ -126,7 +126,7 @@ class AuthKeyUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
         _  = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
 
         // Get update contract result
-        updateResult                               <- rm.getData(b2.body.state.postStateHash)(GDeployId(updateDeploy.sig))
+        updateResult                               <- rm.getData(b2.postStateHash)(GDeployId(updateDeploy.sig))
         Tuple2((Boolean(success), String(errMsg))) = updateResult.head
         // Expect failed update
         _ = assert(!success, s"update should fail, instead: $errMsg")

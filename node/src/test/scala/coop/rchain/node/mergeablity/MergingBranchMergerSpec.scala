@@ -157,7 +157,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
   //    runtimeManagerResource.use { runtimeManager =>
   //      {
   //        implicit val rm: RuntimeManager[Task] = runtimeManager
-  //        val genesisPostStateHash              = genesis.body.state.postStateHash
+  //        val genesisPostStateHash              = genesis.postStateHash
   //
   //        def tryIt =
   //          for {
@@ -215,7 +215,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
   //      {
   //        implicit val rm: RuntimeManager[Task] = runtimeManager
   //        implicit val conc                     = Concurrent[Task]
-  //        val genesisPostStateHash              = genesis.body.state.postStateHash
+  //        val genesisPostStateHash              = genesis.postStateHash
   //        val baseStateReader = runtimeManager.getHistoryRepo
   //          .getHistoryReader(Blake2b256Hash.fromByteString(genesisPostStateHash))
   //
@@ -294,7 +294,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
   //        implicit val metrics                  = new MetricsNOP[Task]
   //
   //        val emptyDag             = InMemDAG[Task, MergingVertex](Map.empty, Map.empty)
-  //        val genesisPostStateHash = genesis.body.state.postStateHash
+  //        val genesisPostStateHash = genesis.postStateHash
   //
   //        val genesisLayer =
   //          Seq(
@@ -388,7 +388,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
         ): Task[BlockMessage] = {
 
           implicit val bds     = dagStore
-          val baseState        = baseBlock.body.state.postStateHash
+          val baseState        = baseBlock.postStateHash
           val seqNum           = baseBlock.seqNum + 1
           val mergingBlocksNum = (baseBlock.seqNum * 2 + 1).toLong
           val nexBaseBlockNum  = (baseBlock.seqNum * 2 + 2).toLong
@@ -405,7 +405,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             indices <- (baseBlock +: mergingBlocks)
                         .traverse { b =>
                           val preStateHash  = b.preStateHash
-                          val postStateHash = b.body.state.postStateHash
+                          val postStateHash = b.postStateHash
                           val seqNum        = b.seqNum
                           val sender        = b.sender
                           for {
@@ -439,7 +439,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             (postState, rejectedDeploys) = v
             mergedState                  = ByteString.copyFrom(postState.bytes.toArray)
             _                            = assert(rejectedDeploys.size == 0)
-            _                            = assert(mergedState != baseBlock.body.state.postStateHash)
+            _                            = assert(mergedState != baseBlock.postStateHash)
 
             // create next base block (merge block)
             r             <- mkHeadBlock(mergedState, seqNum, nexBaseBlockNum)

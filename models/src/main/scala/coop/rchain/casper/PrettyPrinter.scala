@@ -23,7 +23,7 @@ object PrettyPrinter {
     } else {
       s"Block #${b.blockNumber} (${buildString(b.blockHash)}) " +
         s"-- Sender ID ${buildString(b.sender)} " +
-        s"-- Contents ${buildString(b.body.state)}" +
+        s"-- Contents ${buildString(b.postStateHash)}" +
         s"-- Shard ID ${limit(b.shardId, maxLength = 10)}" +
         s"-- Justifications ${buildJustifications(b.justifications)} "
     }
@@ -60,9 +60,6 @@ object PrettyPrinter {
 
   def buildString(d: DeployData): String =
     s"DeployData #${d.timestamp} -- ${d.term}"
-
-  def buildString(r: RChainState): String =
-    buildString(r.postStateHash)
 
   def buildString(hashes: Traversable[BlockHash]): String =
     hashes.map(PrettyPrinter.buildString).mkString("[", " ", "]")

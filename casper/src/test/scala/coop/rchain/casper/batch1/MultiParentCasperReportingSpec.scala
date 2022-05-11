@@ -51,7 +51,7 @@ class MultiParentCasperReportingSpec extends AnyFlatSpec with Matchers with Insp
           case _                  => false
         }
         reportingReplayPostStateHash = trace.postStateHash
-        _                            = reportingReplayPostStateHash shouldBe signedBlock.body.state.postStateHash
+        _                            = reportingReplayPostStateHash shouldBe signedBlock.postStateHash
         _                            = deployCommEventsNum shouldBe reportingCommEventsNum
       } yield ()
     }

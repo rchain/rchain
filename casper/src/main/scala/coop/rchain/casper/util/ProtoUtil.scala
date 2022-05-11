@@ -37,9 +37,6 @@ object ProtoUtil {
   def systemDeploys(b: BlockMessage): Seq[ProcessedSystemDeploy] =
     b.body.systemDeploys
 
-  def postStateHash(b: BlockMessage): ByteString =
-    b.body.state.postStateHash
-
   def bondToBondInfo(bond: (Validator, Long)): BondInfo =
     BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond._1), stake = bond._2)
 
@@ -52,6 +49,7 @@ object ProtoUtil {
       blockNumber: Long,
       sender: PublicKey,
       preStateHash: ByteString,
+      postStateHash: ByteString,
       body: Body,
       justifications: List[BlockHash],
       bonds: Map[Validator, Long],
@@ -65,6 +63,7 @@ object ProtoUtil {
       sender = sender.bytes.toByteString,
       seqNum = seqNum,
       preStateHash = preStateHash,
+      postStateHash = postStateHash,
       body,
       justifications,
       bonds,

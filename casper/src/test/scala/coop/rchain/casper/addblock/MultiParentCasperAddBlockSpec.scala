@@ -457,7 +457,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         status2       <- nodes(2).addBlock(invalidSigned)
         signedBlock2  <- nodes(1).createBlockUnsafe()
         status3       <- nodes(1).addBlock(signedBlock2)
-        bonds         <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
+        bonds         <- nodes(1).runtimeManager.computeBonds(signedBlock2.postStateHash)
         _             = bonds.map { case (_, stake) => stake }.min should be(0) // Slashed validator has 0 stake
         _             <- nodes(2).handleReceive()
         signedBlock3  <- nodes(2).createBlockUnsafe()
@@ -476,10 +476,8 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
-    val postState: RChainState =
-      RChainState(postStateHash = ByteString.EMPTY)
     val blockHash                = ProtoUtil.hashBlock(signedInvalidBlock)
-    val body                     = Body(postState, deploys.toList, List.empty, List.empty)
+    val body                     = Body(deploys.toList, List.empty, List.empty)
     val serializedJustifications = List(signedInvalidBlock.blockHash)
     val serializedBlockHash      = blockHash
     val blockThatPointsToInvalidBlock =
@@ -490,6 +488,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         sender = ByteString.EMPTY,
         seqNum = 0,
         preStateHash = ByteString.EMPTY,
+        postStateHash = ByteString.EMPTY,
         body,
         serializedJustifications,
         bonds = genesis.genesisBlock.bonds,

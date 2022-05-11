@@ -84,13 +84,10 @@ object Genesis {
       stateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
   ): BlockMessage = {
-    val state = RChainState(postStateHash = stateHash)
-
     val blockDeploys = processedDeploys.filterNot(_.isFailed)
     val sortedDeploys =
       blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
     val body = Body(
-      state = state,
       deploys = sortedDeploys.toList,
       rejectedDeploys = List.empty,
       systemDeploys = List.empty
@@ -103,6 +100,7 @@ object Genesis {
       genesis.blockNumber,
       genesis.sender,
       preStateHash = startHash,
+      postStateHash = stateHash,
       body,
       List.empty,
       bonds = buildBondsMap(genesis.proofOfStake),

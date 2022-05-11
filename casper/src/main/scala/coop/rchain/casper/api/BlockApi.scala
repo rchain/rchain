@@ -113,7 +113,7 @@ object BlockApi {
       version = block.version,
       blockNumber = block.blockNumber,
       preStateHash = PrettyPrinter.buildStringNoLimit(block.preStateHash),
-      postStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash),
+      postStateHash = PrettyPrinter.buildStringNoLimit(block.postStateHash),
       bonds = block.bonds.map(ProtoUtil.bondToBondInfo).toList,
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.body.deploys.length,

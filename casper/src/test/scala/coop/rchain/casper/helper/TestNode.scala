@@ -113,7 +113,7 @@ case class TestNode[F[_]: Sync: Timer](
   val approvedBlock = ApprovedBlock(genesis)
 
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
-  val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
+  val postGenesisStateHash = genesis.postStateHash
 
   implicit val rspaceMan = RSpaceStateManagerTestImpl()
 

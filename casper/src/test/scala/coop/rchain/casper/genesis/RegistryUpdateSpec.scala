@@ -91,7 +91,7 @@ class RegistryUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
         _       = assert(b1.body.deploys.head.cost.cost > 0L, s"$b1 deploy cost is 0L")
         _       = assert(b1.body.deploys.head.systemDeployError.isEmpty, s"$b1 system deploy failed")
         _       = assert(!b1.body.deploys.head.isFailed, s"$b1 deploy failed")
-        ret     <- rm.playExploratoryDeploy(getBalanceTerm, b1.body.state.postStateHash)
+        ret     <- rm.playExploratoryDeploy(getBalanceTerm, b1.postStateHash)
         balance = ret.head.exprs.head.getGInt
         b2 <- node
                .addBlock(
@@ -101,9 +101,9 @@ class RegistryUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
         _    = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
         _    = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
         _    = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
-        ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b2.body.state.postStateHash)
+        ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b2.postStateHash)
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
-        ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b2.body.state.postStateHash)
+        ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b2.postStateHash)
         _    = assert(ret3.head.exprs.head.getGString == "hello")
       } yield ()
     }

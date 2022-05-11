@@ -84,7 +84,7 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
                      shardId = genesisContext.genesisBlock.shardId
                    )
         block           <- node.addBlock(contract)
-        stateHash       = ProtoUtil.postStateHash(block)
+        stateHash       = block.postStateHash
         checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)
         result          <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy)
         _               = assert(result.size == 1)

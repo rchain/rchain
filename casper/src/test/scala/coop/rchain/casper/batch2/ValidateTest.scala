@@ -526,10 +526,7 @@ class ValidateTest
         _ <- Validate.formatOfFields[Task](genesis.copy(sigAlgorithm = "")) shouldBeF false
         _ <- Validate.formatOfFields[Task](genesis.copy(shardId = "")) shouldBeF false
         _ <- Validate.formatOfFields[Task](
-              genesis.copy(
-                body = genesis.body
-                  .copy(state = genesis.body.state.copy(postStateHash = ByteString.EMPTY))
-              )
+              genesis.copy(postStateHash = ByteString.EMPTY)
             ) shouldBeF false
       } yield ()
   }

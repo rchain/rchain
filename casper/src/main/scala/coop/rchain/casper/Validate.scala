@@ -68,7 +68,7 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
       } yield false
-    } else if (b.body.state.postStateHash.isEmpty) {
+    } else if (b.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
@@ -377,7 +377,7 @@ object Validate {
       runtimeManager: RuntimeManager[F]
   ): F[ValidBlockProcessing] = {
     val bonds          = b.bonds
-    val tuplespaceHash = ProtoUtil.postStateHash(b)
+    val tuplespaceHash = b.postStateHash
 
     runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {
       case Right(computedBonds) =>

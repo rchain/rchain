@@ -58,7 +58,7 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: 
 
             // Loading the whole block is only needed to get post-state hash
             mainParentBlock     <- BlockStore[F].getUnsafe(mainParentMeta.blockHash)
-            mainParentStateHash = ProtoUtil.postStateHash(mainParentBlock)
+            mainParentStateHash = mainParentBlock.postStateHash
 
             // Get bonds map from PoS
             // NOTE: It would be useful to have active validators cached in the block in the same way as bonds.

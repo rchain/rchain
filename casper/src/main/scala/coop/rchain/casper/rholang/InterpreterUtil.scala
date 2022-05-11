@@ -91,7 +91,7 @@ object InterpreterUtil {
                    } else {
                      for {
                        replayResult <- replayBlock(incomingPreStateHash, block, runtimeManager)
-                       result       <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
+                       result       <- handleErrors(block.postStateHash, replayResult)
                      } yield result
                    }
                }
@@ -119,7 +119,7 @@ object InterpreterUtil {
           )
         replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
                          RetryPolicies.limitRetries(3), {
-                           case Right(stateHash) => stateHash == block.body.state.postStateHash
+                           case Right(stateHash) => stateHash == block.postStateHash
                            case _                => false
                          },
                          (e, retryDetails) =>
@@ -127,7 +127,7 @@ object InterpreterUtil {
                              case Right(stateHash) =>
                                Log[F].error(
                                  s"Replay block ${PrettyPrinter.buildStringNoLimit(block.blockHash)} with " +
-                                   s"${PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash)} " +
+                                   s"${PrettyPrinter.buildStringNoLimit(block.postStateHash)} " +
                                    s"got tuple space mismatch error with error hash ${PrettyPrinter
                                      .buildStringNoLimit(stateHash)}, retries details: ${retryDetails}"
                                )
@@ -255,7 +255,7 @@ object InterpreterUtil {
         case Seq(parent) =>
           BlockStore[F]
             .getUnsafe(parent)
-            .map(ProtoUtil.postStateHash)
+            .map(_.postStateHash)
             .map((_, Seq.empty[ByteString]))
 
         // we might want to take some data from the parent with the most stake,
@@ -268,7 +268,7 @@ object InterpreterUtil {
               for {
                 b         <- BlockStore[F].getUnsafe(v)
                 preState  = b.preStateHash
-                postState = b.body.state.postStateHash
+                postState = b.postStateHash
                 sender    = b.sender.toByteArray
                 seqNum    = b.seqNum
 
@@ -289,7 +289,7 @@ object InterpreterUtil {
           for {
             lfbState <- BlockStore[F]
                          .getUnsafe(s.lastFinalizedBlock)
-                         .map(_.body.state.postStateHash)
+                         .map(_.postStateHash)
                          .map(Blake2b256Hash.fromByteString)
             r <- DagMerger.merge[F](
                   s.dag,

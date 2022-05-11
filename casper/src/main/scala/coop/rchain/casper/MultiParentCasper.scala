@@ -72,7 +72,7 @@ object MultiParentCasper {
   ): F[CasperSnapshot] = {
     def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
       for {
-        av <- RuntimeManager[F].getActiveValidators(b.body.state.postStateHash)
+        av <- RuntimeManager[F].getActiveValidators(b.postStateHash)
         // bonds are available in block message, but please remember this is just a cache, source of truth is RSpace.
         shardConfig = casperShardConf
       } yield OnChainCasperState(shardConfig, b.bonds, av)
@@ -189,7 +189,7 @@ object MultiParentCasper {
       } yield status
 
     val blockPreState  = b.preStateHash
-    val blockPostState = b.body.state.postStateHash
+    val blockPostState = b.postStateHash
     val blockSender    = b.sender.toByteArray
     val indexBlock = for {
       mergeableChs <- RuntimeManager[F].loadMergeableChannels(blockPostState, blockSender, b.seqNum)

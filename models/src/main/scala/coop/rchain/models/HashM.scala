@@ -162,7 +162,6 @@ object HashM extends HashMDerivation {
   implicit val DeployDataHash            = gen[DeployDataProto]
   implicit val ProcessedDeployHash       = gen[ProcessedDeployProto]
   implicit val ProcessedSystemDeployHash = gen[ProcessedSystemDeployProto]
-  implicit val RChainStateHash           = gen[RChainStateProto]
   implicit val ReportConsumeProto        = gen[ReportConsumeProto]
   implicit val bindPattern               = gen[BindPattern]
   implicit val parWithRandom             = gen[ParWithRandom]

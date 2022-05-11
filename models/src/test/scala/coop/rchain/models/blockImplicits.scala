@@ -137,7 +137,6 @@ object blockImplicits {
         blockHash = ByteString.EMPTY,
         blockNumber = setBlockNumber.get,
         body = Body(
-          state = RChainState(postStateHash = postStatehash),
           deploys = deploys.toList,
           systemDeploys = setSysDeploys.toList.flatten,
           rejectedDeploys = List.empty
@@ -146,6 +145,7 @@ object blockImplicits {
         bonds = bonds,
         sender = validator,
         preStateHash = preStatehash,
+        postStateHash = postStatehash,
         seqNum = setSeqNumber.get,
         sig = ByteString.EMPTY,
         sigAlgorithm = "",
