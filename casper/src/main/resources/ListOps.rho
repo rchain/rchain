@@ -17,7 +17,8 @@
 new
   ListOps,
   rs(`rho:registry:insertSigned:secp256k1`),
-  uriOut
+  uriOut,
+  deployerId(`rho:rchain:deployerId`)
 in {
   contract ListOps(@"prepend", @head, @tail, return) = {
     return!([head] ++ tail)
@@ -450,9 +451,8 @@ in {
   } |
 
   rs!(
-    "040126690519dc9b0f52876cb13458e15697794dd87d7c6477707c7efa4cce8a36b634eab5056bd4e3ba385ab14a638e4ac7d3b3e4968da3d66933fc04bc7038b5".hexToBytes(),
     (9223372036854775807, bundle+{*ListOps}),
-    "3045022100dc97997d235773957dc6610491441707c64f9f23efeee6fb6ba8ac04003cd1d302201aa4cfd144dfc866d7c92673dddaa86436609c4df61a8a512ac2dd34e131b3ee".hexToBytes(),
+    *deployerId,
     *uriOut
   )
 }

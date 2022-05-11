@@ -96,7 +96,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
             // system doesn't get precharge and refund , so it would always get one
             val transactions = findTransactions(s.report.head)
             val txCtor = s.systemDeploy.systemDeploy.value match {
-              case SlashSystemDeployDataProto(_, _)  => SlashingDeploy
+              case SlashSystemDeployDataProto(_)     => SlashingDeploy
               case CloseBlockSystemDeployDataProto() => CloseBlock
             }
             transactions

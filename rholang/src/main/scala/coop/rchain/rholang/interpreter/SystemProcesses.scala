@@ -37,7 +37,6 @@ trait SystemProcesses[F[_]] {
   def keccak256Hash: Contract[F]
   def blake2b256Hash: Contract[F]
   def getBlockData(blockData: Ref[F, SystemProcesses.BlockData]): Contract[F]
-  def invalidBlocks(invalidBlocks: SystemProcesses.InvalidBlocks[F]): Contract[F]
   def revAddress: Contract[F]
   def deployerIdOps: Contract[F]
   def registryOps: Contract[F]
@@ -51,20 +50,6 @@ object SystemProcesses {
   type Arity                = Int
   type Remainder            = Option[Var]
   type BodyRef              = Long
-  class InvalidBlocks[F[_]](val invalidBlocks: Ref[F, Par]) {
-    def setParams(invalidBlocks: Par): F[Unit] =
-      this.invalidBlocks.set(invalidBlocks)
-  }
-
-  object InvalidBlocks {
-    def apply[F[_]]()(implicit F: Sync[F]): F[InvalidBlocks[F]] =
-      for {
-        invalidBlocks <- Ref[F].of(Par())
-      } yield new InvalidBlocks[F](invalidBlocks)
-
-    def unsafe[F[_]]()(implicit F: Sync[F]): InvalidBlocks[F] =
-      new InvalidBlocks(Ref.unsafe[F, Par](Par()))
-  }
 
   final case class BlockData private (
       timeStamp: Long,
@@ -117,8 +102,7 @@ object SystemProcesses {
   final case class ProcessContext[F[_]: Concurrent: Span](
       space: RhoTuplespace[F],
       dispatcher: RhoDispatch[F],
-      blockData: Ref[F, BlockData],
-      invalidBlocks: InvalidBlocks[F]
+      blockData: Ref[F, BlockData]
   ) {
     val systemProcesses = SystemProcesses[F](dispatcher, space)
   }
@@ -382,16 +366,6 @@ object SystemProcesses {
           } yield ()
         case _ =>
           illegalArgumentException("blockData expects only a return channel")
-      }
-
-      def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F] = {
-        case isContractCall(produce, Seq(ack)) =>
-          for {
-            invalidBlocks <- invalidBlocks.invalidBlocks.get
-            _             <- produce(Seq(invalidBlocks), ack)
-          } yield ()
-        case _ =>
-          illegalArgumentException("invalidBlocks expects only a return channel")
       }
     }
 }

@@ -43,7 +43,6 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
       IndexedSeq.empty,
       List.empty,
       Set.empty,
-      Map.empty,
       Set.empty,
       0,
       Map.empty,

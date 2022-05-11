@@ -15,9 +15,7 @@ import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.Metrics
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -86,31 +84,13 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
         .address
         .toBase58
     for {
-      txDeploy <- ConstructDeploy.sourceDeployNowF(
-                   txRho(payerAddr, payeeAddr),
-                   sec = payerKey
-                 )
+      txDeploy    <- ConstructDeploy.sourceDeployNowF(txRho(payerAddr, payeeAddr), sec = payerKey)
       userDeploys = txDeploy :: Nil
       systemDeploys = CloseBlockDeploy(
-        SystemDeployUtil
-          .generateCloseDeployRandomSeed(
-            validator,
-            seqNum
-          )
+        SystemDeployUtil.generateCloseDeployRandomSeed(validator, seqNum)
       ) :: Nil
-      blockData = BlockData(
-        txDeploy.data.timestamp,
-        blockNum,
-        validator,
-        seqNum
-      )
-      invalidBlocks = Map.empty[BlockHash, Validator]
-      r <- runtimeManager.computeState(baseState)(
-            userDeploys,
-            systemDeploys,
-            blockData,
-            invalidBlocks
-          )
+      blockData = BlockData(txDeploy.data.timestamp, blockNum, validator, seqNum)
+      r         <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, blockData)
     } yield r
   }
 

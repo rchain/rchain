@@ -81,7 +81,7 @@ object BlockIndex {
                            }
       sysDeploysData = sysDeploys
         .collect {
-          case (Succeeded(log, SlashSystemDeployData(_, _)), mergeChs) =>
+          case (Succeeded(log, SlashSystemDeployData(_)), mergeChs) =>
             (blockHash.concat(SYS_SLASH_DEPLOY_ID), SYS_SLASH_DEPLOY_COST, log, mergeChs)
           case (Succeeded(log, CloseBlockSystemDeployData), mergeChs) =>
             (

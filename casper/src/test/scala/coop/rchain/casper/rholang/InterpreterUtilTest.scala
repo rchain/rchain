@@ -18,9 +18,8 @@ import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
-import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.scalatestcontrib._
@@ -62,7 +61,6 @@ class InterpreterUtilTest
       IndexedSeq.empty,
       List.empty,
       Set.empty,
-      Map.empty,
       Set.empty,
       0,
       Map.empty,
@@ -100,8 +98,7 @@ class InterpreterUtilTest
                 blockNumber,
                 genesisContext.validatorPks.head,
                 seqNum
-              ),
-              Map.empty[BlockHash, Validator]
+              )
             )
             .attempt
       )
@@ -743,7 +740,7 @@ class InterpreterUtilTest
                            )
           Right(tsHash) = validateResult
           _             <- timeEff.advance()
-        } yield tsHash should be(Some(computedTsHash))
+        } yield tsHash.map(_.toHexString) should be(Some(computedTsHash.toHexString))
       }
   }
 

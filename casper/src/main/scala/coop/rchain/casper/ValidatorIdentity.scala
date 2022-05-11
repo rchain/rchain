@@ -1,18 +1,18 @@
 package coop.rchain.casper
 
-import cats.{Applicative, Id}
+import cats.Applicative
 import cats.effect.Sync
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{BlockMessage, Signature}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.shared.{Base16, EnvVars, Log, LogSource}
 import coop.rchain.models.syntax._
+import coop.rchain.shared.{EnvVars, Log, LogSource}
 
 final case class ValidatorIdentity(
     publicKey: PublicKey,
@@ -21,7 +21,7 @@ final case class ValidatorIdentity(
 ) {
   def signature(data: Array[Byte]): Signature = {
     val sig = SignaturesAlg(sigAlgorithm).map(_.sign(data, privateKey)).get
-    Signature(ByteString.copyFrom(publicKey.bytes), sigAlgorithm, ByteString.copyFrom(sig))
+    Signature(publicKey, sigAlgorithm, sig)
   }
 
   def signBlock(
@@ -35,14 +35,13 @@ final case class ValidatorIdentity(
 
     val blockHash = ProtoUtil.hashBlock(b)
 
-    val sig = signature(blockHash.toByteArray).sig
+    val sig = signature(blockHash.toByteArray).signature.toByteString
 
-    b.copy(
-      sig = sig,
-      blockHash = blockHash
-    )
+    b.copy(sig = sig, blockHash = blockHash)
   }
 }
+
+final case class Signature(pk: PublicKey, sigAlgorithm: String, signature: Array[Byte])
 
 object ValidatorIdentity {
   private val RNodeValidatorPasswordEnvVar  = "RNODE_VALIDATOR_PASSWORD"

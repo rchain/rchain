@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -228,7 +228,7 @@ object LfsTupleSpaceRequester {
     }
 
     val stateHash = Blake2b256Hash.fromByteString(
-      ProtoUtil.postStateHash(approvedBlock.candidate.block)
+      ProtoUtil.postStateHash(approvedBlock.block)
     )
     val startRequest: StatePartPath = Seq((stateHash, None))
     for {

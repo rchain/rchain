@@ -64,12 +64,10 @@ class MergingCases extends FlatSpec with Matchers {
             stateTransitionCreator,
             seqNum
           )
-          invalidBlocks = Map.empty[BlockHash, Validator]
           r <- runtimeManager.computeState(baseState)(
                 userDeploys,
                 systemDeploys,
-                blockData,
-                invalidBlocks
+                blockData
               )
           (postStateHash, processedDeploys, _) = r
           _                                    = processedDeploys.size shouldBe 2

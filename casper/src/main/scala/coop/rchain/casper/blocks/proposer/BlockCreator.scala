@@ -68,23 +68,19 @@ object BlockCreator {
           ilmFromBonded = ilm.toList.filter {
             case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L
           }
-          // TODO: Add `slashingDeploys` to DeployStorage
-          slashingDeploys = ilmFromBonded
-            .map(_._2)
-            .map(
-              invalidBlockHash =>
-                SlashDeploy(
-                  invalidBlockHash,
-                  validatorIdentity.publicKey,
-                  SystemDeployUtil.generateSlashDeployRandomSeed(selfId, seqNum)
-                )
-            )
-          _ <- slashingDeploys.traverse_(
-                sd =>
-                  Log[F].info(
-                    s"Issuing slashing deploy justified by block ${PrettyPrinter.buildString(sd.invalidBlockHash)}"
-                  )
-              )
+          slashingDeploysWithBlocks = ilmFromBonded.map {
+            case (slashedValidator, invalidBlock) =>
+              val rnd = SystemDeployUtil.generateSlashDeployRandomSeed(selfId, seqNum)
+              (SlashDeploy(slashedValidator, rnd), invalidBlock)
+          }
+          slashingDeploys <- slashingDeploysWithBlocks.traverse {
+                              case (sd, invalidBlock) =>
+                                Log[F]
+                                  .info(
+                                    s"Issuing slashing deploy justified by block ${PrettyPrinter.buildString(invalidBlock)}"
+                                  )
+                                  .as(sd)
+                            }
         } yield slashingDeploys
 
       def prepareDummyDeploy(blockNumber: Long, shardId: String): Seq[Signed[DeployData]] =
@@ -117,17 +113,15 @@ object BlockCreator {
         deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
         r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
               for {
-                now           <- Time[F].currentMillis
-                invalidBlocks = s.invalidBlocks
-                blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+                now       <- Time[F].currentMillis
+                blockData = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    parents,
                                    deploys.toSeq,
                                    systemDeploys,
                                    s,
                                    runtimeManager,
-                                   blockData,
-                                   invalidBlocks
+                                   blockData
                                  )
                 (
                   preStateHash,

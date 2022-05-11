@@ -91,7 +91,8 @@ new
   revVaultCh,
   multiSigRevVaultCh,
   listOpsCh,
-  currentDeployerData
+  currentDeployerData,
+  deployerId(`rho:rchain:deployerId`)
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -443,193 +444,183 @@ in {
                   }
                 }
               } |
-              // Private method which transfers all of a validator's rewards + bond to the Coop vault.
-              // Slash expects (Boolean, Either[Nil, String]) on returnCh.
-              contract PoS(@"slash", @deployerId, @blockHash, @sysAuthToken, returnCh) = {
-                new isValidTokenCh in {
-                  sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
-                  for (@isValid <- isValidTokenCh) {
-                    if (isValid) {
-                      new invalidBlocksCh, stateProcessCh, userCh,
-                          getInvalidBlocks(`rho:casper:invalidBlocks`)
-                      in {
-                        getInvalidBlocks!(*invalidBlocksCh) |
-                        getUser!(deployerId, *userCh) |
-                        runMVar!(*stateCh, *stateProcessCh, *returnCh) |
-                        for (@invalidBlocks        <- invalidBlocksCh &
-                              @userPk               <- userCh &
-                              @state, stateUpdateCh <- stateProcessCh) {
-                              new toBeSlashed, valBondCh, valRewardCh, posAuthKeyCh in {
-                                // Flow of logic:
-                                // 0. check if blockHash is the hash of an invalid block
-                                // 1. transfer stake of slashed validator from PoS to Coop vault
-                                // 2. update state
-                                // Retrieves either public key of sender of invalid block or the deployer public key.
-                                toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
-                                for (@validator <- toBeSlashed) {
-                                  // Takes the stake of slashed validator
-                                  valBondCh!(state.get("allBonds").get(validator)) |
-                                  @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
-                                  for (@valBond <- valBondCh ; @posAuthKey <- posAuthKeyCh) {
-                                    // Transfers slashed funds from PoS vault to Coop vault, then updates state.
-                                    new transferDoneCh in {
-                                      @posVault!(
-                                        "transfer",
-                                        coopMultiVaultAddr,
-                                        valBond,
-                                        posAuthKey,
-                                        *transferDoneCh
-                                      ) |
-                                      // FIXME handle transfer failing case
-                                      for (_ <- transferDoneCh) {
-                                        // Sets slashed validator's committed rewards and bond to 0 in state.
-                                        // Moves slashed validator to withdrawers map with no quarantine period.
-                                        stateUpdateCh!({
-                                          "allBonds"        : state.get("allBonds").set(validator, 0),
-                                          "activeValidators": state.get("activeValidators").delete(validator),
-                                          "committedRewards" : state.get("committedRewards").delete(validator),
-                                          "withdrawers"     : state.get("withdrawers"),
-                                          "pendingWithdrawers": state.get("pendingWithdrawers"),
-                                          "randomImages"    : state.get("randomImages"),
-                                          "randomNumbers"   : state.get("randomNumbers")
-                                        },
-                                        (true, Nil))
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                        }
-                      }
-                    } else {
-                      returnCh!((false, "Invalid system auth token"))
-                    }
-                  }
-                }
-              } |
-              // Private method which signals the end of block processing.
-              contract PoS(@"closeBlock", @sysAuthToken, ackCh) = {
-                new isValidTokenCh in {
-                  sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
-                  for (@isValid <- isValidTokenCh) {
-                    if (isValid) {
-                      new blockDataCh, getBlockData(`rho:block:data`) in {
-                        getBlockData!(*blockDataCh) |
-                        for (@blockNumber, _, _ <- blockDataCh) {
-                          if (blockNumber % $$epochLength$$ != 0) {
-                            // Epoch change does not occur.
-                            ackCh!((true, Nil))
-                          } else {
-                            // Epoch change occurs.
-                            new payWithdrawer, removeQuarantinedWithdrawers,
-                                stateProcessCh, paymentDoneCh,
-                                accDepositsDoneCh, commitRewardsCh,
-                                newValidatorsCh, removeQuarantinedCh, currentEpochRewardCh,
-                                commitCurrentEpochRewards, updatedRewardsCh, movePendingWithdrawCh, movePendingWithdrawer
-                            in {
-                              PoS!("getCurrentEpochRewards", * currentEpochRewardCh) |
-                              for (@currentRewards <- currentEpochRewardCh) {
-                                runMVar!(*stateCh, *stateProcessCh, *ackCh) |
-                                for (@state, stateUpdateCh <- stateProcessCh) {
-                                  // 1. Calculate all the validator current epoch rewards based on active validator bonding proportion
-                                  // 2. Accumulate `committedRewards` with the result of step 1
-                                  commitCurrentEpochRewards!(state, currentRewards, *updatedRewardsCh) |
-                                  for (@newCommittedState <- updatedRewardsCh) {
-                                    // 3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers`
-                                    // when pendingWithdrawers is not empty, remove the validator in `allBonds`
-                                    movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
-                                    for (@newMovedPendingState <- movePendingWithdrawCh){
-                                      // 4. When the block number reaches the quantinue of `withdrawers` ,
-                                      //  transfer the corresponding bonds+ rewards to the corresponding validator from posVault.
-                                      // 5. update `pendingWithdrawers` to empty Map {}.
-                                      removeQuarantinedWithdrawers!(blockNumber, newMovedPendingState, *removeQuarantinedCh) |
-                                      for (@newRemovedQuantinueState <- removeQuarantinedCh) {
-                                        // 6. Pick new `activeValidators`
-                                        pickActiveValidators!(newMovedPendingState.get("allBonds").toList(), *newValidatorsCh) |
-                                        for (@newValidators <- newValidatorsCh) {
-                                          stateUpdateCh!(newRemovedQuantinueState.set("activeValidators", newValidators), (true, Nil))
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              } |
-                              // Transfers withdrawing validator's bond + accumulated rewards from PoS vault to their vault.
-                              contract payWithdrawer(@(pk, amount), returnCh) = {
-                                new vaultCh, revAddressCh, createCh, posAuthKeyCh in {
-                                  revAddressOps!("fromPublicKey", pk, *revAddressCh) |
-                                  @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
-                                  for (@toRevAddress <- revAddressCh; @posAuthKey <- posAuthKeyCh) {
-                                    @RevVault!("findOrCreate", toRevAddress, *createCh) |
-                                    for (@_ <- createCh){
-                                      @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
-                                    }
-                                  }
-                                }
-                              } |
-                              contract commitCurrentEpochRewards(@state, @currentRewards, returnCh) = {
-                                new accumulate in {
-                                  @ListOps!("fold", currentRewards.toList(), state, *accumulate, *returnCh) |
-                                  contract accumulate(@(pk, reward), @updatedState, resultCh) = {
-                                    resultCh!(updatedState.set("committedRewards",
-                                                                updatedState.get("committedRewards").set(pk, updatedState.get("committedRewards").getOrElse(pk, 0) + reward)))
-                                  }
-                                }
-                              } |
-                              contract movePendingWithdrawer(@state, returnCh) = {
-                                new movePending in {
-                                  @ListOps!("fold", state.get("pendingWithdrawers").toList(), state, *movePending, *returnCh) |
-                                  contract movePending(@(pk, quantine), @updatedState, resultCh) = {
-                                    resultCh!(updatedState
-                                              .set("withdrawers", updatedState.get("withdrawers").set(pk, (updatedState.get("allBonds").get(pk), quantine)))
-                                              .set("allBonds", updatedState.get("allBonds").delete(pk))
-                                              .set("pendingWithdrawers", updatedState.get("pendingWithdrawers").delete(pk))
-                                              )
-                                  }
-                                }
-                              } |
-                              // Checks withdrawer's quarantine period against current block number,
-                              // then computes their payment, removes them from the bonds and withdrawers maps, and
-                              // updates the committed rewards map.
-                              contract removeQuarantinedWithdrawers(@currentBlockNumber, @state, returnCh) = {
-                                new quarantinedValidatorsCh, validatorsToWithdrawListCh,
-                                    isQuarantineFinished, notWithdrawn, payWithdraw,
-                                    newBondsListCh, newWithdrawersListCh,
-                                    computeRemove, payRet
-                                in {
-                                  // Calculate rewards by taking PoS balance on PoS vault and subtract all active stake + newly bonded
-                                  @ListOps!("filter", state.get("withdrawers").toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
-                                  for (@quarantinedValidators <- quarantinedValidatorsCh) {
-                                    @ListOps!("unorderedParMap", quarantinedValidators, *payWithdraw, *payRet) |
-                                    contract payWithdraw(@(pk, (bonds, quantine)), resultCh) = {
-                                      // FIXME fix transfer in failure case
-                                      payWithdrawer!((pk, bonds + state.get("committedRewards").getOrElse(pk, 0)), *resultCh)
-                                    } |
-                                    for (@_ <- payRet) {
-                                      @ListOps!("fold", quarantinedValidators, state, *computeRemove, *returnCh) |
-                                      contract computeRemove(@(pk, (bonds, quantine)), @updatedState, resultCh) = {
-                                        resultCh!(updatedState
-                                                  .set("committedRewards", updatedState.get("committedRewards").delete(pk))
-                                                  .set("withdrawers", updatedState.get("withdrawers").delete(pk))
-                                                  )
-                                      }
-                                    }
-                                  } |
-                                  // Check whether quarantine period is finished.
-                                  contract isQuarantineFinished(@(pk, (bonds, blockNumber)), resultCh) = {
-                                    resultCh!(currentBlockNumber >= blockNumber)
+              new commitRewards in {
+                // Private method which transfers all of a validator's rewards + bond to the Coop vault.
+                // Slash expects (Boolean, Either[Nil, String]) on returnCh.
+                contract PoS(@"slash", @slashedValidator, @sysAuthToken, returnCh) = {
+                  new isValidTokenCh in {
+                    sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
+                    for (@isValid <- isValidTokenCh) {
+                      if (isValid) {
+                        new stateProcessCh in {
+                          runMVar!(*stateCh, *stateProcessCh, *returnCh) |
+                          for (@state, stateUpdateCh <- stateProcessCh) {
+                            new valBondCh, valRewardCh, posAuthKeyCh in {
+                              // Takes the stake of slashed validator
+                              // - transfer stake of slashed validator from PoS to Coop vault
+                              // - update state
+                              valBondCh!(state.get("allBonds").get(slashedValidator)) |
+                              @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
+                              for (@valBond <- valBondCh ; @posAuthKey <- posAuthKeyCh) {
+                                // Transfers slashed funds from PoS vault to Coop vault, then updates state.
+                                new transferDoneCh in {
+                                  @posVault!(
+                                    "transfer",
+                                    coopMultiVaultAddr,
+                                    valBond,
+                                    posAuthKey,
+                                    *transferDoneCh
+                                  ) |
+                                  // FIXME handle transfer failing case
+                                  for (_ <- transferDoneCh) {
+                                    // Sets slashed validator's committed rewards and bond to 0 in state.
+                                    // Moves slashed validator to withdrawers map with no quarantine period.
+                                    stateUpdateCh!({
+                                      "allBonds"        : state.get("allBonds").set(slashedValidator, 0),
+                                      "activeValidators": state.get("activeValidators").delete(slashedValidator),
+                                      "committedRewards" : state.get("committedRewards").delete(slashedValidator),
+                                      "withdrawers"     : state.get("withdrawers"),
+                                      "pendingWithdrawers": state.get("pendingWithdrawers"),
+                                      "randomImages"    : state.get("randomImages"),
+                                      "randomNumbers"   : state.get("randomNumbers")
+                                    },
+                                    (true, Nil))
                                   }
                                 }
                               }
                             }
                           }
                         }
+                      } else {
+                        returnCh!((false, "Invalid system auth token"))
                       }
-                    } else {
-                      ackCh!((false, "Invalid system auth token"))
                     }
                   }
-                }
+                } |
+                // Private method which signals the end of block processing.
+                contract PoS(@"closeBlock", @sysAuthToken, ackCh) = {
+                  new isValidTokenCh in {
+                    sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
+                    for (@isValid <- isValidTokenCh) {
+                      if (isValid) {
+                        new blockDataCh, getBlockData(`rho:block:data`) in {
+                          getBlockData!(*blockDataCh) |
+                          for (@blockNumber, _, _ <- blockDataCh) {
+                            if (blockNumber % $$epochLength$$ != 0) {
+                              // Epoch change does not occur.
+                              ackCh!((true, Nil))
+                            } else {
+                              // Epoch change occurs.
+                              new payWithdrawer, removeQuarantinedWithdrawers,
+                                  stateProcessCh, paymentDoneCh,
+                                  accDepositsDoneCh, commitRewardsCh,
+                                  newValidatorsCh, removeQuarantinedCh, currentEpochRewardCh,
+                                  commitCurrentEpochRewards, updatedRewardsCh, movePendingWithdrawCh, movePendingWithdrawer
+                              in {
+                                PoS!("getCurrentEpochRewards", * currentEpochRewardCh) |
+                                for (@currentRewards <- currentEpochRewardCh) {
+                                  runMVar!(*stateCh, *stateProcessCh, *ackCh) |
+                                  for (@state, stateUpdateCh <- stateProcessCh) {
+                                    // 1. Calculate all the validator current epoch rewards based on active validator bonding proportion
+                                    // 2. Accumulate `committedRewards` with the result of step 1
+                                    commitCurrentEpochRewards!(state, currentRewards, *updatedRewardsCh) |
+                                    for (@newCommittedState <- updatedRewardsCh) {
+                                      // 3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` 
+                                      // when pendingWithdrawers is not empty, remove the validator in `allBonds`
+                                      movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
+                                      for (@newMovedPendingState <- movePendingWithdrawCh){
+                                        // 4. When the block number reaches the quantinue of `withdrawers` ,
+                                        //  transfer the corresponding bonds+ rewards to the corresponding validator from posVault. 
+                                        // 5. update `pendingWithdrawers` to empty Map {}.
+                                        removeQuarantinedWithdrawers!(blockNumber, newMovedPendingState, *removeQuarantinedCh) |
+                                        for (@newRemovedQuantinueState <- removeQuarantinedCh) {
+                                          // 6. Pick new `activeValidators`
+                                          pickActiveValidators!(newMovedPendingState.get("allBonds").toList(), *newValidatorsCh) |
+                                          for (@newValidators <- newValidatorsCh) {
+                                            stateUpdateCh!(newRemovedQuantinueState.set("activeValidators", newValidators), (true, Nil))
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                } | 
+                                // Transfers withdrawing validator's bond + accumulated rewards from PoS vault to their vault.
+                                contract payWithdrawer(@(pk, amount), returnCh) = {
+                                  new vaultCh, revAddressCh, createCh, posAuthKeyCh in {
+                                    revAddressOps!("fromPublicKey", pk, *revAddressCh) |
+                                    @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
+                                    for (@toRevAddress <- revAddressCh; @posAuthKey <- posAuthKeyCh) {
+                                      @RevVault!("findOrCreate", toRevAddress, *createCh) |
+                                      for (@_ <- createCh){
+                                        @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
+                                      }
+                                    }
+                                  }
+                                } |
+                                contract commitCurrentEpochRewards(@state, @currentRewards, returnCh) = {
+                                  new accumulate in {
+                                    @ListOps!("fold", currentRewards.toList(), state, *accumulate, *returnCh) |
+                                    contract accumulate(@(pk, reward), @updatedState, resultCh) = {
+                                      resultCh!(updatedState.set("committedRewards",
+                                                                  updatedState.get("committedRewards").set(pk, updatedState.get("committedRewards").getOrElse(pk, 0) + reward)))
+                                    }
+                                  }
+                                } |
+                                contract movePendingWithdrawer(@state, returnCh) = {
+                                  new movePending in {
+                                    @ListOps!("fold", state.get("pendingWithdrawers").toList(), state, *movePending, *returnCh) | 
+                                    contract movePending(@(pk, quantine), @updatedState, resultCh) = {
+                                      resultCh!(updatedState
+                                                .set("withdrawers", updatedState.get("withdrawers").set(pk, (updatedState.get("allBonds").get(pk), quantine)))
+                                                .set("allBonds", updatedState.get("allBonds").delete(pk))
+                                                .set("pendingWithdrawers", updatedState.get("pendingWithdrawers").delete(pk))
+                                                )
+                                    }
+                                  }
+                                } |
+                                // Checks withdrawer's quarantine period against current block number,
+                                // then computes their payment, removes them from the bonds and withdrawers maps, and
+                                // updates the committed rewards map.
+                                contract removeQuarantinedWithdrawers(@currentBlockNumber, @state, returnCh) = {
+                                  new quarantinedValidatorsCh, validatorsToWithdrawListCh,
+                                      isQuarantineFinished, notWithdrawn, payWithdraw, 
+                                      newBondsListCh, newWithdrawersListCh, 
+                                      computeRemove, payRet
+                                  in {
+                                    // Calculate rewards by taking PoS balance on PoS vault and subtract all active stake + newly bonded
+                                    @ListOps!("filter", state.get("withdrawers").toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
+                                    for (@quarantinedValidators <- quarantinedValidatorsCh) {
+                                      @ListOps!("unorderedParMap", quarantinedValidators, *payWithdraw, *payRet) |
+                                      contract payWithdraw(@(pk, (bonds, quantine)), resultCh) = {
+                                        // FIXME fix transfer in failure case
+                                        payWithdrawer!((pk, bonds + state.get("committedRewards").getOrElse(pk, 0)), *resultCh)
+                                      } |
+                                      for (@_ <- payRet) {
+                                        @ListOps!("fold", quarantinedValidators, state, *computeRemove, *returnCh) |
+                                        contract computeRemove(@(pk, (bonds, quantine)), @updatedState, resultCh) = {
+                                          resultCh!(updatedState
+                                                    .set("committedRewards", updatedState.get("committedRewards").delete(pk))
+                                                    .set("withdrawers", updatedState.get("withdrawers").delete(pk))
+                                                    )
+                                        }
+                                      }
+                                    } |
+                                    // Check whether quarantine period is finished.
+                                    contract isQuarantineFinished(@(pk, (bonds, blockNumber)), resultCh) = {
+                                      resultCh!(currentBlockNumber >= blockNumber)
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      } else {
+                        ackCh!((false, "Invalid system auth token"))
+                      }
+                    }
+                  }
+                } 
               } |
               //
               contract PoS(@"commitRandomImage", @deployerId, @hash, ackCh) = {
@@ -732,9 +723,8 @@ in {
      // Put the contract data on the location channel
      // Insert the signed, write-only dispatcher contract into the registry uri map
     rs!(
-      "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),
       (9223372036854775807, bundle+{*PosDispatcher}),
-      "3044022054ff4bae3984252b116e41e28d98bb5533eaa39aec2729228159166e2784f641022066a0fd99e7ea33df812fab095cbe61250f9548bce6da3ec4c6a90c741b94087f".hexToBytes(),
+      *deployerId,
       *uriOut)
   }
 }

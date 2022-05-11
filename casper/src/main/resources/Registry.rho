@@ -472,49 +472,41 @@ in {
       for (insertSigned <- insertSignedCh) {
         // Verifies signature and inserts data into registry
         // Returns generated uri on `ret`
-        contract insertSigned(@pubKeyBytes, @(nonce, data), @sig, ret) = {
-          new
-            uriCh,
-            hashCh,
-            verifyCh
-          in {
-            hashVerify!((nonce, data), sig, pubKeyBytes, *verifyCh) |
-            for (@verified <- verifyCh) {
-              if (verified) {
-                ops!("buildUri", pubKeyBytes, *uriCh) |
-                for (@uri <- uriCh) {
-                  for (@map <<- _registryStore) {
-                    new responseCh in {
-                      TreeHashMap!("get", map, uri, *responseCh) |
-                      for (@response <- responseCh) {
-                        match response {
-                          Nil => {
+        contract insertSigned(@(nonce, data), deployerID, ret) = {
+          new uriCh, hashCh, verifyCh, deployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
+            deployerIdOps!("pubKeyBytes", *deployerID, *deployerPubKeyBytesCh) |
+            for (@pubKeyBytes <- deployerPubKeyBytesCh){
+              ops!("buildUri", pubKeyBytes, *uriCh) |
+              for (@uri <- uriCh) {
+                for (@map <<- _registryStore) {
+                  new responseCh in {
+                    TreeHashMap!("get", map, uri, *responseCh) |
+                    for (@response <- responseCh) {
+                      match response {
+                        Nil => {
+                          new ack in {
+                            TreeHashMap!("set", map, uri, (nonce, data), *ack) |
+                            for (_ <- ack) {
+                              ret!(uri)
+                            }
+                          }
+                        }
+                        (oldNonce, _) => {
+                          if (nonce > oldNonce) {
                             new ack in {
                               TreeHashMap!("set", map, uri, (nonce, data), *ack) |
                               for (_ <- ack) {
                                 ret!(uri)
                               }
                             }
-                          }
-                          (oldNonce, _) => {
-                            if (nonce > oldNonce) {
-                              new ack in {
-                                TreeHashMap!("set", map, uri, (nonce, data), *ack) |
-                                for (_ <- ack) {
-                                  ret!(uri)
-                                }
-                              }
-                            } else {
-                              ret!(Nil)
-                            }
+                          } else {
+                            ret!(Nil)
                           }
                         }
                       }
                     }
                   }
                 }
-              } else {
-                ret!(Nil)
               }
             }
           }

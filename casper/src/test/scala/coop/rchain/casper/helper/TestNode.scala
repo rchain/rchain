@@ -116,11 +116,7 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val rp: RPConfAsk[F]                               = rpConfAskEffect
   implicit val ep: EventPublisher[F]                          = eventPublisherEffect
 
-  val approvedBlock =
-    ApprovedBlock(
-      candidate = (ApprovedBlockCandidate(block = genesis, requiredSigs = 0)),
-      sigs = List.empty
-    )
+  val approvedBlock = ApprovedBlock(genesis)
 
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
