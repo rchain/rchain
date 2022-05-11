@@ -601,7 +601,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       lastFinalizedBlock <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
       postStateHash      = ProtoUtil.postStateHash(targetBlock.getOrElse(lastFinalizedBlock))
       bonds              <- RuntimeManager[F].computeBonds(postStateHash)
-      validatorBondOpt   = bonds.find(_.validator == publicKey)
+      validatorBondOpt   = bonds.get(publicKey)
     } yield validatorBondOpt.isDefined.asRight[Error]
 
   /**

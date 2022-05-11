@@ -111,7 +111,7 @@ object BlockGenerator {
 trait BlockGenerator {
   def buildBlock[F[_]: Applicative](
       creator: Validator = ByteString.EMPTY,
-      bonds: Seq[Bond] = Seq.empty[Bond],
+      bonds: Map[Validator, Long] = Map.empty,
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
@@ -132,7 +132,7 @@ trait BlockGenerator {
 
   def createGenesis[F[_]: Monad: BlockStore: BlockDagStorage](
       creator: Validator = BlockUtil.generateValidator("Validator genesis"),
-      bonds: Seq[Bond] = Seq.empty[Bond],
+      bonds: Map[Validator, Long] = Map.empty,
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
@@ -157,7 +157,7 @@ trait BlockGenerator {
 
   def createBlock[F[_]: Sync: BlockStore: BlockDagStorage](
       creator: Validator = BlockUtil.generateValidator("Validator"),
-      bonds: Seq[Bond] = Seq.empty[Bond],
+      bonds: Map[Validator, Long] = Map.empty,
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
@@ -199,7 +199,7 @@ trait BlockGenerator {
   def createValidatorBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       justifications: Seq[BlockMessage],
       validator: Validator,
-      bonds: Seq[Bond],
+      bonds: Map[Validator, Long],
       seqNum: Long = 0,
       invalid: Boolean = false,
       shardId: String

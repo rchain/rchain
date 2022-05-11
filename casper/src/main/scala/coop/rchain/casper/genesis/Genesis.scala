@@ -86,8 +86,7 @@ object Genesis {
   ): BlockMessage = {
     val state = RChainState(
       preStateHash = startHash,
-      postStateHash = stateHash,
-      bonds = bondsProto(genesis.proofOfStake).toList
+      postStateHash = stateHash
     )
 
     val blockDeploys = processedDeploys.filterNot(_.isFailed)
@@ -108,19 +107,18 @@ object Genesis {
       genesis.sender,
       body,
       List.empty,
+      bonds = buildBondsMap(genesis.proofOfStake),
       genesis.shardId,
       seqNum
     )
   }
 
-  private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {
+  private def buildBondsMap(proofOfStake: ProofOfStake): Map[StateHash, Long] = {
     val bonds = proofOfStake.validators.flatMap(Validator.unapply).toMap
-    import coop.rchain.crypto.util.Sorting.publicKeyOrdering
-    //sort to have deterministic order (to get reproducible hash)
-    bonds.toIndexedSeq.sorted.map {
+    bonds.map {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk.bytes)
-        Bond(validator, stake)
+        (validator, stake)
     }
   }
 }

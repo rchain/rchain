@@ -74,9 +74,8 @@ object MultiParentCasper {
       for {
         av <- RuntimeManager[F].getActiveValidators(b.body.state.postStateHash)
         // bonds are available in block message, but please remember this is just a cache, source of truth is RSpace.
-        bm          = b.body.state.bonds
         shardConfig = casperShardConf
-      } yield OnChainCasperState(shardConfig, bm.map(v => v.validator -> v.stake).toMap, av)
+      } yield OnChainCasperState(shardConfig, b.bonds, av)
 
     for {
       dag <- BlockDagStorage[F].getRepresentation

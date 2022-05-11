@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
-import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
 import coop.rchain.casper.rholang.{Resources, RuntimeManager, SystemDeployUtil}
@@ -126,8 +126,8 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
               setValidator = ByteString.copyFrom(validatorPk.bytes).some,
               setBonds = genesisContext.validatorKeyPairs
                 .map(_._2)
-                .map(pk => Bond(ByteString.copyFrom(pk.bytes), 1))
-                .toList
+                .map(pk => (ByteString.copyFrom(pk.bytes), 1L))
+                .toMap
                 .some
             )
           }

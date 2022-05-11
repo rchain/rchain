@@ -458,7 +458,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         signedBlock2  <- nodes(1).createBlockUnsafe()
         status3       <- nodes(1).addBlock(signedBlock2)
         bonds         <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
-        _             = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
+        _             = bonds.map { case (_, stake) => stake }.min should be(0) // Slashed validator has 0 stake
         _             <- nodes(2).handleReceive()
         signedBlock3  <- nodes(2).createBlockUnsafe()
         status4       <- nodes(2).addBlock(signedBlock3)
@@ -479,8 +479,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
     val postState: RChainState =
       RChainState(
         preStateHash = ByteString.EMPTY,
-        postStateHash = ByteString.EMPTY,
-        bonds = ProtoUtil.bonds(genesis.genesisBlock).toList
+        postStateHash = ByteString.EMPTY
       )
     val blockHash                = ProtoUtil.hashBlock(signedInvalidBlock)
     val body                     = Body(postState, deploys.toList, List.empty, List.empty)
@@ -495,6 +494,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         seqNum = 0,
         body,
         serializedJustifications,
+        bonds = genesis.genesisBlock.bonds,
         sig = ByteString.EMPTY,
         sigAlgorithm = "",
         shardId = "root"

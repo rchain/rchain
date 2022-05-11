@@ -11,7 +11,6 @@ import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.dag._
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.crypto.signatures.Signed
@@ -49,7 +48,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   ): F[DagRepresentation] = {
     import cats.instances.list._
     import cats.instances.option._
-    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 
     // Empty sender is valid for genesis
     val senderIsEmpty          = block.sender == ByteString.EMPTY
@@ -93,7 +91,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         _ <- blockMetadataIndex.add(blockMetadata)
 
         // Add deploys to deploy index storage
-        deployHashes = deployData(block).map(_.sig).toList
+        deployHashes = block.body.deploys.map(_.deploy.sig)
         _            <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
 
         // Update invalid index
@@ -148,7 +146,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                           block.blockNumber,
                           block.sender,
                           block.seqNum,
-                          block.body.state.bonds.map(b => (b.validator, b.stake)).toMap,
+                          block.bonds,
                           justifications
                         )
                         dagMsgSt.insertMsg(newMsg)

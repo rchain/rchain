@@ -5,14 +5,13 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
-import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.{InterpreterUtil, Resources, RuntimeManager}
-import coop.rchain.casper.util.{BondsParser, GenesisBuilder, ProtoUtil, VaultParser}
+import coop.rchain.casper.util.{BondsParser, GenesisBuilder, VaultParser}
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -181,13 +180,13 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                       log,
                       time
                     )
-          bonds = ProtoUtil.bonds(genesis)
+          bonds = genesis.bonds.toList
           _     = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
+              case (v, i) => (v.unsafeHexToByteString, i.toLong)
             }
-        } yield result.forall(bonds.contains(_)) should be(true)
+        } yield result.forall(bonds.contains) should be(true)
     }
   )
 
@@ -241,13 +240,13 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                       log,
                       time
                     )
-          bonds = ProtoUtil.bonds(genesis)
+          bonds = genesis.bonds.toList
           _     = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
+              case (v, i) => (v.unsafeHexToByteString, i.toLong)
             }
-        } yield result.forall(bonds.contains(_)) should be(true)
+        } yield result.forall(bonds.contains) should be(true)
     }
   )
 

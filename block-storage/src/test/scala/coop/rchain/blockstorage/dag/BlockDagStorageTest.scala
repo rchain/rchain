@@ -25,7 +25,7 @@ trait BlockDagStorageTest
   def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R
 
   val genesis = getRandomBlock(
-    setBonds = Some(List.empty),
+    setBonds = Some(Map.empty),
     setBlockNumber = 0L.some
   )
 

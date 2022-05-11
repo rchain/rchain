@@ -75,7 +75,7 @@ class ValidateTest
 
   def createChain[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       length: Int,
-      bonds: Seq[Bond] = Seq.empty[Bond]
+      bonds: Map[Validator, Long] = Map.empty
   ): F[Vector[BlockMessage]] =
     for {
       genesis <- createGenesis[F](bonds = bonds)
@@ -247,7 +247,7 @@ class ValidateTest
           parents: Seq[BlockMessage] = Nil
       ): Task[BlockMessage] =
         for {
-          block <- createValidatorBlock(parents, validator, Seq(), shardId = "")
+          block <- createValidatorBlock(parents, validator, Map(), shardId = "")
         } yield block
 
       def genSender(id: Int) = List.fill(65)(id.toByte).toArray.toByteString
@@ -419,8 +419,8 @@ class ValidateTest
       val v0 = generateValidator("Validator 1")
       val v1 = generateValidator("Validator 2")
       val bonds = List(v0, v1).zipWithIndex.map {
-        case (v, i) => Bond(v, 2L * i.toLong + 1L)
-      }
+        case (v, i) => (v, 2L * i.toLong + 1L)
+      }.toMap
 
       for {
         b0 <- createGenesis[Task](bonds = bonds)
@@ -451,8 +451,8 @@ class ValidateTest
       val v0 = generateValidator("Validator 1")
       val v1 = generateValidator("Validator 2")
       val bonds = List(v0, v1).zipWithIndex.map {
-        case (v, i) => Bond(v, 2L * i.toLong + 1L)
-      }
+        case (v, i) => (v, 2L * i.toLong + 1L)
+      }.toMap
 
       for {
         b0 <- createGenesis[Task](bonds = bonds)
@@ -499,11 +499,9 @@ class ValidateTest
         dag <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)
-        _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
-        modifiedBonds     = Seq.empty[Bond]
-        modifiedPostState = genesis.body.state.copy(bonds = modifiedBonds.toList)
-        modifiedBody      = genesis.body.copy(state = modifiedPostState)
-        modifiedGenesis   = genesis.copy(body = modifiedBody)
+        _               <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
+        modifiedBonds   = Map.empty[Validator, Long]
+        modifiedGenesis = genesis.copy(bonds = modifiedBonds)
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
                    InvalidBondsCache
                  )

@@ -43,11 +43,8 @@ object ProtoUtil {
   def preStateHash(b: BlockMessage): ByteString =
     b.body.state.preStateHash
 
-  def bonds(b: BlockMessage): Seq[Bond] =
-    b.body.state.bonds
-
-  def bondToBondInfo(bond: Bond): BondInfo =
-    BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond.validator), stake = bond.stake)
+  def bondToBondInfo(bond: (Validator, Long)): BondInfo =
+    BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond._1), stake = bond._2)
 
   def maxBlockNumberMetadata(blocks: Seq[BlockMetadata]): Long = blocks.foldLeft(-1L) {
     case (acc, b) => math.max(acc, b.blockNum)
@@ -62,6 +59,7 @@ object ProtoUtil {
       sender: PublicKey,
       body: Body,
       justifications: List[BlockHash],
+      bonds: Map[Validator, Long],
       shardId: String,
       seqNum: Long
   ): BlockMessage = {
@@ -73,6 +71,7 @@ object ProtoUtil {
       seqNum = seqNum,
       body,
       justifications,
+      bonds,
       sig = ByteString.EMPTY,
       sigAlgorithm = "",
       shardId
@@ -83,14 +82,16 @@ object ProtoUtil {
     block.copy(blockHash = hash)
   }
 
-  def hashBlock(blockMessage: BlockMessage): BlockHash =
-    ProtoUtil.hashByteArrays(
-      blockMessage.body.toProto.toByteArray,
-      blockMessage.sender.toByteArray,
-      StringValue.of(blockMessage.sigAlgorithm).toByteArray,
-      Int64Value.of(blockMessage.seqNum).toByteArray,
-      StringValue.of(blockMessage.shardId).toByteArray
-    )
+  /**
+    * Create hash of a BlockMessage, all fields must be included except signature
+    */
+  def hashBlock(blockMessage: BlockMessage): BlockHash = {
+    assert(blockMessage.sig.isEmpty, {
+      val blockStr = PrettyPrinter.buildString(blockMessage)
+      s"Signature must be empty to hash a BlockMessage $blockStr"
+    })
+    Blake2b256.hash(blockMessage.toProto.toByteArray).toByteString
+  }
 
   def dependenciesHashesOf(b: BlockMessage): Set[BlockHash] = b.justifications.toSet
 }

@@ -114,12 +114,13 @@ object BlockHashMessage {
 
 final case class BlockMessage(
     version: Int,
-    blockHash: ByteString,
+    blockHash: BlockHash,
     blockNumber: Long,
-    sender: ByteString,
+    sender: Validator,
     seqNum: Long,
     body: Body,
     justifications: List[BlockHash],
+    bonds: Map[Validator, Long],
     sig: ByteString,
     sigAlgorithm: String,
     shardId: String
@@ -142,12 +143,23 @@ object BlockMessage {
       bm.seqNum,
       body,
       bm.justifications,
+      bm.bonds.map(b => (b.validator, b.stake)).toMap,
       bm.sig,
       bm.sigAlgorithm,
       bm.shardId
     )
 
-  def toProto(bm: BlockMessage): BlockMessageProto =
+  def toProto(bm: BlockMessage): BlockMessageProto = {
+    // To guarantee the same hash lists and maps must be sorted
+    // - can be defined on common place
+    implicit val byteStringOrdering: Ordering[ByteString] =
+      Ordering.by[ByteString, Iterable[Byte]](_.toByteArray)(Ordering.Iterable[Byte])
+    // Sorted justifications and bonds
+    val sortedJustifications = bm.justifications.sorted
+    val sortedBonds = bm.bonds.toList
+      .sortBy { case (validator, _) => validator }
+      .map { case (validator, stake) => BondProto(validator, stake) }
+    // Build proto message
     BlockMessageProto()
       .withVersion(bm.version)
       .withBlockHash(bm.blockHash)
@@ -155,10 +167,12 @@ object BlockMessage {
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
       .withBody(Body.toProto(bm.body))
-      .withJustifications(bm.justifications)
+      .withJustifications(sortedJustifications)
+      .withBonds(sortedBonds)
       .withSig(bm.sig)
       .withSigAlgorithm(bm.sigAlgorithm)
       .withShardId(bm.shardId)
+  }
 
 }
 
@@ -202,8 +216,7 @@ object Body {
 
 final case class RChainState(
     preStateHash: ByteString,
-    postStateHash: ByteString,
-    bonds: List[Bond]
+    postStateHash: ByteString
 ) {
   def toProto: RChainStateProto = RChainState.toProto(this)
 }
@@ -212,15 +225,13 @@ object RChainState {
   def from(rchs: RChainStateProto): RChainState =
     RChainState(
       rchs.preStateHash,
-      rchs.postStateHash,
-      rchs.bonds.toList.map(Bond.from)
+      rchs.postStateHash
     )
 
   def toProto(rchsp: RChainState): RChainStateProto =
     RChainStateProto()
       .withPreStateHash(rchsp.preStateHash)
       .withPostStateHash(rchsp.postStateHash)
-      .withBonds(rchsp.bonds.map(Bond.toProto))
 }
 
 final case class ProcessedDeploy(
@@ -485,16 +496,6 @@ object Event {
 
   private def toConsumeEventProto(ce: ConsumeEvent): ConsumeEventProto =
     ConsumeEventProto(ce.channelsHashes, ce.hash, ce.persistent)
-}
-
-final case class Bond(
-    validator: ByteString,
-    stake: Long
-)
-
-object Bond {
-  def from(b: BondProto): Bond    = Bond(b.validator, b.stake)
-  def toProto(b: Bond): BondProto = BondProto(b.validator, b.stake)
 }
 
 // Last finalized state

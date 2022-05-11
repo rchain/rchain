@@ -18,6 +18,7 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, Stopwatch, Time}
 
@@ -178,11 +179,11 @@ object BlockCreator {
       deploys: Seq[ProcessedDeploy],
       rejectedDeploys: Seq[ByteString],
       systemDeploys: Seq[ProcessedSystemDeploy],
-      bondsMap: Seq[Bond],
+      bondsMap: Map[Validator, Long],
       shardId: String,
       version: Int
   ): BlockMessage = {
-    val state = RChainState(preStateHash, postStateHash, bondsMap.toList)
+    val state = RChainState(preStateHash, postStateHash)
     val body =
       Body(
         state,
@@ -196,6 +197,7 @@ object BlockCreator {
       sender,
       body,
       justifications,
+      bondsMap,
       shardId,
       blockData.seqNum
     )

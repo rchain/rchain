@@ -64,9 +64,6 @@ object PrettyPrinter {
   def buildString(r: RChainState): String =
     buildString(r.postStateHash)
 
-  def buildString(b: Bond): String =
-    s"${buildStringNoLimit(b.validator)}: ${b.stake.toString}"
-
   def buildString(hashes: Traversable[BlockHash]): String =
     hashes.map(PrettyPrinter.buildString).mkString("[", " ", "]")
 }

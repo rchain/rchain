@@ -34,10 +34,10 @@ class BlocksResponseAPITest
   val v1     = generateValidator("Validator One")
   val v2     = generateValidator("Validator Two")
   val v3     = generateValidator("Validator Three")
-  val v1Bond = Bond(v1, 25)
-  val v2Bond = Bond(v2, 20)
-  val v3Bond = Bond(v3, 15)
-  val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+  val v1Bond = (v1, 25L)
+  val v2Bond = (v2, 20L)
+  val v3Bond = (v3, 15L)
+  val bonds  = Map(v1Bond, v2Bond, v3Bond)
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-response-api-test")
   val maxBlockLimit = 50

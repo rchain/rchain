@@ -12,7 +12,6 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
@@ -360,10 +359,10 @@ object Validate {
       justifications    <- block.justifications.flatTraverse(s.dag.lookup(_).map(_.toList))
       invalidValidators = justifications.filter(_.invalid).map(b => b.sender)
       neglectedInvalidJustification = invalidValidators.exists { invalidValidator =>
-        val slashedValidatorBond = bonds(block).find(_.validator == invalidValidator)
+        val slashedValidatorBond = block.bonds.get(invalidValidator)
         slashedValidatorBond match {
-          case Some(bond) => bond.stake > 0
-          case None       => false
+          case Some(stake) => stake > 0
+          case None        => false
         }
       }
       result = if (neglectedInvalidJustification) {
@@ -377,7 +376,7 @@ object Validate {
       b: BlockMessage,
       runtimeManager: RuntimeManager[F]
   ): F[ValidBlockProcessing] = {
-    val bonds          = ProtoUtil.bonds(b)
+    val bonds          = b.bonds
     val tuplespaceHash = ProtoUtil.postStateHash(b)
 
     runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {

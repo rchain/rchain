@@ -55,14 +55,14 @@ class BlockQueryResponseAPITest
   val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"
   val sender: ByteString = senderString.unsafeHexToByteString
-  val bondsValidator     = Bond(sender, 1)
+  val bondsValidator     = (sender, 1L)
 
   val secondBlock: BlockMessage =
     getRandomBlock(
       setValidator = sender.some,
       setDeploys = randomDeploys.some,
       setJustifications = List(genesisBlock.blockHash).some,
-      setBonds = List(bondsValidator).some
+      setBonds = Map(bondsValidator).some
     )
 
   val faultTolerance = -1f
@@ -100,7 +100,7 @@ class BlockQueryResponseAPITest
               b.postStateHash should be(
                 secondBlock.body.state.postStateHash.toHexString
               )
-              b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+              b.bonds should be(secondBlock.bonds.map(ProtoUtil.bondToBondInfo))
               b.blockSize should be(secondBlock.toProto.serializedSize.toString)
               b.deployCount should be(secondBlock.body.deploys.length)
               b.faultTolerance should be(faultTolerance)
@@ -186,7 +186,7 @@ class BlockQueryResponseAPITest
               blockInfo.postStateHash should be(
                 secondBlock.body.state.postStateHash.toHexString
               )
-              blockInfo.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+              blockInfo.bonds should be(secondBlock.bonds.map(ProtoUtil.bondToBondInfo))
               blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
               blockInfo.deployCount should be(secondBlock.body.deploys.length)
               blockInfo.faultTolerance should be(faultTolerance)

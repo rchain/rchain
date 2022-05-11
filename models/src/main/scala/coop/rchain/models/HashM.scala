@@ -154,7 +154,7 @@ object HashM extends HashMDerivation {
   implicit val BlockQueryByHeightHash         = gen[BlocksQueryByHeight]
   implicit val Status                         = gen[Status]
 
-  implicit val ApprovedBlockHash         = gen[ApprovedBlock]
+  implicit val ApprovedBlockHash         = gen[ApprovedBlockProto]
   implicit val BlockMessageHash          = gen[BlockMessageProto]
   implicit val BlockMetadataInternalHash = gen[BlockMetadataProto]
   implicit val BodyHash                  = gen[BodyProto]

@@ -1,19 +1,20 @@
 package coop.rchain.models
 
-import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 
 final case class BlockMetadata(
-    blockHash: ByteString,
+    blockHash: BlockHash,
     blockNum: Long,
-    sender: ByteString,
+    sender: Validator,
     seqNum: Long,
-    justifications: List[ByteString],
-    weightMap: Map[ByteString, Long],
+    justifications: List[BlockHash],
+    weightMap: Map[Validator, Long],
     invalid: Boolean,
     directlyFinalized: Boolean,
     finalized: Boolean,
-    parents: List[ByteString]
+    parents: List[BlockHash]
 )
 
 object BlockMetadata {
@@ -48,11 +49,6 @@ object BlockMetadata {
 
   def toBytes(b: BlockMetadata) = BlockMetadata.toProto(b).toByteArray
 
-  private def weightMap(state: RChainState): Map[ByteString, Long] =
-    state.bonds.map {
-      case Bond(validator, stake) => validator -> stake
-    }.toMap
-
   def fromBlock(
       b: BlockMessage,
       invalid: Boolean,
@@ -65,7 +61,7 @@ object BlockMetadata {
       b.sender,
       b.seqNum,
       b.justifications,
-      weightMap(b.body.state),
+      b.bonds,
       invalid,
       directlyFinalized,
       finalized,

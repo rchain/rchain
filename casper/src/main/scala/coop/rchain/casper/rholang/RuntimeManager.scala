@@ -60,7 +60,7 @@ trait RuntimeManager[F[_]] {
       blockNumber: Long,
       sender: PublicKey
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
-  def computeBonds(startHash: StateHash): F[Seq[Bond]]
+  def computeBonds(startHash: StateHash): F[Map[Validator, Long]]
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
@@ -200,7 +200,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
     spawnRuntime.flatMap(_.getActiveValidators(startHash))
 
-  def computeBonds(hash: StateHash): F[Seq[Bond]] =
+  def computeBonds(hash: StateHash): F[Map[Validator, Long]] =
     spawnRuntime.flatMap { runtime =>
       def logError(err: Throwable, details: RetryDetails): F[Unit] = details match {
         case WillDelayAndRetry(_, retriesSoFar: Int, _) =>
@@ -218,7 +218,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       }
 
       //TODO this retry is a temp solution for debugging why this throws `IllegalArgumentException`
-      retryingOnAllErrors[Seq[Bond]](
+      retryingOnAllErrors[Map[Validator, Long]](
         RetryPolicies.limitRetries[F](5),
         onError = logError
       )(runtime.computeBonds(hash))

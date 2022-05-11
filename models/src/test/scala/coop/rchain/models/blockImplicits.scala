@@ -30,11 +30,11 @@ object blockImplicits {
     byteArray <- listOfN(Validator.Length, arbitrary[Byte])
   } yield ByteString.copyFrom(byteArray.toArray)
 
-  val bondGen: Gen[Bond] = for {
+  val bondGen: Gen[(Validator, Long)] = for {
     byteArray <- listOfN(Validator.Length, arbitrary[Byte])
     validator = ByteString.copyFrom(byteArray.toArray)
     stake     <- Gen.chooseNum(1L, 1024L)
-  } yield Bond(validator, stake)
+  } yield (validator, stake)
 
   val signedDeployDataGen: Gen[Signed[DeployData]] =
     for {
@@ -69,7 +69,6 @@ object blockImplicits {
 
   // Arbitrary values
   val arbitraryBlockHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
-  val arbitraryBond: Arbitrary[Bond]           = Arbitrary(bondGen)
   val arbitraryStateHash: Arbitrary[StateHash] = Arbitrary(stateHashGen)
   val arbitraryValidator: Arbitrary[Validator] = Arbitrary(validatorGen)
 
@@ -85,12 +84,6 @@ object blockImplicits {
   val arbitraryBlockHashes: Arbitrary[Seq[BlockHash]] =
     Arbitrary.arbContainer[Seq, BlockHash](
       arbitraryBlockHash,
-      Buildable.buildableCanBuildFrom,
-      identity
-    )
-  val arbitraryBonds: Arbitrary[Seq[Bond]] =
-    Arbitrary.arbContainer[Seq, Bond](
-      arbitraryBond,
       Buildable.buildableCanBuildFrom,
       identity
     )
@@ -111,7 +104,7 @@ object blockImplicits {
       setJustifications: Option[Seq[BlockHash]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
       setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
-      setBonds: Option[Seq[Bond]] = None,
+      setBonds: Option[Map[Validator, Long]] = None,
       setShardId: Option[String] = None,
       hashF: Option[BlockMessage => BlockHash] = None
   ): Gen[BlockMessage] =
@@ -129,12 +122,12 @@ object blockImplicits {
                   arbitrary[Seq[ProcessedDeploy]](arbitraryProcessedDeploys)
                 else Gen.const(setDeploys.get)
       // 10 random validators in bonds list
-      bonds <- if (setBonds.isEmpty) Gen.containerOfN[List, Bond](10, bondGen)
+      bonds <- if (setBonds.isEmpty) Gen.mapOfN[Validator, Long](10, bondGen)
               else Gen.const(setBonds.get)
       // Pick random validator from bonds file
       validator <- if (setValidator.isEmpty)
                     Gen.const(
-                      Random.shuffle(bonds).headOption.getOrElse(bondGen.sample.get).validator
+                      Random.shuffle(bonds.toList).headOption.getOrElse(bondGen.sample.get)._1
                     )
                   else Gen.const(setValidator.get)
       version = if (setVersion.isEmpty) 1 else setVersion.get
@@ -146,14 +139,14 @@ object blockImplicits {
         body = Body(
           state = RChainState(
             preStateHash = preStatehash,
-            postStateHash = postStatehash,
-            bonds = bonds.toList
+            postStateHash = postStatehash
           ),
           deploys = deploys.toList,
           systemDeploys = setSysDeploys.toList.flatten,
           rejectedDeploys = List.empty
         ),
         justifications = justifications.toList,
+        bonds = bonds,
         sender = validator,
         seqNum = setSeqNumber.get,
         sig = ByteString.EMPTY,
@@ -171,7 +164,7 @@ object blockImplicits {
         case (gen, _) =>
           for {
             blocks              <- gen
-            b                   <- blockElementGen(setBonds = Some(genesis.body.state.bonds))
+            b                   <- blockElementGen(setBonds = Some(genesis.bonds))
             justifications      <- Gen.someOf(blocks)
             justificationHashes = justifications.map(_.blockHash).toList
             newBlock            = b.copy(justifications = justificationHashes)
@@ -196,7 +189,7 @@ object blockImplicits {
       setJustifications: Option[Seq[BlockHash]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
       setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
-      setBonds: Option[Seq[Bond]] = None,
+      setBonds: Option[Map[Validator, Long]] = None,
       setShardId: Option[String] = None,
       hashF: Option[BlockMessage => BlockHash] = None
   ): BlockMessage =
