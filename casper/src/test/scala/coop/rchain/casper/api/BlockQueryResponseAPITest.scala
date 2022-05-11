@@ -93,7 +93,7 @@ class BlockQueryResponseAPITest
               b.sigAlgorithm should be(secondBlock.sigAlgorithm)
               b.shardId should be(secondBlock.toProto.shardId)
               b.version should be(secondBlock.version)
-              b.blockNumber should be(secondBlock.body.state.blockNumber)
+              b.blockNumber should be(secondBlock.blockNumber)
               b.preStateHash should be(
                 secondBlock.body.state.preStateHash.toHexString
               )
@@ -179,7 +179,7 @@ class BlockQueryResponseAPITest
               blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
               blockInfo.shardId should be(secondBlock.toProto.shardId)
               blockInfo.version should be(secondBlock.version)
-              blockInfo.blockNumber should be(secondBlock.body.state.blockNumber)
+              blockInfo.blockNumber should be(secondBlock.blockNumber)
               blockInfo.preStateHash should be(
                 secondBlock.body.state.preStateHash.toHexString
               )

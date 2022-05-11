@@ -195,7 +195,7 @@ object LfsBlockRequester {
       def validateReceivedBlock(block: BlockMessage) = {
         def invalidBlockMsg =
           s"Received ${PrettyPrinter.buildString(block)} with invalid hash. Ignored block."
-        val blockNumber = ProtoUtil.blockNumber(block)
+        val blockNumber = block.blockNumber
         for {
           // Mark block as received and calculate minimum height (if latest)
           receivedResult <- st.modify(_.received(block.blockHash, blockNumber))

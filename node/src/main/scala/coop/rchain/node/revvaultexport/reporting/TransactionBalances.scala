@@ -287,7 +287,7 @@ object TransactionBalances {
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
             isFinalized         = dagRepresantation.isFinalized(blockHash)
-            isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.body.state.blockNumber
+            isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.blockNumber
           } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
         }
       }

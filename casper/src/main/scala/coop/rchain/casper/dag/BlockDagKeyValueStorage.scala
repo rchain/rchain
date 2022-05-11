@@ -145,7 +145,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                       .map { justifications =>
                         val newMsg = dagMsgSt.createMessage(
                           block.blockHash,
-                          block.body.state.blockNumber,
+                          block.blockNumber,
                           block.sender,
                           block.seqNum,
                           block.body.state.bonds.map(b => (b.validator, b.stake)).toMap,

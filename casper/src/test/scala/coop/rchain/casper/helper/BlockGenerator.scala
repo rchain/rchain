@@ -184,13 +184,12 @@ trait BlockGenerator {
       nextId <- justifications.toList
                  .filterNot(dag.invalidBlocksSet)
                  .traverse(
-                   BlockStore[F].getUnsafe(_).map(_.body.state.blockNumber)
+                   BlockStore[F].getUnsafe(_).map(_.blockNumber)
                  )
                  .map(_.maximumOption.getOrElse(0L) + 1L)
-      newPostState = block.body.state.copy(blockNumber = nextId)
       modifiedBlock = block
         .copy(
-          body = block.body.copy(state = newPostState),
+          blockNumber = nextId,
           seqNum = nextCreatorSeqNum
         )
       _ <- BlockDagStorage[F].insert(modifiedBlock, invalid, false)

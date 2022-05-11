@@ -182,7 +182,7 @@ object BlockCreator {
       shardId: String,
       version: Int
   ): BlockMessage = {
-    val state = RChainState(preStateHash, postStateHash, bondsMap.toList, blockData.blockNumber)
+    val state = RChainState(preStateHash, postStateHash, bondsMap.toList)
     val body =
       Body(
         state,
@@ -192,6 +192,7 @@ object BlockCreator {
       )
     ProtoUtil.unsignedBlockProto(
       version,
+      blockData.blockNumber,
       sender,
       body,
       justifications,

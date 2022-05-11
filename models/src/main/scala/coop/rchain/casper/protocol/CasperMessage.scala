@@ -115,6 +115,7 @@ object BlockHashMessage {
 final case class BlockMessage(
     version: Int,
     blockHash: ByteString,
+    blockNumber: Long,
     sender: ByteString,
     seqNum: Long,
     body: Body,
@@ -136,6 +137,7 @@ object BlockMessage {
     } yield BlockMessage(
       bm.version,
       bm.blockHash,
+      bm.blockNumber,
       bm.sender,
       bm.seqNum,
       body,
@@ -149,6 +151,7 @@ object BlockMessage {
     BlockMessageProto()
       .withVersion(bm.version)
       .withBlockHash(bm.blockHash)
+      .withBlockNumber(bm.blockNumber)
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
       .withBody(Body.toProto(bm.body))
@@ -200,8 +203,7 @@ object Body {
 final case class RChainState(
     preStateHash: ByteString,
     postStateHash: ByteString,
-    bonds: List[Bond],
-    blockNumber: Long
+    bonds: List[Bond]
 ) {
   def toProto: RChainStateProto = RChainState.toProto(this)
 }
@@ -211,8 +213,7 @@ object RChainState {
     RChainState(
       rchs.preStateHash,
       rchs.postStateHash,
-      rchs.bonds.toList.map(Bond.from),
-      rchs.blockNumber
+      rchs.bonds.toList.map(Bond.from)
     )
 
   def toProto(rchsp: RChainState): RChainStateProto =
@@ -220,7 +221,6 @@ object RChainState {
       .withPreStateHash(rchsp.preStateHash)
       .withPostStateHash(rchsp.postStateHash)
       .withBonds(rchsp.bonds.map(Bond.toProto))
-      .withBlockNumber(rchsp.blockNumber)
 }
 
 final case class ProcessedDeploy(

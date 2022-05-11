@@ -87,7 +87,6 @@ object Genesis {
     val state = RChainState(
       preStateHash = startHash,
       postStateHash = stateHash,
-      blockNumber = genesis.blockNumber,
       bonds = bondsProto(genesis.proofOfStake).toList
     )
 
@@ -103,7 +102,15 @@ object Genesis {
     val version = 1 //FIXME make this part of Genesis, and pass it from upstream
     val seqNum  = 0L
 
-    unsignedBlockProto(version, genesis.sender, body, List.empty, genesis.shardId, seqNum)
+    unsignedBlockProto(
+      version,
+      genesis.blockNumber,
+      genesis.sender,
+      body,
+      List.empty,
+      genesis.shardId,
+      seqNum
+    )
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {

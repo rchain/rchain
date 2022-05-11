@@ -142,12 +142,12 @@ object blockImplicits {
       block = BlockMessage(
         version = version,
         blockHash = ByteString.EMPTY,
+        blockNumber = setBlockNumber.get,
         body = Body(
           state = RChainState(
             preStateHash = preStatehash,
             postStateHash = postStatehash,
-            bonds = bonds.toList,
-            blockNumber = setBlockNumber.get
+            bonds = bonds.toList
           ),
           deploys = deploys.toList,
           systemDeploys = setSysDeploys.toList.flatten,

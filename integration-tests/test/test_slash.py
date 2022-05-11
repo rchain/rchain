@@ -121,7 +121,7 @@ def test_slash_invalid_block_number(command_line_options: CommandLineOptions, ra
 
         invalid_block_num_block = BlockMessage()
         invalid_block_num_block.CopyFrom(block_msg)
-        invalid_block_num_block.body.state.blockNumber = 1000  # pylint: disable=maybe-no-member
+        invalid_block_num_block.blockNumber = 1000  # pylint: disable=maybe-no-member
         # change timestamp to make block hash different
         invalid_block_num_block.header.timestamp = block_msg.header.timestamp + 1  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(invalid_block_num_block)
@@ -269,7 +269,7 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         invalid_block = BlockMessage()
         invalid_block.CopyFrom(block_msg)
         invalid_block.seqNum = block_msg.seqNum + 1
-        invalid_block.body.state.blockNumber = block_msg.body.state.blockNumber + 1  # pylint: disable=maybe-no-member
+        invalid_block.blockNumber = block_msg.blockNumber + 1  # pylint: disable=maybe-no-member
         invalid_block.blockHash = evil_block_hash
         invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
         invalid_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
@@ -289,7 +289,7 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         block_not_slash_invalid_block = BlockMessage()
         block_not_slash_invalid_block.CopyFrom(block_msg)
         block_not_slash_invalid_block.seqNum = 1
-        block_not_slash_invalid_block.body.state.blockNumber = 1  # pylint: disable=maybe-no-member
+        block_not_slash_invalid_block.blockNumber = 1  # pylint: disable=maybe-no-member
         block_not_slash_invalid_block.sender = BONDED_VALIDATOR_KEY_2.get_public_key().to_bytes()
         block_not_slash_invalid_block.ClearField("justifications")
         block_not_slash_invalid_block.justifications.extend([  # pylint: disable=maybe-no-member
@@ -366,7 +366,7 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
         invalid_block =  BlockMessage()
         invalid_block.CopyFrom(block_msg3)
         invalid_block.header.ClearField("parentsHashList")  # pylint: disable=maybe-no-member
-        invalid_block.body.state.blockNumber = 2  # pylint: disable=maybe-no-member
+        invalid_block.blockNumber = 2  # pylint: disable=maybe-no-member
         invalid_block.header.parentsHashList.append(bytes.fromhex(block_info1.blockInfo.blockHash))  # pylint: disable=maybe-no-member
         invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
         deploy_data = create_deploy_data(BONDED_VALIDATOR_KEY_2, Path("../rholang/examples/tut-hello.rho").read_text(), 1, 1000000, shard_id='test')

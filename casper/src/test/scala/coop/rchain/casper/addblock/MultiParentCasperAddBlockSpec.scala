@@ -480,8 +480,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
       RChainState(
         preStateHash = ByteString.EMPTY,
         postStateHash = ByteString.EMPTY,
-        bonds = ProtoUtil.bonds(genesis.genesisBlock).toList,
-        blockNumber = 1
+        bonds = ProtoUtil.bonds(genesis.genesisBlock).toList
       )
     val blockHash                = ProtoUtil.hashBlock(signedInvalidBlock)
     val body                     = Body(postState, deploys.toList, List.empty, List.empty)
@@ -491,6 +490,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
       BlockMessage(
         version = 0,
         serializedBlockHash,
+        blockNumber = 1,
         sender = ByteString.EMPTY,
         seqNum = 0,
         body,

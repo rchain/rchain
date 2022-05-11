@@ -90,7 +90,7 @@ object GraphzGenerator {
   ): F[DagInfo] =
     for {
       blocks    <- blockHashes.traverse(BlockStore[F].getUnsafe)
-      timeEntry = blocks.head.body.state.blockNumber
+      timeEntry = blocks.head.blockNumber
       validators = blocks.toList.map { b =>
         val blockHash       = PrettyPrinter.buildString(b.blockHash)
         val blockSenderHash = PrettyPrinter.buildString(b.sender)

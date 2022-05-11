@@ -181,7 +181,7 @@ class NodeSyncing[F[_]
   def requestApprovedState(approvedBlock: ApprovedBlock): F[Unit] = {
     // Starting minimum block height. When latest blocks are downloaded new minimum will be calculated.
     val block            = approvedBlock.block
-    val startBlockNumber = ProtoUtil.blockNumber(block)
+    val startBlockNumber = block.blockNumber
     val minBlockNumberForDeployLifespan =
       Math.max(0, startBlockNumber - MultiParentCasper.deployLifespan)
 
@@ -253,7 +253,7 @@ class NodeSyncing[F[_]
               // If sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
 //              isInvalid = invalidBlocks(block.blockHash)
               // Filter older not necessary blocks
-              blockHeight   = ProtoUtil.blockNumber(block)
+              blockHeight   = block.blockNumber
               blockHeightOk = blockHeight >= minHeight
               // Add block to DAG
               _ <- addBlockToDag(block, false).whenA(blockHeightOk)

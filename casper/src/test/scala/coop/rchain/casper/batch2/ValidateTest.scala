@@ -131,10 +131,8 @@ class ValidateTest
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
-    def withBlockNumber(n: Long): BlockMessage = {
-      val newState = b.body.state.copy(blockNumber = n)
-      b.copy(body = b.body.copy(state = newState))
-    }
+    def withBlockNumber(n: Long): BlockMessage =
+      b.copy(blockNumber = n)
   }
 
   "Block signature validation" should "return false on unknown algorithms" in withStorage {

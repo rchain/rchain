@@ -193,7 +193,7 @@ object Validate {
     for {
       justifications <- b.justifications.traverse(s.dag.lookupUnsafe(_))
       maxBlockNumber = justifications.map(_.blockNum).maximumOption.getOrElse(-1L)
-      number         = ProtoUtil.blockNumber(b)
+      number         = b.blockNumber
       result         = maxBlockNumber + 1 == number
       status <- if (result) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
@@ -212,7 +212,7 @@ object Validate {
   def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
-    val blockNumber       = ProtoUtil.blockNumber(b)
+    val blockNumber       = b.blockNumber
     val deploys           = ProtoUtil.deploys(b).map(_.deploy)
     val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber >= blockNumber)
     maybeFutureDeploy
@@ -235,7 +235,7 @@ object Validate {
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
-    val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
+    val earliestAcceptableValidAfterBlockNumber = b.blockNumber - expirationThreshold
     val deploys                                 = ProtoUtil.deploys(b).map(_.deploy)
     val maybeExpiredDeploy =
       deploys.find(_.data.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)

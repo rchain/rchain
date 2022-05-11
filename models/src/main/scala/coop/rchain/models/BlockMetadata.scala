@@ -61,7 +61,7 @@ object BlockMetadata {
   ): BlockMetadata =
     BlockMetadata(
       b.blockHash,
-      b.body.state.blockNumber,
+      b.blockNumber,
       b.sender,
       b.seqNum,
       b.justifications,

@@ -128,7 +128,7 @@ object SystemProcesses {
     def empty: BlockData = BlockData(0, PublicKey(Base16.unsafeDecode("00")), 0)
     def fromBlock(template: BlockMessage) =
       BlockData(
-        template.body.state.blockNumber,
+        template.blockNumber,
         PublicKey(template.sender),
         template.seqNum
       )

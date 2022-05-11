@@ -46,9 +46,6 @@ object ProtoUtil {
   def bonds(b: BlockMessage): Seq[Bond] =
     b.body.state.bonds
 
-  def blockNumber(b: BlockMessage): Long =
-    b.body.state.blockNumber
-
   def bondToBondInfo(bond: Bond): BondInfo =
     BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond.validator), stake = bond.stake)
 
@@ -61,6 +58,7 @@ object ProtoUtil {
 
   def unsignedBlockProto(
       version: Int,
+      blockNumber: Long,
       sender: PublicKey,
       body: Body,
       justifications: List[BlockHash],
@@ -70,6 +68,7 @@ object ProtoUtil {
     val block = BlockMessage(
       version,
       blockHash = ByteString.EMPTY,
+      blockNumber = blockNumber,
       sender = sender.bytes.toByteString,
       seqNum = seqNum,
       body,
