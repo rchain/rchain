@@ -55,6 +55,7 @@ object ProtoUtil {
       postStateHash: ByteString,
       justifications: List[BlockHash],
       bonds: Map[Validator, Long],
+      rejectedDeploys: List[ByteString],
       state: RholangState
   ): BlockMessage = {
     val block = BlockMessage(
@@ -68,6 +69,7 @@ object ProtoUtil {
       postStateHash = postStateHash,
       justifications,
       bonds,
+      rejectedDeploys,
       state,
       // Signature algorithm is now part of the block hash
       //  so it should be set immediately.

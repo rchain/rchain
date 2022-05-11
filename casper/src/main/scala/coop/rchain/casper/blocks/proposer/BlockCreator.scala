@@ -140,7 +140,7 @@ object BlockCreator {
                   preStateHash,
                   postStateHash,
                   processedDeploys,
-                  rejectedDeploys,
+                  rejectedDeploys.toList,
                   processedSystemDeploys,
                   newBonds,
                   shardId,
@@ -177,18 +177,13 @@ object BlockCreator {
       preStateHash: StateHash,
       postStateHash: StateHash,
       deploys: Seq[ProcessedDeploy],
-      rejectedDeploys: Seq[ByteString],
+      rejectedDeploys: List[ByteString],
       systemDeploys: Seq[ProcessedSystemDeploy],
       bondsMap: Map[Validator, Long],
       shardId: String,
       version: Int
   ): BlockMessage = {
-    val state =
-      RholangState(
-        deploys.toList,
-        rejectedDeploys.map(RejectedDeploy(_)).toList,
-        systemDeploys.toList
-      )
+    val state = RholangState(deploys.toList, systemDeploys.toList)
     ProtoUtil.unsignedBlockProto(
       version,
       shardId,
@@ -199,6 +194,7 @@ object BlockCreator {
       postStateHash,
       justifications,
       bondsMap,
+      rejectedDeploys,
       state
     )
   }

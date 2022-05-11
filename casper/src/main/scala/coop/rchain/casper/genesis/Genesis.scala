@@ -87,11 +87,7 @@ object Genesis {
     val blockDeploys = processedDeploys.filterNot(_.isFailed)
     val sortedDeploys =
       blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
-    val state = RholangState(
-      deploys = sortedDeploys.toList,
-      rejectedDeploys = List.empty,
-      systemDeploys = List.empty
-    )
+    val state   = RholangState(deploys = sortedDeploys.toList, systemDeploys = List.empty)
     val version = 1 //FIXME make this part of Genesis, and pass it from upstream
     val seqNum  = 0L
 
@@ -105,6 +101,7 @@ object Genesis {
       postStateHash = stateHash,
       justifications = List.empty,
       bonds = buildBondsMap(genesis.proofOfStake),
+      rejectedDeploys = List.empty,
       state = state
     )
   }

@@ -134,22 +134,19 @@ object blockImplicits {
       shardId = if (setShardId.isEmpty) "root" else setShardId.get
       block = BlockMessage(
         version = version,
+        shardId = shardId,
         blockHash = ByteString.EMPTY,
         blockNumber = setBlockNumber.get,
-        state = RholangState(
-          deploys = deploys.toList,
-          systemDeploys = setSysDeploys.toList.flatten,
-          rejectedDeploys = List.empty
-        ),
         justifications = justifications.toList,
-        bonds = bonds,
         sender = validator,
+        seqNum = setSeqNumber.get,
         preStateHash = preStatehash,
         postStateHash = postStatehash,
-        seqNum = setSeqNumber.get,
-        sig = ByteString.EMPTY,
+        bonds = bonds,
+        rejectedDeploys = List.empty,
+        state = RholangState(deploys = deploys.toList, systemDeploys = setSysDeploys.toList.flatten),
         sigAlgorithm = "",
-        shardId = shardId
+        sig = ByteString.EMPTY
       )
       blockHash <- if (hashF.isEmpty) arbitrary[BlockHash](arbitraryBlockHash)
                   else Gen.const(hashF.get(block))

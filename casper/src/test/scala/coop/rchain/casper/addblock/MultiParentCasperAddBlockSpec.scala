@@ -477,7 +477,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
     val blockHash                = ProtoUtil.hashBlock(signedInvalidBlock)
-    val state                    = RholangState(deploys.toList, List.empty, List.empty)
+    val state                    = RholangState(deploys.toList, List.empty)
     val serializedJustifications = List(signedInvalidBlock.blockHash)
     val serializedBlockHash      = blockHash
     val blockThatPointsToInvalidBlock =
@@ -492,6 +492,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         postStateHash = ByteString.EMPTY,
         serializedJustifications,
         bonds = genesis.genesisBlock.bonds,
+        rejectedDeploys = List.empty,
         state,
         sigAlgorithm = "",
         sig = ByteString.EMPTY

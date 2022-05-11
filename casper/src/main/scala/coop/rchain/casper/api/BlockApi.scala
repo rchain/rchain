@@ -119,8 +119,6 @@ object BlockApi {
       deployCount = block.state.deploys.length,
       faultTolerance = faultTolerance,
       justifications = block.justifications.map(PrettyPrinter.buildStringNoLimit),
-      rejectedDeploys = block.state.rejectedDeploys.map(
-        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
-      )
+      rejectedDeploys = block.rejectedDeploys.map(PrettyPrinter.buildStringNoLimit)
     )
 }
