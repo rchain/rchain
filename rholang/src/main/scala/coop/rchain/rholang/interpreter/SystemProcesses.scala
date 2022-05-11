@@ -79,7 +79,6 @@ object SystemProcesses {
     val REG_INSERT_SIGNED: Par  = byteName(16)
     val REG_OPS: Par            = byteName(17)
     val SYS_AUTHTOKEN_OPS: Par  = byteName(18)
-    val REG_INSERT_BLESSED: Par = byteName(19)
   }
   object BodyRefs {
     val STDOUT: Long             = 0L

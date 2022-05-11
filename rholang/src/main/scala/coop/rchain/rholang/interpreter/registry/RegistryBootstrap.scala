@@ -10,8 +10,7 @@ object RegistryBootstrap {
     news = Seq(
       bootstrap(FixedChannels.REG_LOOKUP),
       bootstrap(FixedChannels.REG_INSERT_RANDOM),
-      bootstrap(FixedChannels.REG_INSERT_SIGNED),
-      bootstrap(FixedChannels.REG_INSERT_BLESSED)
+      bootstrap(FixedChannels.REG_INSERT_SIGNED)
     )
   )
 

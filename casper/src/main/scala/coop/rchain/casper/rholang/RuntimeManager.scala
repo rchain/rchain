@@ -233,7 +233,7 @@ object RuntimeManager {
     * the time. For some situations, we can just use the value directly for better performance.
     */
   val emptyStateHashFixed: StateHash =
-    "c77114aafbfbd7278a01fa39aff50cce2eda680183a2ee933fb7b07d449d6806".unsafeHexToByteString
+    "9619d9a34bdaf56d5de8cfb7c2304d63cd9e469a0bfc5600fd2f5b9808e290f1".unsafeHexToByteString
 
   def apply[F[_]](implicit F: RuntimeManager[F]): F.type = F
 
