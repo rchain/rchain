@@ -118,6 +118,7 @@ final case class BlockMessage(
     blockNumber: Long,
     sender: Validator,
     seqNum: Long,
+    preStateHash: ByteString,
     body: Body,
     justifications: List[BlockHash],
     bonds: Map[Validator, Long],
@@ -141,6 +142,7 @@ object BlockMessage {
       bm.blockNumber,
       bm.sender,
       bm.seqNum,
+      bm.preStateHash,
       body,
       bm.justifications,
       bm.bonds.map(b => (b.validator, b.stake)).toMap,
@@ -166,6 +168,7 @@ object BlockMessage {
       .withBlockNumber(bm.blockNumber)
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
+      .withPreStateHash(bm.preStateHash)
       .withBody(Body.toProto(bm.body))
       .withJustifications(sortedJustifications)
       .withBonds(sortedBonds)
@@ -215,7 +218,6 @@ object Body {
 }
 
 final case class RChainState(
-    preStateHash: ByteString,
     postStateHash: ByteString
 ) {
   def toProto: RChainStateProto = RChainState.toProto(this)
@@ -223,14 +225,10 @@ final case class RChainState(
 
 object RChainState {
   def from(rchs: RChainStateProto): RChainState =
-    RChainState(
-      rchs.preStateHash,
-      rchs.postStateHash
-    )
+    RChainState(rchs.postStateHash)
 
   def toProto(rchsp: RChainState): RChainStateProto =
     RChainStateProto()
-      .withPreStateHash(rchsp.preStateHash)
       .withPostStateHash(rchsp.postStateHash)
 }
 

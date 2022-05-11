@@ -188,7 +188,7 @@ object MultiParentCasper {
         _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
       } yield status
 
-    val blockPreState  = b.body.state.preStateHash
+    val blockPreState  = b.preStateHash
     val blockPostState = b.body.state.postStateHash
     val blockSender    = b.sender.toByteArray
     val indexBlock = for {

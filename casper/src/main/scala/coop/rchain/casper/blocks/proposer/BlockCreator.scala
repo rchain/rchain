@@ -183,7 +183,7 @@ object BlockCreator {
       shardId: String,
       version: Int
   ): BlockMessage = {
-    val state = RChainState(preStateHash, postStateHash)
+    val state = RChainState(postStateHash)
     val body =
       Body(
         state,
@@ -195,6 +195,7 @@ object BlockCreator {
       version,
       blockData.blockNumber,
       sender,
+      preStateHash,
       body,
       justifications,
       bondsMap,

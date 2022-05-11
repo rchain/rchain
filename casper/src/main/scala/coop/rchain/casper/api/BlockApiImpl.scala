@@ -636,7 +636,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
                         } yield block
         res <- targetBlock.traverse(b => {
                 val postStateHash =
-                  if (usePreStateHash) ProtoUtil.preStateHash(b)
+                  if (usePreStateHash) b.preStateHash
                   else ProtoUtil.postStateHash(b)
                 for {
                   res            <- RuntimeManager[F].playExploratoryDeploy(term, postStateHash)
@@ -685,7 +685,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     for {
       block     <- BlockStore[F].getUnsafe(blockHash)
       sortedPar <- parSortable.sortMatch[F](par).map(_.term)
-      stateHash = if (usePreStateHash) block.body.state.preStateHash
+      stateHash = if (usePreStateHash) block.preStateHash
       else block.body.state.postStateHash
       data <- RuntimeManager[F].getData(stateHash)(sortedPar)
       lbi  = getLightBlockInfo(block)

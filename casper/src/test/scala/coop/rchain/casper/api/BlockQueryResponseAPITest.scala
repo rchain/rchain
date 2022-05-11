@@ -95,7 +95,7 @@ class BlockQueryResponseAPITest
               b.version should be(secondBlock.version)
               b.blockNumber should be(secondBlock.blockNumber)
               b.preStateHash should be(
-                secondBlock.body.state.preStateHash.toHexString
+                secondBlock.preStateHash.toHexString
               )
               b.postStateHash should be(
                 secondBlock.body.state.postStateHash.toHexString
@@ -181,7 +181,7 @@ class BlockQueryResponseAPITest
               blockInfo.version should be(secondBlock.version)
               blockInfo.blockNumber should be(secondBlock.blockNumber)
               blockInfo.preStateHash should be(
-                secondBlock.body.state.preStateHash.toHexString
+                secondBlock.preStateHash.toHexString
               )
               blockInfo.postStateHash should be(
                 secondBlock.body.state.postStateHash.toHexString

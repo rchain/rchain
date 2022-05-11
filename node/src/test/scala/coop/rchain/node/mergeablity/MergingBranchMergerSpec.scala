@@ -404,7 +404,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             // merge children blocks
             indices <- (baseBlock +: mergingBlocks)
                         .traverse { b =>
-                          val preStateHash  = b.body.state.preStateHash
+                          val preStateHash  = b.preStateHash
                           val postStateHash = b.body.state.postStateHash
                           val seqNum        = b.seqNum
                           val sender        = b.sender

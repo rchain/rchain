@@ -40,9 +40,6 @@ object ProtoUtil {
   def postStateHash(b: BlockMessage): ByteString =
     b.body.state.postStateHash
 
-  def preStateHash(b: BlockMessage): ByteString =
-    b.body.state.preStateHash
-
   def bondToBondInfo(bond: (Validator, Long)): BondInfo =
     BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond._1), stake = bond._2)
 
@@ -50,13 +47,11 @@ object ProtoUtil {
     case (acc, b) => math.max(acc, b.blockNum)
   }
 
-  def hashByteArrays(items: Array[Byte]*): ByteString =
-    ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
-
   def unsignedBlockProto(
       version: Int,
       blockNumber: Long,
       sender: PublicKey,
+      preStateHash: ByteString,
       body: Body,
       justifications: List[BlockHash],
       bonds: Map[Validator, Long],
@@ -69,6 +64,7 @@ object ProtoUtil {
       blockNumber = blockNumber,
       sender = sender.bytes.toByteString,
       seqNum = seqNum,
+      preStateHash = preStateHash,
       body,
       justifications,
       bonds,

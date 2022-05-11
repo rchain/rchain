@@ -112,7 +112,7 @@ object BlockApi {
       sigAlgorithm = block.sigAlgorithm,
       version = block.version,
       blockNumber = block.blockNumber,
-      preStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.preStateHash),
+      preStateHash = PrettyPrinter.buildStringNoLimit(block.preStateHash),
       postStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash),
       bonds = block.bonds.map(ProtoUtil.bondToBondInfo).toList,
       blockSize = block.toProto.serializedSize.toString,

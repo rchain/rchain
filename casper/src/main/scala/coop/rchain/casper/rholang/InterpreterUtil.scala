@@ -58,7 +58,7 @@ object InterpreterUtil {
       s: CasperSnapshot,
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
-    val incomingPreStateHash = ProtoUtil.preStateHash(block)
+    val incomingPreStateHash = block.preStateHash
     for {
       _ <- Span[F].mark("before-unsafe-get-parents")
       // TODO: filter invalid justifications
@@ -267,7 +267,7 @@ object InterpreterUtil {
             cached.getOrElse {
               for {
                 b         <- BlockStore[F].getUnsafe(v)
-                preState  = b.body.state.preStateHash
+                preState  = b.preStateHash
                 postState = b.body.state.postStateHash
                 sender    = b.sender.toByteArray
                 seqNum    = b.seqNum

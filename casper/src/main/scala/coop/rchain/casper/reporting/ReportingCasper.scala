@@ -91,7 +91,7 @@ object ReportingCasper {
         for {
           reportingRspace  <- ReportingRuntime.createReportingRSpace(rspaceStore)
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
-          preStateHash     = ProtoUtil.preStateHash(block)
+          preStateHash     = block.preStateHash
 
           // Block with empty justifications is genesis which is build with turned off cost accounting
           withCostAccounting = block.justifications.nonEmpty
