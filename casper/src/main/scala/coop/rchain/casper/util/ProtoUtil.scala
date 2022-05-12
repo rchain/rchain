@@ -87,15 +87,12 @@ object ProtoUtil {
     * Create hash of a BlockMessage, all fields must be included except signature
     */
   def hashBlock(blockMessage: BlockMessage): BlockHash = {
-    assert(blockMessage.sig.isEmpty, {
-      val blockStr = PrettyPrinter.buildString(blockMessage)
-      s"Signature must be empty to hash a BlockMessage $blockStr"
-    })
-    assert(blockMessage.blockHash.isEmpty, {
-      val blockStr = PrettyPrinter.buildString(blockMessage)
-      s"BlockHash must be empty to hash a BlockMessage $blockStr"
-    })
-    Blake2b256.hash(blockMessage.toProto.toByteArray).toByteString
+    val emptyBytes = ByteString.EMPTY
+    val blockClearSigData = blockMessage.copy(
+      blockHash = emptyBytes,
+      sig = emptyBytes
+    )
+    Blake2b256.hash(blockClearSigData.toProto.toByteArray).toByteString
   }
 
   def dependenciesHashesOf(b: BlockMessage): Set[BlockHash] = b.justifications.toSet

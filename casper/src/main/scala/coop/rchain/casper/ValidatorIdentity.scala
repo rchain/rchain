@@ -20,15 +20,11 @@ final case class ValidatorIdentity(
   }
 
   def signBlock(block: BlockMessage): BlockMessage = {
-    // Hash should include sigAlgorithm
-    // TODO: signing a block should not change block hash!!!
-    val b = block.copy(sigAlgorithm = sigAlgorithm)
-
-    val blockHash = ProtoUtil.hashBlock(b)
+    val blockHash = ProtoUtil.hashBlock(block)
 
     val sig = signature(blockHash.toByteArray).signature.toByteString
 
-    b.copy(sig = sig, blockHash = blockHash)
+    block.copy(sig = sig, blockHash = blockHash)
   }
 }
 
