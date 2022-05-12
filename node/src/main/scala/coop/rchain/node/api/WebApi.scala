@@ -33,6 +33,8 @@ trait WebApi[F[_]] {
   // Write data (deploy)
   def deploy(request: DeployRequest): F[String]
 
+  def deployStatus(deployId: String): F[String]
+
   // Read data (listen)
   def listenForDataAtName(request: DataAtNameRequest): F[DataAtNameResponse]
 
@@ -91,6 +93,8 @@ object WebApi {
       toSignedDeploy(request)
         .flatMap(blockApi.deploy)
         .flatMap(_.liftToBlockApiErr)
+
+    def deployStatus(deployId: String): F[String] = deployId.pure
 
     def listenForDataAtName(req: DataAtNameRequest): F[DataAtNameResponse] =
       blockApi

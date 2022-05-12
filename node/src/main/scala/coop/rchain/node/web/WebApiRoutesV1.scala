@@ -70,6 +70,7 @@ final case class WebApiRoutesV1[F[_]: Concurrent: Log](
     ),
     // Deploy
     deploy.implementedByEffect(webApi.deploy),
+    deployStatus.implementedByEffect(webApi.deployStatus),
     // Blocks
     getBlocks.implementedByEffect(const(webApi.getBlocks(1))),
     getBlock.implementedByEffect(webApi.getBlock)

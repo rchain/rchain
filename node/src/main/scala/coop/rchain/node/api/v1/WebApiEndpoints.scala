@@ -35,6 +35,12 @@ trait WebApiEndpoints
     ok(jsonResponse[String])
   )
 
+  val deployStatus: Endpoint[String, String] = endpoint(
+    get(path / "deploy-status" / deployId),
+    ok(jsonResponse[String]),
+    docs = EndpointDocs().withDescription("Get status of deploy with specified deployId".some)
+  )
+
   val exploreDeploy: Endpoint[String, RhoDataResponse] = endpoint(
     post(path / "explore-deploy", jsonRequest[String]),
     ok(jsonResponse[RhoDataResponse]),
@@ -74,4 +80,5 @@ trait WebApiEndpoints
   // Segments
 
   lazy val hashString = segment[String](name = "hash", docs = "Hex encoded string".some)
+  lazy val deployId   = segment[String](name = "deployId", docs = "ID of deploy as HEX string".some)
 }
