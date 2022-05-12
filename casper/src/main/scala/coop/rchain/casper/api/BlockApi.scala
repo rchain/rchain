@@ -15,6 +15,8 @@ trait BlockApi[F[_]] {
 
   def deploy(d: Signed[DeployData]): F[ApiErr[String]]
 
+  def deployStatus(deployId: DeployId): F[String]
+
   def createBlock(isAsync: Boolean): F[ApiErr[String]]
 
   def getProposeResult: F[ApiErr[String]]

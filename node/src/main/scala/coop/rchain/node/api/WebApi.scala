@@ -94,7 +94,8 @@ object WebApi {
         .flatMap(blockApi.deploy)
         .flatMap(_.liftToBlockApiErr)
 
-    def deployStatus(deployId: String): F[String] = deployId.pure
+    def deployStatus(deployId: String): F[String] =
+      blockApi.deployStatus(deployId.unsafeHexToByteString)
 
     def listenForDataAtName(req: DataAtNameRequest): F[DataAtNameResponse] =
       blockApi

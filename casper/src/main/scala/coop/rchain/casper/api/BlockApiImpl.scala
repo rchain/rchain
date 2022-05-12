@@ -14,6 +14,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, Tools}
@@ -172,6 +173,9 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         _ => addDeploy(d)
       )
   }
+
+  override def deployStatus(deployId: DeployId): F[String] =
+    BlockDagStorage[F].asInstanceOf[BlockDagKeyValueStorage[F]].deployStatus(deployId)
 
   override def createBlock(isAsync: Boolean = false): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
