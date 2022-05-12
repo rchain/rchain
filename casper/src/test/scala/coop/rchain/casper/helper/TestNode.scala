@@ -188,7 +188,13 @@ case class TestNode[F[_]: Sync: Timer](
 
   def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
     for {
-      _                 <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])
+      _ <- deployDatums.toList.traverse(
+            deploy =>
+              for {
+                res <- MultiParentCasper.deploy[F](deploy)
+                _   = assert(res.isRight, s"Deploy error ${deploy} with\n ${res.left}")
+              } yield ()
+          )
       cs                <- MultiParentCasper.getSnapshot[F](casperShardConf)
       createBlockResult <- BlockCreator.create(cs, validatorIdOpt.get)
     } yield createBlockResult
