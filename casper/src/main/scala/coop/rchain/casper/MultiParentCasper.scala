@@ -66,13 +66,14 @@ object MultiParentCasper {
     (blockHash, justificationHashes, deployIds, creator, seqNum)
   }
 
-  // TODO: temporary function until multiparent casper is removed
+  // TODO: temporary function until multi-parent finalizer will be working
   def getSnapshot[F[_]: Sync: RuntimeManager: BlockDagStorage: BlockStore](
       casperShardConf: CasperShardConf
   ): F[CasperSnapshot] = {
     def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
       for {
-        av <- RuntimeManager[F].getActiveValidators(b.postStateHash)
+//        av <- RuntimeManager[F].getActiveValidators(b.postStateHash)
+        av <- b.bonds.keys.toSeq.pure[F]
         // bonds are available in block message, but please remember this is just a cache, source of truth is RSpace.
         shardConfig = casperShardConf
       } yield OnChainCasperState(shardConfig, b.bonds, av)
