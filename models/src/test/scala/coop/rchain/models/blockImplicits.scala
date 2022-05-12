@@ -145,13 +145,15 @@ object blockImplicits {
         bonds = bonds,
         rejectedDeploys = List.empty,
         state = RholangState(deploys = deploys.toList, systemDeploys = setSysDeploys.toList.flatten),
-        sigAlgorithm = "",
+        sigAlgorithm = Secp256k1.name,
         sig = ByteString.EMPTY
       )
       blockHash <- if (hashF.isEmpty) arbitrary[BlockHash](arbitraryBlockHash)
                   else Gen.const(hashF.get(block))
       ret = block.copy(blockHash = blockHash)
     } yield ret
+
+  val arbBlockMessage = Arbitrary(blockElementGen())
 
   def blockElementsWithParentsGen(genesis: BlockMessage): Gen[List[BlockMessage]] =
     Gen.sized { size =>
