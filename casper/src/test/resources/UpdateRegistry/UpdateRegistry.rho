@@ -9,7 +9,7 @@ new
   systemContractManager2,           // MultiSig contract's method entry point
   blessedContractLocMapCh
 in {
-  for (@blessedContractLocMap, ret <- updateContract){
+  for (@blessedContractLocMap, oldSystemContractManager, ret <- updateContract){
     blessedContractLocMapCh!(blessedContractLocMap)|
     let @pubKey <- 
       // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
@@ -28,10 +28,12 @@ in {
                       @(*oldData, "extractState")!(*tmp) |
                       for (@oldState <- tmp) {
                         // launch new contract instance with initial state extracted from the old instance
-                        @con!(oldState, *newRet) |
-                        // write new method entry point to location channel
-                        @loc!(meth) |
-                        ret!((true, *newRet))
+                        @con!(oldState, *oldData, *newRet) |
+                        for (@meth <- newRet){
+                          // write new method entry point to location channel
+                          @loc!(meth) |
+                          ret!((true))
+                        }
                       }
                     }
                   }
@@ -46,12 +48,13 @@ in {
       contract systemContractManager2(@"sayHello", returnCh) = {
         returnCh!("hello")
       } |
-      contract @(bundle+{*systemContractManager2}, "extractState")(ret) = {
+      for (ret <- @(*systemContractManager2, "extractState")){
         for (@blessedContractLocMap <<- blessedContractLocMapCh) {
           ret!(blessedContractLocMap)
         }
       } 
-    }
+    } |
+    ret!(*systemContractManager2)
   } |
   stdout!(("update blessed registry start!!!!!"))|
   rl!(`rho:registry:systemContractManager`, *rlret)|
@@ -61,7 +64,6 @@ in {
                   *deployerID,
                   `rho:registry:systemContractManager`,
                   *updateContract,
-                  *systemContractManager2,
                   *updateRet)|
     for (@result <- updateRet){
       stdout!((result, "update result")) |

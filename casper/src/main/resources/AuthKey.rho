@@ -69,7 +69,7 @@ in {
   } |
   // No internal state to return.
   // Method required for updates.
-  contract @(*AuthKey, "extractState")(ret) = {
+  for (ret <- @(*AuthKey, "extractState")) {
     ret!({"authKeyUnf": *_authKey})
   } |
   // Inserts signed write-only AuthKey contract into the registry

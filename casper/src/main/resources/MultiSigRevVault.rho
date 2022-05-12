@@ -263,7 +263,7 @@ in {
     } |
     // No internal state to return.
     // Method required for updates.
-    contract @(*MultiSigRevVault, "extractState")(ret) = {
+    for (ret <- @(*MultiSigRevVault, "extractState")){
       ret!({"multiSigVaultUnf": *_multiSigRevVault})
     }
   } |

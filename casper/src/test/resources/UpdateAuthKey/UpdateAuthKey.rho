@@ -10,8 +10,7 @@ new
   updateRet,
   deployerID(`rho:rchain:deployerId`)
 in {
-  for (oldAuthKey, ret <- updateContract){
-    stdout!(("extracting old state", *oldAuthKey))|
+  for (oldAuthKeyState, oldAuthKey, ret <- updateContract){
     AuthStateCh!(0)|
     contract AuthKey(@"make", @shape, ret) = {
       new authKey in {
@@ -35,11 +34,12 @@ in {
         AuthStateCh!(number + ori)
       }
     } |
-    contract @(bundle+{*AuthKey}, "extractState")(ret) = {
+    for (ret <- @(*AuthKey, "extractState")){
       for (@number <<- AuthStateCh){
         ret!(number)
       }
-    }
+    } | 
+    ret!(*AuthKey)
   } |
   stdout!(("propose start!!!!!"))|
   rl!(`rho:registry:systemContractManager`, *rlret)|
@@ -49,7 +49,6 @@ in {
                   *deployerID,
                   `rho:rchain:authKey`,
                   *updateContract,
-                  *AuthKey,
                   *updateRet)|
     for (@result <- updateRet){
       stdout!((result, "update result")) |

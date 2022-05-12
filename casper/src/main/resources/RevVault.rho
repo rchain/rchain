@@ -277,7 +277,7 @@ in {
           } |
           // Method to extract the current state of the RevVault contract.
           // Returns the current `vaultMap`.
-          contract @(*RevVault, "extractState")(ret) = {
+          for (ret <- @(*RevVault, "extractState")){
             ret!({"vaultMap":vaultMap, "revVaultUnf": *_revVault})
           } |
           // Insert the signed, write-only dispatcher contract into the registry uri map

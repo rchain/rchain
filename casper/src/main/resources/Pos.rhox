@@ -306,7 +306,7 @@ in {
                 @humanControlHandle!("transfer", targetAddress, amount, deployerID, transferRet)
               } |
               // Returns current state elements on `ret`.
-              contract @(*PoS, "extractState")(ret) = {
+              for (ret <- @(*PoS, "extractState")){
                 for (@state <<- stateCh) {
                   ret!({
                     "state"     : state,

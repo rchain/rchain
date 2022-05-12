@@ -342,7 +342,7 @@ in {
           }
         } |
         // Returns the current map
-        contract @(*TreeHashMap, "extractState")(ret) = {
+        for (ret <- @(*TreeHashMap, "extractState")){
           for (@map <<- _registryStore) {
             ret!({"registryMap": map, "storeToken": *storeToken})
           }
@@ -618,7 +618,7 @@ in {
             // con:   the update consume which take the old state
             // meth:  the target new contract which would replace the old one
             // ret:   channel which returns the update result
-            contract systemContractManager(@"update", @deployerID, @uri, @con, @meth, ret) = {
+            contract systemContractManager(@"update", @deployerID, @uri, @con, ret) = {
               // there is an update proposal for `uri`
               new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
                 DeployerIdOps!("pubKeyBytes", deployerID, *deployerPubKeyBytesCh) |
@@ -631,10 +631,12 @@ in {
                             @(*oldData, "extractState")!(*tmp) |
                             for (@oldState <- tmp) {
                               // launch new contract instance with initial state extracted from the old instance
-                              @con!(oldState, *newRet) |
-                              // write new method entry point to location channel
-                              @loc!(meth) |
-                              ret!((true, *newRet))
+                              @con!(oldState, *oldData, *newRet) |
+                              for (@meth <- newRet){
+                                // write new method entry point to location channel
+                                @loc!(meth) |
+                                ret!((true))
+                              }
                             }
                           }
                         }
@@ -646,7 +648,7 @@ in {
                 }
               }
             } |
-            contract @(*systemContractManager, "extractState")(ret) = {
+            for (ret <- @(*systemContractManager, "extractState")){
               for (@blessedContractLocMap <<- blessedContractLocMapCh) {
                 ret!(blessedContractLocMap)
               }

@@ -19,6 +19,8 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
+import scala.io.Source
+
 class PosUpdateSpec extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
@@ -37,31 +39,10 @@ class PosUpdateSpec extends FlatSpec with Matchers with Inspectors {
   private val validatorKeys      = Seq((p1, pub1), (noPermissionKey, noPermissionKeyPub), (p3, pub3))
   private val genesisVaults =
     Seq((p1, 100000000000L), (noPermissionKey, 100000000000L), (p3, 100000000000L))
-  private val bonds       = Map(pub1 -> 1000000L, noPermissionKeyPub -> 1000000L, pub3 -> 1000000L)
-  private val genesis     = buildGenesis(buildGenesisParameters(validatorKeys, genesisVaults, bonds))
-  private val epochLength = 1
+  private val bonds   = Map(pub1 -> 1000000L, noPermissionKeyPub -> 1000000L, pub3 -> 1000000L)
+  private val genesis = buildGenesis(buildGenesisParameters(validatorKeys, genesisVaults, bonds))
 
-  private val updatePosTerm = CompiledRholangTemplate.loadTemplate(
-    "UpdatePos/UpdatePos.rho",
-    Seq(
-      ("minimumBond", 1),
-      ("maximumBond", 10000000000L),
-      ("epochLength", epochLength),
-      ("quarantineLength", 3),
-      ("numberOfActiveValidators", 100),
-      (
-        "posMultiSigPublicKeys",
-        ProofOfStake.publicKeys(
-          List(
-            Base16.encode(pub1.bytes),
-            Base16.encode(noPermissionKey.bytes),
-            Base16.encode(pub3.bytes)
-          )
-        )
-      ),
-      ("posMultiSigQuorum", 2)
-    )
-  )
+  private val updatePosTerm = Source.fromResource("UpdatePos/UpdatePos.rho").mkString
   "deploy with correct private key" should "update the rho:rchain:pos right" in effectTest {
     val updateDeploy =
       ConstructDeploy.sourceDeployNow(updatePosTerm, p1, 100000000L, 0L, shardId = shardId)
@@ -142,10 +123,8 @@ class PosUpdateSpec extends FlatSpec with Matchers with Inspectors {
         _    = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
         ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b5.body.state.postStateHash)
         _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
-        ret3 <- rm.playExploratoryDeploy(exploreUpdateResultTerm, b5.body.state.postStateHash)
-        _    = assert(ret3.head.exprs.head.getGInt == epochLength)
-        ret4 <- rm.playExploratoryDeploy(explorePosNewMethod, b5.body.state.postStateHash)
-        _    = assert(ret4.head.exprs.head.getGString == "hello")
+        ret3 <- rm.playExploratoryDeploy(explorePosNewMethod, b5.body.state.postStateHash)
+        _    = assert(ret3.head.exprs.head.getGString == "hello")
       } yield ()
     }
   }
