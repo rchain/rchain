@@ -34,6 +34,7 @@ option (scalapb.options) = {
 service DeployService {
   // Queue deployment of Rholang code (or fail to parse).
   rpc doDeploy(DeployDataProto) returns (DeployResponse) {}
+  rpc deployStatus(DeployStatusQuery) returns (DeployStatusResponse) {}
   // Get details about a particular block.
   rpc getBlock(BlockQuery) returns (BlockResponse) {}
   // Get dag
@@ -87,6 +88,40 @@ message DeployResponse {
     ServiceError error = 1;
     string result      = 2;
   }
+}
+
+// deployStatus
+message DeployStatusResponse {
+  oneof message {
+    ServiceError error                = 1;
+    DeployExecStatus deployExecStatus = 2;
+  }
+}
+
+message DeployExecStatus {
+  oneof status {
+    ProcessedWithSuccess processedWithSuccess = 1;
+    ProcessedWithError processedWithError = 2;
+    NotProcessed notProcessed = 3;
+  }
+}
+
+message ProcessedWithSuccess {
+  repeated Par deployResult = 1;
+  BlockInfo block           = 2 [(scalapb.field).no_box = true];
+  bool finalized            = 3;
+  bool orphaned             = 4;
+}
+
+message ProcessedWithError {
+  string deployError = 1;
+  BlockInfo block    = 2 [(scalapb.field).no_box = true];
+  bool finalized     = 3;
+  bool orphaned      = 4;
+}
+
+message NotProcessed {
+  string status = 1;
 }
 
 // getBlock

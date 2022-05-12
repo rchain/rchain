@@ -27,6 +27,10 @@ message FindDeployQuery {
   bytes deployId = 1;
 }
 
+message DeployStatusQuery {
+  bytes deployId = 1;
+}
+
 message BlockQuery {
   string hash = 1;
 }
