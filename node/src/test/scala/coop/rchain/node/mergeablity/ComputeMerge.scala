@@ -8,8 +8,8 @@ import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.rholang.RuntimeDeployResult.UserDeployRuntimeResult
 import coop.rchain.casper.rholang.RuntimeManager
-import coop.rchain.casper.rholang.syntax.RuntimeSyntax.UserTransition
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -63,7 +63,7 @@ trait ComputeMerge {
                                runtime.processDeployWithMergeableData
                              )
             (baseDeploys, baseMergeChs, _) = baseDeploysRes
-              .map(UserTransition.unapply(_).get)
+              .map(UserDeployRuntimeResult.unapply(_).get)
               .unzip3
             _ <- Sync[F]
                   .raiseError(
@@ -75,7 +75,7 @@ trait ComputeMerge {
                                runtime.processDeployWithMergeableData
                              )
             (leftDeploys, leftMergeChs, _) = leftDeploysRes
-              .map(UserTransition.unapply(_).get)
+              .map(UserDeployRuntimeResult.unapply(_).get)
               .unzip3
             _ <- Sync[F]
                   .raiseError(
@@ -88,7 +88,7 @@ trait ComputeMerge {
                                 runtime.processDeployWithMergeableData
                               )
             (rightDeploys, rightMergeChs, _) = rightDeploysRes
-              .map(UserTransition.unapply(_).get)
+              .map(UserDeployRuntimeResult.unapply(_).get)
               .unzip3
             _ <- Sync[F]
                   .raiseError(

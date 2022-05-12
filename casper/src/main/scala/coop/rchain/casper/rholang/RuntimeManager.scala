@@ -8,8 +8,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.RuntimeManager.{ExecutionTracker, MergeableStore, StateHash}
-import coop.rchain.casper.rholang.syntax.RuntimeSyntax.{SystemTransition, UserTransition}
+import coop.rchain.casper.rholang.RuntimeDeployResult._
+import coop.rchain.casper.rholang.RuntimeManager.{BlockExecutionTracker, MergeableStore, StateHash}
 import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.signatures.Signed
@@ -79,7 +79,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     historyRepo: RhoHistoryRepository[F],
     mergeableStore: MergeableStore[F],
     mergeableTagName: Par,
-    executionTracker: ExecutionTracker[F]
+    executionTracker: BlockExecutionTracker[F]
 ) extends RuntimeManager[F] {
 
   def spawnRuntime: F[RhoRuntime[F]] =
@@ -113,18 +113,18 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     for {
       runtime  <- spawnRuntime
-      _        <- terms.map(_.sig).toList.traverse(executionTracker.callbackExecutionStarted)
+      _        <- terms.map(_.sig).toList.traverse(executionTracker.execStarted)
       computed <- runtime.computeState(startHash, terms, systemDeploys, blockData)
       _ <- {
         val v = computed._2.map(tx => (tx.deploy.deploy.sig, tx.evalResult))
-        v.toList.traverse((executionTracker.callbackExecutionComplete _).tupled)
+        v.toList.traverse((executionTracker.execComplete _).tupled)
       }
       (stateHash, usrDeployRes, sysDeployRes) = computed
       (usrProcessed, usrMergeable, _) = usrDeployRes
-        .map(UserTransition.unapply(_).get)
+        .map(UserDeployRuntimeResult.unapply(_).get)
         .unzip3
       (sysProcessed, sysMergeable) = sysDeployRes
-        .map(SystemTransition.unapply(_).get)
+        .map(SystemDeployRuntimeResult.unapply(_).get)
         .unzip
 
       // Concat user and system deploys mergeable channel maps
@@ -149,7 +149,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       .flatMap {
         case (preState, stateHash, processed) =>
           val (processedDeploys, mergeableChs, _) =
-            processed.map(UserTransition.unapply(_).get).unzip3
+            processed.map(UserDeployRuntimeResult.unapply(_).get).unzip3
 
           // Convert from final to diff values and persist mergeable (number) channels for post-state hash
           val preStateHash  = preState.toBlake2b256Hash
@@ -262,7 +262,7 @@ object RuntimeManager {
       historyRepo: RhoHistoryRepository[F],
       mergeableStore: MergeableStore[F],
       mergeableTagName: Par,
-      executionTracker: ExecutionTracker[F]
+      executionTracker: BlockExecutionTracker[F]
   ): F[RuntimeManagerImpl[F]] =
     Sync[F].delay(
       RuntimeManagerImpl(
@@ -279,7 +279,7 @@ object RuntimeManager {
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
       mergeableTagName: Par,
-      executionTracker: ExecutionTracker[F]
+      executionTracker: BlockExecutionTracker[F]
   )(
       implicit ec: ExecutionContext
   ): F[RuntimeManagerImpl[F]] =
@@ -289,7 +289,7 @@ object RuntimeManager {
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
       mergeableTagName: Par,
-      executionTracker: ExecutionTracker[F]
+      executionTracker: BlockExecutionTracker[F]
   )(
       implicit ec: ExecutionContext
   ): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
@@ -325,15 +325,14 @@ object RuntimeManager {
       deployMergeableDataSeqCodec
     )
 
-  // TODO add more callbacks (system deploys, maybe something else)
-  trait ExecutionTracker[F[_]] {
-    def callbackExecutionStarted(d: DeployId): F[Unit]
-    def callbackExecutionComplete(d: DeployId, res: EvaluateResult): F[Unit]
+  trait BlockExecutionTracker[F[_]] {
+    def execStarted(d: DeployId): F[Unit]
+    def execComplete(d: DeployId, res: EvaluateResult): F[Unit]
   }
 
-  def noOpExecutionTracker[F[_]: Applicative]: ExecutionTracker[F] =
-    new ExecutionTracker[F] {
-      override def callbackExecutionStarted(d: DeployId): F[Unit]                       = ().pure[F]
-      override def callbackExecutionComplete(d: DeployId, res: EvaluateResult): F[Unit] = ().pure[F]
+  def noOpExecutionTracker[F[_]: Applicative]: BlockExecutionTracker[F] =
+    new BlockExecutionTracker[F] {
+      override def execStarted(d: DeployId): F[Unit]                       = ().pure[F]
+      override def execComplete(d: DeployId, res: EvaluateResult): F[Unit] = ().pure[F]
     }
 }

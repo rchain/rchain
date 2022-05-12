@@ -18,7 +18,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.casper.rholang.RuntimeManager
-import coop.rchain.casper.rholang.RuntimeManager.ExecutionTracker
+import coop.rchain.casper.rholang.RuntimeManager.BlockExecutionTracker
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.comm.RoutingMessage
@@ -126,17 +126,10 @@ object Setup {
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
-        val executionTracker = new ExecutionTracker[F] {
-          override def callbackExecutionStarted(d: DeployId): F[Unit] =
-            blockDagStorage.commitExecutionStarted(d)
-          override def callbackExecutionComplete(d: DeployId, res: EvaluateResult): F[Unit] = {
-            val err = res.errors.map(_.getMessage).mkString("\n")
-            blockDagStorage.commitExecutionComplete(d, if (err.isBlank) "Success" else err)
-          }
-        }
         for {
-          rStores    <- rnodeStoreManager.rSpaceStores
-          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          rStores          <- rnodeStoreManager.rSpaceStores
+          mergeStore       <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          executionTracker = BlockDagKeyValueStorage.executionTracker(blockDagStorage)
           rm <- RuntimeManager
                  .createWithHistory[F](
                    rStores,

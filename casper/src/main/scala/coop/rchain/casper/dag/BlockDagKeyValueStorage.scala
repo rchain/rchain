@@ -23,6 +23,8 @@ import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
 import coop.rchain.shared.syntax._
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage._
+import coop.rchain.casper.rholang.RuntimeManager.BlockExecutionTracker
+import coop.rchain.rholang.interpreter.EvaluateResult
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import fs2.Stream
@@ -292,6 +294,16 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 object BlockDagKeyValueStorage {
   implicit private val BlockDagKeyValueStorage_FromFileMetricsSource: Source =
     Metrics.Source(BlockStorageMetricsSource, "dag-key-value-store")
+
+  def executionTracker[F[_]](blockDagStorage: BlockDagKeyValueStorage[F]) =
+    new BlockExecutionTracker[F] {
+      override def execStarted(d: DeployId): F[Unit] =
+        blockDagStorage.commitExecutionStarted(d)
+      override def execComplete(d: DeployId, res: EvaluateResult): F[Unit] = {
+        val err = res.errors.map(_.getMessage).mkString("\n")
+        blockDagStorage.commitExecutionComplete(d, if (err.isBlank) "Success" else err)
+      }
+    }
 
   private final case class DagStores[F[_]](
       metadata: BlockMetadataStore[F],

@@ -54,6 +54,7 @@ import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.shared.{Base16, Log}
 import RuntimeSyntax._
+import coop.rchain.casper.rholang.RuntimeDeployResult._
 
 trait RuntimeSyntax {
   implicit final def casperSyntaxRholangRuntime[F[_]](
@@ -63,15 +64,6 @@ trait RuntimeSyntax {
 
 object RuntimeSyntax {
   type SysEvalResult[S <: SystemDeploy] = (Either[SystemDeployUserError, S#Result], EvaluateResult)
-  final case class UserTransition(
-      deploy: ProcessedDeploy,
-      mergeable: NumberChannelsEndVal,
-      evalResult: EvaluateResult
-  )
-  final case class SystemTransition(
-      deploy: ProcessedSystemDeploy,
-      mergeable: NumberChannelsEndVal
-  )
 
   implicit val RuntimeMetricsSource = Metrics.Source(CasperMetricsSource, "rho-runtime")
 
@@ -110,7 +102,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       implicit s: Sync[F],
       span: Span[F],
       log: Log[F]
-  ): F[(StateHash, Seq[UserTransition], Seq[SystemTransition])] =
+  ): F[(StateHash, Seq[UserDeployRuntimeResult], Seq[SystemDeployRuntimeResult])] =
     Span[F].traceI("compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
@@ -119,16 +111,17 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
                               }
         (startHash, processedDeploys) = deployProcessResult
         systemDeployProcessResult <- {
-          systemDeploys.toList.foldM((startHash, Vector.empty[SystemTransition])) {
+          systemDeploys.toList.foldM((startHash, Vector.empty[SystemDeployRuntimeResult])) {
             case ((startHash, processedSystemDeploys), sd) =>
               playSystemDeploy(startHash)(sd) >>= {
                 case PlaySucceeded(stateHash, processedSystemDeploy, mergeChs, _) => {
-                  val result = SystemTransition(processedSystemDeploy, mergeChs)
+                  val result = SystemDeployRuntimeResult(processedSystemDeploy, mergeChs)
                   (stateHash, processedSystemDeploys :+ result).pure[F]
                 }
                 case PlayFailed(Failed(_, errorMsg)) => {
                   val errStr = "Unexpected system error during play of system deploy: " + errorMsg
-                  new Exception(errStr).raiseError[F, (StateHash, Vector[SystemTransition])]
+                  new Exception(errStr)
+                    .raiseError[F, (StateHash, Vector[SystemDeployRuntimeResult])]
                 }
               }
           }
@@ -148,7 +141,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       implicit s: Sync[F],
       span: Span[F],
       log: Log[F]
-  ): F[(StateHash, StateHash, Seq[UserTransition])] =
+  ): F[(StateHash, StateHash, Seq[UserDeployRuntimeResult])] =
     Span[F].traceI("compute-genesis") {
       for {
         _ <- runtime.setBlockData(
@@ -168,8 +161,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   def playDeploys(
       startHash: StateHash,
       terms: Seq[Signed[DeployData]],
-      processDeploy: Signed[DeployData] => F[UserTransition]
-  )(implicit m: Monad[F]): F[(StateHash, Seq[UserTransition])] =
+      processDeploy: Signed[DeployData] => F[UserDeployRuntimeResult]
+  )(implicit m: Monad[F]): F[(StateHash, Seq[UserDeployRuntimeResult])] =
     for {
       _               <- runtime.reset(startHash.toBlake2b256Hash)
       res             <- terms.toList.traverse(processDeploy)
@@ -182,7 +175,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     */
   def playDeployWithCostAccounting(
       deploy: Signed[DeployData]
-  )(implicit s: Sync[F], log: Log[F], span: Span[F]): F[UserTransition] = {
+  )(implicit s: Sync[F], log: Log[F], span: Span[F]): F[UserDeployRuntimeResult] = {
     // Pre-charge system deploy evaluator
     val preChargeF: F[(Vector[Event], Either[SystemDeployUserError, Unit], Set[Par])] =
       playSystemDeployInternal(
@@ -263,7 +256,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
             for {
               collected             <- st.get
               mergeableChannelsData <- getNumberChannelsData(collected.mergeableChannels)
-            } yield UserTransition(
+            } yield UserDeployRuntimeResult(
               pd.copy(deployLog = collected.eventLog.toList),
               mergeableChannelsData,
               evalResult
@@ -303,12 +296,12 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
 
   def processDeployWithMergeableData(
       deploy: Signed[DeployData]
-  )(implicit s: Sync[F], span: Span[F], log: Log[F]): F[UserTransition] =
+  )(implicit s: Sync[F], span: Span[F], log: Log[F]): F[UserDeployRuntimeResult] =
     processDeploy(deploy) flatMap {
       case (pd, result @ EvaluateResult(_, _, mergeChs)) =>
         for {
           mergeableData <- getNumberChannelsData(mergeChs)
-        } yield UserTransition(pd, mergeableData, result)
+        } yield UserDeployRuntimeResult(pd, mergeableData, result)
     }
 
   def getNumberChannelsData(
