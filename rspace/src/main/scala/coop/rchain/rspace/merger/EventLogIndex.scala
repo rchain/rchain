@@ -4,7 +4,10 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.kernel.Monoid
 import cats.syntax.all._
-import coop.rchain.rspace.merger.MergingLogic.{combineProducesCopiedByPeek, NumberChannelsDiff}
+import coop.rchain.rspace.merger.EventLogMergingLogic.{
+  combineProducesCopiedByPeek,
+  NumberChannelsDiff
+}
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
 import coop.rchain.shared.syntax._
 

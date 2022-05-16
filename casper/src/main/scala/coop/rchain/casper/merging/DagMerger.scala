@@ -10,8 +10,13 @@ import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.merger.MergingLogic.NumberChannelsDiff
-import coop.rchain.rspace.merger.{ChannelChange, MergingLogic, StateChange, StateChangeMerger}
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
+import coop.rchain.rspace.merger.{
+  ChannelChange,
+  EventLogMergingLogic,
+  StateChange,
+  StateChangeMerger
+}
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import scodec.bits.ByteVector
@@ -43,7 +48,7 @@ object DagMerger {
 
       branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
         (as.flatMap(_.deploysWithCost.map(_.id)) intersect bs.flatMap(_.deploysWithCost.map(_.id))).nonEmpty ||
-          MergingLogic.areConflicting(
+          EventLogMergingLogic.areConflicting(
             as.map(_.eventLogIndex).toList.combineAll,
             bs.map(_.eventLogIndex).toList.combineAll
           )
@@ -72,8 +77,8 @@ object DagMerger {
       r <- ConflictSetMerger.merge[F, DeployChainIndex](
             actualSet = actualSet,
             lateSet = lateSet,
-            depends =
-              (target, source) => MergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
+            depends = (target, source) =>
+              EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
             conflicts = branchesAreConflicting,
             cost = rejectionCostF,
             stateChanges = _.stateChanges.pure,

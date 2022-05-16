@@ -17,8 +17,13 @@ import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.merger.MergingLogic.NumberChannelsDiff
-import coop.rchain.rspace.merger.{ChannelChange, MergingLogic, StateChange, StateChangeMerger}
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
+import coop.rchain.rspace.merger.{
+  ChannelChange,
+  EventLogMergingLogic,
+  StateChange,
+  StateChangeMerger
+}
 import coop.rchain.rspace.serializers.ScodecSerialize
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
@@ -166,18 +171,18 @@ class MergeNumberChannelSpec extends FlatSpec {
         leftResult                     <- runRholang(leftTerms, baseCp.root)
         (leftEvIndices, leftPostState) = leftResult
 
-        leftDeployIndices = MergingLogic.computeRelatedSets[DeployIndex](
+        leftDeployIndices = EventLogMergingLogic.computeRelatedSets[DeployIndex](
           leftEvIndices,
-          (x, y) => MergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
+          (x, y) => EventLogMergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
         )
 
         // Branch 2 change
         rightResult                      <- runRholang(rightTerms, baseCp.root)
         (rightEvIndices, rightPostState) = rightResult
 
-        rightDeployIndices = MergingLogic.computeRelatedSets[DeployIndex](
+        rightDeployIndices = EventLogMergingLogic.computeRelatedSets[DeployIndex](
           rightEvIndices,
-          (x, y) => MergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
+          (x, y) => EventLogMergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
         )
 
         // Calculate deploy chains / deploy dependency
@@ -195,7 +200,7 @@ class MergeNumberChannelSpec extends FlatSpec {
         // Detect rejections / number channel overflow/negative
 
         branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
-          MergingLogic.areConflicting(
+          EventLogMergingLogic.areConflicting(
             as.map(_.eventLogIndex).toList.combineAll,
             bs.map(_.eventLogIndex).toList.combineAll
           )
@@ -228,7 +233,7 @@ class MergeNumberChannelSpec extends FlatSpec {
               actualSet = leftDeployChains.toSet ++ rightDeployChains.toSet,
               lateSet = Set(),
               depends = (target, source) =>
-                MergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
+                EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
               conflicts = branchesAreConflicting,
               cost = DagMerger.costOptimalRejectionAlg,
               stateChanges = r => r.stateChanges.pure,

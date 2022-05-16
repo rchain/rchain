@@ -6,7 +6,7 @@ import coop.rchain.models.ListParWithRandom
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryReaderBinary
-import coop.rchain.rspace.merger.MergingLogic._
+import coop.rchain.rspace.merger.EventLogMergingLogic._
 import coop.rchain.rspace.merger.StateChange._
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.serializers.ScodecSerialize.DatumB

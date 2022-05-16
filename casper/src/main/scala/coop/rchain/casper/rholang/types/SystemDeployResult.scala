@@ -2,7 +2,7 @@ package coop.rchain.casper.rholang.types
 
 import coop.rchain.casper.protocol.{Event, ProcessedSystemDeploy, SystemDeployData}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
-import coop.rchain.rspace.merger.MergingLogic.NumberChannelsEndVal
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 
 sealed trait SystemDeployResult[A]
 

@@ -38,7 +38,7 @@ import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.merger.MergingLogic.NumberChannelsEndVal
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.Log
 

@@ -7,7 +7,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.{ColdStoreInstances, DataLeaf, HistoryReaderBinary}
 import coop.rchain.rspace.internal.Datum
-import coop.rchain.rspace.merger.MergingLogic._
+import coop.rchain.rspace.merger.EventLogMergingLogic._
 import coop.rchain.rspace.serializers.ScodecSerialize
 import coop.rchain.rspace.serializers.ScodecSerialize.{serializeToCodecDatumMemo, RichAttempt}
 import coop.rchain.rspace.trace.Produce
