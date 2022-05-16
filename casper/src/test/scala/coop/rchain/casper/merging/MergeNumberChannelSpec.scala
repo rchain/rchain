@@ -235,7 +235,7 @@ class MergeNumberChannelSpec extends FlatSpec {
               depends = (target, source) =>
                 EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
               conflicts = branchesAreConflicting,
-              cost = DagMerger.costOptimalRejectionAlg,
+              cost = DagMerger.deployChainCost,
               stateChanges = r => r.stateChanges.pure,
               mergeableChannels = _.eventLogIndex.numberChannelsData,
               computeTrieActions = computeTrieActions,

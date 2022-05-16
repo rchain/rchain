@@ -2,9 +2,8 @@ package coop.rchain.casper.merging
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
@@ -23,36 +22,24 @@ import scodec.bits.ByteVector
 
 object DagMerger {
 
-  def costOptimalRejectionAlg: DeployChainIndex => Long =
-    (r: DeployChainIndex) => r.deploysWithCost.map(_.cost).sum
+  def deployChainCost(r: DeployChainIndex): Long = r.deploysWithCost.map(_.cost).sum
 
   def merge[F[_]: Concurrent: BlockDagStorage: Log](
       dag: DagRepresentation,
-      lfb: BlockHash,
-      lfbPostState: Blake2b256Hash,
-      index: BlockHash => F[Vector[DeployChainIndex]],
-      historyRepository: RhoHistoryRepository[F],
-      rejectionCostF: DeployChainIndex => Long
-  ): F[(Blake2b256Hash, Seq[ByteString])] =
+      finalState: Blake2b256Hash,
+      deployChainIndex: BlockHash => F[Vector[DeployChainIndex]],
+      historyRepository: RhoHistoryRepository[F]
+  ): F[(Blake2b256Hash, Seq[DeployId])] =
     for {
       // all not finalized blocks (conflict set)
-      nonFinalisedBlocks <- dag.nonFinalizedBlocks
-      // blocks that see last finalized state
-      actualBlocks = dag.descendants(lfb)
-      // blocks that does not see last finalized state
-      lateBlocks = nonFinalisedBlocks diff actualBlocks
-
-      actualSet <- actualBlocks.toList.traverse(index).map(_.flatten.toSet)
-      // TODO reject only late units conflicting with finalised body
-      lateSet <- lateBlocks.toList.traverse(index).map(_.flatten.toSet)
-
+      conflictSet <- (dag.dagSet -- dag.finalizedBlocksSet).toVector.flatTraverse(deployChainIndex)
       branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
         (as.flatMap(_.deploysWithCost.map(_.id)) intersect bs.flatMap(_.deploysWithCost.map(_.id))).nonEmpty ||
           EventLogMergingLogic.areConflicting(
             as.map(_.eventLogIndex).toList.combineAll,
             bs.map(_.eventLogIndex).toList.combineAll
           )
-      historyReader <- historyRepository.getHistoryReader(lfbPostState)
+      historyReader <- historyRepository.getHistoryReader(finalState)
       baseReader    = historyReader.readerBinary
       baseGetData   = historyReader.getData _
       overrideTrieAction = (
@@ -72,15 +59,14 @@ object DagMerger {
         )
 
       applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
-        historyRepository.reset(lfbPostState).flatMap(_.doCheckpoint(actions).map(_.root))
+        historyRepository.reset(finalState).flatMap(_.doCheckpoint(actions).map(_.root))
 
       r <- ConflictSetMerger.merge[F, DeployChainIndex](
-            actualSet = actualSet,
-            lateSet = lateSet,
+            mergeSet = conflictSet.toSet,
             depends = (target, source) =>
               EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
             conflicts = branchesAreConflicting,
-            cost = rejectionCostF,
+            cost = deployChainCost,
             stateChanges = _.stateChanges.pure,
             mergeableChannels = _.eventLogIndex.numberChannelsData,
             computeTrieActions = computeTrieActions,

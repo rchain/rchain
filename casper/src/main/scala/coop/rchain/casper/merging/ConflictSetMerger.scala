@@ -18,8 +18,7 @@ object ConflictSetMerger {
 
   /** R is a type for minimal rejection unit */
   def merge[F[_]: Concurrent: Log, R: Ordering](
-      actualSet: Set[R],
-      lateSet: Set[R],
+      mergeSet: Set[R],
       depends: (R, R) => Boolean,
       conflicts: (Set[R], Set[R]) => Boolean,
       cost: R => Long,
@@ -70,7 +69,6 @@ object ConflictSetMerger {
                 case _: ArithmeticException => none
               }
           }
-
       }
     }
 
@@ -103,9 +101,6 @@ object ConflictSetMerger {
             rejected ++ normalRejectOptions
         }
       }
-
-    val (rejectedAsDependents, mergeSet) =
-      actualSet.partition(t => lateSet.exists(depends(t, _)))
 
     /** split merging set into branches without cross dependencies
       * TODO make dependencies directional, maintain dependency graph. Now if l depends on r or otherwise - it does not matter. */
@@ -142,7 +137,7 @@ object ConflictSetMerger {
         baseMergeableChRes
       )
       optimalRejection = getOptimalRejection(rejectionOptionsWithOverflow, rejectionTargetF)
-      rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
+      rejected         = optimalRejection.flatten
       toMerge          = branches diff optimalRejection
       r                <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
 
@@ -158,13 +153,11 @@ object ConflictSetMerger {
       (newState, applyActionsTime)      = r
       overallChanges                    = s"${allChanges.datumsChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.consumeChannelsToJoinSerializedMap.size} J"
       logStr = s"Merging done: " +
-        s"late set size ${lateSet.size}; " +
-        s"actual set size ${actualSet.size}; " +
+        s"merge set size ${mergeSet.size}; " +
         s"computed branches (${branches.size}) in ${branchesTime}; " +
         s"conflicts map in ${conflictsMapTime}; " +
         s"rejection options (${rejectionOptions.size}) in ${rejectionOptionsTime}; " +
         s"optimal rejection set size ${optimalRejection.size}; " +
-        s"rejected as late dependency ${rejectedAsDependents.size}; " +
         s"changes combined (${overallChanges}) in ${combineAllChanges}; " +
         s"trie actions (${trieActions.size}) in ${computeActionsTime}; " +
         s"actions applied in ${applyActionsTime}"

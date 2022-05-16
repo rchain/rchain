@@ -299,8 +299,7 @@ object InterpreterUtil {
                   s.lastFinalizedBlock,
                   lfbState,
                   blockIndexF(_).map(_.deployChains),
-                  runtimeManager.getHistoryRepo,
-                  DagMerger.costOptimalRejectionAlg
+                  runtimeManager.getHistoryRepo
                 )
             (state, rejected) = r
           } yield (ByteString.copyFrom(state.bytes.toArray), rejected)
