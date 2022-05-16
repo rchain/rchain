@@ -5,9 +5,7 @@ sealed trait BlockStatus
 object BlockStatus {
   def valid: ValidBlock                    = ValidBlock.Valid
   def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
-  def invalidFormat: BlockError            = InvalidBlock.InvalidFormat
   def invalidSender: BlockError            = InvalidBlock.InvalidSender
-  def invalidVersion: BlockError           = InvalidBlock.InvalidVersion
   def invalidBlockNumber: BlockError       = InvalidBlock.InvalidBlockNumber
   def invalidRepeatDeploy: BlockError      = InvalidBlock.InvalidRepeatDeploy
   def invalidSequenceNumber: BlockError    = InvalidBlock.InvalidSequenceNumber
@@ -33,10 +31,7 @@ object BlockError {
 
 sealed trait InvalidBlock extends BlockError
 object InvalidBlock {
-  case object InvalidFormat  extends InvalidBlock
-  case object InvalidSender  extends InvalidBlock
-  case object InvalidVersion extends InvalidBlock
-
+  case object InvalidSender           extends InvalidBlock
   case object InvalidBlockNumber      extends InvalidBlock
   case object InvalidRepeatDeploy     extends InvalidBlock
   case object InvalidSequenceNumber   extends InvalidBlock
