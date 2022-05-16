@@ -19,10 +19,13 @@ new
   rl(`rho:registry:lookup`),
   uriOut,
   NonNegativeNumberCh,
-  deployerId(`rho:rchain:deployerId`)
+  deployerId(`rho:rchain:deployerId`),
+  systemContractManagerCh,
+  dispatcherCh
 in {
   rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
-  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
+  rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
+  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh & @systemContractManager <- systemContractManagerCh) {
     // user calls MakeMint
     // we actually go to MakeMintLoc and get the real MakeMint contract definition
     contract MakeMint(return) = {
@@ -154,12 +157,15 @@ in {
     // Method required for updates.
     for (ret  <- @(*MakeMint, "extractState")){
       ret!(Nil)
+    } |
+    @systemContractManager!("createDispatcher", *MakeMint, `rho:rchain:makeMint`, *dispatcherCh)|
+    for (makeMintdispatcher <- dispatcherCh){
+      // Inserts signed write-only MakeMint dispatcher contract into the registry
+      rs!(
+        (9223372036854775807, bundle+{*makeMintdispatcher}),
+        *deployerId,
+        *uriOut
+      )
     }
-  } |
-  // Insert the signed, write-only dispatcher contract into the registry uri map
-  rs!(
-    (9223372036854775807, *MakeMint),
-    *deployerId,
-    *uriOut
-  )
+  }
 }

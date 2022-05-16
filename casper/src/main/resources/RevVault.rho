@@ -30,16 +30,20 @@ new
   _revVault,
   _transferTemplate,
   _depositTemplate,
-  deployerId(`rho:rchain:deployerId`)
+  deployerId(`rho:rchain:deployerId`),
+  systemContractManagerCh,
+  dispatcherCh
 in {
   rl!(`rho:rchain:makeMint`, *MakeMintCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
   rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
+  rl!(`rho:registry:systemContractManager`, *systemContractManagerCh) |
   for (@(_, MakeMint) <- MakeMintCh &
        @(_, AuthKey)  <- AuthKeyCh &
        @(_, Either)   <- EitherCh &
-       TreeHashMap    <- TreeHashMapCh) {
+       TreeHashMap    <- TreeHashMapCh &
+       @systemContractManager <- systemContractManagerCh) {
     // Each invocation of the RevVault contract uses a different mint.
     new mintCh, vaultMapStore, initVault in {
       // Initializes the vaultMapStore.
@@ -281,11 +285,14 @@ in {
             ret!({"vaultMap":vaultMap, "revVaultUnf": *_revVault})
           } |
           // Insert the signed, write-only dispatcher contract into the registry uri map
-          rs!(
-            (9223372036854775807, *RevVault),
-            *deployerId,
-            *uriOut
-          )
+          @systemContractManager!("createDispatcher", *RevVault, `rho:rchain:revVault`, *dispatcherCh)|
+          for (revVaultDispatcher <- dispatcherCh){
+            rs!(
+              (9223372036854775807, bundle+{*revVaultDispatcher}),
+              *deployerId,
+              *uriOut
+            )
+          }
         }
       }
     }

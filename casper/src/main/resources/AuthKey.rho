@@ -20,7 +20,10 @@ new
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
   _authKey,
-  deployerId(`rho:rchain:deployerId`)
+  deployerId(`rho:rchain:deployerId`),
+  rl(`rho:registry:lookup`),
+  systemContractManagerCh,
+  dispatcherCh
 in {
 
   // An `AuthKey` is a means for creating a safe authentication token based on a process / unfograble name
@@ -72,10 +75,17 @@ in {
   for (ret <- @(*AuthKey, "extractState")) {
     ret!({"authKeyUnf": *_authKey})
   } |
-  // Inserts signed write-only AuthKey contract into the registry
-  rs!(
-    (9223372036854775807, *AuthKey),
-    *deployerId,
-    *uriOut
-  )
+  rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
+  for (@systemContractManager <- systemContractManagerCh){
+    @systemContractManager!("createDispatcher", *AuthKey, `rho:rchain:authKey`, *dispatcherCh)|
+    for (dispatcher <- dispatcherCh){
+      // Inserts signed write-only AuthKey dispatcher contract into the registry
+      rs!(
+        (9223372036854775807, bundle+{*dispatcher}),
+        *deployerId,
+        *uriOut
+      )
+    }
+  }
+
 }

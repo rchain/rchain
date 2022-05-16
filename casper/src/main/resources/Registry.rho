@@ -6,7 +6,6 @@ new
   bootstrapInsertArbitrary(`rho:registry:insertArbitrary`),
   insertSignedCh,
   bootstrapInsertSigned(`rho:registry:insertSigned:secp256k1`),
-  insertBlessed,
   blessedContractLocMapCh,
   buildUri,
   ops(`rho:registry:ops`),
@@ -18,8 +17,7 @@ new
   secpVerify(`rho:crypto:secp256k1Verify`),
   blake2b256(`rho:crypto:blake2b256Hash`),
   hashVerify,
-  storeToken,
-  normalInsertSigned
+  storeToken
 in {
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
@@ -398,7 +396,7 @@ in {
     }
   } |
   // blessed contract uri shorthand map
-  let @shorthands, @shortHandsRevert <- {
+  let @shorthands <- {
     `rho:lang:either`             : `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn`,
     `rho:lang:listOps`            : `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks`,
     `rho:lang:nonNegativeNumber`  : `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9`,
@@ -407,15 +405,6 @@ in {
     `rho:rchain:pos`              : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
     `rho:rchain:revVault`         : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
     `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
-    }, {
-    `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn` : `rho:lang:either`,
-    `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks` : `rho:lang:listOps`,
-    `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9` : `rho:lang:nonNegativeNumber` ,
-    `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i` : `rho:rchain:authKey`,
-    `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc` : `rho:rchain:makeMint`,
-    `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr` : `rho:rchain:pos`,
-    `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j` : `rho:rchain:revVault`,
-    `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn` : `rho:rchain:multiSigRevVault`
     } in {
       contract hashVerify(@data, @sig, @pubKey, ret) = {
         new hashCh in {
@@ -475,37 +464,6 @@ in {
           }
         }
       } |
-      contract normalInsertSigned(@uri, @nonce, @data, ret) = {
-        for (@map <<- _registryStore) {
-          new responseCh in {
-            TreeHashMap!("get", map, uri, *responseCh) |
-            for (@response <- responseCh) {
-              match response {
-                Nil => {
-                  new ack in {
-                    TreeHashMap!("set", map, uri, (nonce, data), *ack) |
-                    for (_ <- ack) {
-                      ret!(uri)
-                    }
-                  }
-                }
-                (oldNonce, _) => {
-                  if (nonce > oldNonce) {
-                    new ack in {
-                      TreeHashMap!("set", map, uri, (nonce, data), *ack) |
-                      for (_ <- ack) {
-                        ret!(uri)
-                      }
-                    }
-                  } else {
-                    ret!(Nil)
-                  }
-                }
-              }
-            }
-          }
-        }
-      } |
       // Registers `insertSignedCh` as an insertSigned channel in the registry
       bootstrapInsertSigned!(*insertSignedCh) | // this will work only once
       for (insertSigned <- insertSignedCh) {
@@ -518,19 +476,32 @@ in {
               ops!("buildUri", pubKeyBytes, *uriCh) |
               for (@uri <- uriCh) {
                 for (@map <<- _registryStore) {
-                  match uri {
-                    //
-                    // AuthKey
-                    `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i` => {insertBlessed!(uri, nonce, data, *ret)}
-                    // MakeMint
-                    `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc` => {insertBlessed!(uri, nonce, data, *ret)}
-                    // PoS
-                    `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr` => {insertBlessed!(uri, nonce, data, *ret)}
-                    // RevVault
-                    `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j` => {insertBlessed!(uri, nonce, data, *ret)}
-                    // MultiSigVault
-                    `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn` => {insertBlessed!(uri, nonce, data, *ret)}
-                    _ => {normalInsertSigned!(uri, nonce, data, *ret)}
+                  new responseCh in {
+                    TreeHashMap!("get", map, uri, *responseCh) |
+                    for (@response <- responseCh) {
+                      match response {
+                        Nil => {
+                          new ack in {
+                            TreeHashMap!("set", map, uri, (nonce, data), *ack) |
+                            for (_ <- ack) {
+                              ret!(uri)
+                            }
+                          }
+                        }
+                        (oldNonce, _) => {
+                          if (nonce > oldNonce) {
+                            new ack in {
+                              TreeHashMap!("set", map, uri, (nonce, data), *ack) |
+                              for (_ <- ack) {
+                                ret!(uri)
+                              }
+                            }
+                          } else {
+                            ret!(Nil)
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -540,67 +511,6 @@ in {
       } |
       // blessedContractMap: uriShorthand -> location
       blessedContractLocMapCh!({}) |
-      contract insertBlessed(@uri, @nonce, @lib, ret) = {
-        for (@blessedContractLocMap <<- blessedContractLocMapCh){
-          if (blessedContractLocMap.getOrElse(shortHandsRevert.get(uri), Nil) == Nil){
-            new loc, dispatcher in {
-              loc!(lib) |
-              contract dispatcher(@arg1) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1)
-                }
-              } |
-              contract dispatcher(@arg1, @arg2) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1, arg2)
-                }
-              } |
-              contract dispatcher(@arg1, @arg2, @arg3) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1, arg2, arg3)
-                }
-              } |
-              contract dispatcher(@arg1, @arg2, @arg3, @arg4) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1, arg2, arg3, arg4)
-                }
-              } |
-              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1, arg2, arg3, arg4, arg5)
-                }
-              } |
-              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6)
-                }
-              } |
-              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-                }
-              } |
-              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-                }
-              } |
-              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-                for (realAK <<- loc) {
-                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-                }
-              } |
-              normalInsertSigned!(uri, nonce, bundle+{*dispatcher}, *ret) |
-              for (@blessedContractLocMap <- blessedContractLocMapCh){
-                blessedContractLocMapCh!(blessedContractLocMap.set(shortHandsRevert.get(uri), *loc))
-              }
-            }
-          } else {
-            ret!(Nil)
-          }
-        }
-         
-      } |
       {
         let @pubKey <- 
           // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
@@ -645,6 +555,66 @@ in {
                   } else {
                     ret!((false, "You have no permissions to update system contract!"))
                   }
+                }
+              }
+            } |
+            contract systemContractManager(@"createDispatcher", @lib, @uri, ret) = {
+              for (@blessedContractLocMap <<- blessedContractLocMapCh){
+                if (blessedContractLocMap.getOrElse(uri, Nil) == Nil){
+                  new loc, dispatcher in {
+                    loc!(lib) |
+                    contract dispatcher(@arg1) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1)
+                      }
+                    } |
+                    contract dispatcher(@arg1, @arg2) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1, arg2)
+                      }
+                    } |
+                    contract dispatcher(@arg1, @arg2, @arg3) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1, arg2, arg3)
+                      }
+                    } |
+                    contract dispatcher(@arg1, @arg2, @arg3, @arg4) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1, arg2, arg3, arg4)
+                      }
+                    } |
+                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1, arg2, arg3, arg4, arg5)
+                      }
+                    } |
+                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1, arg2, arg3, arg4, arg5, arg6)
+                      }
+                    } |
+                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+                      }
+                    } |
+                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+                      }
+                    } |
+                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+                      for (realAK <<- loc) {
+                        realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+                      }
+                    } |
+                    for (@blessedContractLocMap <- blessedContractLocMapCh){
+                      blessedContractLocMapCh!(blessedContractLocMap.set(uri, *loc)) |
+                      ret!(*dispatcher)
+                    }
+                  }
+                } else {
+                  ret!(Nil)
                 }
               }
             } |

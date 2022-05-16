@@ -23,14 +23,18 @@ new
   RevVaultCh,
   AuthKeyCh,
   ListOpsCh,
-  deployerId(`rho:rchain:deployerId`)
+  deployerId(`rho:rchain:deployerId`),
+  systemContractManagerCh,
+  dispatcherCh
 in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:rchain:revVault`, *RevVaultCh) |
+  rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
   for(@(_, ListOps) <- ListOpsCh &
       @(_, AuthKey) <- AuthKeyCh &
-      @(_, RevVault) <- RevVaultCh) {
+      @(_, RevVault) <- RevVaultCh &
+      @systemContractManager <- systemContractManagerCh) {
     // Creates a sealer/unsealer pair and return on `ret`
     contract MultiSigRevVault(@"makeSealerUnsealer", ret) = {
       new
@@ -265,12 +269,15 @@ in {
     // Method required for updates.
     for (ret <- @(*MultiSigRevVault, "extractState")){
       ret!({"multiSigVaultUnf": *_multiSigRevVault})
+    } |
+    @systemContractManager!("createDispatcher", *MultiSigRevVault, `rho:rchain:multiSigRevVault`, *dispatcherCh)|
+    for (multiSigRevVaultDispatcher <- dispatcherCh){
+      // Inserts signed write-only MultiSigRevVault dispatcher contract into the registry
+      rs!(
+        (9223372036854775807, bundle+{*multiSigRevVaultDispatcher}),
+        *deployerId,
+        *uriOut
+      )
     }
-  } |
-  // Insert the signed, write-only dispatcher contract into the registry uri map
-  rs!(
-    (9223372036854775807, *MultiSigRevVault),
-    *deployerId,
-    *uriOut
-  )
+  }
 }
