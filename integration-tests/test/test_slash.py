@@ -2,6 +2,7 @@ import hashlib
 import re
 import sys
 import time
+import copy
 from pathlib import Path
 from random import Random
 from typing import Generator, Tuple, Dict
@@ -9,7 +10,8 @@ from contextlib import contextmanager
 import logging
 import pytest
 from docker.client import DockerClient
-from rchain.crypto import PrivateKey, gen_block_hash_from_block
+from google.protobuf.wrappers_pb2 import Int32Value, StringValue
+from rchain.crypto import PrivateKey
 from rchain.pb.CasperMessage_pb2 import BlockMessageProto as BlockMessage, JustificationProto as Justification
 from rchain.util import create_deploy_data
 
@@ -31,6 +33,34 @@ BONDED_VALIDATOR_KEY_1 = PrivateKey.from_hex("597623f0b50e82008d5264498369972453
 BONDED_VALIDATOR_KEY_2 = PrivateKey.from_hex("9a32ff7b7c6e25527e0b4e5bec70596c6094e6529d56bf61cbd1ca26d3e92b10")
 BONDED_VALIDATOR_KEY_3 = PrivateKey.from_hex("af47862137d4e772f540029ae73ee01443c61288f3df9307a13d681de6ad2de4")
 
+
+def blake2b_32(data: bytes = b'') -> hashlib.blake2b:
+  return hashlib.blake2b(data, digest_size=32)
+
+def gen_block_hash_from_block(block: BlockMessage) -> bytes:
+  blockVersion = block.header.version
+  if blockVersion == 2:
+    return gen_block_hash_from_block_v2(block)
+  if blockVersion == 1:
+    return gen_block_hash_from_block_v1(block)
+  raise Exception('Unsupported block version', blockVersion)
+
+def gen_block_hash_from_block_v2(block: BlockMessage) -> bytes:
+  empty_bytes = b''
+  block_clear_sig_data = copy.copy(block)
+  block_clear_sig_data.blockHash = empty_bytes
+  block_clear_sig_data.sig = empty_bytes
+  return blake2b_32(block_clear_sig_data.SerializeToString()).digest()
+
+def gen_block_hash_from_block_v1(block: BlockMessage) -> bytes:
+  signed_obj = b''.join([block.header.SerializeToString(),
+                         block.body.SerializeToString(),
+                         block.sender,
+                         StringValue(value=block.sigAlgorithm).SerializeToString(),
+                         Int32Value(value=block.seqNum).SerializeToString(),
+                         StringValue(value=block.shardId).SerializeToString(),
+                         block.extraBytes])
+  return blake2b_32(signed_obj).digest()
 
 def generate_block_hash() -> bytes:
     blake = hashlib.blake2b(digest_size=32)
