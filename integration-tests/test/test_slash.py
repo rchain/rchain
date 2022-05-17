@@ -377,10 +377,10 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
 @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
 def test_node_working_right_after_slashing(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
-    Slash a validator which proposes an invalid block contains invalid block hash
+    Slash a validator which proposes an invalid block contains invalid block number
 
     1. v1 proposes a valid block b1
-    2. v1 proposes an invalid block b2 with invalid block hash and send it to v2
+    2. v1 proposes an invalid block b2 with invalid block number and send it to v2
     3. v2 records b2 as invalid block (InvalidBlockHash)
     4. v2 proposes a new block which slashes v1
     5. v2 should propose normally
@@ -396,15 +396,16 @@ def test_node_working_right_after_slashing(command_line_options: CommandLineOpti
         block_info = validator1.get_block(blockhash)
 
         block_msg = client.block_request(block_info.blockInfo.blockHash, validator1)
-        evil_block_hash = generate_block_hash()
 
+        # Modify block number to make invalid block
+        block_msg.body.state.blockNumber = 1000  # pylint: disable=maybe-no-member
+        evil_block_hash = gen_block_hash_from_block(block_msg)
         block_msg.blockHash = evil_block_hash
         block_msg.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
-        block_msg.header.timestamp = int(time.time()*1000)
 
         client.send_block(block_msg, validator2)
 
-        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(evil_block_hash.hex()[:10]))
+        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockNumber".format(evil_block_hash.hex()[:10]))
         wait_for_log_match(context, validator2, record_invalid)
 
         validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
