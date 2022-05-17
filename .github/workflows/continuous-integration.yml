@@ -284,7 +284,6 @@ jobs:
           - test_finalization
           - test_genesis_ceremony
           - test_propose
-          - test_slash_invalid_block_hash
           - test_slash_invalid_block_number
           - test_slash_invalid_block_seq
           - test_slash_justification_not_correct

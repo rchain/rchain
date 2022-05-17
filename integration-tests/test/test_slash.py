@@ -92,47 +92,6 @@ def three_nodes_network_with_node_client(command_line_options: CommandLineOption
 
 
 @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
-def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
-    """
-    Slash a validator which proposes an invalid block contains invalid block hash
-
-    1. v1 proposes a valid block b1
-    2. v1 proposes an invalid block b2 with invalid block hash and send it to v2
-    3. v2 records b2 as invalid block (InvalidBlockHash)
-    4. v2 proposes a new block which slashes v1
-    """
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
-        contract = '/opt/docker/examples/tut-hello.rho'
-
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
-        blockhash = validator1.propose()
-
-        wait_for_node_sees_block(context, validator2, blockhash)
-
-        block_info = validator1.get_block(blockhash)
-
-        block_msg = client.block_request(block_info.blockInfo.blockHash, validator1)
-        evil_block_hash = generate_block_hash()
-
-        block_msg.blockHash = evil_block_hash
-        block_msg.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
-        block_msg.header.timestamp = int(time.time()*1000)
-
-        client.send_block(block_msg, validator2)
-
-        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(evil_block_hash.hex()[:10]))
-        wait_for_log_match(context, validator2, record_invalid)
-
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
-
-        slashed_block_hash = validator2.propose()
-
-        block_info = validator2.get_block(slashed_block_hash)
-        bonds_validators = {b.validator: b.stake for b in block_info.blockInfo.bonds}
-        assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
-
-
-@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
 def test_slash_invalid_block_number(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
     Propose an block with invalid block number(a block number that isn't one more than the max of all the parents block's numbers).
