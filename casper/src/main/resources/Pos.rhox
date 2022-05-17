@@ -102,7 +102,7 @@ in {
   registryLookup!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
   for (@(_, RevVault)         <- revVaultCh &
        @(_, ListOps)          <- listOpsCh &
-       TreeHashMap            <- treeHashMapCh &
+       @(_, TreeHashMap)      <- treeHashMapCh &
        @(_, MultiSigRevVault) <- multiSigRevVaultCh ) {
     new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh,
         initialActiveCh, createUnfVault, moveInitialBondCh
@@ -720,8 +720,8 @@ in {
       }
     }
   } | 
-  for (@systemContractManager <- systemContractManagerCh) {
-    @systemContractManager!("createDispatcher", *PoS, `rho:rchain:pos`, *dispatcherCh) |
+  for (@(_, systemContractManager) <- systemContractManagerCh) {
+    @systemContractManager!("createDispatcher", *PoS, *dispatcherCh) |
     for (posDispatcher <- dispatcherCh){
       // Inserts signed write-only pos dispatcher contract into the registry
       rs!(

@@ -34,7 +34,7 @@ in {
   for(@(_, ListOps) <- ListOpsCh &
       @(_, AuthKey) <- AuthKeyCh &
       @(_, RevVault) <- RevVaultCh &
-      @systemContractManager <- systemContractManagerCh) {
+      @(_, systemContractManager) <- systemContractManagerCh) {
     // Creates a sealer/unsealer pair and return on `ret`
     contract MultiSigRevVault(@"makeSealerUnsealer", ret) = {
       new
@@ -270,7 +270,7 @@ in {
     for (ret <- @(*MultiSigRevVault, "extractState")){
       ret!({"multiSigVaultUnf": *_multiSigRevVault})
     } |
-    @systemContractManager!("createDispatcher", *MultiSigRevVault, `rho:rchain:multiSigRevVault`, *dispatcherCh)|
+    @systemContractManager!("createDispatcher", *MultiSigRevVault, *dispatcherCh)|
     for (multiSigRevVaultDispatcher <- dispatcherCh){
       // Inserts signed write-only MultiSigRevVault dispatcher contract into the registry
       rs!(

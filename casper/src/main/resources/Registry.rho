@@ -6,7 +6,7 @@ new
   bootstrapInsertArbitrary(`rho:registry:insertArbitrary`),
   insertSignedCh,
   bootstrapInsertSigned(`rho:registry:insertSigned:secp256k1`),
-  blessedContractLocMapCh,
+  locToken,
   buildUri,
   ops(`rho:registry:ops`),
   secpVerify(`rho:crypto:secp256k1Verify`),
@@ -17,7 +17,8 @@ new
   secpVerify(`rho:crypto:secp256k1Verify`),
   blake2b256(`rho:crypto:blake2b256Hash`),
   hashVerify,
-  storeToken
+  storeToken,
+  systemContractManager
 in {
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
@@ -344,53 +345,6 @@ in {
           for (@map <<- _registryStore) {
             ret!({"registryMap": map, "storeToken": *storeToken})
           }
-        } |
-        // TreeHashMap dispatcher contract
-        // for use with 1-9 arguments
-        contract TreeHashMapDispatcher(@arg1) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1)
-          }
-        } |
-        contract TreeHashMapDispatcher(@arg1, @arg2) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1, arg2)
-          }
-        } |
-        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1, arg2, arg3)
-          }
-        } |
-        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1, arg2, arg3, arg4)
-          }
-        } |
-        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1, arg2, arg3, arg4, arg5)
-          }
-        } |
-        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1, arg2, arg3, arg4, arg5, arg6)
-          }
-        } |
-        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-          }
-        } |
-        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-          }
-        } |
-        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-          for (realThm <<- TreeHashMapLoc) {
-            realThm!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-          }
         }
       }
     }
@@ -418,18 +372,16 @@ in {
       } |
       // Use 4 * 8 = 32-bit paths to leaf nodes.
       TreeHashMap!("init", 4, *_registryStore) |
-      new ack in {
+      new ack, createDispatcherRet in {
         // Store write-only `TreeHashMap` bundle on the node with prefix ``rho:lang:treeHashMap``
         for (@map <<- _registryStore) {
-          TreeHashMap!("set", map, `rho:lang:treeHashMap`, bundle+{*TreeHashMapDispatcher}, *ack)
+          systemContractManager!("createDispatcher", *TreeHashMap, *createDispatcherRet)|
+          for (TreeHashMapDispatcher <- createDispatcherRet){
+            TreeHashMap!("set", map, `rho:lang:treeHashMap`, (9223372036854775807, bundle+{*TreeHashMapDispatcher}), *ack)
+          }
         } |
         // Wait for the set to finish, then register `lookupCh` as the uri/shorthand lookup channel
         for (_ <- ack) {
-          // add TreeHashMap location to location map
-          for (@blessedContractLocMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(blessedContractLocMap.set(`rho:lang:treeHashMap`, *TreeHashMapLoc)) |
-            TreeHashMapLoc!(*TreeHashMap)
-          } |
           // Registers `lookupCh` as a lookup channel for the registry
           bootstrapLookup!(*lookupCh) | // this will work only once
           for (lookup <- lookupCh) {
@@ -509,178 +461,113 @@ in {
           }
         }
       } |
-      // blessedContractMap: uriShorthand -> location
-      blessedContractLocMapCh!({}) |
       {
         let @pubKey <- 
           // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
           "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes(),
         in {
-          new
-            systemContractManager,
-            systemContractManagerLoc,       
-            systemContractManagerDispatcher
-          in {
-            // ------
-            // Update
-            // deployerID: (`rho:rchain:deployerId`)
-            // uri:   the uri you want to update.  `rho:rchain:pos` etc.
-            // con:   the update consume which take the old state
-            // meth:  the target new contract which would replace the old one
-            // ret:   channel which returns the update result
-            contract systemContractManager(@"update", @deployerID, @uri, @con, ret) = {
-              // there is an update proposal for `uri`
-              new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
-                DeployerIdOps!("pubKeyBytes", deployerID, *deployerPubKeyBytesCh) |
-                for (@deployerPubKeyBytes <- deployerPubKeyBytesCh){
-                  if (deployerPubKeyBytes == pubKey){
-                    for (@blessedContractLocMap <<- blessedContractLocMapCh) {
-                      let @loc <- blessedContractLocMap.get(uri) in {
-                        for (oldLib <- @loc) {
-                          new tmp, newRet in {
-                            @(*oldLib, "extractState")!(*tmp) |
-                            for (@oldState <- tmp) {
-                              // launch new contract instance with initial state extracted from the old instance
-                              @con!(oldState, *oldLib, *newRet) |
-                              for (@meth <- newRet){
-                                // write new method entry point to location channel
-                                @loc!(meth) |
-                                ret!((true))
-                              }
+          // ------
+          // Update
+          // deployerID: (`rho:rchain:deployerId`)
+          // uri:   the uri you want to update.  `rho:rchain:pos` etc.
+          // con:   the update consume which take the old state
+          // meth:  the target new contract which would replace the old one
+          // ret:   channel which returns the update result
+          contract systemContractManager(@"update", @deployerID, @uri, @con, ret) = {
+            // there is an update proposal for `uri`
+            new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh, rl(`rho:registry:lookup`), rlRet, locRet in {
+              DeployerIdOps!("pubKeyBytes", deployerID, *deployerPubKeyBytesCh) |
+              for (@deployerPubKeyBytes <- deployerPubKeyBytesCh){
+                if (deployerPubKeyBytes == pubKey){
+                  rl!(uri, *rlRet)|
+                  for (@(_, dispatcher) <- rlRet) {
+                    @(*locToken, dispatcher)!(*locRet)|
+                    for (loc <- locRet) {
+                      for (oldLib <- loc) {
+                        new tmp, newRet in {
+                          @(*oldLib, "extractState")!(*tmp) |
+                          for (@oldState <- tmp) {
+                            // launch new contract instance with initial state extracted from the old instance
+                            @con!(oldState, *oldLib, *newRet) |
+                            for (@meth <- newRet){
+                              // write new method entry point to location channel
+                              loc!(meth) |
+                              ret!((true, Nil))
                             }
                           }
                         }
-                      } 
-                    }
-                  } else {
-                    ret!((false, "You have no permissions to update system contract!"))
-                  }
-                }
-              }
-            } |
-            contract systemContractManager(@"createDispatcher", @lib, @uri, ret) = {
-              for (@blessedContractLocMap <<- blessedContractLocMapCh){
-                if (blessedContractLocMap.getOrElse(uri, Nil) == Nil){
-                  new loc, dispatcher in {
-                    loc!(lib) |
-                    contract dispatcher(@arg1) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1)
                       }
-                    } |
-                    contract dispatcher(@arg1, @arg2) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1, arg2)
-                      }
-                    } |
-                    contract dispatcher(@arg1, @arg2, @arg3) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1, arg2, arg3)
-                      }
-                    } |
-                    contract dispatcher(@arg1, @arg2, @arg3, @arg4) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1, arg2, arg3, arg4)
-                      }
-                    } |
-                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1, arg2, arg3, arg4, arg5)
-                      }
-                    } |
-                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1, arg2, arg3, arg4, arg5, arg6)
-                      }
-                    } |
-                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-                      }
-                    } |
-                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-                      }
-                    } |
-                    contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-                      for (realAK <<- loc) {
-                        realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-                      }
-                    } |
-                    for (@blessedContractLocMap <- blessedContractLocMapCh){
-                      blessedContractLocMapCh!(blessedContractLocMap.set(uri, *loc)) |
-                      ret!(*dispatcher)
-                    }
+                    } 
                   }
                 } else {
-                  ret!(Nil)
+                  ret!((false, "You have no permissions to update system contract!"))
                 }
               }
-            } |
-            for (ret <- @(*systemContractManager, "extractState")){
-              for (@blessedContractLocMap <<- blessedContractLocMapCh) {
-                ret!(blessedContractLocMap)
-              }
-            } |
-            new ack in {
-              for (@map <<- _registryStore) {
-                // add systemContractManager dispatcher to the uri map
-                TreeHashMap!("set", map, `rho:registry:systemContractManager`, bundle+{*systemContractManagerDispatcher}, *ack)
+            }
+          } |
+          contract systemContractManager(@"createDispatcher", @lib, ret) = {
+            new loc, dispatcher in {
+              loc!(lib) |
+              contract dispatcher(@arg1) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1)
+                }
               } |
-              for (_ <- ack) {
-                // add systemContractManager location to location map and the methods' entry point to the location channel
-                for (@blessedContractLocMap <- blessedContractLocMapCh) {
-                  blessedContractLocMapCh!(blessedContractLocMap.set(`rho:registry:systemContractManager`, *systemContractManagerLoc)) |
-                  systemContractManagerLoc!(*systemContractManager)
+              contract dispatcher(@arg1, @arg2) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2)
                 }
-              }
-            } |
-            // systemContractManager dispatcher contract
-            // for use with 1-9 arguments
-            contract systemContractManagerDispatcher(@arg1) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1)
-              }
-            } |
-            contract systemContractManagerDispatcher(@arg1, @arg2) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1, arg2)
-              }
-            } |
-            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1, arg2, arg3)
-              }
-            } |
-            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1, arg2, arg3, arg4)
-              }
-            } |
-            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1, arg2, arg3, arg4, arg5)
-              }
-            } |
-            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1, arg2, arg3, arg4, arg5, arg6)
-              }
-            } |
-            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-              }
-            } |
-            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-              }
-            } |
-            contract systemContractManagerDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-              for (realMS <<- systemContractManagerLoc) {
-                realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+                }
+              } |
+              contract @(*locToken, bundle+{*dispatcher})(locRet) = {
+                locRet!(*loc)
+              } |
+              ret!(*dispatcher)
+            }
+          } |
+          for (ret <- @(*systemContractManager, "extractState")){
+            ret!({"locToken": *locToken})
+          } |
+          new ack, createDispatcherRet in {
+            for (@map <<- _registryStore) {
+              // add systemContractManager dispatcher to the uri map
+              systemContractManager!("createDispatcher", *systemContractManager, *createDispatcherRet)|
+              for (systemContractManagerDispatcher <- createDispatcherRet){
+                TreeHashMap!("set", map, `rho:registry:systemContractManager`, (9223372036854775807, bundle+{*systemContractManagerDispatcher}), *ack)
               }
             }
           }

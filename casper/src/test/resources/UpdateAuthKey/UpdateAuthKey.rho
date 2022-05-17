@@ -43,7 +43,7 @@ in {
   } |
   stdout!(("propose start!!!!!"))|
   rl!(`rho:registry:systemContractManager`, *rlret)|
-  for(@systemContractManager <- rlret){
+  for(@(_, systemContractManager) <- rlret){
     stdout!(("propose get multisig ok", systemContractManager))|
     @systemContractManager!("update",
                   *deployerID,

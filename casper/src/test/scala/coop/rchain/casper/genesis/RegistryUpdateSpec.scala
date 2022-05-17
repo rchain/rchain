@@ -78,7 +78,7 @@ class RegistryUpdateSpec extends FlatSpec with Matchers with Inspectors {
     val exploreUpdateResultTerm =
       """new return, registryLookup(`rho:registry:lookup`), resCh,stdout(`rho:io:stdout`), ret in {
         #  registryLookup!(`rho:registry:systemContractManager`, *resCh) |
-        #  for (@systemContractManager <- resCh){
+        #  for (@(_, systemContractManager) <- resCh){
         #    @systemContractManager!("sayHello", *return)
         #  }
         #}""".stripMargin('#')

@@ -27,8 +27,8 @@ class RhoTrieTraverserTest extends FlatSpec {
     val insertRho = insertKeyValues.foldLeft("") {
       case (acc, (key, value, index)) =>
         if (index != total)
-          acc + s"""new a in {TreeHashMap!("set", treeMap, "${key}", ${value}, *a)}|\n"""
-        else acc + s"""new a in {TreeHashMap!("set", treeMap, "${key}", ${value}, *a)}\n"""
+          acc + s"""new a in {@TreeHashMap!("set", treeMap, "${key}", ${value}, *a)}|\n"""
+        else acc + s"""new a in {@TreeHashMap!("set", treeMap, "${key}", ${value}, *a)}\n"""
     }
     val trieInitializedRho =
       s"""
@@ -39,8 +39,8 @@ class RhoTrieTraverserTest extends FlatSpec {
         |  vaultMapStore
         |  in {
         |  rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-        |  for (TreeHashMap <- TreeHashMapCh){
-        |    TreeHashMap!("init", ${trieDepth}, *vaultMapStore) |
+        |  for (@(_, TreeHashMap) <- TreeHashMapCh){
+        |    @TreeHashMap!("init", ${trieDepth}, *vaultMapStore) |
         |    for (@treeMap <-  vaultMapStore){
         |      ${insertRho}
         |      |@"t"!(treeMap)

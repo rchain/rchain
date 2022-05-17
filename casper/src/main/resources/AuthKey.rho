@@ -76,8 +76,8 @@ in {
     ret!({"authKeyUnf": *_authKey})
   } |
   rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
-  for (@systemContractManager <- systemContractManagerCh){
-    @systemContractManager!("createDispatcher", *AuthKey, `rho:rchain:authKey`, *dispatcherCh)|
+  for (@(_, systemContractManager) <- systemContractManagerCh){
+    @systemContractManager!("createDispatcher", *AuthKey, *dispatcherCh)|
     for (dispatcher <- dispatcherCh){
       // Inserts signed write-only AuthKey dispatcher contract into the registry
       rs!(

@@ -330,22 +330,22 @@ class TreeHashMapMergeabilitySpec
     )
   }
   private def readKeyRho(keys: List[String]): String =
-    keys.map(key => s"""new a in {TreeHashMap!("get", treeMap, "${key}", *a)}""").mkString("|\n")
+    keys.map(key => s"""new a in {@TreeHashMap!("get", treeMap, "${key}", *a)}""").mkString("|\n")
 
   private def writeKeyValueRho(keyValues: List[KeyValue]): String =
     keyValues
-      .map(kv => s"""new a in {TreeHashMap!("set", treeMap, "${kv.key}", "${kv.value}", *a)}""")
+      .map(kv => s"""new a in {@TreeHashMap!("set", treeMap, "${kv.key}", "${kv.value}", *a)}""")
       .mkString("|\n")
 
   private def containKeyRho(keys: List[String]): String =
     keys
-      .map(key => s"""new a in {TreeHashMap!("contains", treeMap, "${key}", *a)}""")
+      .map(key => s"""new a in {@TreeHashMap!("contains", treeMap, "${key}", *a)}""")
       .mkString("|\n")
 
   private def updateKeyValueRho(keyValues: List[KeyValue]): String =
     keyValues
       .map(kv => s"""new a, updateFn in {
-                    #  TreeHashMap!("update", treeMap, "${kv.key}", *updateFn, *a)|
+                    #  @TreeHashMap!("update", treeMap, "${kv.key}", *updateFn, *a)|
                     #  for (_, resultCh <- updateFn){ resultCh!("${kv.value}")}
                     #  }""".stripMargin('#'))
       .mkString("|\n")
@@ -357,8 +357,8 @@ class TreeHashMapMergeabilitySpec
        #  treeMapStore
        #  in {
        #  rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-       #  for (TreeHashMap <- TreeHashMapCh){
-       #    TreeHashMap!("init", ${depth}, *treeMapStore) |
+       #  for (@(_, TreeHashMap) <- TreeHashMapCh){
+       #    @TreeHashMap!("init", ${depth}, *treeMapStore) |
        #    for (@treeMap <-  treeMapStore){
        #      {${writeKeyValueRho(initialKeyValues)}}
        #      // store the treeHashMap handle in a public name which would be easier to retrieve
@@ -374,7 +374,7 @@ class TreeHashMapMergeabilitySpec
        #  TreeHashMapCh
        #  in {
        #  rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-       #  for (TreeHashMap <- TreeHashMapCh){
+       #  for (@(_, TreeHashMap) <- TreeHashMapCh){
        #    for (@treeMap <<- @"treeHashChannel"){
        #      ${readKeyRho(keys)}
        #    }
@@ -387,7 +387,7 @@ class TreeHashMapMergeabilitySpec
        #  TreeHashMapCh
        #  in {
        #  rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-       #  for (TreeHashMap <- TreeHashMapCh){
+       #  for (@(_, TreeHashMap) <- TreeHashMapCh){
        #    for (@treeMap <<- @"treeHashChannel"){
        #      ${writeKeyValueRho(keyValues)}
        #    }
@@ -400,7 +400,7 @@ class TreeHashMapMergeabilitySpec
        #  TreeHashMapCh
        #  in {
        #  rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-       #  for (TreeHashMap <- TreeHashMapCh){
+       #  for (@(_, TreeHashMap) <- TreeHashMapCh){
        #    for (@treeMap <<- @"treeHashChannel"){
        #      ${containKeyRho(keys)}
        #    }
@@ -413,7 +413,7 @@ class TreeHashMapMergeabilitySpec
        #  TreeHashMapCh
        #  in {
        #  rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-       #  for (TreeHashMap <- TreeHashMapCh){
+       #  for (@(_, TreeHashMap) <- TreeHashMapCh){
        #    for (@treeMap <<- @"treeHashChannel"){
        #      ${updateKeyValueRho(keyValues)}
        #    }

@@ -6,59 +6,20 @@ new
   stdout(`rho:io:stdout`),
   updateRet,
   deployerID(`rho:rchain:deployerId`),
-  systemContractManager2,           // MultiSig contract's method entry point
-  blessedContractLocMapCh
+  systemContractManager2           // MultiSig contract's method entry point
 in {
-  for (@blessedContractLocMap, oldSystemContractManager, ret <- updateContract){
-    blessedContractLocMapCh!(blessedContractLocMap)|
-    let @pubKey <- 
-      // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
-      "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes(),
-    in {
-      contract systemContractManager2(@"update", @deployerID, @uri, @con, @meth, ret) = {
-        // there is an update proposal for `uri`
-        new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
-          DeployerIdOps!("pubKeyBytes", deployerID, *deployerPubKeyBytesCh) |
-          for (@deployerPubKeyBytes <- deployerPubKeyBytesCh){
-            if (deployerPubKeyBytes == pubKey){
-              for (@blessedContractLocMap <<- blessedContractLocMapCh) {
-                let @loc <- blessedContractLocMap.get(uri) in {
-                  for (oldData <- @loc) {
-                    new tmp, newRet in {
-                      @(*oldData, "extractState")!(*tmp) |
-                      for (@oldState <- tmp) {
-                        // launch new contract instance with initial state extracted from the old instance
-                        @con!(oldState, *oldData, *newRet) |
-                        for (@meth <- newRet){
-                          // write new method entry point to location channel
-                          @loc!(meth) |
-                          ret!((true))
-                        }
-                      }
-                    }
-                  }
-                } 
-              }
-            } else {
-              ret!((false, "You have not permissions to update system contract!"))
-            }
-          }
-        }
-      } |
-      contract systemContractManager2(@"sayHello", returnCh) = {
-        returnCh!("hello")
-      } |
-      for (ret <- @(*systemContractManager2, "extractState")){
-        for (@blessedContractLocMap <<- blessedContractLocMapCh) {
-          ret!(blessedContractLocMap)
-        }
-      } 
+  for (@locToken, oldSystemContractManager, ret <- updateContract){
+    contract oldSystemContractManager(@"sayHello", returnCh) = {
+      returnCh!("hello")
     } |
-    ret!(*systemContractManager2)
+    for (ret <- @(*oldSystemContractManager, "extractState")){
+      ret!({"locToken": locToken.get("locToken")})
+    } |
+    ret!(*oldSystemContractManager)
   } |
   stdout!(("update blessed registry start!!!!!"))|
   rl!(`rho:registry:systemContractManager`, *rlret)|
-  for(@oriSystemContractManager <- rlret){
+  for(@(_, oriSystemContractManager) <- rlret){
     stdout!(("update get multisig ok", oriSystemContractManager))|
     @oriSystemContractManager!("update",
                   *deployerID,

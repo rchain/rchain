@@ -25,7 +25,7 @@ new
 in {
   rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
   rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
-  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh & @systemContractManager <- systemContractManagerCh) {
+  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh & @(_, systemContractManager) <- systemContractManagerCh) {
     // user calls MakeMint
     // we actually go to MakeMintLoc and get the real MakeMint contract definition
     contract MakeMint(return) = {
@@ -158,7 +158,7 @@ in {
     for (ret  <- @(*MakeMint, "extractState")){
       ret!(Nil)
     } |
-    @systemContractManager!("createDispatcher", *MakeMint, `rho:rchain:makeMint`, *dispatcherCh)|
+    @systemContractManager!("createDispatcher", *MakeMint, *dispatcherCh)|
     for (makeMintdispatcher <- dispatcherCh){
       // Inserts signed write-only MakeMint dispatcher contract into the registry
       rs!(

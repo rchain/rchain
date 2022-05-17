@@ -42,12 +42,12 @@ in {
   for (@(_, MakeMint) <- MakeMintCh &
        @(_, AuthKey)  <- AuthKeyCh &
        @(_, Either)   <- EitherCh &
-       TreeHashMap    <- TreeHashMapCh &
-       @systemContractManager <- systemContractManagerCh) {
+       @(_, TreeHashMap)    <- TreeHashMapCh &
+       @(_, systemContractManager) <- systemContractManagerCh) {
     // Each invocation of the RevVault contract uses a different mint.
     new mintCh, vaultMapStore, initVault in {
       // Initializes the vaultMapStore.
-      TreeHashMap!("init", 2, *vaultMapStore) |
+      @TreeHashMap!("init", 2, *vaultMapStore) |
       for (@vaultMap <- vaultMapStore) {
         // Called from RevGenerator:
         //   RevVault!("init", *ret)
@@ -58,7 +58,7 @@ in {
           initContinue!() |
           contract RevVault(@"init", ret) = {
             for (<- initContinue) {
-              ret!(*TreeHashMap, vaultMap, *initVault, *initContinue)
+              ret!(TreeHashMap, vaultMap, *initVault, *initContinue)
             }
           }
         } |
@@ -111,7 +111,7 @@ in {
                   // Valid Rev address returns Right and we proceed with creation/search.
                   _ => {
                     new createVault, vaultCh, getVaultCh in {
-                      TreeHashMap!("get", vaultMap, revAddress, *getVaultCh) |
+                      @TreeHashMap!("get", vaultMap, revAddress, *getVaultCh) |
                       for (@vault <- getVaultCh) {
                         if (vault != Nil) {
                           // If vault is in the store, return (true, vault).
@@ -157,7 +157,7 @@ in {
               for (@eitherVault <- resCh) {
                 match eitherVault {
                   (true, vault) => {
-                    TreeHashMap!("set", vaultMap, revAddress, vault, *ackCh) |
+                    @TreeHashMap!("set", vaultMap, revAddress, vault, *ackCh) |
                     for (_ <- ackCh) {
                       retCh!(eitherVault)
                     }
@@ -285,7 +285,7 @@ in {
             ret!({"vaultMap":vaultMap, "revVaultUnf": *_revVault})
           } |
           // Insert the signed, write-only dispatcher contract into the registry uri map
-          @systemContractManager!("createDispatcher", *RevVault, `rho:rchain:revVault`, *dispatcherCh)|
+          @systemContractManager!("createDispatcher", *RevVault, *dispatcherCh)|
           for (revVaultDispatcher <- dispatcherCh){
             rs!(
               (9223372036854775807, bundle+{*revVaultDispatcher}),
