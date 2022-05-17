@@ -156,7 +156,7 @@ object blockImplicits {
                       Random.shuffle(bonds).headOption.getOrElse(bondGen.sample.get).validator
                     )
                   else Gen.const(setValidator.get)
-      version   = if (setVersion.isEmpty) 1L else setVersion.get
+      version   = if (setVersion.isEmpty) BlockVersion.Current else setVersion.get
       timestamp <- if (setTimestamp.isEmpty) arbitrary[Long] else Gen.const(setTimestamp.get)
       shardId   = if (setShardId.isEmpty) "root" else setShardId.get
       block = BlockMessage(
