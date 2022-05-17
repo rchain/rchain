@@ -9,7 +9,7 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.merger.MergingLogic.{computeRelatedSets, NumberChannelsDiff}
+import coop.rchain.rspace.merger.EventLogMergingLogic.{computeRelatedSets, NumberChannelsDiff}
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.trace.Produce
 
@@ -115,7 +115,7 @@ object BlockIndex {
         * Therefore there won't be any conflicts between event logs. But there can be dependencies. */
       deployChains = computeRelatedSets[DeployIndex](
         deployIndices.toSet,
-        (l, r) => MergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
+        (l, r) => EventLogMergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
       )
       index <- deployChains.toVector
                 .traverse(

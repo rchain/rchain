@@ -13,7 +13,7 @@ import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{
   NumberChannel
 }
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.merger.MergingLogic.{NumberChannelsDiff, NumberChannelsEndVal}
+import coop.rchain.rspace.merger.EventLogMergingLogic.{NumberChannelsDiff, NumberChannelsEndVal}
 import coop.rchain.shared.AttemptOpsF.RichAttempt
 import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector

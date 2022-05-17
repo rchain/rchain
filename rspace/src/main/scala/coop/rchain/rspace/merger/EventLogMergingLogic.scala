@@ -7,7 +7,8 @@ import fs2.Stream
 import scala.Function.tupled
 import scala.annotation.tailrec
 
-object MergingLogic {
+/** Logic for merging event logs. */
+object EventLogMergingLogic {
 
   /**
     * Map used to represent mergeable (numeric) channels with intermediate values
