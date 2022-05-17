@@ -48,7 +48,7 @@ class BlockProcessor[F[_]: Concurrent](
     // TODO c.dagContains does not take into account equivocation tracker
     val alreadyProcessed  = c.dagContains(b.blockHash) ||^ c.bufferContains(b.blockHash)
     val shardOfInterest   = c.getApprovedBlock.map(_.shardId.equalsIgnoreCase(b.shardId))
-    val versionOfInterest = c.getApprovedBlock.flatMap(g => Validate.version(b, g.header.version))
+    val versionOfInterest = Validate.version(b)
     val oldBlock =
       c.getApprovedBlock.flatMap(g => (ProtoUtil.blockNumber(b) < ProtoUtil.blockNumber(g)).pure[F])
     alreadyProcessed.not &&^ shardOfInterest &&^ versionOfInterest &&^ oldBlock.not
@@ -57,13 +57,15 @@ class BlockProcessor[F[_]: Concurrent](
   // check block format and store if check passed
   def checkIfWellFormedAndStore(b: BlockMessage)(
       implicit log: Log[F]
-  ): F[Boolean] =
+  ): F[Boolean] = {
+    val validFormat = Validate.formatOfFields(b)
+    val validHash   = Validate.blockHash(b)
+    val validSig    = Validate.blockSignature(b)
     for {
-      validFormat <- Validate.formatOfFields(b)
-      validSig    <- Validate.blockSignature(b)
-      isValid     = validFormat && validSig
-      _           <- storeBlock(b).whenA(isValid)
+      isValid <- validFormat &&^ validHash &&^ validSig
+      _       <- storeBlock(b).whenA(isValid)
     } yield isValid
+  }
 
   // check if block has all dependencies available and can be validated
   def checkDependenciesWithEffects(
@@ -115,7 +117,7 @@ object BlockProcessor {
   // format: off
   def apply[F[_]
   /* Execution */   : Concurrent
-  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage 
+  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage
   /* Diagnostics */ : Log
   /* Comm */        : CommUtil: BlockRetriever
   ] // format: on
