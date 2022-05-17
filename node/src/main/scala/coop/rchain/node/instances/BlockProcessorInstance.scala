@@ -31,7 +31,7 @@ object BlockProcessorInstance {
           val (c, b)                             = i
           val blockStr                           = PrettyPrinter.buildString(b, short = true)
           val logNotOfInterest                   = Log[F].info(s"Block $blockStr is not of interest. Dropped")
-          val logMalformed                       = Log[F].info(s"Block $blockStr is not of malformed. Dropped")
+          val logMalformed                       = Log[F].info(s"Block $blockStr is malformed. Dropped")
           val logMissingDeps                     = Log[F].info(s"Block $blockStr missing dependencies.")
           val logStarted                         = Log[F].info(s"Block $blockStr processing started.")
           def logResult(r: ValidBlockProcessing) = Log[F].info(s"Block $blockStr validated: ${r}")
