@@ -536,12 +536,12 @@ in {
                   if (deployerPubKeyBytes == pubKey){
                     for (@blessedContractLocMap <<- blessedContractLocMapCh) {
                       let @loc <- blessedContractLocMap.get(uri) in {
-                        for (oldData <- @loc) {
+                        for (oldLib <- @loc) {
                           new tmp, newRet in {
-                            @(*oldData, "extractState")!(*tmp) |
+                            @(*oldLib, "extractState")!(*tmp) |
                             for (@oldState <- tmp) {
                               // launch new contract instance with initial state extracted from the old instance
-                              @con!(oldState, *oldData, *newRet) |
+                              @con!(oldState, *oldLib, *newRet) |
                               for (@meth <- newRet){
                                 // write new method entry point to location channel
                                 @loc!(meth) |
