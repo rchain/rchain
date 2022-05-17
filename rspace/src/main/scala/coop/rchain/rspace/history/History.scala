@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
-import cats.Parallel
 import cats.effect.{Concurrent, Sync}
+import cats.{Parallel, Show}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
 import coop.rchain.rspace.history.instances.RadixHistory
@@ -48,4 +48,19 @@ object History {
   ): F[RadixHistory[F]] = RadixHistory(root, RadixHistory.createStore(store))
 
   type KeyPath = Seq[Byte]
+  type KeyWord = Byte
+
+  // Key segment type class implementation for sequence of bytes
+  implicit val kpKs = new KeySegment[KeyPath, KeyWord] {
+    override def size(ks: KeyPath): Int                   = ks.size
+    override def isEmpty(ks: KeyPath): Boolean            = ks.isEmpty
+    override def headOption(ks: KeyPath): Option[Byte]    = ks.headOption
+    override def tailOption(ks: KeyPath): Option[KeyPath] = Some(ks.tail)
+    override def empty: KeyPath                           = Seq.empty[Byte]
+    override def :+(k: KeyPath, w: KeyWord): KeyPath      = k :+ w
+    override def ++(k1: KeyPath, k2: KeyPath): KeyPath    = k1 ++ k2
+  }
+  implicit val kpShow = new Show[KeyPath] {
+    override def show(t: KeyPath): String = t.map(_.toString).mkString(" ")
+  }
 }
