@@ -1,22 +1,20 @@
 package coop.rchain.casper.genesis
 
-import cats.syntax.all._
-import coop.rchain.casper.genesis.contracts.ProofOfStake
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
+import coop.rchain.casper.protocol.ProcessedDeploy
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.models.GDeployId
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.shared.Base16
-import coop.rchain.shared.scalatestcontrib._
-import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.build.CompiledRholangTemplate
-import coop.rchain.rholang.interpreter.RhoType.{Boolean, String, Tuple2}
+import coop.rchain.models.syntax._
+import coop.rchain.models.{GDeployId, PCost}
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.interpreter.RhoType.{Boolean, Number, String, Tuple2}
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.Inside.inside
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 import scala.io.Source
@@ -99,32 +97,41 @@ class PosUpdateSpec extends FlatSpec with Matchers with Inspectors {
         #    @pos!("sayHello", *return)
         #  }
         #}""".stripMargin('#')
+
     TestNode.standaloneEff(genesis).use { node =>
       val rm = node.runtimeManager
       for {
         b2 <- node.addBlock(updateDeploy)
-        _  = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
-        _  = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
-        _  = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
+        _ = inside(b2.body.deploys) {
+          case Seq(deploy) =>
+            assert(deploy.cost.cost > 0L, s"$b2 deploy cost is 0L")
+            assert(deploy.systemDeployError.isEmpty, s"$b2 system deploy failed")
+            assert(!deploy.isFailed, s"$b2 deploy failed")
+        }
+
         originalEpoch <- rm.playExploratoryDeploy(
                           exploreUpdateResultTerm,
                           genesis.genesisBlock.body.state.postStateHash
                         )
-        _       = assert(originalEpoch.head.exprs.head.getGInt == 1000)
-        ret     <- rm.playExploratoryDeploy(getBalanceTerm, b2.body.state.postStateHash)
-        balance = ret.head.exprs.head.getGInt
+        _ = originalEpoch should matchPattern { case Seq(Number(1000)) => }
+
+        ret                  <- rm.playExploratoryDeploy(getBalanceTerm, b2.body.state.postStateHash)
+        Seq(Number(balance)) = ret
+
         b5 <- node
                .addBlock(
                  ConstructDeploy
                    .sourceDeployNow(transferTerm, sec = p1, shardId = shardId, phloLimit = 9000000L)
                )
-        _    = assert(b5.body.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
-        _    = assert(b5.body.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
-        _    = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
+        _ = assert(b5.body.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
+        _ = assert(b5.body.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
+        _ = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
+
         ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b5.body.state.postStateHash)
-        _    = assert(ret2.head.exprs.head.getGInt == balance + transferAmount.toLong)
+        _    = inside(ret2) { case Seq(Number(n)) => n shouldBe balance + transferAmount.toLong }
+
         ret3 <- rm.playExploratoryDeploy(explorePosNewMethod, b5.body.state.postStateHash)
-        _    = assert(ret3.head.exprs.head.getGString == "hello")
+        _    = ret3 should matchPattern { case Seq(String("hello")) => }
       } yield ()
     }
   }
@@ -145,11 +152,13 @@ class PosUpdateSpec extends FlatSpec with Matchers with Inspectors {
         _  = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
         _  = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
         _  = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
+
         // Get update contract result
-        updateResult                               <- rm.getData(b2.body.state.postStateHash)(GDeployId(updateDeploy.sig))
-        Tuple2((Boolean(success), String(errMsg))) = updateResult.head
+        updateResult <- rm.getData(b2.body.state.postStateHash)(GDeployId(updateDeploy.sig))
         // Expect failed update
-        _ = assert(!success, s"update should fail, instead: $errMsg")
+        _ = updateResult should matchPattern {
+          case Seq(Tuple2((Boolean(false), String(_)))) =>
+        }
       } yield ()
     }
   }
