@@ -75,6 +75,23 @@ in {
   for (ret <- @(*AuthKey, "extractState")) {
     ret!({"authKeyUnf": *_authKey})
   } |
+  let @pubKey <- 
+    // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
+    "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes()
+  in {
+    contract @(*AuthKey, "securityCheck")(@deployerID, ret) = {
+      new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
+        DeployerIdOps!("pubKeyBytes", deployerID, *deployerPubKeyBytesCh) |
+        for (@deployerPubKeyBytes <- deployerPubKeyBytesCh){
+          if (deployerPubKeyBytes == pubKey){
+            ret!((true, Nil))
+          } else {
+            ret!((false, "You have no permissions to update system contract!"))
+          }
+        }
+      }
+    }
+  } |
   rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
   for (@(_, systemContractManager) <- systemContractManagerCh){
     @systemContractManager!("createDispatcher", *AuthKey, *dispatcherCh)|
