@@ -377,7 +377,7 @@ in {
         for (@map <<- _registryStore) {
           systemContractManager!("createDispatcher", *TreeHashMap, *createDispatcherRet)|
           for (TreeHashMapDispatcher <- createDispatcherRet){
-            TreeHashMap!("set", map, `rho:lang:treeHashMap`, (9223372036854775807, bundle+{*TreeHashMapDispatcher}), *ack)
+            TreeHashMap!("set", map, `rho:lang:treeHashMap`, (9223372036854775807, *TreeHashMapDispatcher), *ack)
           }
         } |
         // Wait for the set to finish, then register `lookupCh` as the uri/shorthand lookup channel
@@ -556,7 +556,7 @@ in {
               contract @(*locToken, bundle+{*dispatcher})(locRet) = {
                 locRet!(*loc)
               } |
-              ret!(*dispatcher)
+              ret!(bundle+{*dispatcher})
             }
           } |
           for (ret <- @(*systemContractManager, "extractState")){
@@ -567,7 +567,7 @@ in {
               // add systemContractManager dispatcher to the uri map
               systemContractManager!("createDispatcher", *systemContractManager, *createDispatcherRet)|
               for (systemContractManagerDispatcher <- createDispatcherRet){
-                TreeHashMap!("set", map, `rho:registry:systemContractManager`, (9223372036854775807, bundle+{*systemContractManagerDispatcher}), *ack)
+                TreeHashMap!("set", map, `rho:registry:systemContractManager`, (9223372036854775807, *systemContractManagerDispatcher), *ack)
               }
             }
           }

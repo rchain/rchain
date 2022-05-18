@@ -162,7 +162,7 @@ in {
     for (makeMintdispatcher <- dispatcherCh){
       // Inserts signed write-only MakeMint dispatcher contract into the registry
       rs!(
-        (9223372036854775807, bundle+{*makeMintdispatcher}),
+        (9223372036854775807, *makeMintdispatcher),
         *deployerId,
         *uriOut
       )
