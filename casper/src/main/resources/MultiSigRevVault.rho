@@ -291,7 +291,7 @@ in {
     for (multiSigRevVaultDispatcher <- dispatcherCh){
       // Inserts signed write-only MultiSigRevVault dispatcher contract into the registry
       rs!(
-        (9223372036854775807, *multiSigRevVaultDispatcher),
+        (9223372036854775807, bundle+{*multiSigRevVaultDispatcher}),
         *deployerId,
         *uriOut
       )

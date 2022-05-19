@@ -742,7 +742,7 @@ in {
     for (posDispatcher <- dispatcherCh){
       // Inserts signed write-only pos dispatcher contract into the registry
       rs!(
-        (9223372036854775807, *posDispatcher),
+        (9223372036854775807, bundle+{*posDispatcher}),
         *deployerId,
         *uriOut
       )

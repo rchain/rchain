@@ -305,7 +305,7 @@ in {
           @systemContractManager!("createDispatcher", *RevVault, *dispatcherCh)|
           for (revVaultDispatcher <- dispatcherCh){
             rs!(
-              (9223372036854775807, *revVaultDispatcher),
+              (9223372036854775807, bundle+{*revVaultDispatcher}),
               *deployerId,
               *uriOut
             )

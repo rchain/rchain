@@ -98,7 +98,7 @@ in {
     for (dispatcher <- dispatcherCh){
       // Inserts signed write-only AuthKey dispatcher contract into the registry
       rs!(
-        (9223372036854775807, *dispatcher),
+        (9223372036854775807, bundle+{*dispatcher}),
         *deployerId,
         *uriOut
       )
