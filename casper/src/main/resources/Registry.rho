@@ -475,10 +475,9 @@ in {
       // Update
       // deployerID: (`rho:rchain:deployerId`)
       // uri:   the uri you want to update.  `rho:rchain:pos` etc.
-      // con:   the update consume which take the old state
-      // meth:  the target new contract which would replace the old one
+      // updateContract:   the update consume which take the old state
       // ret:   channel which returns the update result
-      contract systemContractManager(@"update", @securityData, @uri, @con, ret) = {
+      contract systemContractManager(@"update", @securityData, @uri, @updateContract, ret) = {
         // there is an update proposal for `uri`
         new rl(`rho:registry:lookup`), rlRet, locRet in {
           rl!(uri, *rlRet)|
@@ -496,7 +495,7 @@ in {
                             @(*oldLib, "extractState")!(*tmp) |
                             for (@oldState <- tmp) {
                               // launch new contract instance with initial state extracted from the old instance
-                              @con!(oldState, *oldLib, *newRet) |
+                              @updateContract!(oldState, *oldLib, *newRet) |
                               for (@meth <- newRet){
                                 // write new method entry point to location channel
                                 loc!(meth) |
