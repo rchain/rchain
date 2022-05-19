@@ -35,6 +35,7 @@ import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.graphz.StringSerializer
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockVersion
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
@@ -145,8 +146,8 @@ case class TestNode[F[_]: Timer](
     heightConstraintThreshold = Long.MaxValue,
     // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
     // Required to enable protection from re-submitting duplicate deploys
-    deployLifespan = 50,
-    casperVersion = 1,
+    deployLifespan = MultiParentCasperImpl.deployLifespan,
+    casperVersion = BlockVersion.Current,
     configVersion = 1,
     bondMinimum = 0,
     bondMaximum = Long.MaxValue,
