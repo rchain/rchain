@@ -16,7 +16,6 @@ new
   TreeHashMapDispatcher,
   secpVerify(`rho:crypto:secp256k1Verify`),
   blake2b256(`rho:crypto:blake2b256Hash`),
-  hashVerify,
   storeToken,
   systemContractManager,
   createSecurityCheck
@@ -380,16 +379,6 @@ in {
     `rho:rchain:revVault`         : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
     `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
     } in {
-      contract hashVerify(@data, @sig, @pubKey, ret) = {
-        new hashCh in {
-          // hash the data
-          blake2b256!(data.toByteArray(), *hashCh) |
-          for (@hash <- hashCh) {
-            // verify the signature
-            secpVerify!(hash, sig, pubKey, *ret)
-          }
-        }
-      } |
       // Use 4 * 8 = 32-bit paths to leaf nodes.
       TreeHashMap!("init", 4, *_registryStore) |
       new ack, createDispatcherRet in {

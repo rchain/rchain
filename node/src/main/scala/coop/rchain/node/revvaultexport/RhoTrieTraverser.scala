@@ -78,7 +78,7 @@ object RhoTrieTraverser {
   private val storeTokenUnforgeable: Par = {
     val rand =
       Tools.unforgeableNameRng(StandardDeploys.registryPubKey, StandardDeploys.registryTimestamp)
-    val target = LazyList.continually(rand.next()).drop(10).head
+    val target = LazyList.continually(rand.next()).drop(9).head
     Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target))))))
   }
 
