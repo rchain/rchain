@@ -377,7 +377,8 @@ in {
     `rho:rchain:makeMint`         : `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc`,
     `rho:rchain:pos`              : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
     `rho:rchain:revVault`         : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
-    `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
+    `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`,
+    `rho:rchain:coopSecurityCheck`: `rho:id:rezpgjuphh6edwbwuy16wjh1tozqpurw1ickwxrinw5cxe9hw1666r`
     } in {
       // Use 4 * 8 = 32-bit paths to leaf nodes.
       TreeHashMap!("init", 4, *_registryStore) |

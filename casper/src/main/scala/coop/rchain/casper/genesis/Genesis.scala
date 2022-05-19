@@ -52,6 +52,7 @@ object Genesis {
     // Order of deploys is important for Registry to work correctly
     // - dependencies must be defined first in the list
     StandardDeploys.registry(shardId) +:
+      StandardDeploys.coopSecurityCheck(shardId) +:
       StandardDeploys.listOps(shardId) +:
       StandardDeploys.either(shardId) +:
       StandardDeploys.nonNegativeNumber(shardId) +:

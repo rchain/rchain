@@ -92,7 +92,8 @@ new
   currentDeployerData,
   deployerId(`rho:rchain:deployerId`),
   systemContractManagerCh,
-  dispatcherCh
+  dispatcherCh,
+  coopSecurityCheckCh
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -100,10 +101,11 @@ in {
   registryLookup!(`rho:lang:treeHashMap`, *treeHashMapCh) |
   registryLookup!(`rho:rchain:multiSigRevVault`, *multiSigRevVaultCh) |
   registryLookup!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
+  registryLookup!(`rho:rchain:coopSecurityCheck`, *coopSecurityCheckCh)|
   for (@(_, RevVault)         <- revVaultCh &
        @(_, ListOps)          <- listOpsCh &
        @(_, TreeHashMap)      <- treeHashMapCh &
-       @(_, MultiSigRevVault) <- multiSigRevVaultCh ) {
+       @(_, MultiSigRevVault) <- multiSigRevVaultCh) {
     new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh,
         initialActiveCh, createUnfVault, moveInitialBondCh
     in {
@@ -319,23 +321,6 @@ in {
                     })
                   }
                 } |
-                let @pubKey <- 
-                  // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
-                  "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes()
-                in {
-                  contract @(*PoS, "securityCheck")(@deployerID, ret) = {
-                    new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
-                      DeployerIdOps!("pubKeyBytes", deployerID, *deployerPubKeyBytesCh) |
-                      for (@deployerPubKeyBytes <- deployerPubKeyBytesCh){
-                        if (deployerPubKeyBytes == pubKey){
-                          ret!((true, Nil))
-                        } else {
-                          ret!((false, "You have no permissions to update system contract!"))
-                        }
-                      }
-                    }
-                  }
-                } | 
                 // Public method allowing users to bond and become validators.
                 contract PoS(@"bond", @deployerId, @amount, returnCh) = {
                   new userCh, depositCh,
@@ -737,8 +722,10 @@ in {
       }
     }
   } | 
-  for (@(_, systemContractManager) <- systemContractManagerCh) {
+  for (@(_, systemContractManager) <- systemContractManagerCh &
+       @(_, coopSecurityCheck)<- coopSecurityCheckCh) {
     @systemContractManager!("createDispatcher", *PoS, *dispatcherCh) |
+    @coopSecurityCheck!(*PoS)|
     for (posDispatcher <- dispatcherCh){
       // Inserts signed write-only pos dispatcher contract into the registry
       rs!(

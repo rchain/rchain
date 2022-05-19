@@ -1,0 +1,41 @@
+new
+  rl(`rho:registry:lookup`), RhoSpecCh,
+  securityCheckCh,
+  stdlog(`rho:io:stdlog`),
+  testSuccessValidation,
+  testFailureValidation,
+  getDeployerId(`rho:test:deployerId:make`)
+in {
+  stdlog!("info", "Starting coopSecurityCheck test") |
+  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
+  rl!(`rho:rchain:coopSecurityCheck`, *securityCheckCh) |
+  for(@(_, RhoSpec) <- RhoSpecCh & @(_, coopSecurityCheck) <- securityCheckCh) {
+    stdlog!("info", "RhoSpec and coopSecurityCheck found") |
+    @RhoSpec!("testSuite",
+      [
+        ("pass the check for a valid deployerId", *testSuccessValidation),
+        ("pass the check for a invalid deployerId", *testFailureValidation),
+      ]) |
+
+    contract testSuccessValidation(rhoSpec, _, ackCh) = {
+      new lib, deployerIdCh , ret in {
+        @coopSecurityCheck!(*lib) |
+        getDeployerId!("deployerId", "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes(), *deployerIdCh) |
+        for (@deployerId <- deployerIdCh){
+          @(*lib, "securityCheck")!(deployerId, *ret) |
+          rhoSpec!("assert", ((true, Nil), "== <-", *ret), "check succeeded", *ackCh)
+        }
+      }
+    } |
+    contract testFailureValidation(rhoSpec, _, ackCh) = {
+      new lib, deployerIdCh , ret in {
+        @coopSecurityCheck!(*lib)|
+        getDeployerId!("deployerId", "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111".hexToBytes(), *deployerIdCh) |
+        for (@deployerId <- deployerIdCh){
+          @(*lib, "securityCheck")!(deployerId, *ret) |
+          rhoSpec!("assert", ((false, "You have no permissions to update system contract!"), "== <-", *ret), "check succeeded", *ackCh)
+        }
+      }
+    } 
+  }
+}
