@@ -16,6 +16,11 @@ class GroundMatcherSpec extends AnyFlatSpec with Matchers {
     val expectedResult: Expr = GInt(7)
     GroundNormalizeMatcher.normalizeMatch[Coeval](gi).value should be(expectedResult)
   }
+  "Positive groundBigInt" should "Compile GBigInt" in {
+    val gbi                  = new GroundBigInt("9999999999999999999999999999999999999999")
+    val expectedResult: Expr = GBigInt(BigInt("9999999999999999999999999999999999999999"))
+    GroundNormalizeMatcher.normalizeMatch[Coeval](gbi).value should be(expectedResult)
+  }
   "GroundString" should "Compile as GString" in {
     val gs                   = new GroundString("\"String\"")
     val expectedResult: Expr = GString("String")

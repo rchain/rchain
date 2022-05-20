@@ -130,6 +130,7 @@ final case class PrettyPrinter(
       case EVarBody(EVar(v)) => buildStringM(v)
       case GBool(b)          => pure(b.toString)
       case GInt(i)           => pure(i.toString)
+      case GBigInt(bi)       => pure("BigInt(" + bi.toString + ")")
       case GString(s)        => pure("\"" + s + "\"")
       case GUri(u)           => pure(s"`$u`")
       // TODO: Figure out if we can prevent ScalaPB from generating
@@ -264,6 +265,7 @@ final case class PrettyPrinter(
           case VarRefBody(value)  => pure(s"=$freeId${freeShift - value.index - 1}")
           case _: ConnBool        => pure("Bool")
           case _: ConnInt         => pure("Int")
+          case _: ConnBigInt      => pure("BigInt")
           case _: ConnString      => pure("String")
           case _: ConnUri         => pure("Uri")
           case _: ConnByteArray   => pure("ByteArray")

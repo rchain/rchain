@@ -17,6 +17,7 @@ option (scalapb.options) = {
   import: "coop.rchain.models.BitSetBytesMapper.bitSetBytesMapper"
   import: "coop.rchain.models.ParSetTypeMapper.parSetESetTypeMapper"
   import: "coop.rchain.models.ParMapTypeMapper.parMapEMapTypeMapper"
+  import: "coop.rchain.models.BigIntTypeMapper.bigIntBytesTypeMapper"
   preserve_unknown_fields: false
 };
 
@@ -177,6 +178,7 @@ message Expr {
     oneof expr_instance {
         bool g_bool = 1;
         sint64 g_int = 2;
+        bytes g_big_int = 34 [(scalapb.field).type = "scala.math.BigInt"];
         string g_string = 3;
         string g_uri = 4;
         bytes g_byte_array = 25;
@@ -385,6 +387,7 @@ message Connective {
     VarRef var_ref_body = 4;
     bool conn_bool = 5;
     bool conn_int = 6;
+    bool conn_big_int = 10;
     bool conn_string = 7;
     bool conn_uri = 8;
     bool conn_byte_array = 9;

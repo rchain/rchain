@@ -56,6 +56,7 @@ class EqualMSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers
   sameResultAsReference[ParMap]
 
   sameResultAsReference[Int]
+  sameResultAsReference[BigInt]
   sameResultAsReference[Long]
   sameResultAsReference[String]
   sameResultAsReference[ByteString]

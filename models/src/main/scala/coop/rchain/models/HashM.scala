@@ -8,7 +8,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models.Expr.ExprInstance.{GBigInt, GInt}
 
 import java.util.Objects
 import scala.collection.immutable.BitSet
@@ -56,6 +56,7 @@ object HashM extends HashMDerivation {
 
   implicit val BooleanHash: HashM[Boolean]                   = opaqueHash
   implicit val IntHash: HashM[Int]                           = opaqueHash
+  implicit val BigIntHash: HashM[BigInt]                     = opaqueHash
   implicit val FloatHash: HashM[Float]                       = opaqueHash
   implicit val DoubleHash: HashM[Double]                     = opaqueHash
   implicit val StringHash: HashM[String]                     = opaqueHash
@@ -112,7 +113,8 @@ object HashM extends HashMDerivation {
         .map(dataHash => Objects.hash(value.sig, value.sigAlgorithm, Int.box(dataHash)))
   }
 
-  implicit val GIntHash = gen[GInt] //This is only possible to derive here, b/c LongHashM is private
+  implicit val GIntHash    = gen[GInt] //This is only possible to derive here, b/c LongHashM is private
+  implicit val GBigIntHash = gen[GBigInt]
 
   implicit val ConnectiveHash = gen[Connective]
 

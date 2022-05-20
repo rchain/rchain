@@ -37,6 +37,8 @@ private[sorter] object ConnectiveSortMatcher extends Sortable[Connective] {
         ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_BOOL, if (b) 1 else 0)).pure[F]
       case v @ ConnInt(b) =>
         ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_INT, if (b) 1 else 0)).pure[F]
+      case v @ ConnBigInt(b) =>
+        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_BIG_INT, if (b) 1 else 0)).pure[F]
       case v @ ConnString(b) =>
         ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_STRING, if (b) 1 else 0)).pure[F]
       case v @ ConnUri(b) =>

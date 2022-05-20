@@ -135,6 +135,7 @@ object Substitute {
                 .map(par.prepend(_, depth))
             case c: ConnBool      => par.prepend(Connective(c), depth).pure[M]
             case c: ConnInt       => par.prepend(Connective(c), depth).pure[M]
+            case c: ConnBigInt    => par.prepend(Connective(c), depth).pure[M]
             case c: ConnString    => par.prepend(Connective(c), depth).pure[M]
             case c: ConnUri       => par.prepend(Connective(c), depth).pure[M]
             case c: ConnByteArray => par.prepend(Connective(c), depth).pure[M]

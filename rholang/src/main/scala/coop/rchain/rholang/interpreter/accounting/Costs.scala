@@ -93,6 +93,48 @@ trait Costs {
   // + then it copies all elements of the Par
   def toByteArrayCost[T <: StacksafeMessage[_]](a: T): Cost =
     Cost(ProtoM.serializedSize(a).value, "to byte array")
+
+  // Converting rholang BigInt, String or ByteArray into a GInt.
+  // The cost is estimated as the number of bytes in converted data.
+  def toIntCost(bi: BigInt): Cost  = Cost(bigIntSize(bi), "bigint to int")
+  def toIntCost(str: String): Cost = Cost(str.length, "string to int")
+
+  // TODO: Adjust the BigInt operation cost
+  // Converting rholang Int, String or ByteArray into a GBigInt.
+  // The cost is estimated as the number of bytes in converted data.
+  final val INT_TO_BIGINT_COST: Cost  = Cost(8, "int to bigint")
+  def toBigIntCost(str: String): Cost = Cost(str.length, "string to bigint")
+
+  // The number of bytes in the new array is used
+  def bigIntNegation(bi: BigInt): Cost = Cost(bigIntSize(bi), "bigint negation")
+
+  // Сompared byte by byte
+  def bigIntComparison(left: BigInt, right: BigInt): Cost =
+    Cost(scala.math.min(bigIntSize(left), bigIntSize(right)), "bigint comparison")
+
+  // For storing result need to copy N+1 bytes
+  def bigIntSum(left: BigInt, right: BigInt): Cost =
+    Cost(scala.math.max(bigIntSize(left), bigIntSize(right)) + 1, "bigint sum")
+
+  // For storing result need to copy N+1 bytes
+  def bigIntSubtraction(left: BigInt, right: BigInt): Cost =
+    Cost(scala.math.max(bigIntSize(left), bigIntSize(right)) + 1, "bigint subtraction")
+
+  // Assumed to be used long multiplication
+  def bigIntMultiplication(left: BigInt, right: BigInt): Cost =
+    Cost(bigIntSize(left) * bigIntSize(right), "bigint multiplication")
+
+  // Assumed to be used long division
+  def bigIntDivision(left: BigInt, right: BigInt): Cost =
+    Cost(bigIntSize(left) * bigIntSize(right), "bigint division")
+
+  // Assumed to be used long division
+  def bigIntModulo(left: BigInt, right: BigInt): Cost =
+    Cost(bigIntSize(left) * bigIntSize(right), "bigint modulo")
+
+  // Calculate number of bytes needed to storyng BigInt value
+  def bigIntSize(bi: BigInt): Int = bi.bitLength / 8 + 1
+
   //TODO: adjust the cost of size method
   def sizeMethodCost(size: Int): Cost = Cost(size, "size")
   // slice(from, to) needs to drop `from` elements and then append `to - from` elements

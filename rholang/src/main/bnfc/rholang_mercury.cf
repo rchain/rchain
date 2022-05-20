@@ -167,6 +167,9 @@ BoolFalse.  BoolLiteral ::= "false" ;
 -- Ground types:
 -- The "Literal" suffix avoids collisions with Simple Types
 GroundBool.    Ground ::= BoolLiteral ;
+-- We are forced to use `"BigInt("` instead `"BigInt" "("`. Because we have a conflict with SimpleTypeBigInt in two cases:
+-- 1 case (name quote in contract): `contract "@"BigInt ( )` 2 case (Tuple in match): `match "" {"" => BigInt (1,) "=>" ""}`
+GroundBigInt.  Ground ::= "BigInt(" LongLiteral ")" ;
 GroundInt.     Ground ::= LongLiteral ;
 GroundString.  Ground ::= StringLiteral ;
 GroundUri.     Ground ::= UriLiteral ;
@@ -196,6 +199,7 @@ VarRefKindName. VarRefKind ::= "=" "*" ;
 -- Simple Types:
 SimpleTypeBool. SimpleType ::= "Bool" ;
 SimpleTypeInt. SimpleType ::= "Int" ;
+SimpleTypeBigInt. SimpleType ::= "BigInt" ;
 SimpleTypeString. SimpleType ::= "String" ;
 SimpleTypeUri. SimpleType ::= "Uri" ;
 SimpleTypeByteArray. SimpleType ::= "ByteArray" ;

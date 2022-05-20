@@ -57,6 +57,7 @@ object EqualM extends EqualMDerivation {
   }
 
   implicit val IntEqual: EqualM[Int]                           = opaqueEqual
+  implicit val BigIntEqual: EqualM[BigInt]                     = opaqueEqual
   implicit val FloatEqual: EqualM[Float]                       = opaqueEqual
   implicit val LongEqual: EqualM[Long]                         = opaqueEqual
   implicit val DoubleEqual: EqualM[Double]                     = opaqueEqual

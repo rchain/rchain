@@ -479,15 +479,23 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           p2: Par,
           relopb: (Boolean, Boolean) => Boolean,
           relopi: (Long, Long) => Boolean,
+          relopbi: (BigInt, BigInt) => Boolean,
           relops: (String, String) => Boolean
       ): M[Expr] =
         for {
           v1 <- evalSingleExpr(p1)
           v2 <- evalSingleExpr(p2)
           result <- (v1.exprInstance, v2.exprInstance) match {
-                     case (GBool(b1), GBool(b2))     => GBool(relopb(b1, b2)).pure[M]
-                     case (GInt(i1), GInt(i2))       => GBool(relopi(i1, i2)).pure[M]
-                     case (GString(s1), GString(s2)) => GBool(relops(s1, s2)).pure[M]
+                     case (GBool(b1), GBool(b2)) =>
+                       charge[M](COMPARISON_COST) >> GBool(relopb(b1, b2)).pure[M]
+                     case (GInt(i1), GInt(i2)) =>
+                       charge[M](COMPARISON_COST) >> GBool(relopi(i1, i2)).pure[M]
+                     case (GBigInt(bi1), GBigInt(bi2)) =>
+                       charge[M](bigIntComparison(bi1, bi2)) >> GBool(
+                         relopbi(bi1, bi2)
+                       ).pure[M]
+                     case (GString(s1), GString(s2)) =>
+                       charge[M](COMPARISON_COST) >> GBool(relops(s1, s2)).pure[M]
                      case _ =>
                        ReduceError("Unexpected compare: " + v1 + " vs. " + v2).raiseError[M, GBool]
                    }
@@ -496,31 +504,77 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       expr.exprInstance match {
         case x: GBool          => (x: Expr).pure[M]
         case x: GInt           => (x: Expr).pure[M]
+        case x: GBigInt        => (x: Expr).pure[M]
         case x: GString        => (x: Expr).pure[M]
         case x: GUri           => (x: Expr).pure[M]
         case x: GByteArray     => (x: Expr).pure[M]
         case ENotBody(ENot(p)) => evalToBool(p).map(b => GBool(!b))
-        case ENegBody(ENeg(p)) => evalToLong(p).map(v => GInt(-v))
+
+        case ENegBody(ENeg(p)) =>
+          for {
+            v <- evalSingleExpr(p)
+            result <- v.exprInstance match {
+                       case GInt(hs) => Expr(GInt(-hs)).pure[M]
+                       case GBigInt(hs) =>
+                         for {
+                           r <- Sync[M].delay(-hs)
+                           _ <- charge[M](bigIntNegation(r))
+                         } yield Expr(GBigInt(r))
+                       case other => OperatorNotDefined("Negation", other.typ).raiseError[M, Expr]
+                     }
+          } yield result
+
         case EMultBody(EMult(p1, p2)) =>
           for {
-            v1 <- evalToLong(p1)
-            v2 <- evalToLong(p2)
-            _  <- charge[M](MULTIPLICATION_COST)
-          } yield GInt(v1 * v2)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         charge[M](MULTIPLICATION_COST) >> Expr(GInt(lhs * rhs)).pure[M]
+                       case (GBigInt(lhs), GBigInt(rhs)) =>
+                         charge[M](bigIntMultiplication(lhs, rhs)) >> Expr(GBigInt(lhs * rhs))
+                           .pure[M]
+                       case (_: GInt, other) =>
+                         OperatorExpectedError("*", "Int", other.typ).raiseError[M, Expr]
+                       case (_: GBigInt, other) =>
+                         OperatorExpectedError("*", "BigInt", other.typ).raiseError[M, Expr]
+                       case (other, _) => OperatorNotDefined("*", other.typ).raiseError[M, Expr]
+                     }
+          } yield result
 
         case EDivBody(EDiv(p1, p2)) =>
           for {
-            v1 <- evalToLong(p1)
-            v2 <- evalToLong(p2)
-            _  <- charge[M](DIVISION_COST)
-          } yield GInt(v1 / v2)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         charge[M](DIVISION_COST) >> Expr(GInt(lhs / rhs)).pure[M]
+                       case (GBigInt(lhs), GBigInt(rhs)) =>
+                         charge[M](bigIntDivision(lhs, rhs)) >> Expr(GBigInt(lhs / rhs)).pure[M]
+                       case (_: GInt, other) =>
+                         OperatorExpectedError("/", "Int", other.typ).raiseError[M, Expr]
+                       case (_: GBigInt, other) =>
+                         OperatorExpectedError("/", "BigInt", other.typ).raiseError[M, Expr]
+                       case (other, _) => OperatorNotDefined("/", other.typ).raiseError[M, Expr]
+                     }
+          } yield result
 
         case EModBody(EMod(p1, p2)) =>
           for {
-            v1 <- evalToLong(p1)
-            v2 <- evalToLong(p2)
-            _  <- charge[M](MODULO_COST)
-          } yield GInt(v1 % v2)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         charge[M](MODULO_COST) >> Expr(GInt(lhs % rhs)).pure[M]
+                       case (GBigInt(lhs), GBigInt(rhs)) =>
+                         charge[M](bigIntModulo(lhs, rhs)) >> Expr(GBigInt(lhs % rhs)).pure[M]
+                       case (_: GInt, other) =>
+                         OperatorExpectedError("%", "Int", other.typ).raiseError[M, Expr]
+                       case (_: GBigInt, other) =>
+                         OperatorExpectedError("%", "BigInt", other.typ).raiseError[M, Expr]
+                       case (other, _) => OperatorNotDefined("%", other.typ).raiseError[M, Expr]
+                     }
+          } yield result
 
         case EPlusBody(EPlus(p1, p2)) =>
           for {
@@ -529,6 +583,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
                          charge[M](SUM_COST) >> Expr(GInt(lhs + rhs)).pure[M]
+                       case (GBigInt(lhs), GBigInt(rhs)) =>
+                         charge[M](bigIntSum(lhs, rhs)) >> Expr(GBigInt(lhs + rhs)).pure[M]
                        case (lhs: ESetBody, rhs) =>
                          for {
                            _         <- charge[M](OP_CALL_COST)
@@ -537,6 +593,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
                          } yield resultExp
                        case (_: GInt, other) =>
                          OperatorExpectedError("+", "Int", other.typ).raiseError[M, Expr]
+                       case (_: GBigInt, other) =>
+                         OperatorExpectedError("+", "BigInt", other.typ).raiseError[M, Expr]
                        case (other, _) => OperatorNotDefined("+", other.typ).raiseError[M, Expr]
                      }
           } yield result
@@ -548,6 +606,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
                          charge[M](SUBTRACTION_COST) >> Expr(GInt(lhs - rhs)).pure[M]
+                       case (GBigInt(lhs), GBigInt(rhs)) =>
+                         charge[M](bigIntSubtraction(lhs, rhs)) >> Expr(GBigInt(lhs - rhs)).pure[M]
                        case (lhs: EMapBody, rhs) =>
                          for {
                            _         <- charge[M](OP_CALL_COST)
@@ -562,22 +622,20 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
                          } yield resultExp
                        case (_: GInt, other) =>
                          OperatorExpectedError("-", "Int", other.typ).raiseError[M, Expr]
+                       case (_: GBigInt, other) =>
+                         OperatorExpectedError("-", "BigInt", other.typ).raiseError[M, Expr]
                        case (other, _) =>
                          OperatorNotDefined("-", other.typ).raiseError[M, Expr]
                      }
           } yield result
 
-        case ELtBody(ELt(p1, p2)) =>
-          charge[M](COMPARISON_COST) >> relop(p1, p2, (_ < _), (_ < _), (_ < _))
+        case ELtBody(ELt(p1, p2)) => relop(p1, p2, _ < _, _ < _, _ < _, _ < _)
 
-        case ELteBody(ELte(p1, p2)) =>
-          charge[M](COMPARISON_COST) >> relop(p1, p2, (_ <= _), (_ <= _), (_ <= _))
+        case ELteBody(ELte(p1, p2)) => relop(p1, p2, _ <= _, _ <= _, _ <= _, _ <= _)
 
-        case EGtBody(EGt(p1, p2)) =>
-          charge[M](COMPARISON_COST) >> relop(p1, p2, (_ > _), (_ > _), (_ > _))
+        case EGtBody(EGt(p1, p2)) => relop(p1, p2, _ > _, _ > _, _ > _, _ > _)
 
-        case EGteBody(EGte(p1, p2)) =>
-          charge[M](COMPARISON_COST) >> relop(p1, p2, (_ >= _), (_ >= _), (_ >= _))
+        case EGteBody(EGte(p1, p2)) => relop(p1, p2, _ >= _, _ >= _, _ >= _, _ >= _)
 
         case EEqBody(EEq(p1, p2)) =>
           for {
@@ -645,6 +703,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
                 (keyString -> valueString).pure[M]
               case (GString(keyString), GInt(valueInt)) =>
                 (keyString -> valueInt.toString).pure[M]
+              case (GString(keyString), GBigInt(valueBigInt)) =>
+                (keyString -> valueBigInt.toString).pure[M]
               case (GString(keyString), GBool(valueBool)) =>
                 (keyString -> valueBool.toString).pure[M]
               case (GString(keyString), GUri(uri)) =>
@@ -880,6 +940,82 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           ba         <- Sync[M].fromEither(serialize(exprSubst))
         } yield Expr(GByteArray(ByteString.copyFrom(ba)))
       }
+  }
+
+  private[this] val toInt: Method = new Method() {
+
+    def bigIntToLong(bi: BigInt): M[Long] =
+      if (bi > Long.MaxValue || bi < Long.MinValue)
+        ReduceError("Error: input value out of range").raiseError[M, Long]
+      else Sync[M].delay(bi.toLong)
+
+    def createGInt(exp: Expr): M[GInt] =
+      exp.exprInstance match {
+        case e: GInt => e.pure
+
+        case GBigInt(bi) =>
+          for {
+            _       <- charge[M](toIntCost(bi))
+            longVal <- bigIntToLong(bi)
+          } yield GInt(longVal)
+
+        case GString(str) =>
+          for {
+            _ <- charge[M](toIntCost(str))
+            longVal <- Sync[M].delay(str.toLong).handleErrorWith { ex =>
+                        ReduceError(
+                          s"Error: exception was thrown when decoding input String to Int: ${ex.getMessage}"
+                        ).raiseError[M, Long]
+                      }
+          } yield GInt(longVal)
+
+        case other => MethodNotDefined("toInt", other.typ).raiseError[M, GInt]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- MethodArgumentNumberMismatch("toInt", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
+        baseExpr <- evalSingleExpr(p)
+        r        <- createGInt(baseExpr)
+      } yield r
+  }
+
+  private[this] val toBigInt: Method = new Method() {
+
+    def createGBigInt(exp: Expr): M[GBigInt] =
+      exp.exprInstance match {
+
+        case e: GBigInt => e.pure
+
+        case GInt(num) =>
+          for {
+            _      <- charge[M](INT_TO_BIGINT_COST)
+            bigInt <- Sync[M].delay(BigInt(num))
+          } yield GBigInt(bigInt)
+
+        case GString(str) =>
+          for {
+            _ <- charge[M](toBigIntCost(str))
+            bigInt <- Sync[M].delay(BigInt(str)).handleErrorWith { ex =>
+                       ReduceError(
+                         s"Error: exception was thrown when decoding input String to BigInt: ${ex.getMessage}"
+                       ).raiseError[M, BigInt]
+                     }
+          } yield GBigInt(bigInt)
+
+        case other => MethodNotDefined("toBigInt", other.typ).raiseError[M, GBigInt]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- MethodArgumentNumberMismatch("toBigInt", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
+        baseExpr <- evalSingleExpr(p)
+        r        <- createGBigInt(baseExpr)
+      } yield r
   }
 
   private[this] val hexToBytes: Method = new Method() {
@@ -1436,6 +1572,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     Map(
       "nth"         -> nth,
       "toByteArray" -> toByteArray,
+      "toInt"       -> toInt,
+      "toBigInt"    -> toBigInt,
       "hexToBytes"  -> hexToBytes,
       "bytesToHex"  -> bytesToHex,
       "toUtf8Bytes" -> toUtf8Bytes,

@@ -31,6 +31,7 @@ class SubSpec extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
       ConnNotBody(Par()),
       ConnBool(false),
       ConnInt(false),
+      ConnBigInt(false),
       ConnString(true),
       ConnUri(true),
       ConnByteArray(true),
