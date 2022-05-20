@@ -304,7 +304,7 @@ object TransactionBalances {
                                               }
                                               transfers ++ addedTransfers
                                           }
-                                        transactions <- transactionStore.get(
+                                        transactions <- transactionStore.get1(
                                                          blockHash.toHexString
                                                        )
                                         res = transactions.get.flatten
