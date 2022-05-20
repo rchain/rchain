@@ -8,7 +8,7 @@ new
   updateRet,
   deployerID(`rho:rchain:deployerId`)
 in {
-  for (@oldData, Pos, conRet <- updateContract){
+  for (Pos, conRet <- updateContract){
     contract Pos(@"sayHello", ret) = {
       ret!("hello")
     }|

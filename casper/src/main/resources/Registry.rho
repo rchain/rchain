@@ -492,16 +492,13 @@ in {
                     match res {
                       (true, Nil) => {
                         for (oldLib <- loc) {
-                          new tmp, newRet in {
-                            @(*oldLib, "extractState")!(*tmp) |
-                            for (@oldState <- tmp) {
-                              // launch new contract instance with initial state extracted from the old instance
-                              @updateContract!(oldState, *oldLib, *newRet) |
-                              for (@meth <- newRet){
-                                // write new method entry point to location channel
-                                loc!(meth) |
-                                ret!((true, Nil))
-                              }
+                          new newRet in {
+                            // launch new contract instance with the old instance
+                            @updateContract!(*oldLib, *newRet) |
+                            for (@meth <- newRet){
+                              // write new method entry point to location channel
+                              loc!(meth) |
+                              ret!((true, Nil))
                             }
                           }
                         }

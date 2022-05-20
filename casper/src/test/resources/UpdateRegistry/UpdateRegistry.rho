@@ -6,14 +6,12 @@ new
   stdout(`rho:io:stdout`),
   updateRet,
   deployerID(`rho:rchain:deployerId`),
-  systemContractManager2           // MultiSig contract's method entry point
+  systemContractManager2,
+  oldStateCh
 in {
-  for (@locToken, oldSystemContractManager, ret <- updateContract){
+  for (oldSystemContractManager, ret <- updateContract){
     contract oldSystemContractManager(@"sayHello", returnCh) = {
       returnCh!("hello")
-    } |
-    for (ret <- @(*oldSystemContractManager, "extractState")){
-      ret!({"locToken": locToken.get("locToken")})
     } |
     ret!(*oldSystemContractManager)
   } |

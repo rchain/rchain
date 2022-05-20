@@ -8,38 +8,44 @@ new
   _authKey,
   stdout(`rho:io:stdout`),
   updateRet,
-  deployerID(`rho:rchain:deployerId`)
+  deployerID(`rho:rchain:deployerId`),
+  oldStateCh
 in {
-  for (oldAuthKeyState, oldAuthKey, ret <- updateContract){
-    AuthStateCh!(0)|
-    contract AuthKey(@"make", @shape, ret) = {
-      new authKey in {
-        contract authKey(@"challenge", retCh) = {
-          retCh!(bundle0{ (*_authKey, shape)})
-        } |
-        ret ! (bundle+{*authKey})
-      }
-    } |
-    contract AuthKey(@"check", key, @shape, ret) = {
-      new responseCh in {
-        key!("challenge", *responseCh) |
-        for (@response <- responseCh) {
-          ret!(response == { bundle0{ (*_authKey, shape) } } )
+  for ( oldAuthKey, ret <- updateContract){
+    stdout!(("get the old lib", *oldAuthKey)) |
+    @(*oldAuthKey, "extractState")!(*oldStateCh) |
+    for (oldAuthKeyState <- oldStateCh){
+      stdout!(("get the old lib state", *oldAuthKeyState)) |
+      AuthStateCh!(0)|
+      contract AuthKey(@"make", @shape, ret) = {
+        new authKey in {
+          contract authKey(@"challenge", retCh) = {
+            retCh!(bundle0{ (*_authKey, shape)})
+          } |
+          ret!(bundle+{*authKey})
         }
-      }
-    } |
-    contract AuthKey(@"add", @number, ret) = {
-      for (@ori <- AuthStateCh){
-        ret!(number + ori)|
-        AuthStateCh!(number + ori)
-      }
-    } |
-    for (ret <- @(*AuthKey, "extractState")){
-      for (@number <<- AuthStateCh){
-        ret!(number)
-      }
-    } | 
-    ret!(*AuthKey)
+      } |
+      contract AuthKey(@"check", key, @shape, ret) = {
+        new responseCh in {
+          key!("challenge", *responseCh) |
+          for (@response <- responseCh) {
+            ret!(response == { bundle0{ (*_authKey, shape) } } )
+          }
+        }
+      } |
+      contract AuthKey(@"add", @number, ret) = {
+        for (@ori <- AuthStateCh){
+          ret!(number + ori)|
+          AuthStateCh!(number + ori)
+        }
+      } |
+      for (ret <- @(*AuthKey, "extractState")){
+        for (@number <<- AuthStateCh){
+          ret!(number)
+        }
+      } | 
+      ret!(*AuthKey)
+    } 
   } |
   stdout!(("propose start!!!!!"))|
   rl!(`rho:registry:systemContractManager`, *rlret)|
