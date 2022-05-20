@@ -53,7 +53,8 @@ object BlockAPI {
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
       triggerPropose: Option[ProposeFunction[F]],
-      minPhloPrice: Long
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -69,6 +70,12 @@ object BlockAPI {
         // call a propose if proposer defined
         _ <- triggerPropose.traverse(_(casper, true))
       } yield r
+
+    // Check if node is read-only
+    val readOnlyError = new RuntimeException(
+      "Deploy was rejected because node is running in read-only mode."
+    ).raiseError[F, ApiErr[String]]
+    val readOnlyCheck = readOnlyError.whenA(isNodeReadOnly)
 
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
@@ -89,7 +96,9 @@ object BlockAPI {
       .warn(errorMessage)
       .as(s"Error: $errorMessage".asLeft[String])
 
-    forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
+    readOnlyCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[
+      ApiErr[String]
+    ](
       casperDeploy,
       logErrorMessage
     ))
@@ -377,16 +386,12 @@ object BlockAPI {
       ))
   }
 
-  def visualizeDag[
-      F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore,
-      G[_]: Monad: GraphSerializer,
-      R
-  ](
+  def visualizeDag[F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore, R](
       depth: Int,
       maxDepthLimit: Int,
       startBlockNumber: Int,
-      visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
-      serialize: G[Graphz[G]] => R
+      visualizer: (Vector[Vector[BlockHash]], String) => F[Graphz[F]],
+      serialize: F[R]
   ): F[ApiErr[R]] = {
     val errorMessage = "visual dag failed"
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] =
@@ -400,9 +405,11 @@ object BlockAPI {
                         startBlockNum - depth,
                         Some(startBlockNum)
                       )
-        lfb   <- casper.lastFinalizedBlock
-        graph <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
-      } yield serialize(graph).asRight[Error]
+        lfb    <- casper.lastFinalizedBlock
+        _      <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
+        result <- serialize
+      } yield result.asRight[Error]
+
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
       Log[F]
@@ -792,17 +799,31 @@ object BlockAPI {
     )
   }
 
-  def getDataAtPar[F[_]: Concurrent: RuntimeManager: BlockStore](
-      blockHash: String,
+  def getDataAtPar[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       par: Par,
+      blockHash: String,
       usePreStateHash: Boolean
-  ): F[Seq[Par]] =
-    for {
-      block <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
-      stateHash = if (usePreStateHash) block.body.state.preStateHash
-      else block.body.state.postStateHash
-      sortedPar <- parSortable.sortMatch[F](par).map(_.term)
-      data      <- RuntimeManager[F].getData(stateHash)(sortedPar)
-    } yield data
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
+
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
+      for {
+        block          <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
+        sortedPar      <- parSortable.sortMatch[F](par).map(_.term)
+        runtimeManager <- casper.getRuntimeManager
+        data           <- getDataWithBlockInfo(runtimeManager, sortedPar, block).map(_.get)
+      } yield (data.postBlockData, data.getBlock).asRight[Error]
+
+    val errorMessage =
+      "Could not get data at par, casper instance was not available yet."
+
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[(Seq[Par], LightBlockInfo)]](
+        casperResponse(_),
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
 
 }

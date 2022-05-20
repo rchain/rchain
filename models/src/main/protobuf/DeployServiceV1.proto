@@ -14,6 +14,7 @@ import "DeployServiceCommon.proto";
 // make a scalapb directory in this file's location and place it inside
 
 import "scalapb/scalapb.proto";
+import "RhoTypes.proto";
 
 import "google/protobuf/empty.proto";
 
@@ -42,7 +43,10 @@ service DeployService {
   // Get a summary of blocks on the blockchain.
   rpc getBlocks(BlocksQuery) returns (stream BlockInfoResponse) {}
   // Find data sent to a name.
+  // OBSOLETE: Use getDataAtName instead. This method will be removed in the future version of RNode.
   rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  // Find data sent to a name.
+  rpc getDataAtName(DataAtNameByBlockQuery) returns (RhoDataResponse) {}
   // Find processes receiving on a name.
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ContinuationAtNameResponse) {}
   // Find block containing a deploy.
@@ -131,6 +135,19 @@ message ListeningNameDataResponse {
 message ListeningNameDataPayload {
   repeated DataWithBlockInfo blockInfo = 1;
   int32 length                         = 2;
+}
+
+// listenForDataAtPar
+message RhoDataResponse {
+  oneof message {
+    ServiceError error     = 1;
+    RhoDataPayload payload = 2;
+  }
+}
+
+message RhoDataPayload {
+  repeated Par par     = 1;
+  LightBlockInfo block = 2 [(scalapb.field).no_box = true];
 }
 
 // listenForContinuationAtName

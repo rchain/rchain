@@ -1,6 +1,5 @@
 package coop.rchain.casper.helper
 
-import cats.data.State
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
@@ -21,9 +20,9 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
-import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
+import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
-import coop.rchain.casper.{Casper, ValidBlock, _}
+import coop.rchain.casper._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -33,9 +32,10 @@ import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.comm.transport.CommunicationResponse
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.graphz.{Graphz, StringSerializer}
+import coop.rchain.graphz.StringSerializer
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockVersion
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
@@ -146,8 +146,8 @@ case class TestNode[F[_]: Timer](
     heightConstraintThreshold = Long.MaxValue,
     // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
     // Required to enable protection from re-submitting duplicate deploys
-    deployLifespan = 50,
-    casperVersion = 1,
+    deployLifespan = MultiParentCasperImpl.deployLifespan,
+    casperVersion = BlockVersion.Current,
     configVersion = 1,
     bondMinimum = 0,
     bondMaximum = Long.MaxValue,
@@ -347,29 +347,24 @@ case class TestNode[F[_]: Timer](
 
   def shutoff() = transportLayerEff.clear(local)
 
-  def visualizeDag(startBlockNumber: Int): F[String] = {
-
-    type G[A] = State[StringBuffer, A]
-    import cats.mtl.implicits._
-
-    implicit val serializer = new StringSerializer[G]
-    val serialize: G[Graphz[G]] => String =
-      _.runS(new StringBuffer("")).value.toString
-
-    val result: F[Either[String, String]] = BlockAPI.visualizeDag[F, G, String](
-      Int.MaxValue,
-      apiMaxBlocksLimit,
-      startBlockNumber,
-      (ts, lfb) =>
-        GraphzGenerator.dagAsCluster[F, G](
-          ts,
-          lfb,
-          GraphConfig(showJustificationLines = true)
-        ),
-      serialize
-    )
-    result.map(_.right.get)
-  }
+  def visualizeDag(startBlockNumber: Int): F[String] =
+    for {
+      ref <- Ref[F].of(new StringBuffer(""))
+      ser = new StringSerializer(ref)
+      result <- BlockAPI.visualizeDag[F, String](
+                 Int.MaxValue,
+                 apiMaxBlocksLimit,
+                 startBlockNumber,
+                 (ts, lfb) =>
+                   GraphzGenerator.dagAsCluster[F](
+                     ts,
+                     lfb,
+                     GraphConfig(showJustificationLines = true),
+                     ser
+                   ),
+                 ref.get.map(_.toString)
+               )
+    } yield result.right.get
 
   /**
     * Prints a uri on stdout that, when clicked, visualizes the current dag state using ttps://dreampuf.github.io.

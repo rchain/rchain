@@ -20,6 +20,7 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockVersion
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
 import fs2.concurrent.Queue
@@ -57,9 +58,9 @@ object CasperLaunch {
         conf.maxParentDepth.getOrElse(Int.MaxValue),
         conf.synchronyConstraintThreshold.toFloat,
         conf.heightConstraintThreshold,
-        50,
-        1,
-        1,
+        deployLifespan = MultiParentCasperImpl.deployLifespan,
+        casperVersion = BlockVersion.Current,
+        configVersion = 1,
         conf.genesisBlockData.bondMinimum,
         conf.genesisBlockData.bondMaximum,
         conf.genesisBlockData.epochLength,

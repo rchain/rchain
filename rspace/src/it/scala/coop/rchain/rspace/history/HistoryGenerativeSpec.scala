@@ -1,4 +1,5 @@
 package coop.rchain.rspace.history
+
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
 import History._
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -27,12 +28,12 @@ class HistoryGenerativeSpec
     distinctListOf(arbitraryRandomThreeBytes)
   ) { keys: List[Key] =>
     val actions             = keys.map(k => (k, TestData.randomBlake))
-    val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
+    val emptyMergingHistory = HistoryMergingInstances.merging[Task](emptyRootHash, inMemHistoryStore)
 
-    val emptySimplisticHistory: History[Task] =
+    val emptySimplisticHistory: HistoryWithFind[Task] =
       SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
 
-    val emptyState = Map.empty[Key, (Data, History[Task], History[Task])] // accumulate actions performed on the trie
+    val emptyState = Map.empty[Key, (Data, HistoryWithFind[Task], HistoryWithFind[Task])] // accumulate actions performed on the trie
 
     val (resultMergingHistory, resultSimplisticHistory, map) =
       actions.foldLeft((emptyMergingHistory, emptySimplisticHistory, emptyState)) {
@@ -74,9 +75,9 @@ class HistoryGenerativeSpec
   "process" should "accept new leafs in bulk" in forAll(distinctListOf(arbitraryRandomThreeBytes)) {
     keys: List[Key] =>
       val actions             = keys.map(k => (k, TestData.randomBlake))
-      val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
+      val emptyMergingHistory = HistoryMergingInstances.merging[Task](emptyRootHash, inMemHistoryStore)
 
-      val emptySimplisticHistory: History[Task] =
+      val emptySimplisticHistory: HistoryWithFind[Task] =
         SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
 
       val inserts                  = actions.map { case (k, v) => InsertAction(k, v) }
@@ -105,10 +106,10 @@ class HistoryGenerativeSpec
     )
 
   def insertAndVerify(
-      history: History[Task],
+      history: HistoryWithFind[Task],
       toBeProcessed: List[Data],
       pastData: List[Data]
-  ): (History[Task], List[Data]) = {
+  ): (HistoryWithFind[Task], List[Data]) = {
     val inserts      = toBeProcessed.map(v => InsertAction(v._1, v._2))
     val insertResult = runEffect(history.process(inserts))
     insertResult.root should not be history.root
@@ -129,9 +130,9 @@ class HistoryGenerativeSpec
     (insertResult, allUniqueData.toList)
   }
 
-  def fetchData(h: History[Task], data: Data): (TriePointer, Vector[Trie]) =
+  def fetchData(h: HistoryWithFind[Task], data: Data): (TriePointer, Vector[Trie]) =
     fetchData(h, data._1)
 
-  def fetchData(h: History[Task], k: Key): (TriePointer, Vector[Trie]) =
+  def fetchData(h: HistoryWithFind[Task], k: Key): (TriePointer, Vector[Trie]) =
     runEffect(h.find(k))
 }
