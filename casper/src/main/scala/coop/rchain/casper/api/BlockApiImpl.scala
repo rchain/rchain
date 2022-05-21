@@ -103,6 +103,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   override def status: F[Status] =
     for {
       netInfo                  <- networkStatus
+      latestBlockNumber        <- BlockDagStorage[F].getRepresentation.map(_.latestBlockNumber)
       (thisNode, peers, nodes) = netInfo
       status = Status(
         version = VersionInfo(api = 1.toString, node = version),
@@ -111,7 +112,8 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         shardId,
         peers = peers.length,
         nodes = nodes.length,
-        minPhloPrice
+        minPhloPrice,
+        latestBlockNumber
       )
     } yield status
 

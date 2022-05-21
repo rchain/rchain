@@ -231,7 +231,8 @@ object WebApi {
       shardId: String,
       peers: Int,
       nodes: Int,
-      minPhloPrice: Long
+      minPhloPrice: Long,
+      latestBlockNumber: Long
   )
 
   final case class VersionInfo(api: String, node: String)
@@ -254,7 +255,8 @@ object WebApi {
       shardId = status.shardId,
       peers = status.peers,
       nodes = status.nodes,
-      minPhloPrice = status.minPhloPrice
+      minPhloPrice = status.minPhloPrice,
+      latestBlockNumber = status.latestBlockNumber
     )
 
   def toSignedDeploy[F[_]: Sync](
