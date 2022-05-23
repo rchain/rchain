@@ -1,7 +1,7 @@
 package coop.rchain.casper.rholang
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.rholang.interpreter.EvaluateResult
-import coop.rchain.rspace.merger.MergingLogic.NumberChannelsEndVal
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 
 object RuntimeDeployResult {
   final case class UserDeployRuntimeResult(
