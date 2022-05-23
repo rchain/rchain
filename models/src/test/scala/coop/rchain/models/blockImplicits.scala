@@ -158,7 +158,7 @@ object blockImplicits {
                       Random.shuffle(bonds).headOption.getOrElse(bondGen.sample.get).validator
                     )
                   else Gen.const(setValidator.get)
-      version   = if (setVersion.isEmpty) 1L else setVersion.get
+      version   = if (setVersion.isEmpty) BlockVersion.Current else setVersion.get
       timestamp <- if (setTimestamp.isEmpty) arbitrary[Long] else Gen.const(setTimestamp.get)
       shardId   = if (setShardId.isEmpty) "root" else setShardId.get
       block = BlockMessage(
@@ -190,6 +190,8 @@ object blockImplicits {
                   else Gen.const(hashF.get(block))
       ret = block.copy(blockHash = blockHash)
     } yield ret
+
+  val arbBlockMessage = Arbitrary(blockElementGen())
 
   def blockElementsWithParentsGen(genesis: BlockMessage): Gen[List[BlockMessage]] =
     Gen.sized { size =>

@@ -10,6 +10,7 @@ import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.models.BlockVersion
 
 final case class Genesis(
     shardId: String,
@@ -103,8 +104,7 @@ object Genesis {
       rejectedDeploys = List.empty,
       systemDeploys = List.empty
     )
-    val version = 1L //FIXME make this part of Genesis, and pass it from upstream
-    val header  = blockHeader(body, List.empty[StateHash], version, timestamp)
+    val header = blockHeader(body, List.empty[StateHash], BlockVersion.Current, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }

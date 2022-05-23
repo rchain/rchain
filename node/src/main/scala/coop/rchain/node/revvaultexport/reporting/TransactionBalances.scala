@@ -41,7 +41,9 @@ object TransactionBalances {
       transaction: TransactionInfo,
       blockNumber: Long,
       isFinalized: Boolean
-  )
+  ) {
+    val isSucceed: Boolean = transaction.transaction.failReason.isEmpty
+  }
 
   val initialPosStakingVault: RevAccount = RevAccount(
     RevAddress
@@ -136,7 +138,7 @@ object TransactionBalances {
   ): GlobalVaultsInfo = {
     val resultMap = transfers.foldLeft(genesisVault.vaultMaps) {
       case (m, transfer) =>
-        if (transfer.isFinalized) {
+        if (transfer.isFinalized && transfer.isSucceed) {
           val fromAddr = transfer.transaction.transaction.fromAddr
           val toAddr   = transfer.transaction.transaction.toAddr
           val amount   = transfer.transaction.transaction.amount
@@ -171,16 +173,22 @@ object TransactionBalances {
       block: BlockMessage
   ): F[GlobalVaultsInfo] =
     for {
-      vaultMap  <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
-      coopVault = RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
+      vaultMap <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
+      coopVault = vaultMap.getOrElse(
+        CoopVaultAddr,
+        RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
+      )
       perValidatorVaults <- getPerValidatorVaults(runtime, block).map(
                              addrs =>
                                addrs.map(
                                  addr =>
-                                   RevAccount(
-                                     RevAddress.parse(addr).right.get,
-                                     0,
-                                     PerValidatorVault
+                                   vaultMap.getOrElse(
+                                     addr,
+                                     RevAccount(
+                                       RevAddress.parse(addr).right.get,
+                                       0,
+                                       PerValidatorVault
+                                     )
                                    )
                                )
                            )
@@ -212,7 +220,7 @@ object TransactionBalances {
       walletPath: Path,
       bondPath: Path,
       targetBlockHash: String
-  )(implicit scheduler: ExecutionContext): F[GlobalVaultsInfo] = {
+  )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
     val oldRSpacePath                           = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     val legacyRSpaceDirSupport                  = Files.exists(oldRSpacePath)
     implicit val metrics: Metrics.MetricsNOP[F] = new Metrics.MetricsNOP[F]()
@@ -268,11 +276,16 @@ object TransactionBalances {
             blockMeta <- blockMetaOpt.liftTo(
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
-            isFinalized <- dagRepresantation.isFinalized(blockHash)
-          } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized)
+            isFinalized         <- dagRepresantation.isFinalized(blockHash)
+            isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.body.state.blockNumber
+          } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
         }
       }
-      afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allWrappedTransactions)
-    } yield afterTransferMap
+      allSortedTransactions = allWrappedTransactions.sortBy(_.blockNumber)
+      _ <- log.info(
+            s"Transaction history from ${allSortedTransactions.head} to ${allSortedTransactions.tail}"
+          )
+      afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allSortedTransactions)
+    } yield (afterTransferMap, allSortedTransactions)
   }
 }

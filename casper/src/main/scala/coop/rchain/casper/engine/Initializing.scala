@@ -221,7 +221,7 @@ class Initializing[F[_]
       // TODO: validate genesis (zero) block correctly
       true.pure
     } else
-      Validate.blockHash(block).map(_ == Right(Valid))
+      Validate.blockHash(block)
   }
 
   private def populateDag(

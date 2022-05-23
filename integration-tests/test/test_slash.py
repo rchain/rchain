@@ -2,6 +2,7 @@ import hashlib
 import re
 import sys
 import time
+import copy
 from pathlib import Path
 from random import Random
 from typing import Generator, Tuple, Dict
@@ -9,7 +10,8 @@ from contextlib import contextmanager
 import logging
 import pytest
 from docker.client import DockerClient
-from rchain.crypto import PrivateKey, gen_block_hash_from_block
+from google.protobuf.wrappers_pb2 import Int32Value, StringValue
+from rchain.crypto import PrivateKey
 from rchain.pb.CasperMessage_pb2 import BlockMessageProto as BlockMessage, JustificationProto as Justification
 from rchain.util import create_deploy_data
 
@@ -31,6 +33,34 @@ BONDED_VALIDATOR_KEY_1 = PrivateKey.from_hex("597623f0b50e82008d5264498369972453
 BONDED_VALIDATOR_KEY_2 = PrivateKey.from_hex("9a32ff7b7c6e25527e0b4e5bec70596c6094e6529d56bf61cbd1ca26d3e92b10")
 BONDED_VALIDATOR_KEY_3 = PrivateKey.from_hex("af47862137d4e772f540029ae73ee01443c61288f3df9307a13d681de6ad2de4")
 
+
+def blake2b_32(data: bytes = b'') -> hashlib.blake2b:
+  return hashlib.blake2b(data, digest_size=32)
+
+def gen_block_hash_from_block(block: BlockMessage) -> bytes:
+  blockVersion = block.header.version
+  if blockVersion == 2:
+    return gen_block_hash_from_block_v2(block)
+  if blockVersion == 1:
+    return gen_block_hash_from_block_v1(block)
+  raise Exception('Unsupported block version', blockVersion)
+
+def gen_block_hash_from_block_v2(block: BlockMessage) -> bytes:
+  empty_bytes = b''
+  block_clear_sig_data = copy.copy(block)
+  block_clear_sig_data.blockHash = empty_bytes
+  block_clear_sig_data.sig = empty_bytes
+  return blake2b_32(block_clear_sig_data.SerializeToString()).digest()
+
+def gen_block_hash_from_block_v1(block: BlockMessage) -> bytes:
+  signed_obj = b''.join([block.header.SerializeToString(),
+                         block.body.SerializeToString(),
+                         block.sender,
+                         StringValue(value=block.sigAlgorithm).SerializeToString(),
+                         Int32Value(value=block.seqNum).SerializeToString(),
+                         StringValue(value=block.shardId).SerializeToString(),
+                         block.extraBytes])
+  return blake2b_32(signed_obj).digest()
 
 def generate_block_hash() -> bytes:
     blake = hashlib.blake2b(digest_size=32)
@@ -59,47 +89,6 @@ def three_nodes_network_with_node_client(command_line_options: CommandLineOption
         bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
         node_protocol_client(bootstrap_node.network, docker_client, context) as client:
         yield context, bootstrap_node, validator1, validator2, client
-
-
-@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
-def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
-    """
-    Slash a validator which proposes an invalid block contains invalid block hash
-
-    1. v1 proposes a valid block b1
-    2. v1 proposes an invalid block b2 with invalid block hash and send it to v2
-    3. v2 records b2 as invalid block (InvalidBlockHash)
-    4. v2 proposes a new block which slashes v1
-    """
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
-        contract = '/opt/docker/examples/tut-hello.rho'
-
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
-        blockhash = validator1.propose()
-
-        wait_for_node_sees_block(context, validator2, blockhash)
-
-        block_info = validator1.get_block(blockhash)
-
-        block_msg = client.block_request(block_info.blockInfo.blockHash, validator1)
-        evil_block_hash = generate_block_hash()
-
-        block_msg.blockHash = evil_block_hash
-        block_msg.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
-        block_msg.header.timestamp = int(time.time()*1000)
-
-        client.send_block(block_msg, validator2)
-
-        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(evil_block_hash.hex()[:10]))
-        wait_for_log_match(context, validator2, record_invalid)
-
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
-
-        slashed_block_hash = validator2.propose()
-
-        block_info = validator2.get_block(slashed_block_hash)
-        bonds_validators = {b.validator: b.stake for b in block_info.blockInfo.bonds}
-        assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
 
 
 @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
@@ -388,10 +377,10 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
 @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
 def test_node_working_right_after_slashing(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
-    Slash a validator which proposes an invalid block contains invalid block hash
+    Slash a validator which proposes an invalid block contains invalid block number
 
     1. v1 proposes a valid block b1
-    2. v1 proposes an invalid block b2 with invalid block hash and send it to v2
+    2. v1 proposes an invalid block b2 with invalid block number and send it to v2
     3. v2 records b2 as invalid block (InvalidBlockHash)
     4. v2 proposes a new block which slashes v1
     5. v2 should propose normally
@@ -407,15 +396,16 @@ def test_node_working_right_after_slashing(command_line_options: CommandLineOpti
         block_info = validator1.get_block(blockhash)
 
         block_msg = client.block_request(block_info.blockInfo.blockHash, validator1)
-        evil_block_hash = generate_block_hash()
 
+        # Modify block number to make invalid block
+        block_msg.body.state.blockNumber = 1000  # pylint: disable=maybe-no-member
+        evil_block_hash = gen_block_hash_from_block(block_msg)
         block_msg.blockHash = evil_block_hash
         block_msg.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
-        block_msg.header.timestamp = int(time.time()*1000)
 
         client.send_block(block_msg, validator2)
 
-        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(evil_block_hash.hex()[:10]))
+        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockNumber".format(evil_block_hash.hex()[:10]))
         wait_for_log_match(context, validator2, record_invalid)
 
         validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
