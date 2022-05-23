@@ -8,6 +8,7 @@ import cats.syntax.all._
 import cats.{~>, Parallel}
 import com.typesafe.config.Config
 import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
@@ -372,14 +373,18 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       finishedProcessing  <- Queue.unbounded[F, BlockHash]
       blockReceiverState  <- Ref[F].of(BlockReceiverState(Map.empty[BlockHash, RecvStatus]))
 
-      (incomingBlocksStream, processesBlocksStream) = BlockReceiver.streams(
-        storeManager,
-        blockProcessorQueue,
-        receiverOutputQueue,
-        finishedProcessing.dequeue,
-        casperShardConf,
-        blockReceiverState
-      )
+      casperBuffer <- CasperBufferKeyValueStorage.create[F](storeManager)
+      (incomingBlocksStream, processesBlocksStream) = {
+        implicit val a  = blockRetriever
+        implicit val cb = casperBuffer
+        BlockReceiver.streams(
+          blockProcessorQueue,
+          receiverOutputQueue,
+          finishedProcessing.dequeue,
+          casperShardConf,
+          blockReceiverState
+        )
+      }
 
       blockProcessorStream = BlockProcessorInstance.create(
         receiverOutputQueue.dequeue,

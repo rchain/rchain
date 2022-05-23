@@ -32,15 +32,13 @@ final case class BlockReceiverState[MId](state: Map[MId, RecvStatus]) {
 }
 
 object BlockReceiver {
-  def streams[F[_]: Concurrent: Sync: RuntimeManager: RequestedBlocks: RPConfAsk: TransportLayer: BlockStore: BlockDagStorage: CommUtil: Log: Timer: Time: Metrics: Span /*: Concurrent: Sync: RuntimeManager: BlockDagStorage: BlockStore: RequestedBlocks: Timer: Time: RPConfAsk: TransportLayer: CommUtil: Metrics: Log: Span*/ ](
-      storeManager: KeyValueStoreManager[F],
+  def streams[F[_]: Concurrent: Sync: RuntimeManager: RequestedBlocks: RPConfAsk: TransportLayer: BlockStore: BlockDagStorage: CasperBufferStorage: BlockRetriever: CommUtil: Log: Timer: Time: Metrics: Span](
       incomingBlocks: Queue[F, BlockMessage],
       receiverOutputQueue: Queue[F, BlockHash],
       finishedProcessingStream: Stream[F, BlockHash],
       casperShardConf: CasperShardConf,
       state: Ref[F, BlockReceiverState[BlockHash]]
   ): (Stream[F, BlockMessage], Stream[F, Unit]) = {
-    val casperBufferF = CasperBufferKeyValueStorage.create[F](storeManager)
 
     def blockStr(b: BlockMessage)       = PrettyPrinter.buildString(b, short = true)
     def logMissingDeps(b: BlockMessage) = Log[F].info(s"Block ${blockStr(b)} missing dependencies.")
@@ -53,57 +51,37 @@ object BlockReceiver {
       incomingBlocks.dequeue
         .parEvalMapUnorderedProcBounded[F, BlockMessage](_.pure)
         .filter(block => block.shardId == casperShardConf.shardName)
-        .evalFilter(
-          block =>
-            casperBufferF >>= { casperBuffer =>
-              implicit val cb: CasperBufferStorage[F] = casperBuffer
-              checkIfOfInterest(block)
-            } >>= { r =>
-              logNotOfInterest(block).unlessA(r).as(r)
-            }
-        )
-        .evalFilter(
-          block =>
-            checkIfWellFormedAndStore(block) >>= { r =>
-              logMalformed(block).unlessA(r).as(r)
-            }
-        )
-        .evalMap(
-          block =>
-            casperBufferF >>= { casperBuffer =>
-              {
-                implicit val cb = casperBuffer
-                commitToBuffer(block, None)
-              } *> block.pure
-            }
-        )
+        .evalFilter { block =>
+          checkIfOfInterest(block) >>= { r =>
+            logNotOfInterest(block).unlessA(r).as(r)
+          }
+        }
+        .evalFilter { block =>
+          checkIfWellFormedAndStore(block) >>= { r =>
+            logMalformed(block).unlessA(r).as(r)
+          }
+        }
+        .evalTap(commitToBuffer(_, None))
         .evalMap(block => state.modify(st => (st.add(block.blockHash), block)))
 
     def processesBlocksStream =
-      finishedProcessingStream
-        .parEvalMapUnorderedProcBounded(
-          _ =>
-            for {
-              casperBuffer   <- casperBufferF
-              blockRetriever = BlockRetriever.of[F]
-              // TODO: Checking and updating state not atomic
-              hashesInReceive <- state.get.map(_.state.keySet)
-              blocksInReceive <- hashesInReceive.toList.traverse(BlockStore[F].getUnsafe)
-              blocksResolved <- {
-                implicit val (br, cb) = (blockRetriever, casperBuffer)
-                blocksInReceive
-                  .filterA(
-                    block =>
-                      checkDependenciesWithEffects[F](block) >>= { r =>
-                        logMissingDeps(block).unlessA(r).as(r)
-                      }
-                  )
-                  .map(_.toSet)
-              }
-              hashesResolved   = blocksResolved.map(_.blockHash)
-              hashesUnresolved = hashesInReceive.diff(hashesResolved)
-              removedHashes    <- hashesResolved.toList.traverse(casperBuffer.remove)
-              _ = state.update { st =>
+      finishedProcessingStream.parEvalMapUnorderedProcBounded { hash =>
+        for {
+          // TODO: Checking and updating state not atomic
+          hashesInReceive <- state.get.map(_.state.keySet)
+          blocksInReceive <- hashesInReceive.toList.traverse(BlockStore[F].getUnsafe)
+          blocksResolved <- blocksInReceive
+                             .filterA { block =>
+                               checkDependenciesWithEffects[F](block) >>= { r =>
+                                 logMissingDeps(block).unlessA(r).as(r)
+                               }
+                             }
+                             .map(_.toSet)
+
+          hashesResolved   = blocksResolved.map(_.blockHash)
+          hashesUnresolved = hashesInReceive.diff(hashesResolved)
+          removedHashes    <- hashesResolved.toList.traverse(CasperBufferStorage[F].remove)
+          _ <- state.update { st =>
                 // TODO: The pattern (removedHashes.contains) not guarantee atomically removing hash
                 //  from CasperBuffer and state because incomingBlocksStream can push hashes in parallel.
                 val newSt = hashesResolved.filter(removedHashes.contains).foldLeft(st) {
@@ -111,12 +89,12 @@ object BlockReceiver {
                 }
                 newSt
               }
-              _ = hashesResolved
+          _ <- hashesResolved.toList
                 .filter(removedHashes.contains)
-                .foreach(receiverOutputQueue.enqueue1)
-              // TODO: Should we request dependencies for hashesUnresolved?
-            } yield ()
-        )
+                .traverse_(receiverOutputQueue.enqueue1)
+          // TODO: Should we request dependencies for hashesUnresolved?
+        } yield ()
+      }
     (incomingBlocksStream, processesBlocksStream)
   }
 
