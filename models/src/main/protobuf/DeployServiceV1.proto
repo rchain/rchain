@@ -50,8 +50,6 @@ service DeployService {
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ContinuationAtNameResponse) {}
   // Find block containing a deploy.
   rpc findDeploy(FindDeployQuery) returns (FindDeployResponse) {}
-  // Preview new top-level unforgeable names (for example, to compute signatures over them).
-  rpc previewPrivateNames(PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {}
   // Get details about a particular block.
   rpc lastFinalizedBlock(LastFinalizedBlockQuery) returns (LastFinalizedBlockResponse) {}
   // Check if a given block is finalized.
@@ -167,14 +165,6 @@ message FindDeployResponse {
   oneof message {
     ServiceError error        = 1;
     LightBlockInfo blockInfo  = 2;
-  }
-}
-
-// previewPrivateNames
-message PrivateNamePreviewResponse {
-  oneof message {
-    ServiceError error                 = 1;
-    PrivateNamePreviewPayload payload  = 2;
   }
 }
 

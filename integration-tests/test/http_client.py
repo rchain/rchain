@@ -30,12 +30,6 @@ class ApiStatus:
 
 
 @dataclass
-class PrepareResponse:
-    names: List[str]
-    seq_number: int
-
-
-@dataclass
 class DataResponse:
     exprs: List[Union[str, int]]
     length: int
@@ -67,20 +61,6 @@ class HttpClient():
             peers=message['peers'],
             nodes=message['nodes'])
 
-    def prepare_deploy(self, deployer: Optional[str] =None, timestamp: Optional[int] = None, name_qty: Optional[int] = None) -> PrepareResponse:
-        prepare_deploy_url = self.url + '/prepare-deploy'
-        if deployer and timestamp and name_qty:
-            data = {
-                "deployer":deployer,
-                "timestamp": timestamp,
-                "nameQty": name_qty
-            }
-            rep = requests.post(prepare_deploy_url,json=data)
-        else:
-            rep = requests.get(prepare_deploy_url)
-        _check_reponse(rep)
-        message = rep.json()
-        return PrepareResponse(names=message['names'], seq_number=message['seqNumber'])
 
     def deploy(self, term: str, phlo_limit: int, phlo_price: int, valid_after_block_number: int, deployer: PrivateKey, shard_id: str = '') -> str:
         timestamp = int(time.time()* 1000)

@@ -171,8 +171,6 @@ object HashM extends HashMDerivation {
   implicit val PCostHash              = gen[PCost]
   implicit val TaggedContinuationHash = gen[TaggedContinuation]
 
-  implicit val PrivateNamePreviewQueryHash = gen[PrivateNamePreviewQuery]
-
   // deploy service V1
   implicit val ContinuationAtNamePayloadV2Hash  = gen[v1.ContinuationAtNamePayload]
   implicit val BlockResponseV2Hash              = gen[v1.BlockResponse]

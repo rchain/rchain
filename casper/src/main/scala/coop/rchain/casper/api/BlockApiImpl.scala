@@ -514,17 +514,6 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       message      <- blockHashOpt.flatTraverse(BlockStore[F].get1)
     } yield message
 
-  override def previewPrivateNames(
-      deployer: ByteString,
-      timestamp: Long,
-      nameQty: Int
-  ): F[ApiErr[Seq[ByteString]]] = {
-    val rand                = Tools.unforgeableNameRng(PublicKey(deployer.toByteArray), timestamp)
-    val safeQty             = nameQty min 1024
-    val ids: Seq[BlockHash] = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
-    ids.asRight[String].pure[F]
-  }
-
   override def lastFinalizedBlock: F[ApiErr[BlockInfo]] =
     for {
       dag                <- BlockDagStorage[F].getRepresentation

@@ -27,9 +27,6 @@ import coop.rchain.shared.Base16
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
 
-  // Get data to create deploy
-  def prepareDeploy(request: Option[PrepareRequest]): F[PrepareResponse]
-
   // Write data (deploy)
   def deploy(request: DeployRequest): F[String]
 
@@ -70,22 +67,6 @@ object WebApi {
     import WebApiSyntax._
 
     def status: F[ApiStatus] = blockApi.status.map(toApiStatus)
-
-    def prepareDeploy(req: Option[PrepareRequest]): F[PrepareResponse] = {
-      val seqNumber = blockApi.getLatestMessage
-        .flatMap(_.liftToBlockApiErr)
-        .map(_.seqNum)
-        .handleError { case _: LatestBlockMessageError => -1 }
-
-      val previewNames = req.fold(List[String]().pure) { r =>
-        blockApi
-          .previewPrivateNames(r.deployer.unsafeHexToByteString, r.timestamp, r.nameQty)
-          .flatMap(_.liftToBlockApiErr)
-          .map(_.map(toHex).toList)
-      }
-
-      (previewNames, seqNumber).mapN(PrepareResponse)
-    }
 
     def deploy(request: DeployRequest): F[String] =
       toSignedDeploy(request)
@@ -211,17 +192,6 @@ object WebApi {
   final case class RhoDataResponse(
       expr: Seq[RhoExpr],
       block: LightBlockInfo
-  )
-
-  final case class PrepareRequest(
-      deployer: String,
-      timestamp: Long,
-      nameQty: Int
-  )
-
-  final case class PrepareResponse(
-      names: List[String],
-      seqNumber: Int
   )
 
   final case class ApiStatus(
