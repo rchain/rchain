@@ -6,9 +6,9 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.InterpreterUtil.computeParentsPostState
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, SystemDeployUtil}
@@ -113,15 +113,15 @@ object BlockCreator {
         deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
         r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
               for {
-                now       <- Time[F].currentMillis
-                blockData = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+                now                 <- Time[F].currentMillis
+                blockData           = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+                computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
-                                   parents,
                                    deploys.toSeq,
                                    systemDeploys,
-                                   s,
                                    runtimeManager,
-                                   blockData
+                                   blockData,
+                                   computedParentsInfo
                                  )
                 (
                   preStateHash,

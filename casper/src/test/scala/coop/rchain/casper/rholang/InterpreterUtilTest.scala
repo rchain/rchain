@@ -85,20 +85,26 @@ class InterpreterUtilTest
   ] =
     Time[F].currentMillis >>= (
         now =>
-          InterpreterUtil
-            .computeDeploysCheckpoint[F](
-              parents,
-              deploys,
-              List.empty[SystemDeploy],
-              mkCasperSnapshot(dag),
-              runtimeManager,
-              BlockData(
-                now,
-                // TODO this should be blockNumber
-                blockNumber,
-                genesisContext.validatorPks.head,
-                seqNum
-              )
+          computeParentsPostState(
+            parents,
+            mkCasperSnapshot(dag),
+            runtimeManager
+          ).flatMap(
+              preState =>
+                InterpreterUtil
+                  .computeDeploysCheckpoint[F](
+                    deploys,
+                    List.empty[SystemDeploy],
+                    runtimeManager,
+                    BlockData(
+                      now,
+                      // TODO this should be blockNumber
+                      blockNumber,
+                      genesisContext.validatorPks.head,
+                      seqNum
+                    ),
+                    preState
+                  )
             )
             .attempt
       )
