@@ -498,7 +498,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   it should "succeed at slashing" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deployData    <- ConstructDeploy.basicDeployData[Effect](0)
+        deployData    <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
         signedBlock   <- nodes(0).casperEff.deploy(deployData) >> nodes(0).createBlockUnsafe()
         modifiedBlock = signedBlock.copy(seqNum = 47)
         invalidBlock  = nodes(0).validatorId.get.signBlock(modifiedBlock)
