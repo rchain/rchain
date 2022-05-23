@@ -75,7 +75,7 @@ object NodeLaunch {
 
         // Store genesis block
         _  <- BlockStore[F].put(genesisBlock)
-        ab = ApprovedBlock(genesisBlock)
+        ab = FinalizedFringe(List(genesisBlock.blockHash), genesisBlock.postStateHash)
         _  <- ApprovedStore[F].putApprovedBlock(ab)
         _  <- LastApprovedBlock[F].set(ab)
         _  <- BlockDagStorage[F].insert(genesisBlock, invalid = false, approved = true)

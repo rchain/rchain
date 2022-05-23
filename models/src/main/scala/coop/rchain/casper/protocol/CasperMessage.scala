@@ -8,6 +8,7 @@ import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.Serialize
@@ -28,8 +29,8 @@ object CasperMessage {
     // Tips request
     case _: ForkChoiceTipRequestProto => Right(ForkChoiceTipRequest)
     // Approved block
-    case m: ApprovedBlockProto            => ApprovedBlock.from(m)
-    case m: ApprovedBlockRequestProto     => Right(ApprovedBlockRequest.from(m))
+    case m: FinalizedFringeProto          => Right(FinalizedFringe.from(m))
+    case m: FinalizedFringeRequestProto   => Right(FinalizedFringeRequest.from(m))
     case m: NoApprovedBlockAvailableProto => Right(NoApprovedBlockAvailable.from(m))
     // Last finalized state messages
     case m: StoreItemsMessageRequestProto => Right(StoreItemsMessageRequest.from(m))
@@ -39,23 +40,24 @@ object CasperMessage {
 
 /* Approved block message */
 
-final case class ApprovedBlock(block: BlockMessage) extends CasperMessage {
-  def toProto: ApprovedBlockProto = ApprovedBlockProto().withBlock(block.toProto)
-}
-
-object ApprovedBlock {
-  def from(ba: ApprovedBlockProto): Either[String, ApprovedBlock] =
-    BlockMessage.from(ba.block).map(ApprovedBlock(_))
-}
-
-final case class ApprovedBlockRequest(identifier: String, trimState: Boolean = false)
+final case class FinalizedFringe(hashes: Seq[BlockHash], stateHash: StateHash)
     extends CasperMessage {
-  def toProto: ApprovedBlockRequestProto = ApprovedBlockRequestProto(identifier, trimState)
+  def toProto: FinalizedFringeProto =
+    FinalizedFringeProto().withHashes(hashes.toList).withStateHash(stateHash)
 }
 
-object ApprovedBlockRequest {
-  def from(abr: ApprovedBlockRequestProto): ApprovedBlockRequest =
-    ApprovedBlockRequest(abr.identifier, abr.trimState)
+object FinalizedFringe {
+  def from(f: FinalizedFringeProto): FinalizedFringe = FinalizedFringe(f.hashes, f.stateHash)
+}
+
+final case class FinalizedFringeRequest(identifier: String, trimState: Boolean = false)
+    extends CasperMessage {
+  def toProto: FinalizedFringeRequestProto = FinalizedFringeRequestProto(identifier, trimState)
+}
+
+object FinalizedFringeRequest {
+  def from(abr: FinalizedFringeRequestProto): FinalizedFringeRequest =
+    FinalizedFringeRequest(abr.identifier, abr.trimState)
 }
 
 final case class NoApprovedBlockAvailable(identifier: String, nodeIdentifer: String)

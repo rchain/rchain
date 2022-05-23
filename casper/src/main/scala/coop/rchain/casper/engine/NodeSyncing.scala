@@ -13,7 +13,6 @@ import coop.rchain.casper.engine.NodeSyncing.logNoApprovedBlockAvailable
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -21,8 +20,8 @@ import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
+import coop.rchain.shared._
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Event => NodeEvent, _}
 import fs2.concurrent.Queue
 
 import scala.collection.immutable.SortedMap
@@ -91,10 +90,10 @@ class NodeSyncing[F[_]
     trimState: Boolean = true
 ) {
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case ab: ApprovedBlock =>
+    case ab: FinalizedFringe =>
       onApprovedBlock(peer, ab)
 
-    case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
+    case br: FinalizedFringeRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
 
     case na: NoApprovedBlockAvailable =>
       logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
@@ -115,57 +114,40 @@ class NodeSyncing[F[_]
   // TEMP: flag for single call for process approved block
   val startRequester = Ref.unsafe(true)
 
-  private def onApprovedBlock(sender: PeerNode, approvedBlock: ApprovedBlock): F[Unit] = {
+  private def onApprovedBlock(sender: PeerNode, fringe: FinalizedFringe): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
-    val receivedShard     = approvedBlock.block.shardId
-    val expectedShard     = casperShardConf.shardName
-    val shardNameIsValid  = receivedShard == expectedShard
 
-    def handleApprovedBlock = {
-      val block = approvedBlock.block
+    def handleApprovedBlock =
       for {
-        _ <- Log[F].info(
-              s"Valid approved block ${PrettyPrinter.buildString(block, short = true)} received. Restoring approved state."
-            )
-
-        // Record approved block in DAG
-        _ <- BlockDagStorage[F].insert(block, invalid = false, approved = true)
+        _ <- Log[F].info(s"Finalized fringe received. Restoring LFS state.")
 
         // Download approved state and all related blocks
-        _ <- requestApprovedState(approvedBlock)
+        _ <- requestApprovedState(fringe)
 
         // Approved block is saved after the whole state is received,
         //  to restart requesting if interrupted with incomplete state.
-        _ <- ApprovedStore[F].putApprovedBlock(approvedBlock)
-        _ <- LastApprovedBlock[F].set(approvedBlock)
+        _ <- ApprovedStore[F].putApprovedBlock(fringe)
+        _ <- LastApprovedBlock[F].set(fringe)
 
-        _ <- EventLog[F].publish(
-              NodeEvent.ApprovedBlockReceived(
-                PrettyPrinter
-                  .buildStringNoLimit(block.blockHash)
-              )
-            )
+        // TODO: adjust for fringe event or remove completely until proper event solution is built
+//        _ <- EventLog[F].publish(
+//              NodeEvent.ApprovedBlockReceived(
+//                PrettyPrinter
+//                  .buildStringNoLimit(block.blockHash)
+//              )
+//            )
 
         _ <- Log[F].info(
-              s"Approved state for block ${PrettyPrinter.buildString(block, short = true)} is successfully restored."
+              s"LFS state for fringe ${PrettyPrinter.buildString(fringe.hashes)} is successfully restored."
             )
       } yield ()
-    }
 
     for {
-      isValid <- senderIsBootstrap &&^ shardNameIsValid.pure &&^
-                  Validate.blockHash[F](approvedBlock.block)
+      isValid <- senderIsBootstrap
 
-      _ <- Log[F].info("Received approved block from bootstrap node.").whenA(isValid)
+      _ <- Log[F].info("Received finalized fringe from bootstrap node.").whenA(isValid)
 
-      _ <- Log[F].info("Invalid LastFinalizedBlock received; refusing to add.").whenA(!isValid)
-
-      _ <- Log[F]
-            .info(
-              s"Connected to the wrong shard. Approved block received from bootstrap is in shard " +
-                s"'${receivedShard}' but expected is '${expectedShard}'. Check configuration option shard-name."
-            )
-            .whenA(!shardNameIsValid)
+      _ <- Log[F].info("Received invalid message from bootstrap node.").whenA(!isValid)
 
       // Start only once, when state is true and approved block is valid
       start <- startRequester.modify {
@@ -178,19 +160,13 @@ class NodeSyncing[F[_]
     } yield ()
   }
 
-  def requestApprovedState(approvedBlock: ApprovedBlock): F[Unit] = {
-    // Starting minimum block height. When latest blocks are downloaded new minimum will be calculated.
-    val block            = approvedBlock.block
-    val startBlockNumber = block.blockNumber
-    val minBlockNumberForDeployLifespan =
-      Math.max(0, startBlockNumber - MultiParentCasper.deployLifespan)
-
+  def requestApprovedState(fringe: FinalizedFringe): F[Unit] =
     for {
       // Request all blocks for Last Finalized State
       blockRequestStream <- LfsBlockRequester.stream(
-                             approvedBlock,
+                             fringe,
                              incomingBlocksQueue.dequeue,
-                             minBlockNumberForDeployLifespan,
+                             MultiParentCasper.deployLifespan,
                              hash => CommUtil[F].broadcastRequestForBlock(hash, 1.some),
                              requestTimeout = 30.seconds,
                              BlockStore[F].contains(_),
@@ -202,7 +178,7 @@ class NodeSyncing[F[_]
       // Request tuple space state for Last Finalized State
       stateValidator = RSpaceImporter.validateStateItems[F] _
       tupleSpaceStream <- LfsTupleSpaceRequester.stream(
-                           approvedBlock,
+                           fringe,
                            tupleSpaceQueue,
                            (statePartPath, pageSize) =>
                              TransportLayer[F].sendToBootstrap(
@@ -218,7 +194,7 @@ class NodeSyncing[F[_]
 
       // Receive the blocks and after populate the DAG
       blockRequestAddDagStream = blockRequestStream.last.unNoneTerminate.evalMap { st =>
-        populateDag(approvedBlock.block, st.lowerBound, st.heightMap)
+        populateDag(st.lowerBound, st.heightMap)
       }
 
       // Run both streams in parallel until tuple space and all needed blocks are received
@@ -227,15 +203,11 @@ class NodeSyncing[F[_]
       // Mark finished initialization
       _ <- finished.complete(())
     } yield ()
-  }
 
   private def populateDag(
-      startBlock: BlockMessage,
       minHeight: Long,
       heightMap: SortedMap[Long, Set[BlockHash]]
   ): F[Unit] = {
-    import cats.instances.list._
-
     def addBlockToDag(block: BlockMessage, isInvalid: Boolean): F[Unit] =
       Log[F].info(
         s"Adding ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
@@ -248,10 +220,8 @@ class NodeSyncing[F[_]
       _ <- heightMap.flatMap(_._2).toList.reverse.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
-              // TODO: blocks added to DAG without validation will have flag `processed=false`
-              //  so invalid flag is not applicable
+              // TODO: blocks added to DAG without validation will have flag `processed=false` so invalid flag is not applicable
               // If sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
-//              isInvalid = invalidBlocks(block.blockHash)
               // Filter older not necessary blocks
               blockHeight   = block.blockNumber
               blockHeightOk = blockHeight >= minHeight

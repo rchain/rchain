@@ -22,7 +22,8 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
 
-  def createApprovedBlock(block: BlockMessage): ApprovedBlock = ApprovedBlock(block)
+  def createApprovedBlock(block: BlockMessage): FinalizedFringe =
+    FinalizedFringe(block.justifications, block.postStateHash)
 
   // Create hash from hex string (padding to 32 bytes)
   def createHash(s: String) = Blake2b256Hash.fromHex(s.padTo(64, '0'))

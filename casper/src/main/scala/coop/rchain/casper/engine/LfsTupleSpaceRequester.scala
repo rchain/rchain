@@ -85,7 +85,7 @@ object LfsTupleSpaceRequester {
   /**
     * Create a stream to receive tuple space needed for Last Finalized State.
     *
-    * @param approvedBlock          Last finalized block
+    * @param fringe          Last finalized block
     * @param tupleSpaceMessageQueue Handler of tuple space messages
     * @param requestForStoreItem Send request for state chunk
     * @param requestTimeout Time after request will be resent if not received
@@ -94,7 +94,7 @@ object LfsTupleSpaceRequester {
     * @return fs2.Stream processing all tuple space state
     */
   def stream[F[_]: Concurrent: Timer: Log](
-      approvedBlock: ApprovedBlock,
+      fringe: FinalizedFringe,
       tupleSpaceMessageQueue: Queue[F, StoreItemsMessage],
       requestForStoreItem: (StatePartPath, Int) => F[Unit],
       requestTimeout: FiniteDuration,
@@ -227,7 +227,7 @@ object LfsTupleSpaceRequester {
         .terminateAfter(_.isFinished) concurrently responseStream
     }
 
-    val stateHash                   = Blake2b256Hash.fromByteString(approvedBlock.block.postStateHash)
+    val stateHash                   = Blake2b256Hash.fromByteString(fringe.stateHash)
     val startRequest: StatePartPath = Seq((stateHash, None))
     for {
       // Write last finalized state root

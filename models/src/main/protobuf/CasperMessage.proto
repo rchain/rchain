@@ -23,12 +23,13 @@ option (scalapb.options) = {
 
 // ---------- Approved block ---------
 
-message ApprovedBlockProto  {
+message FinalizedFringeProto  {
   option (scalapb.message).extends = "CasperMessageProto";
-  BlockMessageProto block  = 1 [(scalapb.field).no_box = true];
+  repeated bytes hashes = 1 [(scalapb.field).collection_type="List"];
+  bytes stateHash       = 2;
 }
 
-message ApprovedBlockRequestProto {
+message FinalizedFringeRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
   string identifier = 1;
   bool   trimState  = 2;

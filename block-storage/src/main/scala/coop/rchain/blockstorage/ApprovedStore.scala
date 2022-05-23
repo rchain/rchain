@@ -2,26 +2,27 @@ package coop.rchain.blockstorage
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.blockstorage.dag.codecs.codecApprovedBlock
-import coop.rchain.casper.protocol.{ApprovedBlock, ApprovedBlockProto}
+import coop.rchain.blockstorage.dag.codecs.codecFringe
+import coop.rchain.casper.protocol.{FinalizedFringe, FinalizedFringeProto}
 import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import scodec.codecs._
 
 object approvedStore {
-  type ApprovedStore[F[_]] = KeyValueTypedStore[F, Byte, ApprovedBlock]
+  type ApprovedStore[F[_]] = KeyValueTypedStore[F, Byte, FinalizedFringe]
+
   def ApprovedStore[F[_]](implicit instance: ApprovedStore[F]): instance.type = instance
 
   def create[F[_]: Sync](
       kvm: KeyValueStoreManager[F]
-  ): F[KeyValueTypedStore[F, Byte, ApprovedBlock]] =
+  ): F[KeyValueTypedStore[F, Byte, FinalizedFringe]] =
     kvm
-      .store("blocks-approved")
-      .map(_.toTypedStore[Byte, ApprovedBlock](byte, codecApprovedBlock))
+      .store("finalized-store")
+      .map(_.toTypedStore[Byte, FinalizedFringe](byte, codecFringe))
 
-  def bytesToApprovedBlock(bytes: Array[Byte]): Either[String, ApprovedBlock] =
-    ApprovedBlock.from(ApprovedBlockProto.parseFrom(bytes))
+  def bytesToFringe(bytes: Array[Byte]): FinalizedFringe =
+    FinalizedFringe.from(FinalizedFringeProto.parseFrom(bytes))
 
-  def approvedBlockToBytes(approvedBlock: ApprovedBlock): Array[Byte] =
+  def fringeToBytes(approvedBlock: FinalizedFringe): Array[Byte] =
     approvedBlock.toProto.toByteArray
 }

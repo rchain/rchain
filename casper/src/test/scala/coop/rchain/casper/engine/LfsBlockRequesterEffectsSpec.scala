@@ -31,7 +31,8 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     )
   }
 
-  def createApprovedBlock(block: BlockMessage): ApprovedBlock = ApprovedBlock(block)
+  def createApprovedBlock(block: BlockMessage): FinalizedFringe =
+    FinalizedFringe(block.justifications, block.postStateHash)
 
   val hash9 = mkHash("9")
   val hash8 = mkHash("8")
@@ -106,7 +107,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       processingStream <- LfsBlockRequester.stream(
                            approvedBlock,
                            responseQueue.dequeue,
-                           initialMinimumHeight = 0,
+                           blockHeightsBeforeFringe = 0,
                            requestQueue.enqueue1,
                            requestTimeout,
                            hash => testState.get.map(_.blocks.contains(hash)),

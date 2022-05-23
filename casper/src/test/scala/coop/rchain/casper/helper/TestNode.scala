@@ -110,7 +110,7 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val rp: RPConfAsk[F]                               = rpConfAskEffect
   implicit val ep: EventPublisher[F]                          = eventPublisherEffect
 
-  val approvedBlock = ApprovedBlock(genesis)
+  val approvedBlock = FinalizedFringe(Seq(genesis.blockHash), genesis.postStateHash)
 
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = genesis.postStateHash

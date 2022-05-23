@@ -2,7 +2,7 @@ package coop.rchain.blockstorage
 
 import cats.effect.Sync
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
-import coop.rchain.casper.protocol.ApprovedBlock
+import coop.rchain.casper.protocol.FinalizedFringe
 import coop.rchain.shared.syntax._
 
 trait ApprovedStoreSyntax {
@@ -18,7 +18,7 @@ final class ApprovedStoreOps[F[_]: Sync](
 ) {
   val approvedBlockKey: Byte = 42.toByte
 
-  def getApprovedBlock: F[Option[ApprovedBlock]] = approvedStore.get1(approvedBlockKey)
+  def getApprovedBlock: F[Option[FinalizedFringe]] = approvedStore.get1(approvedBlockKey)
 
-  def putApprovedBlock(block: ApprovedBlock): F[Unit] = approvedStore.put(approvedBlockKey, block)
+  def putApprovedBlock(block: FinalizedFringe): F[Unit] = approvedStore.put(approvedBlockKey, block)
 }

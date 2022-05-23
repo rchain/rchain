@@ -9,9 +9,9 @@ trait CasperMessageProtocol {
   implicit final val blockHashMessageFromPacket =
     protoImpl[PacketTypeTag.BlockHashMessage.type, BlockHashMessageProto]
   implicit final val approvedBlockFromPacket =
-    protoImpl[PacketTypeTag.ApprovedBlock.type, ApprovedBlockProto]
+    protoImpl[PacketTypeTag.ApprovedBlock.type, FinalizedFringeProto]
   implicit final val approvedBlockRequestFromPacket =
-    protoImpl[PacketTypeTag.ApprovedBlockRequest.type, ApprovedBlockRequestProto]
+    protoImpl[PacketTypeTag.ApprovedBlockRequest.type, FinalizedFringeRequestProto]
   implicit final val blockRequestFromPacket =
     protoImpl[PacketTypeTag.BlockRequest.type, BlockRequestProto]
   implicit final val hasBlockRequestFromPacket =
@@ -33,9 +33,9 @@ trait CasperMessageProtocol {
   implicit final val blockMessageToPacket =
     protoSerde[PacketTypeTag.BlockMessage.type, BlockMessageProto]
   implicit final val approvedBlockToPacket =
-    protoSerde[PacketTypeTag.ApprovedBlock.type, ApprovedBlockProto]
+    protoSerde[PacketTypeTag.ApprovedBlock.type, FinalizedFringeProto]
   implicit final val approvedBlockRequestToPacket =
-    protoSerde[PacketTypeTag.ApprovedBlockRequest.type, ApprovedBlockRequestProto]
+    protoSerde[PacketTypeTag.ApprovedBlockRequest.type, FinalizedFringeRequestProto]
   implicit final val blockRequestToPacket =
     protoSerde[PacketTypeTag.BlockRequest.type, BlockRequestProto]
   implicit final val hasBlockRequestToPacket =

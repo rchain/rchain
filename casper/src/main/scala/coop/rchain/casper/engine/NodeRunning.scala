@@ -213,7 +213,7 @@ object NodeRunning {
     */
   def handleApprovedBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: Log](
       peer: PeerNode,
-      approvedBlock: ApprovedBlock
+      approvedBlock: FinalizedFringe
   ): F[Unit] =
     Log[F].info(s"Received ApprovedBlockRequest from ${peer}") >>
       TransportLayer[F].streamToPeer(peer, approvedBlock.toProto) >>
@@ -314,14 +314,14 @@ class NodeRunning[F[_]
 
     case _: ForkChoiceTipRequest.type => handleForkChoiceTipRequest(peer)
 
-    case abr: ApprovedBlockRequest =>
+    case abr: FinalizedFringeRequest =>
       for {
         lfBlockHash <- BlockDagStorage[F].getRepresentation.flatMap(_.lastFinalizedBlockUnsafe)
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {
           lfBlock           <- BlockStore[F].getUnsafe(lfBlockHash)
-          lastApprovedBlock = ApprovedBlock(lfBlock)
+          lastApprovedBlock = FinalizedFringe(List(lfBlock.blockHash), lfBlock.postStateHash)
         } yield lastApprovedBlock
 
         // TODO: fix finalized block depending if trim state requested

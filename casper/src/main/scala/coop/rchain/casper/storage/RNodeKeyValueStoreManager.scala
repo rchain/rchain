@@ -35,7 +35,7 @@ object RNodeKeyValueStoreManager {
       // Block storage
       (Db("blocks"), blockStorageEnvConfig),
       // Block metadata storage
-      (Db("blocks-approved"), dagStorageEnvConfig),
+      (Db("finalized-store"), dagStorageEnvConfig),
       (Db("block-metadata"), dagStorageEnvConfig),
       (Db("equivocation-tracker"), dagStorageEnvConfig),
       (Db("latest-messages"), dagStorageEnvConfig),

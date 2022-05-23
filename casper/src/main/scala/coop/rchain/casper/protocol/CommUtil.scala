@@ -144,7 +144,7 @@ final class CommUtilOps[F[_]](
     for {
       maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
       bootstrap      <- maybeBootstrap.liftTo(StandaloneNodeSendToBootstrapError)
-      msg            = ApprovedBlockRequest("", trimState).toProto
+      msg            = FinalizedFringeRequest("", trimState).toProto
       _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "ApprovedBlockRequest")
     } yield ()
 
