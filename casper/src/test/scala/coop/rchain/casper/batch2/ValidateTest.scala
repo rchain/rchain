@@ -1,11 +1,14 @@
 package coop.rchain.casper.batch2
 
-import cats.Monad
+import cats.{Id, Monad}
+import cats.conversions.all.autoWidenBifunctor
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{
@@ -18,20 +21,22 @@ import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper._
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockVersion
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Time}
+import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest._
+import org.scalatest.prop.PropertyChecks
 
 import java.nio.file.Files
 import scala.collection.immutable.HashMap
@@ -42,7 +47,8 @@ class ValidateTest
     with BeforeAndAfterEach
     with BlockGenerator
     with BlockDagStorageFixture
-    with UnlimitedParentsEstimatorFixture {
+    with UnlimitedParentsEstimatorFixture
+    with PropertyChecks {
   import InvalidBlock._
   import ValidBlock._
 
@@ -814,40 +820,41 @@ class ValidateTest
       } yield ()
   }
 
-  "Block hash format validation" should "fail on invalid hash" in withStorage {
-    _ => implicit blockDagStorage =>
-      val context  = buildGenesis()
-      val (sk, pk) = context.validatorKeyPairs.head
-      val sender   = ByteString.copyFrom(pk.bytes)
-      for {
-        _                <- blockDagStorage.insert(genesis, false, approved = true)
-        dag              <- blockDagStorage.getRepresentation
-        latestMessageOpt <- dag.latestMessage(sender)
-        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        genesis = ValidatorIdentity(sk)
-          .signBlock(context.genesisBlock.copy(seqNum = seqNum))
-        _ <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
-        result <- Validate.blockHash[Task](
-                   genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
-                 ) shouldBeF Left(InvalidBlockHash)
-      } yield result
+  "Block hash format validation" should "fail on invalid hash" in {
+    implicit val aBlock = arbBlockMessage
+
+    forAll { (block: BlockMessage) =>
+      val hash           = ProtoUtil.hashBlock(block)
+      val blockValidHash = block.copy(blockHash = hash)
+
+      // Test valid block hash
+      val hashValid = Validate.blockHash[Task](blockValidHash).runSyncUnsafe()
+
+      hashValid shouldBe true
+
+      val blockInValidHash = block.copy(blockHash = ByteString.copyFromUtf8("123"))
+
+      // Test invalid block hash
+      val hashInValid = Validate.blockHash[Task](blockInValidHash).runSyncUnsafe()
+
+      hashInValid shouldBe false
+    }
   }
 
-  "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
-    val context  = buildGenesis()
-    val (sk, pk) = context.validatorKeyPairs.head
-    val sender   = ByteString.copyFrom(pk.bytes)
-    for {
-      _                <- blockDagStorage.insert(genesis, false, approved = true)
-      dag              <- blockDagStorage.getRepresentation
-      latestMessageOpt <- dag.latestMessage(sender)
-      seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-      genesis = ValidatorIdentity(sk).signBlock(
-        context.genesisBlock.copy(seqNum = seqNum)
-      )
-      _      <- Validate.version[Task](genesis, -1) shouldBeF false
-      result <- Validate.version[Task](genesis, 1) shouldBeF true
-    } yield result
+  "Block version validation" should "allow supported versions" in {
+    implicit val aBlock = arbBlockMessage
+
+    forAll { (block: BlockMessage, version: Long) =>
+      val header           = block.header.copy(version = version)
+      val blockWithVersion = block.copy(header = header)
+
+      // Expected one of hard-coded block versions supported by this version of RNode software
+      val expectedValid = BlockVersion.Supported.contains(version)
+      // Actual validation
+      val actualValid = Validate.version[Task](blockWithVersion).runSyncUnsafe()
+
+      actualValid shouldBe expectedValid
+    }
   }
 
 }

@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -17,7 +18,7 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockMetadata
+import coop.rchain.models.{BlockMetadata, BlockVersion}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Base16, _}
 
@@ -138,16 +139,17 @@ object Validate {
       true.pure
     }
 
-  def version[F[_]: Monad: Log](b: BlockMessage, version: Long): F[Boolean] = {
+  def version[F[_]: Monad: Log](b: BlockMessage): F[Boolean] = {
     val blockVersion = b.header.version
-    if (blockVersion == version) {
+    if (BlockVersion.Supported.contains(blockVersion)) {
       true.pure
     } else {
+      val versionsStr = BlockVersion.Supported.mkString(" or ")
       Log[F]
         .warn(
           ignore(
             b,
-            s"received block version $blockVersion is the expected version $version."
+            s"received block version $blockVersion is not the expected version $versionsStr."
           )
         )
         .as(false)
@@ -165,8 +167,6 @@ object Validate {
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
     (for {
-      _ <- EitherT.liftF(Span[F].mark("before-block-hash-validation"))
-      _ <- EitherT(Validate.blockHash(block))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
       _ <- EitherT(Validate.timestamp(block))
       _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
@@ -448,22 +448,18 @@ object Validate {
       } yield BlockStatus.invalidShardId.asLeft[ValidBlock]
     }
 
-  // TODO: Double check this validation isn't shadowed by the blockSignature validation
-  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] = {
+  def blockHash[F[_]: Sync: Log](b: BlockMessage): F[Boolean] = Sync[F].defer {
     val blockHashComputed = ProtoUtil.hashBlock(b)
     if (b.blockHash == blockHashComputed)
-      BlockStatus.valid.asRight[BlockError].pure
+      true.pure[F]
     else {
       val computedHashString = PrettyPrinter.buildString(blockHashComputed)
       val hashString         = PrettyPrinter.buildString(b.blockHash)
-      for {
-        _ <- Log[F].warn(
-              ignore(
-                b,
-                s"block hash $hashString does not match to computed value $computedHashString."
-              )
-            )
-      } yield BlockStatus.invalidBlockHash.asLeft[ValidBlock]
+      Log[F]
+        .warn(
+          ignore(b, s"block hash $hashString does not match to computed value $computedHashString.")
+        )
+        .as(false)
     }
   }
 

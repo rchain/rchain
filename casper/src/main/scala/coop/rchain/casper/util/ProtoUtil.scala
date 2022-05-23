@@ -16,12 +16,12 @@ import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.DeployParameters
 import coop.rchain.shared.Base16
 
 import java.nio.charset.StandardCharsets
 import scala.collection.immutable
-import scala.collection.immutable.Map
 
 object ProtoUtil {
   def getMainChainUntilDepth[F[_]: Sync: BlockStore](
@@ -283,7 +283,19 @@ object ProtoUtil {
     block.copy(blockHash = hash)
   }
 
-  def hashBlock(blockMessage: BlockMessage): BlockHash =
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def hashBlock(blockMessage: BlockMessage): BlockHash = {
+    val version = blockMessage.header.version
+    if (version == 1L) {
+      hashBlockVersion1(blockMessage)
+    } else if (version == 2L) {
+      hashBlockVersion2(blockMessage)
+    } else {
+      throw new Exception(s"Hashing of block version '$version' is not supported expected 1 or 2")
+    }
+  }
+
+  def hashBlockVersion1(blockMessage: BlockMessage): BlockHash =
     ProtoUtil.hashByteArrays(
       blockMessage.header.toProto.toByteArray,
       blockMessage.body.toProto.toByteArray,
@@ -293,6 +305,19 @@ object ProtoUtil {
       StringValue.of(blockMessage.shardId).toByteArray,
       blockMessage.extraBytes.toByteArray
     )
+
+  /**
+    * Create hash of a BlockMessage, all fields must be included except signature
+    */
+  def hashBlockVersion2(blockMessage: BlockMessage): BlockHash = {
+    val emptyBytes = ByteString.EMPTY
+    val blockClearSigData = blockMessage.copy(
+      blockHash = emptyBytes,
+      sig = emptyBytes
+    )
+    Blake2b256.hash(blockClearSigData.toProto.toByteArray).toByteString
+  }
+
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
   def computeCodeHash(dd: DeployData): Par = {

@@ -498,21 +498,22 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   it should "succeed at slashing" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deployData   <- ConstructDeploy.basicDeployData[Effect](0)
-        signedBlock  <- nodes(0).casperEff.deploy(deployData) >> nodes(0).createBlockUnsafe()
-        invalidBlock = signedBlock.copy(seqNum = 47)
-        status1      <- nodes(1).processBlock(invalidBlock)
-        status2      <- nodes(2).processBlock(invalidBlock)
-        signedBlock2 <- nodes(1).createBlockUnsafe()
-        status3      <- nodes(1).processBlock(signedBlock2)
-        bonds        <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
-        _            = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
-        _            <- nodes(2).handleReceive()
-        signedBlock3 <- nodes(2).createBlockUnsafe()
-        status4      <- nodes(2).processBlock(signedBlock3)
+        deployData    <- ConstructDeploy.basicDeployData[Effect](0)
+        signedBlock   <- nodes(0).casperEff.deploy(deployData) >> nodes(0).createBlockUnsafe()
+        modifiedBlock = signedBlock.copy(seqNum = 47)
+        invalidBlock  = nodes(0).validatorId.get.signBlock(modifiedBlock)
+        status1       <- nodes(1).processBlock(invalidBlock)
+        status2       <- nodes(2).processBlock(invalidBlock)
+        signedBlock2  <- nodes(1).createBlockUnsafe()
+        status3       <- nodes(1).processBlock(signedBlock2)
+        bonds         <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
+        _             = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
+        _             <- nodes(2).handleReceive()
+        signedBlock3  <- nodes(2).createBlockUnsafe()
+        status4       <- nodes(2).processBlock(signedBlock3)
       } yield {
-        status1 should be(Left(InvalidBlockHash))
-        status2 should be(Left(InvalidBlockHash))
+        status1 should be(Left(InvalidSequenceNumber))
+        status2 should be(Left(InvalidSequenceNumber))
         status3 should be(Right(Valid))
         status4 should be(Right(Valid))
         // TODO: assert no effect as already slashed
