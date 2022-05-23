@@ -212,25 +212,19 @@ object InterpreterUtil {
   }
 
   def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
-      parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      s: CasperSnapshot,
       runtimeManager: RuntimeManager[F],
-      blockData: BlockData
+      blockData: BlockData,
+      computedParentsInfo: (StateHash, Seq[ByteString])
   )(
       implicit spanF: Span[F]
   ): F[
     (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])
   ] =
     spanF.trace(ComputeDeploysCheckpointMetricsSource) {
+      val (preStateHash, rejectedDeploys) = computedParentsInfo
       for {
-        nonEmptyParents <- parents.pure
-                            .ensure(new IllegalArgumentException("Parents must not be empty"))(
-                              _.nonEmpty
-                            )
-        computedParentsInfo             <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
-        (preStateHash, rejectedDeploys) = computedParentsInfo
         result <- runtimeManager.computeState(preStateHash)(
                    deploys,
                    systemDeploys,
@@ -246,7 +240,7 @@ object InterpreterUtil {
       )
     }
 
-  private def computeParentsPostState[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
+  def computeParentsPostState[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
       parents: Seq[BlockMessage],
       s: CasperSnapshot,
       runtimeManager: RuntimeManager[F]
