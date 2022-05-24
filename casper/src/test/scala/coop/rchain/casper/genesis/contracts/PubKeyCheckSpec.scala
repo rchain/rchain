@@ -4,9 +4,9 @@ import coop.rchain.casper.helper.RhoSpec
 import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
 
-class CoopSecurityCheckSpec
+class PubKeyCheckSpec
     extends RhoSpec(
-      CompiledRholangSource("CoopSecurityCheckTest.rho", NormalizerEnv.Empty),
+      CompiledRholangSource("PubKeyCheckTest.rho", NormalizerEnv.Empty),
       Seq.empty,
       GENESIS_TEST_TIMEOUT
     )

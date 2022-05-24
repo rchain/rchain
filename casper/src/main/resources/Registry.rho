@@ -18,7 +18,7 @@ new
   blake2b256(`rho:crypto:blake2b256Hash`),
   storeToken,
   systemContractManager,
-  createSecurityCheck
+  pubKeyCheck
 in {
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
@@ -61,21 +61,14 @@ in {
   //     }
   //   }
   // }
-  contract createSecurityCheck(lib) = {
-    let @pubKey <-
-      // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
-      "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes()
-    in {
-      contract @(*lib, "securityCheck")(@deployerID, ret) = {
-        new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
-          DeployerIdOps!("pubKeyBytes", deployerID, *deployerPubKeyBytesCh) |
-          for (@deployerPubKeyBytes <- deployerPubKeyBytesCh){
-            if (deployerPubKeyBytes == pubKey){
-              ret!((true, Nil))
-            } else {
-              ret!((false, "You have no permissions to update system contract!"))
-            }
-          }
+  contract pubKeyCheck(@deployerId, @pubKeyHex, ret) = {
+    new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
+      DeployerIdOps!("pubKeyBytes", deployerId, *deployerPubKeyBytesCh) |
+      for (@deployerPubKeyBytes <- deployerPubKeyBytesCh){
+        if (deployerPubKeyBytes == pubKeyHex.hexToBytes()){
+          ret!((true, Nil))
+        } else {
+          ret!((false, "You have no permissions to update system contract!"))
         }
       }
     }
@@ -364,7 +357,13 @@ in {
             ret!({"registryMap": map, "storeToken": *storeToken})
           }
         } |
-        createSecurityCheck!(*TreeHashMap)
+        contract @(*TreeHashMap, "securityCheck")(@deployerId, ret) = {
+          pubKeyCheck!(
+            deployerId,
+            "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf",
+            *ret
+            )
+        }
       }
     }
   } |
@@ -377,17 +376,17 @@ in {
     `rho:rchain:makeMint`         : `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc`,
     `rho:rchain:pos`              : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
     `rho:rchain:revVault`         : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
-    `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`,
-    `rho:rchain:coopSecurityCheck`: `rho:id:rezpgjuphh6edwbwuy16wjh1tozqpurw1ickwxrinw5cxe9hw1666r`
+    `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
     } in {
       // Use 4 * 8 = 32-bit paths to leaf nodes.
       TreeHashMap!("init", 4, *_registryStore) |
-      new ack, createDispatcherRet in {
+      new ack, ack2, createDispatcherRet in {
         // Store write-only `TreeHashMap` bundle on the node with prefix ``rho:lang:treeHashMap``
         for (@map <<- _registryStore) {
           systemContractManager!("createDispatcher", *TreeHashMap, *createDispatcherRet)|
           for (TreeHashMapDispatcher <- createDispatcherRet){
-            TreeHashMap!("set", map, `rho:lang:treeHashMap`, (9223372036854775807, bundle+{*TreeHashMapDispatcher}), *ack)
+            TreeHashMap!("set", map, `rho:lang:treeHashMap`, (9223372036854775807, bundle+{*TreeHashMapDispatcher}), *ack) |
+            TreeHashMap!("set", map, `rho:rchain:pubKeyCheck`, (9223372036854775807, bundle+{*pubKeyCheck}), *ack2)
           }
         } |
         // Wait for the set to finish, then register `lookupCh` as the uri/shorthand lookup channel
@@ -569,7 +568,13 @@ in {
       for (ret <- @(*systemContractManager, "extractState")){
         ret!({"locToken": *locToken})
       } |
-      createSecurityCheck!(*systemContractManager) |
+      contract @(*systemContractManager, "securityCheck")(@deployerId, ret) = {
+        pubKeyCheck!(
+          deployerId,
+          "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf",
+          *ret
+          )
+      } |
       new ack, createDispatcherRet in {
         for (@map <<- _registryStore) {
           // add systemContractManager dispatcher to the uri map

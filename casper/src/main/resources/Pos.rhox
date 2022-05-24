@@ -93,7 +93,7 @@ new
   deployerId(`rho:rchain:deployerId`),
   systemContractManagerCh,
   dispatcherCh,
-  coopSecurityCheckCh
+  pubKeyCheckCh
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -101,11 +101,12 @@ in {
   registryLookup!(`rho:lang:treeHashMap`, *treeHashMapCh) |
   registryLookup!(`rho:rchain:multiSigRevVault`, *multiSigRevVaultCh) |
   registryLookup!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
-  registryLookup!(`rho:rchain:coopSecurityCheck`, *coopSecurityCheckCh)|
+  registryLookup!(`rho:rchain:pubKeyCheck`, *pubKeyCheckCh)|
   for (@(_, RevVault)         <- revVaultCh &
        @(_, ListOps)          <- listOpsCh &
        @(_, TreeHashMap)      <- treeHashMapCh &
-       @(_, MultiSigRevVault) <- multiSigRevVaultCh) {
+       @(_, MultiSigRevVault) <- multiSigRevVaultCh &
+       @(_, pubKeyCheck)       <- pubKeyCheckCh) {
     new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh,
         initialActiveCh, createUnfVault, moveInitialBondCh
     in {
@@ -320,6 +321,13 @@ in {
                       "currentDeployerData"   : *currentDeployerData
                     })
                   }
+                } |
+                contract @(*PoS, "securityCheck")(@deployerId, ret) = {
+                  @pubKeyCheck!(
+                    deployerId,
+                    "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf",
+                    *ret
+                    )
                 } |
                 // Public method allowing users to bond and become validators.
                 contract PoS(@"bond", @deployerId, @amount, returnCh) = {
@@ -722,10 +730,8 @@ in {
       }
     }
   } | 
-  for (@(_, systemContractManager) <- systemContractManagerCh &
-       @(_, coopSecurityCheck)<- coopSecurityCheckCh) {
+  for (@(_, systemContractManager) <- systemContractManagerCh) {
     @systemContractManager!("createDispatcher", *PoS, *dispatcherCh) |
-    @coopSecurityCheck!(*PoS)|
     for (posDispatcher <- dispatcherCh){
       // Inserts signed write-only pos dispatcher contract into the registry
       rs!(

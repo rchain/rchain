@@ -78,13 +78,6 @@ object StandardDeploys {
     shardId
   )
 
-  def coopSecurityCheck(shardId: String): Signed[DeployData] = toDeploy(
-    CompiledRholangSource("CoopSecurityCheck.rho"),
-    coopSecurityCheckPk,
-    coopSecurityCheckTimestamp,
-    shardId
-  )
-
   def listOps(shardId: String): Signed[DeployData] = toDeploy(
     CompiledRholangSource("ListOps.rho"),
     listOpsPk,
