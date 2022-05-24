@@ -79,6 +79,8 @@ object BlockApi {
   type Error     = String
   type ApiErr[A] = Either[Error, A]
 
+  final class BlockApiException(message: String) extends Exception(message)
+
   private def getBlockInfo[A](
       block: BlockMessage,
       constructor: (BlockMessage, Float) => A

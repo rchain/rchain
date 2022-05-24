@@ -13,7 +13,6 @@ import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
-import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1.{
@@ -181,31 +180,24 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
   override def deployStatus(deployId: DeployId): F[ApiErr[DeployExecStatus]] = {
 
-    def deployBlockHash: F[String] =
-      findDeploy(deployId).map(_.getOrElse(LightBlockInfo.defaultInstance)).map(_.blockHash)
-
-    def getBlockInfo(blockHash: String): F[BlockInfo] =
-      getBlock(blockHash).map(_.getOrElse(BlockInfo.defaultInstance))
-
     def getSeqPar(blockHash: String): F[Seq[Par]] =
       for {
         par       <- Sync[F].delay(GDeployId(deployId).asInstanceOf[Par])
         dataAtPar <- getDataAtPar(par, blockHash, usePreStateHash = false)
-        seqPar    <- dataAtPar.leftMap(new Exception(_)).liftTo[F].map { case (seqPar, _) => seqPar }
+        seqPar    <- liftToBlockApiErr(dataAtPar).map { case (seqPar, _) => seqPar }
       } yield seqPar
 
-    def withBlockInfoAndSeqPar[A](f: (BlockInfo, Seq[Par]) => A) =
+    def withBlockInfoAndSeqPar[A](f: (BlockInfo, Seq[Par]) => A): F[A] =
       for {
-        blockHash <- deployBlockHash
-        blockInfo <- getBlockInfo(blockHash)
+        blockHash <- BlockDagStorage[F].lookupByDeployId(deployId).map(_.get.toHexString)
+        blockInfo <- getBlock(blockHash) >>= liftToBlockApiErr
         seqPar    <- getSeqPar(blockHash)
       } yield f(blockInfo, seqPar)
 
     def notProcessed(message: String) = DeployExecStatus().withNotProcessed(NotProcessed(message))
 
     for {
-      status      <- BlockDagStorage[F].asInstanceOf[BlockDagKeyValueStorage[F]].deployStatus(deployId)
-      deployIdStr = deployId.toHexString
+      status <- BlockDagStorage[F].deployStatus(deployId)
       response <- status match {
                    case "Finalized" =>
                      withBlockInfoAndSeqPar {
@@ -216,26 +208,24 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
                    case "Orphaned" =>
                      withBlockInfoAndSeqPar {
                        case (blockInfo, _) =>
-                         val message = s"""Deploy $deployIdStr is published in invalid block."""
-                         val error   = ProcessedWithError(message, blockInfo, orphaned = true)
-                         DeployExecStatus().withProcessedWithError(error)
-
+                         DeployExecStatus().withProcessedWithError(
+                           ProcessedWithError(status, blockInfo, orphaned = true)
+                         )
                      }
                    case "Included" =>
                      withBlockInfoAndSeqPar {
                        case (blockInfo, _) =>
-                         val message =
-                           s"""Deploy $deployIdStr was stored in deploy-index but not finalized."""
-                         val error = ProcessedWithError(message, blockInfo)
-                         DeployExecStatus().withProcessedWithError(error)
+                         DeployExecStatus().withProcessedWithError(
+                           ProcessedWithError(status, blockInfo)
+                         )
                      }
-                   case "Pooled" =>
-                     notProcessed(s"""Deploy "$deployIdStr" stored but not processed.""").pure
-                   case "Expired"     => notProcessed(s"""Deploy "$deployIdStr" was expired.""").pure
-                   case "Unknown" | _ => notProcessed(s"""Deploy "$deployIdStr" not found.""").pure
+                   case "Pooled" | "Expired" | "Unknown" | _ => notProcessed(status).pure
                  }
     } yield response.asRight[Error]
   }
+
+  private def liftToBlockApiErr[A](x: Either[String, A]): F[A] =
+    x.leftMap(new BlockApiException(_)).liftTo[F]
 
   override def createBlock(isAsync: Boolean = false): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]

@@ -22,6 +22,7 @@ trait BlockDagStorage[F[_]] {
   def lookupByDeployId(blockHash: DeployId): F[Option[BlockHash]]
   def addDeploy(d: Signed[DeployData]): F[Unit]
   def pooledDeploys: F[Map[DeployId, Signed[DeployData]]]
+  def deployStatus(d: DeployId): F[String]
 }
 
 object BlockDagStorage {

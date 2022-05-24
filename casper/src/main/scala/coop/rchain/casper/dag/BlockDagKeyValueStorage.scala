@@ -248,7 +248,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   private val execMap    = TrieMap.empty[DeployId, Option[String]]
   private val expiredMap = TrieMap.empty[DeployId, Unit]
 
-  def deployStatus(d: DeployId): F[String] = blockMetadataIndex.finalizedBlockSet.flatMap {
+  override def deployStatus(d: DeployId): F[String] = blockMetadataIndex.finalizedBlockSet.flatMap {
     finalizedSet =>
       val pooledF   = deployStore.contains(d)
       val expiredF  = Sync[F].delay(execMap.contains(d))
