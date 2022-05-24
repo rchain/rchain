@@ -152,8 +152,6 @@ object EqualM extends EqualMDerivation {
 
   implicit val PCostHash              = gen[PCost]
   implicit val TaggedContinuationHash = gen[TaggedContinuation]
-
-  implicit val PrivateNamePreviewQueryHash = gen[PrivateNamePreviewQuery]
 }
 
 trait EqualMDerivation {

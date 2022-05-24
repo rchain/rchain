@@ -97,26 +97,16 @@ object WebApiRoutes {
     implicit val lightBlockListEnc          = jsonEncoderOf[F, List[LightBlockInfo]]
     implicit val dataAtNameRespEncoder      = jsonEncoderOf[F, DataAtNameResponse]
     implicit val dataAtParRespEncoder       = jsonEncoderOf[F, RhoDataResponse]
-    implicit val prepareEncoder             = jsonEncoderOf[F, PrepareResponse]
     implicit val transactionResponseEncoder = jsonEncoderOf[F, TransactionResponse]
     // Decoders
     implicit val deployRequestDecoder     = jsonOf[F, DeployRequest]
     implicit val dataAtNameRequestDecoder = jsonOf[F, DataAtNameRequest]
     implicit val dataAtParRequestDecoder  = jsonOf[F, DataAtNameByBlockHashRequest]
-    implicit val prepareDecoder           = jsonOf[F, PrepareRequest]
     implicit val ExploreDeployRequest     = jsonOf[F, ExploreDeployRequest]
 
     HttpRoutes.of[F] {
       case GET -> Root / "status" =>
         webApi.status.handle
-
-      // Prepare deploy
-
-      case GET -> Root / "prepare-deploy" =>
-        webApi.prepareDeploy(none).handle
-
-      case req @ POST -> Root / "prepare-deploy" =>
-        req.handle[PrepareRequest, PrepareResponse](x => webApi.prepareDeploy(x.some))
 
       // Deploy
 
