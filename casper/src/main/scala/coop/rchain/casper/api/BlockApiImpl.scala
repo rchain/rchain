@@ -8,14 +8,20 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-
 import coop.rchain.casper.MultiParentCasper.parsingError
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.deploy.v1.{
+  DeployExecStatus,
+  NotProcessed,
+  ProcessedWithError,
+  ProcessedWithSuccess
+}
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, Tools}
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
@@ -30,7 +36,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
-import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
+import coop.rchain.models.{BlockMetadata, GDeployId, NormalizerEnv, Par}
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Log
@@ -103,7 +109,6 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   override def status: F[Status] =
     for {
       netInfo                  <- networkStatus
-      latestBlockNumber        <- BlockDagStorage[F].getRepresentation.map(_.latestBlockNumber)
       (thisNode, peers, nodes) = netInfo
       status = Status(
         version = VersionInfo(api = 1.toString, node = version),
@@ -112,8 +117,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         shardId,
         peers = peers.length,
         nodes = nodes.length,
-        minPhloPrice,
-        latestBlockNumber
+        minPhloPrice
       )
     } yield status
 
@@ -173,6 +177,64 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         err => parsingError(s"Error in parsing term: \n$err").pure[F],
         _ => addDeploy(d)
       )
+  }
+
+  override def deployStatus(deployId: DeployId): F[ApiErr[DeployExecStatus]] = {
+
+    def deployBlockHash: F[String] =
+      findDeploy(deployId).map(_.getOrElse(LightBlockInfo.defaultInstance)).map(_.blockHash)
+
+    def getBlockInfo(blockHash: String): F[BlockInfo] =
+      getBlock(blockHash).map(_.getOrElse(BlockInfo.defaultInstance))
+
+    def getSeqPar(blockHash: String): F[Seq[Par]] =
+      for {
+        par       <- Sync[F].delay(GDeployId(deployId).asInstanceOf[Par])
+        dataAtPar <- getDataAtPar(par, blockHash, usePreStateHash = false)
+        seqPar    <- dataAtPar.leftMap(new Exception(_)).liftTo[F].map { case (seqPar, _) => seqPar }
+      } yield seqPar
+
+    def withBlockInfoAndSeqPar[A](f: (BlockInfo, Seq[Par]) => A) =
+      for {
+        blockHash <- deployBlockHash
+        blockInfo <- getBlockInfo(blockHash)
+        seqPar    <- getSeqPar(blockHash)
+      } yield f(blockInfo, seqPar)
+
+    def notProcessed(message: String) = DeployExecStatus().withNotProcessed(NotProcessed(message))
+
+    for {
+      status      <- BlockDagStorage[F].asInstanceOf[BlockDagKeyValueStorage[F]].deployStatus(deployId)
+      deployIdStr = deployId.toHexString
+      response <- status match {
+                   case "Finalized" =>
+                     withBlockInfoAndSeqPar {
+                       case (blockInfo, seqPar) =>
+                         val success = ProcessedWithSuccess(seqPar, blockInfo, finalized = true)
+                         DeployExecStatus().withProcessedWithSuccess(success)
+                     }
+                   case "Orphaned" =>
+                     withBlockInfoAndSeqPar {
+                       case (blockInfo, _) =>
+                         val message = s"""Deploy $deployIdStr is published in invalid block."""
+                         val error   = ProcessedWithError(message, blockInfo, orphaned = true)
+                         DeployExecStatus().withProcessedWithError(error)
+
+                     }
+                   case "Included" =>
+                     withBlockInfoAndSeqPar {
+                       case (blockInfo, _) =>
+                         val message =
+                           s"""Deploy $deployIdStr was stored in deploy-index but not finalized."""
+                         val error = ProcessedWithError(message, blockInfo)
+                         DeployExecStatus().withProcessedWithError(error)
+                     }
+                   case "Pooled" =>
+                     notProcessed(s"""Deploy "$deployIdStr" stored but not processed.""").pure
+                   case "Expired"     => notProcessed(s"""Deploy "$deployIdStr" was expired.""").pure
+                   case "Unknown" | _ => notProcessed(s"""Deploy "$deployIdStr" not found.""").pure
+                 }
+    } yield response.asRight[Error]
   }
 
   override def createBlock(isAsync: Boolean = false): F[ApiErr[String]] = {

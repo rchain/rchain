@@ -84,6 +84,13 @@ object DeployGrpcServiceV1 {
             }
           )
 
+      def deployStatus(request: DeployStatusQuery): Task[DeployStatusResponse] =
+        defer(blockApi.deployStatus(request.deployId)) { r =>
+          import DeployStatusResponse.Message
+          import DeployStatusResponse.Message._
+          DeployStatusResponse(r.fold[Message](Error, DeployExecStatus))
+        }
+
       def getBlock(request: BlockQuery): Task[BlockResponse] =
         defer(blockApi.getBlock(request.hash)) { r =>
           import BlockResponse.Message

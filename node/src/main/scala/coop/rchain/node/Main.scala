@@ -161,6 +161,7 @@ object Main {
                 )
               )
         } yield ()
+      case DeployStatus(deployId)       => DeployRuntime.deployStatus[F](deployId)
       case FindDeploy(deployId)         => DeployRuntime.findDeploy[F](deployId)
       case Propose(printUnmatchedSends) => DeployRuntime.propose[F](printUnmatchedSends)
       case ShowBlock(hash)              => DeployRuntime.getBlock[F](hash)
@@ -203,9 +204,10 @@ object Main {
           location(),
           shardId()
         )
-      case Some(options.findDeploy) => FindDeploy(options.findDeploy.deployId())
-      case Some(options.propose)    => Propose(options.propose.printUnmatchedSends())
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
+      case Some(options.deployStatus) => DeployStatus(options.deployStatus.deployId())
+      case Some(options.findDeploy)   => FindDeploy(options.findDeploy.deployId())
+      case Some(options.propose)      => Propose(options.propose.printUnmatchedSends())
+      case Some(options.showBlock)    => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) =>
         import options.showBlocks._
         ShowBlocks(depth.getOrElse(1))

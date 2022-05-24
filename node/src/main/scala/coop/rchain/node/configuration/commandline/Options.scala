@@ -617,6 +617,19 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(deploy)
 
+  val deployStatus = new Subcommand("deploy-status") {
+    descr(
+      "Returns the status of the deploy with provided id."
+    )
+    helpWidth(width)
+
+    val deployId = opt[Array[Byte]](
+      descr = "Id of the deploy.",
+      required = true
+    )(Base16Converter)
+  }
+  addSubcommand(deployStatus)
+
   val showBlock = new Subcommand("show-block") {
     descr(
       "View properties of a block known by Casper on an existing running node." +

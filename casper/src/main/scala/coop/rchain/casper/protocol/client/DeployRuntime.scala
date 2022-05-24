@@ -98,6 +98,13 @@ object DeployRuntime {
       }
     )
 
+  def deployStatus[F[_]: Sync: DeployService](deployId: Array[Byte]): F[Unit] =
+    gracefulExit(
+      DeployService[F]
+        .deployStatus(DeployStatusQuery(deployId.toByteString))
+        .map(_.map(s => s"Deploy status: ${s.toProtoString}"))
+    )
+
   def lastFinalizedBlock[F[_]: Sync: DeployService]: F[Unit] =
     gracefulExit(DeployService[F].lastFinalizedBlock)
 
