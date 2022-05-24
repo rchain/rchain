@@ -619,12 +619,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val deployStatus = new Subcommand("deploy-status") {
     descr(
-      "Returns the status of the deploy with provided id."
+      "Returns the status of the deploy with provided signature."
     )
     helpWidth(width)
 
-    val deployId = opt[Array[Byte]](
-      descr = "Id of the deploy.",
+    val deploySignature = opt[Array[Byte]](
+      descr = "Signature of the deploy.",
       required = true
     )(Base16Converter)
   }
