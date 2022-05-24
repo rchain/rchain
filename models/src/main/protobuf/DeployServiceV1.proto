@@ -34,7 +34,8 @@ option (scalapb.options) = {
 service DeployService {
   // Queue deployment of Rholang code (or fail to parse).
   rpc doDeploy(DeployDataProto) returns (DeployResponse) {}
-  rpc deployStatus(DeployStatusQuery) returns (DeployStatusResponse) {}
+  // Get the deployment status by its signature
+  rpc deployStatus(FindDeployQuery) returns (DeployStatusResponse) {}
   // Get details about a particular block.
   rpc getBlock(BlockQuery) returns (BlockResponse) {}
   // Get dag
