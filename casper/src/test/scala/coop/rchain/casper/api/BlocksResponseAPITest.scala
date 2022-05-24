@@ -1,9 +1,12 @@
 package coop.rchain.casper.api
 
 import cats.effect.Resource
+import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper.DeployStatus
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper._
@@ -40,6 +43,9 @@ class BlocksResponseAPITest
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-response-api-test")
   val maxBlockLimit = 50
+
+  val etState: Ref[Task, Map[DeployId, Option[DeployStatus]]] =
+    Ref[Task].of(Map.empty[DeployId, Option[DeployStatus]]).runSyncUnsafe()
 
   private def createDagWith8Blocks(
       implicit blockstore: BlockStore[Task],
@@ -105,7 +111,7 @@ class BlocksResponseAPITest
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
           genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
-          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit, etState)
           blocksResponse <- blockApi.getBlocks(10)
         } yield blocksResponse.right.get.length should be(8)
       }
@@ -115,7 +121,7 @@ class BlocksResponseAPITest
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
         genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
-        blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+        blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit, etState)
         blocksResponse <- blockApi.getBlocks(2)
       } yield blocksResponse.right.get.length should be(3)
     }
@@ -126,7 +132,7 @@ class BlocksResponseAPITest
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
           genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
-          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit, etState)
           blocksResponse <- blockApi.getBlocksByHeights(2, 5)
           blocks         = blocksResponse.right.get
           _              = blocks.length should be(5)

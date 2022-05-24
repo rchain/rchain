@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.MultiParentCasper.parsingError
 import coop.rchain.casper._
@@ -57,7 +57,8 @@ object BlockApiImpl {
       devMode: Boolean,
       triggerPropose: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
-      autoPropose: Boolean
+      autoPropose: Boolean,
+      etState: Ref[F, Map[DeployId, Option[DeployStatus]]]
   ): F[BlockApiImpl[F]] =
     Sync[F].delay(
       new BlockApiImpl(
@@ -72,7 +73,8 @@ object BlockApiImpl {
         devMode,
         triggerPropose,
         proposerStateRefOpt,
-        autoPropose
+        autoPropose,
+        etState
       )
     )
 
@@ -97,7 +99,8 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     devMode: Boolean,
     triggerProposeOpt: Option[ProposeFunction[F]],
     proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
-    autoPropose: Boolean
+    autoPropose: Boolean,
+    etState: Ref[F, Map[DeployId, Option[DeployStatus]]]
 ) extends BlockApi[F] {
   import BlockApiImpl._
 
@@ -179,49 +182,54 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   }
 
   override def deployStatus(deployId: DeployId): F[ApiErr[DeployExecStatus]] = {
-    import coop.rchain.models.rholang.implicits._
-    def getSeqPar(blockHash: String): F[Seq[Par]] =
+    def withSeqParAndBlockInfo(
+        blockHashOpt: Option[BlockHash]
+    )(f: (Seq[Par], BlockInfo) => DeployExecStatus): F[DeployExecStatus] = {
+      import coop.rchain.models.rholang.implicits._
       for {
+        blockHash <- blockHashOpt.map(_.toHexString).get.pure
         par       <- Sync[F].delay(GDeployId(deployId))
         dataAtPar <- getDataAtPar(par, blockHash, usePreStateHash = false)
         seqPar    <- liftToBlockApiErr(dataAtPar).map { case (seqPar, _) => seqPar }
-      } yield seqPar
-
-    def withBlockInfoAndSeqPar[A](f: (BlockInfo, Seq[Par]) => A): F[A] =
-      for {
-        blockHash <- BlockDagStorage[F].lookupByDeployId(deployId).map(_.get.toHexString)
         blockInfo <- getBlock(blockHash) >>= liftToBlockApiErr
-        seqPar    <- getSeqPar(blockHash)
-      } yield f(blockInfo, seqPar)
+      } yield f(seqPar, blockInfo)
+    }
 
-    def notProcessed(message: String) = DeployExecStatus().withNotProcessed(NotProcessed(message))
+    def notProcessed(status: String): F[DeployExecStatus] =
+      DeployExecStatus().withNotProcessed(NotProcessed(status)).pure
 
-    for {
-      status <- BlockDagStorage[F].deployStatus(deployId)
-      response <- status match {
-                   case "Finalized" =>
-                     withBlockInfoAndSeqPar {
-                       case (blockInfo, seqPar) =>
-                         val success = ProcessedWithSuccess(seqPar, blockInfo, finalized = true)
-                         DeployExecStatus().withProcessedWithSuccess(success)
-                     }
-                   case "Orphaned" =>
-                     withBlockInfoAndSeqPar {
-                       case (blockInfo, _) =>
-                         DeployExecStatus().withProcessedWithError(
-                           ProcessedWithError(status, blockInfo, orphaned = true)
-                         )
-                     }
-                   case "Included" =>
-                     withBlockInfoAndSeqPar {
-                       case (blockInfo, _) =>
-                         DeployExecStatus().withProcessedWithError(
-                           ProcessedWithError(status, blockInfo)
-                         )
-                     }
-                   case "Pooled" | "Expired" | "Unknown" | _ => notProcessed(status).pure
-                 }
-    } yield response.asRight[Error]
+    def unknown = "Unknown"
+
+    def statusF: F[DeployExecStatus] =
+      for {
+        blockHashOpt    <- BlockDagStorage[F].lookupByDeployId(deployId)
+        isDeployInBlock = blockHashOpt.isDefined
+        isDeployInPool  <- BlockDagStorage[F].pooledDeploys.map(_.contains(deployId))
+
+        deployExistsOpt <- etState.get.map(state => state.get(deployId))
+        deployIsTracked = deployExistsOpt.isDefined
+
+        s <- if (isDeployInBlock) {
+              if (deployIsTracked) {
+                val statusExistsOpt = deployExistsOpt.get
+                if (statusExistsOpt.isDefined) {
+                  withSeqParAndBlockInfo(blockHashOpt) {
+                    case (seqPar, blockInfo) =>
+                      statusExistsOpt.get match {
+                        case DeployStatusSuccess =>
+                          val success = ProcessedWithSuccess(seqPar, blockInfo)
+                          DeployExecStatus().withProcessedWithSuccess(success)
+                        case DeployStatusError(s) =>
+                          DeployExecStatus().withProcessedWithError(
+                            ProcessedWithError(s, blockInfo)
+                          )
+                      }
+                  }
+                } else notProcessed("In Progress")
+              } else notProcessed(unknown)
+            } else notProcessed(if (isDeployInPool) "Pooled" else unknown)
+      } yield s
+    statusF.map(_.asRight[Error]).handleErrorWith(_.getMessage.asLeft[DeployExecStatus].pure)
   }
 
   private def liftToBlockApiErr[A](x: Either[String, A]): F[A] =

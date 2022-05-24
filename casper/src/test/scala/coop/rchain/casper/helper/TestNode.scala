@@ -11,6 +11,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
@@ -86,7 +87,8 @@ case class TestNode[F[_]: Sync: Timer](
     rpConfAskEffect: RPConfAsk[F],
     eventPublisherEffect: EventPublisher[F],
     casperShardConf: CasperShardConf,
-    routingMessageQueue: Queue[F, RoutingMessage]
+    routingMessageQueue: Queue[F, RoutingMessage],
+    etState: Ref[F, Map[DeployId, Option[DeployStatus]]]
 )(implicit concurrentF: Concurrent[F]) {
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...
@@ -537,6 +539,8 @@ object TestNode {
                  // Remove TransportLayer handling in TestNode (too low level for these tests)
                  routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
 
+                 etState <- Ref[F].of(Map.empty[DeployId, Option[DeployStatus]])
+
                  node = new TestNode[F](
                    name,
                    currentPeerNode,
@@ -574,7 +578,8 @@ object TestNode {
                    blockRetrieverEffect = blockRetriever,
                    metricEffect = metricEff,
                    casperShardConf = shardConf,
-                   routingMessageQueue = routingMessageQueue
+                   routingMessageQueue = routingMessageQueue,
+                   etState = etState
                  )
                } yield node
              })
