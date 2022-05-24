@@ -24,7 +24,7 @@ new
   rl(`rho:registry:lookup`),
   systemContractManagerCh,
   dispatcherCh,
-  checkSystemSecurityCh
+  configPublicKeyCheckCh
 in {
 
   // An `AuthKey` is a means for creating a safe authentication token based on a process / unfograble name
@@ -78,11 +78,11 @@ in {
   }  |
 
   rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
-  rl!(`rho:rchain:checkSystemSecurity`, *checkSystemSecurityCh)|
-  for (@(_, systemContractManager) <- systemContractManagerCh & @(_, checkSystemSecurity)<- checkSystemSecurityCh){
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
+  for (@(_, systemContractManager) <- systemContractManagerCh & @(_, configPublicKeyCheck)<- configPublicKeyCheckCh){
     @systemContractManager!("createDispatcher", *AuthKey, *dispatcherCh)|
     contract @(*AuthKey, "securityCheck")(@deployerId, ret) = {
-      @checkSystemSecurity!(deployerId, *ret)
+      @configPublicKeyCheck!(deployerId, *ret)
     } |
     for (dispatcher <- dispatcherCh){
       // Inserts signed write-only AuthKey dispatcher contract into the registry

@@ -93,7 +93,7 @@ new
   deployerId(`rho:rchain:deployerId`),
   systemContractManagerCh,
   dispatcherCh,
-  checkSystemSecurityCh
+  configPublicKeyCheckCh
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -101,12 +101,12 @@ in {
   registryLookup!(`rho:lang:treeHashMap`, *treeHashMapCh) |
   registryLookup!(`rho:rchain:multiSigRevVault`, *multiSigRevVaultCh) |
   registryLookup!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
-  registryLookup!(`rho:rchain:checkSystemSecurity`, *checkSystemSecurityCh)|
+  registryLookup!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
   for (@(_, RevVault)         <- revVaultCh &
        @(_, ListOps)          <- listOpsCh &
        @(_, TreeHashMap)      <- treeHashMapCh &
        @(_, MultiSigRevVault) <- multiSigRevVaultCh &
-       @(_, checkSystemSecurity)       <- checkSystemSecurityCh) {
+       @(_, configPublicKeyCheck)       <- configPublicKeyCheckCh) {
     new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh,
         initialActiveCh, createUnfVault, moveInitialBondCh
     in {
@@ -323,7 +323,7 @@ in {
                   }
                 } |
                 contract @(*PoS, "securityCheck")(@deployerId, ret) = {
-                  @checkSystemSecurity!(deployerId, *ret)
+                  @configPublicKeyCheck!(deployerId, *ret)
                 } |
                 // Public method allowing users to bond and become validators.
                 contract PoS(@"bond", @deployerId, @amount, returnCh) = {

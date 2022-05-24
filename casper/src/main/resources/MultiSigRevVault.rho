@@ -26,18 +26,18 @@ new
   deployerId(`rho:rchain:deployerId`),
   systemContractManagerCh,
   dispatcherCh,
-  checkSystemSecurityCh
+  configPublicKeyCheckCh
 in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:rchain:revVault`, *RevVaultCh) |
   rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
-  rl!(`rho:rchain:checkSystemSecurity`, *checkSystemSecurityCh)|
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
   for(@(_, ListOps) <- ListOpsCh &
       @(_, AuthKey) <- AuthKeyCh &
       @(_, RevVault) <- RevVaultCh &
       @(_, systemContractManager) <- systemContractManagerCh &
-      @(_, checkSystemSecurity)<- checkSystemSecurityCh) {
+      @(_, configPublicKeyCheck)<- configPublicKeyCheckCh) {
     // Creates a sealer/unsealer pair and return on `ret`
     contract MultiSigRevVault(@"makeSealerUnsealer", ret) = {
       new
@@ -275,7 +275,7 @@ in {
     } |
     @systemContractManager!("createDispatcher", *MultiSigRevVault, *dispatcherCh)|
     contract @(*MultiSigRevVault, "securityCheck")(@deployerId, ret) = {
-      @checkSystemSecurity!(deployerId, *ret)
+      @configPublicKeyCheck!(deployerId, *ret)
     } |
     for (multiSigRevVaultDispatcher <- dispatcherCh){
       // Inserts signed write-only MultiSigRevVault dispatcher contract into the registry

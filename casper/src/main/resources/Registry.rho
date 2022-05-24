@@ -18,7 +18,7 @@ new
   blake2b256(`rho:crypto:blake2b256Hash`),
   storeToken,
   systemContractManager,
-  checkSystemSecurity
+  configPublicKeyCheck
 in {
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
@@ -61,7 +61,7 @@ in {
   //     }
   //   }
   // }
-  contract checkSystemSecurity(@deployerId, ret) = {
+  contract configPublicKeyCheck(@deployerId, ret) = {
     let @coopPubKey <- // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
       "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes()
     in {
@@ -362,7 +362,7 @@ in {
           }
         } |
         contract @(*TreeHashMap, "securityCheck")(@deployerId, ret) = {
-          checkSystemSecurity!(deployerId, *ret)
+          configPublicKeyCheck!(deployerId, *ret)
         }
       }
     }
@@ -386,7 +386,7 @@ in {
           systemContractManager!("createDispatcher", *TreeHashMap, *createDispatcherRet)|
           for (TreeHashMapDispatcher <- createDispatcherRet){
             TreeHashMap!("set", map, `rho:lang:treeHashMap`, (9223372036854775807, bundle+{*TreeHashMapDispatcher}), *ack) |
-            TreeHashMap!("set", map, `rho:rchain:checkSystemSecurity`, (9223372036854775807, bundle+{*checkSystemSecurity}), *ack2)
+            TreeHashMap!("set", map, `rho:rchain:configPublicKeyCheck`, (9223372036854775807, bundle+{*configPublicKeyCheck}), *ack2)
           }
         } |
         // Wait for the set to finish, then register `lookupCh` as the uri/shorthand lookup channel
@@ -569,7 +569,7 @@ in {
         ret!({"locToken": *locToken})
       } |
       contract @(*systemContractManager, "securityCheck")(@deployerId, ret) = {
-        checkSystemSecurity!(deployerId, *ret)
+        configPublicKeyCheck!(deployerId, *ret)
       } |
       new ack, createDispatcherRet in {
         for (@map <<- _registryStore) {

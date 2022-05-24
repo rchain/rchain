@@ -33,20 +33,20 @@ new
   deployerId(`rho:rchain:deployerId`),
   systemContractManagerCh,
   dispatcherCh,
-  checkSystemSecurityCh
+  configPublicKeyCheckCh
 in {
   rl!(`rho:rchain:makeMint`, *MakeMintCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
   rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
   rl!(`rho:registry:systemContractManager`, *systemContractManagerCh) |
-  rl!(`rho:rchain:checkSystemSecurity`, *checkSystemSecurityCh)|
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
   for (@(_, MakeMint) <- MakeMintCh &
        @(_, AuthKey)  <- AuthKeyCh &
        @(_, Either)   <- EitherCh &
        @(_, TreeHashMap)    <- TreeHashMapCh &
        @(_, systemContractManager) <- systemContractManagerCh &
-       @(_, checkSystemSecurity)<- checkSystemSecurityCh) {
+       @(_, configPublicKeyCheck)<- configPublicKeyCheckCh) {
     // Each invocation of the RevVault contract uses a different mint.
     new mintCh, vaultMapStore, initVault in {
       // Initializes the vaultMapStore.
@@ -290,7 +290,7 @@ in {
           // Insert the signed, write-only dispatcher contract into the registry uri map
           @systemContractManager!("createDispatcher", *RevVault, *dispatcherCh)|
           contract @(*RevVault, "securityCheck")(@deployerId, ret) = {
-            @checkSystemSecurity!(deployerId, *ret)
+            @configPublicKeyCheck!(deployerId, *ret)
           } |
           for (revVaultDispatcher <- dispatcherCh){
             rs!(
