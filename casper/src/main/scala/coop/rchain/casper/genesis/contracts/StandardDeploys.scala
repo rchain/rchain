@@ -31,7 +31,6 @@ object StandardDeploys {
 
   // Private keys used to sign blessed (standard) contracts
   val registryPk          = "5a0bde2f5857124b1379c78535b07a278e3b9cefbcacc02e62ab3294c02765a1"
-  val coopSecurityCheckPk = "7b83216211a4fb70fd124f92cf036a414c5ee249ca7b6a985c60b98e6cc738ca"
   val listOpsPk           = "867c21c6a3245865444d80e49cac08a1c11e23b35965b566bbe9f49bb9897511"
   val eitherPk            = "5248f8913f8572d8227a3c7787b54bd8263389f7209adc1422e36bb2beb160dc"
   val nonNegativeNumberPk = "e33c9f1e925819d04733db4ec8539a84507c9e9abd32822059349449fe03997d"
@@ -43,8 +42,7 @@ object StandardDeploys {
   val revGeneratorPk      = "a06959868e39bb3a8502846686a23119716ecd001700baf9e2ecfa0dbf1a3247"
 
   val (registryPubKey, registryTimestamp) = (toPublic(registryPk), 1559156071321L)
-  val (coopSecurityCheckPubKey, coopSecurityCheckTimestamp) =
-    (toPublic(coopSecurityCheckPk), 1559156071322L)
+
   val (listOpsPubKey, listOpsTimestamp) = (toPublic(listOpsPk), 1559156082324L)
   val (eitherPubKey, eitherTimestamp)   = (toPublic(eitherPk), 1559156217509L)
   val (nonNegativeNumberPubKey, nonNegativeNumberTimestamp) =
