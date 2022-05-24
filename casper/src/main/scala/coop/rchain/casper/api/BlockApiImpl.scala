@@ -179,10 +179,10 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   }
 
   override def deployStatus(deployId: DeployId): F[ApiErr[DeployExecStatus]] = {
-
+    import coop.rchain.models.rholang.implicits._
     def getSeqPar(blockHash: String): F[Seq[Par]] =
       for {
-        par       <- Sync[F].delay(GDeployId(deployId).asInstanceOf[Par])
+        par       <- Sync[F].delay(GDeployId(deployId))
         dataAtPar <- getDataAtPar(par, blockHash, usePreStateHash = false)
         seqPar    <- liftToBlockApiErr(dataAtPar).map { case (seqPar, _) => seqPar }
       } yield seqPar
