@@ -101,7 +101,7 @@ object DeployRuntime {
   def deployStatus[F[_]: Sync: DeployService](deployId: Array[Byte]): F[Unit] =
     gracefulExit(
       DeployService[F]
-        .deployStatus(DeployStatusQuery(deployId.toByteString))
+        .deployStatus(FindDeployQuery(deployId.toByteString))
         .map(_.map(s => s"Deploy status: ${s.toProtoString}"))
     )
 

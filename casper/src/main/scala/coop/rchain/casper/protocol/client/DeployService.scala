@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 
 trait DeployService[F[_]] {
   def deploy(d: Signed[DeployData]): F[Either[Seq[String], String]]
-  def deployStatus(deployId: DeployStatusQuery): F[Either[Seq[String], DeployExecStatus]]
+  def deployStatus(deployId: FindDeployQuery): F[Either[Seq[String], DeployExecStatus]]
   def getBlock(q: BlockQuery): F[Either[Seq[String], String]]
   def getBlocks(q: BlocksQuery): F[Either[Seq[String], String]]
   def visualizeDag(q: VisualizeDagQuery): F[Either[Seq[String], String]]
@@ -61,7 +61,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
         _.message.result
       )
 
-  def deployStatus(deployId: DeployStatusQuery): F[Either[Seq[String], DeployExecStatus]] =
+  def deployStatus(deployId: FindDeployQuery): F[Either[Seq[String], DeployExecStatus]] =
     stub
       .deployStatus(deployId)
       .fromTask

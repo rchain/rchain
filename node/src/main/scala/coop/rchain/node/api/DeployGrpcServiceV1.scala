@@ -84,7 +84,7 @@ object DeployGrpcServiceV1 {
             }
           )
 
-      def deployStatus(request: DeployStatusQuery): Task[DeployStatusResponse] =
+      def deployStatus(request: FindDeployQuery): Task[DeployStatusResponse] =
         defer(blockApi.deployStatus(request.deployId)) { r =>
           import DeployStatusResponse.Message
           import DeployStatusResponse.Message._
