@@ -22,12 +22,12 @@ new
   deployerId(`rho:rchain:deployerId`),
   systemContractManagerCh,
   dispatcherCh,
-  pubKeyCheckCh
+  checkSystemSecurityCh
 in {
   rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
   rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
-  rl!(`rho:rchain:pubKeyCheck`, *pubKeyCheckCh)|
-  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh & @(_, systemContractManager) <- systemContractManagerCh& @(_, pubKeyCheck)<- pubKeyCheckCh) {
+  rl!(`rho:rchain:checkSystemSecurity`, *checkSystemSecurityCh)|
+  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh & @(_, systemContractManager) <- systemContractManagerCh& @(_, checkSystemSecurity)<- checkSystemSecurityCh) {
     // user calls MakeMint
     // we actually go to MakeMintLoc and get the real MakeMint contract definition
     contract MakeMint(return) = {
@@ -162,11 +162,7 @@ in {
     } |
     @systemContractManager!("createDispatcher", *MakeMint, *dispatcherCh)|
     contract @(*MakeMint, "securityCheck")(@deployerId, ret) = {
-      @pubKeyCheck!(
-        deployerId,
-        "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf",
-        *ret
-        )
+      @checkSystemSecurity!(deployerId, *ret)
     } |
     for (makeMintdispatcher <- dispatcherCh){
       // Inserts signed write-only MakeMint dispatcher contract into the registry
