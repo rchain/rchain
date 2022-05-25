@@ -155,9 +155,9 @@ in {
         return!(bundle+{*thisMint})
       }
     } |
-    // No internal state to return.
     // Method required for updates.
     for (ret  <- @(*MakeMint, "extractState")){
+      // No internal state to return.
       ret!(Nil)
     } |
     @systemContractManager!("createDispatcher", *MakeMint, *dispatcherCh)|
