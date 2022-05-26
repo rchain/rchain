@@ -1,7 +1,7 @@
 new
   deployId(`rho:rchain:deployId`),
   updateContract,
-  AuthKey,
+  NewAuthKey,
   AuthStateCh,
   rl(`rho:registry:lookup`),
   rlret,
@@ -9,7 +9,8 @@ new
   stdout(`rho:io:stdout`),
   updateRet,
   deployerID(`rho:rchain:deployerId`),
-  oldStateCh
+  oldStateCh,
+  configPublicKeyCheckCh
 in {
   for ( oldAuthKey, ret <- updateContract){
     stdout!(("get the old lib", *oldAuthKey)) |
@@ -17,7 +18,7 @@ in {
     for (oldAuthKeyState <- oldStateCh){
       stdout!(("get the old lib state", *oldAuthKeyState)) |
       AuthStateCh!(0)|
-      contract AuthKey(@"make", @shape, ret) = {
+      contract NewAuthKey(@"make", @shape, ret) = {
         new authKey in {
           contract authKey(@"challenge", retCh) = {
             retCh!(bundle0{ (*_authKey, shape)})
@@ -25,7 +26,7 @@ in {
           ret!(bundle+{*authKey})
         }
       } |
-      contract AuthKey(@"check", key, @shape, ret) = {
+      contract NewAuthKey(@"check", key, @shape, ret) = {
         new responseCh in {
           key!("challenge", *responseCh) |
           for (@response <- responseCh) {
@@ -33,24 +34,28 @@ in {
           }
         }
       } |
-      contract AuthKey(@"add", @number, ret) = {
+      contract NewAuthKey(@"add", @number, ret) = {
         for (@ori <- AuthStateCh){
           ret!(number + ori)|
           AuthStateCh!(number + ori)
         }
       } |
-      for (ret <- @(*AuthKey, "extractState")){
+      for (ret <- @(*NewAuthKey, "extractState")){
         for (@number <<- AuthStateCh){
           ret!(number)
         }
       } | 
-      ret!(*AuthKey)
+      ret!(*NewAuthKey)
     } 
   } |
   stdout!(("propose start!!!!!"))|
   rl!(`rho:registry:systemContractManager`, *rlret)|
-  for(@(_, systemContractManager) <- rlret){
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
+  for(@(_, systemContractManager) <- rlret & @(_, configPublicKeyCheck)<- configPublicKeyCheckCh){
     stdout!(("propose get multisig ok", systemContractManager))|
+    contract @(*NewAuthKey, "securityCheck")(@deployerId, ret) = {
+      @configPublicKeyCheck!(deployerId, *ret)
+    } |
     @systemContractManager!("update",
                   *deployerID,
                   `rho:rchain:authKey`,

@@ -42,9 +42,8 @@ object StandardDeploys {
   val revGeneratorPk      = "a06959868e39bb3a8502846686a23119716ecd001700baf9e2ecfa0dbf1a3247"
 
   val (registryPubKey, registryTimestamp) = (toPublic(registryPk), 1559156071321L)
-
-  val (listOpsPubKey, listOpsTimestamp) = (toPublic(listOpsPk), 1559156082324L)
-  val (eitherPubKey, eitherTimestamp)   = (toPublic(eitherPk), 1559156217509L)
+  val (listOpsPubKey, listOpsTimestamp)   = (toPublic(listOpsPk), 1559156082324L)
+  val (eitherPubKey, eitherTimestamp)     = (toPublic(eitherPk), 1559156217509L)
   val (nonNegativeNumberPubKey, nonNegativeNumberTimestamp) =
     (toPublic(nonNegativeNumberPk), 1559156251792L)
   val (makeMintPubKey, makeMintTimestamp) = (toPublic(makeMintPk), 1559156452968L)
