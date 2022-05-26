@@ -598,12 +598,24 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
   override def getDataAtPar(
       par: Par,
-      blockHash: String,
+      blockHashStr: String,
       usePreStateHash: Boolean
-  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
-    for {
-      block     <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
-      sortedPar <- parSortable.sortMatch[F](par).map(_.term)
-      data      <- getDataWithBlockInfo(sortedPar, block).map(_.get)
-    } yield (data.postBlockData, data.block).asRight[Error]
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
+    val blockHashOpt = blockHashStr.hexToByteString
+    val dataF = for {
+      hashDecoded <- blockHashOpt.liftTo(new Exception(s"$blockHashStr is not a valid block hash."))
+      blockOpt    <- BlockStore[F].get1(hashDecoded)
+      block       <- blockOpt.liftTo(new Exception(s"Block $blockHashStr not found."))
+      sortedPar   <- parSortable.sortMatch[F](par).map(_.term)
+      stateHash = if (usePreStateHash) block.body.state.preStateHash
+      else block.body.state.postStateHash
+      data <- RuntimeManager[F].getData(stateHash)(sortedPar)
+      lbi  = getLightBlockInfo(block)
+    } yield (data, lbi)
+
+    dataF
+      .map(_.asRight[Error])
+      .handleErrorWith(_.getMessage.asLeft[(Seq[Par], LightBlockInfo)].pure)
+  }
+
 }
