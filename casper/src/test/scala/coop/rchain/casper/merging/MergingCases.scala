@@ -11,8 +11,8 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.merger.MergingLogic.computeRelatedSets
-import coop.rchain.rspace.merger.{EventLogIndex, MergingLogic}
+import coop.rchain.rspace.merger.EventLogMergingLogic.computeRelatedSets
+import coop.rchain.rspace.merger.{EventLogIndex, EventLogMergingLogic}
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
@@ -87,12 +87,12 @@ class MergingCases extends FlatSpec with Matchers {
                        mergeChs
                      )
                  }
-          firstDepends  = MergingLogic.depends(idxs.head, idxs(1))
-          secondDepends = MergingLogic.depends(idxs(1), idxs.head)
-          conflicts     = MergingLogic.areConflicting(idxs.head, idxs(1))
+          firstDepends  = EventLogMergingLogic.depends(idxs.head, idxs(1))
+          secondDepends = EventLogMergingLogic.depends(idxs(1), idxs.head)
+          conflicts     = EventLogMergingLogic.areConflicting(idxs.head, idxs(1))
           deployChains = computeRelatedSets[EventLogIndex](
             idxs.toSet,
-            MergingLogic.depends
+            EventLogMergingLogic.depends
           )
           // deploys inside one state transition never conflict, as executed in a sequence (for now)
           _ = conflicts shouldBe false

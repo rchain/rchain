@@ -103,6 +103,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   override def status: F[Status] =
     for {
       netInfo                  <- networkStatus
+      latestBlockNumber        <- BlockDagStorage[F].getRepresentation.map(_.latestBlockNumber)
       (thisNode, peers, nodes) = netInfo
       status = Status(
         version = VersionInfo(api = 1.toString, node = version),
@@ -111,7 +112,8 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         shardId,
         peers = peers.length,
         nodes = nodes.length,
-        minPhloPrice
+        minPhloPrice,
+        latestBlockNumber
       )
     } yield status
 
@@ -511,17 +513,6 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       blockHashOpt = dag.find(hash)
       message      <- blockHashOpt.flatTraverse(BlockStore[F].get1)
     } yield message
-
-  override def previewPrivateNames(
-      deployer: ByteString,
-      timestamp: Long,
-      nameQty: Int
-  ): F[ApiErr[Seq[ByteString]]] = {
-    val rand                = Tools.unforgeableNameRng(PublicKey(deployer.toByteArray), timestamp)
-    val safeQty             = nameQty min 1024
-    val ids: Seq[BlockHash] = (0 until safeQty).map(_ => ByteString.copyFrom(rand.next()))
-    ids.asRight[String].pure[F]
-  }
 
   override def lastFinalizedBlock: F[ApiErr[BlockInfo]] =
     for {

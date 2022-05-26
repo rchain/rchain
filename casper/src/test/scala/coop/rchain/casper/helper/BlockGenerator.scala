@@ -8,7 +8,10 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.InterpreterUtil.computeDeploysCheckpoint
+import coop.rchain.casper.rholang.InterpreterUtil.{
+  computeDeploysCheckpoint,
+  computeParentsPostState
+}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
@@ -80,13 +83,17 @@ object BlockGenerator {
     for {
       parents <- ProtoUtil.getParents[F](b)
       deploys = ProtoUtil.deploys(b).map(_.deploy)
+      computedParentsInfo <- computeParentsPostState(
+                              parents,
+                              s,
+                              runtimeManager
+                            )
       result <- computeDeploysCheckpoint[F](
-                 parents,
                  deploys,
                  List.empty[SystemDeploy],
-                 s,
                  runtimeManager,
-                 BlockData.fromBlock(b)
+                 BlockData.fromBlock(b),
+                 computedParentsInfo
                ).attempt
       Right((preStateHash, postStateHash, processedDeploys, rejectedDeploys, _)) = result
     } yield (postStateHash, processedDeploys)

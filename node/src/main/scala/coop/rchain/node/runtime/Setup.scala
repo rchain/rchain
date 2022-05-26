@@ -6,6 +6,7 @@ import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
@@ -17,6 +18,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.RuntimeManager.BlockExecutionTracker
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.comm.RoutingMessage
@@ -38,7 +40,7 @@ import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.{ReportingRoutes, Transaction}
-import coop.rchain.rholang.interpreter.RhoRuntime
+import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime}
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
@@ -125,10 +127,16 @@ object Setup {
       runtimeManagerWithHistory <- {
         implicit val sp = span
         for {
-          rStores    <- rnodeStoreManager.rSpaceStores
-          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          rStores          <- rnodeStoreManager.rSpaceStores
+          mergeStore       <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          executionTracker = BlockDagKeyValueStorage.executionTracker(blockDagStorage)
           rm <- RuntimeManager
-                 .createWithHistory[F](rStores, mergeStore, Genesis.NonNegativeMergeableTagName)
+                 .createWithHistory[F](
+                   rStores,
+                   mergeStore,
+                   Genesis.NonNegativeMergeableTagName,
+                   executionTracker
+                 )
         } yield rm
       }
       (runtimeManager, historyRepo) = runtimeManagerWithHistory

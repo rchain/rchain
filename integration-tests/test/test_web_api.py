@@ -30,10 +30,6 @@ def test_web_api(node_with_blocks: Tuple[Node, List[str], List[str]]) -> None :
 
     status = client.status()
     assert status.version
-    prepare_rep = client.prepare_deploy()
-    assert prepare_rep.seq_number == 3
-    prepare_rep_2 = client.prepare_deploy(STANDALONE_KEY.get_public_key().to_hex(), 1, 1)
-    assert prepare_rep_2.seq_number == 3
 
     data_at_name = client.data_at_name(deploy_hash[0], 1, "UnforgDeploy")
     assert data_at_name.length == 0

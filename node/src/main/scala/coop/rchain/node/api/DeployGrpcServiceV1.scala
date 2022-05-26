@@ -176,18 +176,6 @@ object DeployGrpcServiceV1 {
           FindDeployResponse(r.fold[Message](Error, BlockInfo))
         }
 
-      def previewPrivateNames(request: PrivateNamePreviewQuery): Task[PrivateNamePreviewResponse] =
-        defer(blockApi.previewPrivateNames(request.user, request.timestamp, request.nameQty)) { r =>
-          import PrivateNamePreviewResponse.Message
-          import PrivateNamePreviewResponse.Message._
-          PrivateNamePreviewResponse(
-            r.fold[Message](
-              Error,
-              ids => Payload(PrivateNamePreviewPayload(ids))
-            )
-          )
-        }
-
       def lastFinalizedBlock(request: LastFinalizedBlockQuery): Task[LastFinalizedBlockResponse] =
         defer(blockApi.lastFinalizedBlock) { r =>
           import LastFinalizedBlockResponse.Message

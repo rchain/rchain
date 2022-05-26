@@ -62,7 +62,7 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
   ): F[Option[PersistedData]] =
     targetHistory
       .read(prefix +: key.bytes)
-      .flatMap(_.map(Blake2b256Hash.fromByteVector).flatTraverse(leafStore.get1))
+      .flatMap(_.flatTraverse(leafStore.get1))
 
   override def base: HistoryReaderBase[F, C, P, A, K] = {
     val historyReader = this

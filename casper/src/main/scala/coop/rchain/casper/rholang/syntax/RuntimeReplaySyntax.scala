@@ -38,22 +38,23 @@ import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.merger.MergingLogic.NumberChannelsEndVal
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.Log
+import RuntimeReplaySyntax._
+import coop.rchain.casper.syntax._
 
 trait RuntimeReplaySyntax {
-  implicit final def casperSyntaxRholangRuntimeReplay[F[_]: Sync: Span: Log](
+  implicit final def casperSyntaxRholangRuntimeReplay[F[_]](
       runtime: ReplayRhoRuntime[F]
-  ): RuntimeReplayOps[F] =
-    new RuntimeReplayOps[F](runtime)
+  ): RuntimeReplayOps[F] = new RuntimeReplayOps[F](runtime)
 }
 
-final class RuntimeReplayOps[F[_]: Sync: Span: Log](
-    private val runtime: ReplayRhoRuntime[F]
-) extends RuntimeSyntax {
-
+object RuntimeReplaySyntax {
   implicit val RuntimeMetricsSource = Metrics.Source(CasperMetricsSource, "replay-rho-runtime")
+}
+
+final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) extends AnyVal {
 
   /* REPLAY Compute state with deploys (genesis block) and System deploys (regular block) */
 
@@ -65,6 +66,10 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
       withCostAccounting: Boolean
+  )(
+      implicit sync: Sync[F],
+      span: Span[F],
+      log: Log[F]
   ): F[Either[ReplayFailure, (Blake2b256Hash, Seq[NumberChannelsEndVal])]] =
     Span[F].traceI("replay-compute-state") {
       for {
@@ -90,6 +95,9 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
       systemDeploys: Seq[ProcessedSystemDeploy],
       replayDeploy: ProcessedDeploy => F[Either[ReplayFailure, NumberChannelsEndVal]],
       replaySystemDeploy: ProcessedSystemDeploy => F[Either[ReplayFailure, NumberChannelsEndVal]]
+  )(
+      implicit s: Sync[F],
+      span: Span[F]
   ): F[Either[ReplayFailure, (Blake2b256Hash, Vector[NumberChannelsEndVal])]] = {
     type Params[D] = (Seq[D], Vector[NumberChannelsEndVal])
 
@@ -134,11 +142,19 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
     */
   def replayDeploy(withCostAccounting: Boolean)(
       processedDeploy: ProcessedDeploy
+  )(
+      implicit s: Sync[F],
+      span: Span[F],
+      log: Log[F]
   ): F[Option[ReplayFailure]] =
     replayDeployE(withCostAccounting)(processedDeploy).swap.toOption.value
 
   def replayDeployE(withCostAccounting: Boolean)(
       processedDeploy: ProcessedDeploy
+  )(
+      implicit s: Sync[F],
+      span: Span[F],
+      log: Log[F]
   ): EitherT[F, ReplayFailure, NumberChannelsEndVal] = {
     val refT = Ref.of(Set[Par]()).liftEitherT[ReplayFailure]
     refT flatMap { mergeable =>
@@ -243,6 +259,9 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
     */
   def replayBlockSystemDeployDiag(blockData: BlockData)(
       processedSystemDeploy: ProcessedSystemDeploy
+  )(
+      implicit s: Sync[F],
+      span: Span[F]
   ): F[Either[ReplayFailure, NumberChannelsEndVal]] =
     Span[F].withMarks("replay-system-deploy")(
       replayBlockSystemDeploy(blockData)(processedSystemDeploy).value
@@ -250,7 +269,7 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
 
   def replayBlockSystemDeploy(blockData: BlockData)(
       processedSysDeploy: ProcessedSystemDeploy
-  ): EitherT[F, ReplayFailure, NumberChannelsEndVal] = {
+  )(implicit s: Sync[F], span: Span[F]): EitherT[F, ReplayFailure, NumberChannelsEndVal] = {
     import processedSysDeploy._
     val sender = ByteString.copyFrom(blockData.sender.bytes)
     systemDeploy match {
@@ -289,7 +308,7 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
   def replaySystemDeployInternal[S <: SystemDeploy](
       systemDeploy: S,
       expectedFailureMsg: Option[String]
-  ): EitherT[F, ReplayFailure, SysEvalResult[S]] = {
+  )(implicit sync: Sync[F], span: Span[F]): EitherT[F, ReplayFailure, SysEvalResult[S]] = {
     // Evaluate system deploy
     val fe = runtime
       .evalSystemDeploy(systemDeploy)
@@ -326,14 +345,15 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
   def rigWithCheck[A](
       processedDeploy: ProcessedDeploy,
       action: F[Either[ReplayFailure, (A, Boolean)]]
-  ): EitherT[F, ReplayFailure, (A, Boolean)] = EitherT(rig(processedDeploy) *> action) flatMap {
-    case r @ (_, evalRes) => checkReplayDataWithFix(evalRes).as(r)
-  }
+  )(implicit s: Sync[F]): EitherT[F, ReplayFailure, (A, Boolean)] =
+    EitherT(rig(processedDeploy) *> action) flatMap {
+      case r @ (_, evalRes) => checkReplayDataWithFix(evalRes).as(r)
+    }
 
   def rigWithCheck[A](
       processedSystemDeploy: ProcessedSystemDeploy,
       action: EitherT[F, ReplayFailure, (A, EvaluateResult)]
-  ): EitherT[F, ReplayFailure, (A, EvaluateResult)] =
+  )(implicit s: Sync[F]): EitherT[F, ReplayFailure, (A, EvaluateResult)] =
     rig(processedSystemDeploy).liftEitherT[ReplayFailure] *> action flatMap {
       case r @ (_, evalRes) => checkReplayDataWithFix(evalRes.succeeded).as(r)
     }
@@ -344,7 +364,9 @@ final class RuntimeReplayOps[F[_]: Sync: Span: Log](
   def rig(processedSystemDeploy: ProcessedSystemDeploy): F[Unit] =
     runtime.rig(processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent))
 
-  def checkReplayDataWithFix(evalSuccessful: Boolean): EitherT[F, ReplayFailure, Unit] =
+  def checkReplayDataWithFix(
+      evalSuccessful: Boolean
+  )(implicit s: Sync[F]): EitherT[F, ReplayFailure, Unit] =
     runtime.checkReplayData.attemptT
       .leftMap {
         case replayException: ReplayException =>

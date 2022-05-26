@@ -48,12 +48,6 @@ trait BlockApi[F[_]] {
 
   def getBlock(hash: String): F[ApiErr[BlockInfo]]
 
-  def previewPrivateNames(
-      deployer: ByteString,
-      timestamp: Long,
-      nameQty: Int
-  ): F[ApiErr[Seq[ByteString]]]
-
   def bondStatus(
       publicKey: ByteString,
       targetBlock: Option[BlockMessage] = none[BlockMessage]

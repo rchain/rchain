@@ -1,5 +1,6 @@
 package coop.rchain.casper.rholang.syntax
 
+import cats.{Applicative, Functor, Monad}
 import cats.data.{EitherT, OptionT}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
@@ -16,7 +17,7 @@ import coop.rchain.casper.protocol.{
 }
 import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
 import coop.rchain.casper.rholang._
-import coop.rchain.casper.rholang.syntax.RuntimeSyntax.SysEvalResult
+import coop.rchain.casper.rholang.syntax.RuntimeSyntax._
 import coop.rchain.casper.rholang.sysdeploys.{
   CloseBlockDeploy,
   PreChargeDeploy,
@@ -50,35 +51,36 @@ import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.interpreter.{storage, EvaluateResult, RhoRuntime}
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.History.emptyRootHash
-import coop.rchain.rspace.merger.MergingLogic.NumberChannelsEndVal
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.shared.{Base16, Log}
+import RuntimeSyntax._
+import coop.rchain.casper.rholang.RuntimeDeployResult._
 
 trait RuntimeSyntax {
-  implicit final def casperSyntaxRholangRuntime[F[_]: Sync: Span: Log](
+  implicit final def casperSyntaxRholangRuntime[F[_]](
       runtime: RhoRuntime[F]
   ): RuntimeOps[F] = new RuntimeOps[F](runtime)
 }
 
 object RuntimeSyntax {
   type SysEvalResult[S <: SystemDeploy] = (Either[SystemDeployUserError, S#Result], EvaluateResult)
-}
 
-final class RuntimeOps[F[_]: Sync: Span: Log](
-    private val runtime: RhoRuntime[F]
-) {
   implicit val RuntimeMetricsSource = Metrics.Source(CasperMetricsSource, "rho-runtime")
 
-  private val systemDeployConsumeAllPattern = {
+  val systemDeployConsumeAllPattern = {
     import coop.rchain.models.rholang.{implicits => toPar}
     BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
   }
+}
+
+final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal {
 
   /**
     * Because of the history legacy, the emptyStateHash does not really represent an empty trie.
     * The `emptyStateHash` is used as genesis block pre state which the state only contains registry
     * fixed channels in the state.
     */
-  def emptyStateHash: F[StateHash] =
+  def emptyStateHash(implicit m: Monad[F]): F[StateHash] =
     for {
       _          <- runtime.reset(emptyRootHash)
       _          <- bootstrapRegistry(runtime)
@@ -96,13 +98,11 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
       blockData: BlockData
-  ): F[
-    (
-        StateHash,
-        Seq[(ProcessedDeploy, NumberChannelsEndVal)],
-        Seq[(ProcessedSystemDeploy, NumberChannelsEndVal)]
-    )
-  ] =
+  )(
+      implicit s: Sync[F],
+      span: Span[F],
+      log: Log[F]
+  ): F[(StateHash, Seq[UserDeployRuntimeResult], Seq[SystemDeployRuntimeResult])] =
     Span[F].traceI("compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
@@ -111,20 +111,18 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
                               }
         (startHash, processedDeploys) = deployProcessResult
         systemDeployProcessResult <- {
-          systemDeploys.toList.foldM(
-            (startHash, Vector.empty[(ProcessedSystemDeploy, NumberChannelsEndVal)])
-          ) {
+          systemDeploys.toList.foldM((startHash, Vector.empty[SystemDeployRuntimeResult])) {
             case ((startHash, processedSystemDeploys), sd) =>
               playSystemDeploy(startHash)(sd) >>= {
-                case PlaySucceeded(stateHash, processedSystemDeploy, mergeChs, _) =>
-                  (stateHash, processedSystemDeploys :+ (processedSystemDeploy, mergeChs)).pure[F]
-                case PlayFailed(Failed(_, errorMsg)) =>
-                  new Exception(
-                    "Unexpected system error during play of system deploy: " + errorMsg
-                  ).raiseError[
-                    F,
-                    (StateHash, Vector[(ProcessedSystemDeploy, NumberChannelsEndVal)])
-                  ]
+                case PlaySucceeded(stateHash, processedSystemDeploy, mergeChs, _) => {
+                  val result = SystemDeployRuntimeResult(processedSystemDeploy, mergeChs)
+                  (stateHash, processedSystemDeploys :+ result).pure[F]
+                }
+                case PlayFailed(Failed(_, errorMsg)) => {
+                  val errStr = "Unexpected system error during play of system deploy: " + errorMsg
+                  new Exception(errStr)
+                    .raiseError[F, (StateHash, Vector[SystemDeployRuntimeResult])]
+                }
               }
           }
         }
@@ -139,7 +137,11 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
       blockNumber: Long
-  ): F[(StateHash, StateHash, Seq[(ProcessedDeploy, NumberChannelsEndVal)])] =
+  )(
+      implicit s: Sync[F],
+      span: Span[F],
+      log: Log[F]
+  ): F[(StateHash, StateHash, Seq[UserDeployRuntimeResult])] =
     Span[F].traceI("compute-genesis") {
       for {
         _ <- runtime.setBlockData(
@@ -159,8 +161,8 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
   def playDeploys(
       startHash: StateHash,
       terms: Seq[Signed[DeployData]],
-      processDeploy: Signed[DeployData] => F[(ProcessedDeploy, NumberChannelsEndVal)]
-  ): F[(StateHash, Seq[(ProcessedDeploy, NumberChannelsEndVal)])] =
+      processDeploy: Signed[DeployData] => F[UserDeployRuntimeResult]
+  )(implicit m: Monad[F]): F[(StateHash, Seq[UserDeployRuntimeResult])] =
     for {
       _               <- runtime.reset(startHash.toBlake2b256Hash)
       res             <- terms.toList.traverse(processDeploy)
@@ -173,7 +175,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
     */
   def playDeployWithCostAccounting(
       deploy: Signed[DeployData]
-  ): F[(ProcessedDeploy, NumberChannelsEndVal)] = {
+  )(implicit s: Sync[F], log: Log[F], span: Span[F]): F[UserDeployRuntimeResult] = {
     // Pre-charge system deploy evaluator
     val preChargeF: F[(Vector[Event], Either[SystemDeployUserError, Unit], Set[Par])] =
       playSystemDeployInternal(
@@ -219,38 +221,46 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
           Span[F].traceI("refund")(execAndSave[RefundDeploy](refundF(amount)))
 
       // Creates user deploy evaluator with diagnostics
-      val userDeployDiag: F[ProcessedDeploy] = Span[F].traceI("user-deploy")(
+      val userDeployDiag = Span[F].traceI("user-deploy")(
         // Evaluates user deploy and append event log to local state
-        processDeploy(deploy).flatMap { case (pd, mc) => st.update(_.add(pd.deployLog, mc)).as(pd) }
+        processDeploy(deploy).flatTap {
+          case (pd, r) => st.update(_.add(pd.deployLog, r.mergeable))
+        }
       )
 
       // Evaluates Pre-charge system deploy
       EitherT(preChargeDiag)
       // Evaluates user deploy
         .semiflatMap(_ => userDeployDiag)
-        .flatTap { pd =>
-          // Evaluates Refund system deploy
-          EitherT(refundDiag(pd.refundAmount))
-            .leftSemiflatTap { error =>
-              // If Pre-charge succeeds and Refund fails, it's a platform error and we should signal it with raiseError
-              Log[F].warn(s"Refund failure '${error.errorMessage}'") *>
-                GasRefundFailure(error.errorMessage).raiseError[F, Unit]
-            }
+        .flatTap {
+          case (pd, _) =>
+            // Evaluates Refund system deploy
+            EitherT(refundDiag(pd.refundAmount))
+              .leftSemiflatTap { error =>
+                // If Pre-charge succeeds and Refund fails, it's a platform error and we should signal it with raiseError
+                Log[F].warn(s"Refund failure '${error.errorMessage}'") *>
+                  GasRefundFailure(error.errorMessage).raiseError[F, Unit]
+              }
         }
         .valueOr {
           // Handle evaluation errors from PreCharge or Refund
           // - assigning 0 cost - replay should reach the same state
           case SystemDeployUserError(errorMsg) =>
-            ProcessedDeploy
-              .empty(deploy)
-              .copy(systemDeployError = Some(errorMsg))
+            val pd = ProcessedDeploy.empty(deploy).copy(systemDeployError = Some(errorMsg))
+            val er = EvaluateResult(cost = Cost(0), errors = Vector(), mergeable = Set())
+            (pd, er)
         }
-        .flatMap { pd =>
-          // Update result with accumulated event logs (if evaluation failed also)
-          for {
-            collected             <- st.get
-            mergeableChannelsData <- getNumberChannelsData(collected.mergeableChannels)
-          } yield pd.copy(deployLog = collected.eventLog.toList) -> mergeableChannelsData
+        .flatMap {
+          case (pd, evalResult) =>
+            // Update result with accumulated event logs (if evaluation failed also)
+            for {
+              collected             <- st.get
+              mergeableChannelsData <- getNumberChannelsData(collected.mergeableChannels)
+            } yield UserDeployRuntimeResult(
+              pd.copy(deployLog = collected.eventLog.toList),
+              mergeableChannelsData,
+              evalResult
+            )
         }
     }
   }
@@ -258,7 +268,9 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
   /**
     * Evaluates deploy
     */
-  def processDeploy(deploy: Signed[DeployData]): F[(ProcessedDeploy, Set[Par])] =
+  def processDeploy(
+      deploy: Signed[DeployData]
+  )(implicit s: Sync[F], span: Span[F], log: Log[F]): F[(ProcessedDeploy, EvaluateResult)] =
     Span[F].withMarks("play-deploy") {
       for {
         fallback <- runtime.createSoftCheckpoint
@@ -279,29 +291,31 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
         _ <- (runtime.revertToSoftCheckpoint(fallback) *>
               printDeployErrors(deploy.sig, evaluateResult.errors)).whenA(!evalSucceeded)
 
-      } yield (deployResult, evaluateResult.mergeable)
+      } yield (deployResult, evaluateResult)
     }
 
   def processDeployWithMergeableData(
       deploy: Signed[DeployData]
-  ): F[(ProcessedDeploy, NumberChannelsEndVal)] =
+  )(implicit s: Sync[F], span: Span[F], log: Log[F]): F[UserDeployRuntimeResult] =
     processDeploy(deploy) flatMap {
-      case (pd, mergeChs) =>
+      case (pd, result @ EvaluateResult(_, _, mergeChs)) =>
         for {
           mergeableData <- getNumberChannelsData(mergeChs)
-        } yield (pd, mergeableData)
+        } yield UserDeployRuntimeResult(pd, mergeableData, result)
     }
 
-  def getNumberChannelsData(channels: Set[Par]): F[NumberChannelsEndVal] =
+  def getNumberChannelsData(
+      channels: Set[Par]
+  )(implicit s: Sync[F]): F[NumberChannelsEndVal] =
     channels.toList.traverse(getNumberChannel).map(_.flatten.toMap)
 
-  def getNumberChannel(chan: Par): F[Option[(Blake2b256Hash, Long)]] =
+  def getNumberChannel(chan: Par)(implicit m: Sync[F]): F[Option[(Blake2b256Hash, Long)]] =
     // Read current channel value
     for {
       chValues <- runtime.getData(chan)
 
       r <- if (chValues.isEmpty) {
-            none.pure
+            none[(Blake2b256Hash, Long)].pure[F]
           } else {
             for {
               _ <- new Exception(s"NumberChannel must have singleton value.").raiseError
@@ -322,7 +336,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
     */
   def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S
-  ): F[SystemDeployResult[S#Result]] =
+  )(implicit s: Sync[F], span: Span[F]): F[SystemDeployResult[S#Result]] =
     for {
       _ <- runtime.reset(stateHash.toBlake2b256Hash)
 
@@ -372,6 +386,9 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
 
   def playSystemDeployInternal[S <: SystemDeploy](
       systemDeploy: S
+  )(
+      implicit s: Sync[F],
+      span: Span[F]
   ): F[(Vector[Event], Either[SystemDeployUserError, S#Result], Set[Par])] =
     for {
       // Get System deploy result / throw fatal errors for unexpected results
@@ -389,7 +406,9 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
   /**
     * Evaluates System deploy (applicative errors are fatal)
     */
-  def evalSystemDeploy[S <: SystemDeploy](systemDeploy: S): F[SysEvalResult[S]] =
+  def evalSystemDeploy[S <: SystemDeploy](
+      systemDeploy: S
+  )(implicit m: Sync[F], span: Span[F]): F[SysEvalResult[S]] =
     for {
       // Evaluate Rholang term with trace diagnostics
       evalResult <- Span[F].traceI("evaluate-system-source") {
@@ -424,7 +443,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
   /**
     * Evaluates exploratory (read-only) deploy
     */
-  def playExploratoryDeploy(term: String, hash: StateHash): F[Seq[Par]] = {
+  def playExploratoryDeploy(term: String, hash: StateHash)(implicit s: Sync[F]): F[Seq[Par]] = {
     // Create a deploy with newly created private key
     val (privKey, _) = Secp256k1.newKeyPair
 
@@ -451,7 +470,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
   /**
     * Creates soft checkpoint with rollback if result is false.
     */
-  def withSoftTransaction[A](fa: F[(A, Boolean)]): F[A] =
+  def withSoftTransaction[A](fa: F[(A, Boolean)])(implicit m: Monad[F]): F[A] =
     for {
       fallback <- runtime.createSoftCheckpoint
       // Execute action
@@ -468,7 +487,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
   def captureResults(
       start: StateHash,
       deploy: Signed[DeployData]
-  ): F[Seq[Par]] = {
+  )(implicit s: Sync[F]): F[Seq[Par]] = {
     // Create return channel as first unforgeable name created in deploy term
     val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
     import coop.rchain.models.rholang.implicits._
@@ -476,7 +495,9 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
     captureResults(start, deploy, returnName)
   }
 
-  def captureResults(start: StateHash, deploy: Signed[DeployData], name: Par): F[Seq[Par]] =
+  def captureResults(start: StateHash, deploy: Signed[DeployData], name: Par)(
+      implicit s: Sync[F]
+  ): F[Seq[Par]] =
     captureResultsWithErrors(start, deploy, name)
       .handleErrorWith(
         ex =>
@@ -488,7 +509,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       start: StateHash,
       deploy: Signed[DeployData],
       name: Par
-  ): F[Seq[Par]] =
+  )(implicit s: Sync[F]): F[Seq[Par]] =
     runtime.reset(start.toBlake2b256Hash) >>
       evaluate(deploy)
         .flatMap({ res =>
@@ -512,10 +533,12 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       systemDeploy.rand
     )
 
-  def getDataPar(channel: Par): F[Seq[Par]] =
+  def getDataPar(channel: Par)(implicit f: Functor[F]): F[Seq[Par]] =
     runtime.getData(channel).map(_.flatMap(_.a.pars))
 
-  def getContinuationPar(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
+  def getContinuationPar(
+      channels: Seq[Par]
+  )(implicit f: Functor[F]): F[Seq[(Seq[BindPattern], Par)]] =
     runtime
       .getContinuation(channels)
       .map(
@@ -536,7 +559,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
 
   /* Read only Rholang evaluator helpers */
 
-  def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
+  def getActiveValidators(startHash: StateHash)(implicit s: Sync[F]): F[Seq[Validator]] =
     playExploratoryDeploy(activateValidatorQuerySource, startHash)
       .ensureOr(
         validatorsPar =>
@@ -547,7 +570,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       )(validatorsPar => validatorsPar.size == 1)
       .map(validatorsPar => toValidatorSeq(validatorsPar.head))
 
-  def computeBonds(hash: StateHash): F[Seq[Bond]] =
+  def computeBonds(hash: StateHash)(implicit s: Sync[F]): F[Seq[Bond]] =
     // Create a deploy with newly created private key
     playExploratoryDeploy(bondsQuerySource, hash)
       .ensureOr(

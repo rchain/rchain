@@ -5,7 +5,7 @@ import cats.syntax.all._
 import coop.rchain.rspace._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.HistoryReaderBinary
-import coop.rchain.rspace.merger.MergingLogic.NumberChannelsDiff
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import scodec.bits.ByteVector
 
 object StateChangeMerger {
