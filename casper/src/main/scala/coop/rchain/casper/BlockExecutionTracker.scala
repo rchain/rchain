@@ -21,7 +21,7 @@ final class StatefulExecutionTracker[F[_]: Sync] extends BlockExecutionTracker[F
   override def execStarted(d: DeployId): F[Unit] = state.update(_ + (d -> none[DeployStatus]))
   override def execComplete(d: DeployId, res: EvaluateResult): F[Unit] = {
     val err    = res.errors.map(_.getMessage).mkString("\n")
-    val status = if (err.isBlank) DeployStatusSuccess else DeployStatusError(err)
+    val status = if (res.succeeded) DeployStatusSuccess else DeployStatusError(err)
     state.update(_ + (d -> status.some))
   }
 
