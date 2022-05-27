@@ -8,7 +8,6 @@ import scodec.{Codec, TransformSyntax}
 final case class BlockRandomSeed(
     shardId: String,
     blockNumber: Long,
-    sender: PublicKey,
     validatorPublicKey: PublicKey,
     preStateHash: Blake2b256Hash
 )
@@ -18,7 +17,7 @@ object BlockRandomSeed {
     .xmap[PublicKey](bv => PublicKey(bv.toArray), pk => ByteVector(pk.bytes))
 
   private val codecBlockRandomSeed: Codec[BlockRandomSeed] = (utf8 :: ulong(bits = 64) ::
-    codecPublicKey :: codecPublicKey :: Blake2b256Hash.codecPureBlake2b256Hash).as[BlockRandomSeed]
+    codecPublicKey :: Blake2b256Hash.codecPureBlake2b256Hash).as[BlockRandomSeed]
 
   private def encode(blockRandomSeed: BlockRandomSeed): Array[Byte] =
     codecBlockRandomSeed.encode(blockRandomSeed).require.toByteArray
