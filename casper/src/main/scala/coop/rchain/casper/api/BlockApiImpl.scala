@@ -1,13 +1,14 @@
 package coop.rchain.casper.api
 
+import cats.data.OptionT
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.MultiParentCasper.parsingError
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
@@ -21,13 +22,12 @@ import coop.rchain.casper.protocol.deploy.v1.{
   ProcessedWithError,
   ProcessedWithSuccess
 }
-import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, Tools}
+import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.Connections
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
@@ -35,7 +35,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
-import coop.rchain.models.{BlockMetadata, GDeployId, NormalizerEnv, Par}
+import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
+import coop.rchain.rholang.interpreter.RhoType.DeployId
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Log
@@ -182,69 +183,80 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   }
 
   override def deployStatus(deployId: DeployId): F[ApiErr[DeployExecStatus]] = {
-    // TODO: Don't use Option in input arguments, except in cases where it carries information.
-    def withSeqParAndBlockInfo(
-        blockHashOpt: Option[BlockHash]
-    )(f: (Seq[Par], BlockInfo) => DeployExecStatus): F[DeployExecStatus] = {
-      import coop.rchain.models.rholang.implicits._
-      for {
-        blockHash <- blockHashOpt.map(_.toHexString).get.pure
-        par       <- Sync[F].delay(GDeployId(deployId))
-        dataAtPar <- getDataAtPar(par, blockHash, usePreStateHash = false)
-        seqPar    <- liftToBlockApiErr(dataAtPar).map { case (seqPar, _) => seqPar }
-        blockInfo <- getBlock(blockHash) >>= liftToBlockApiErr
-      } yield f(seqPar, blockInfo)
+    def notProcessed(status: String): DeployExecStatus =
+      DeployExecStatus().withNotProcessed(NotProcessed(status))
+
+    def findProcessedDeployResultAndStatus: OptionT[F, DeployExecStatus] = {
+      val lookupDeploy = OptionT(BlockDagStorage[F].lookupByDeployId(deployId))
+      lookupDeploy.semiflatMap { blockHash =>
+        val deployIdCh = DeployId(deployId.toByteArray)
+        for {
+          block     <- BlockStore[F].getUnsafe(blockHash)
+          deployOpt = block.body.deploys.find(_.deploy.sig == deployId)
+          deploy <- deployOpt.liftTo {
+                     val blockHashStr = PrettyPrinter.buildString(blockHash)
+                     val deploySigStr = PrettyPrinter.buildString(deployId)
+                     val errMsg =
+                       s"Deploy not found in the block, blockHash: $blockHashStr, deploy sig: $deploySigStr"
+                     new Exception(errMsg)
+                   }
+          status <- if (!deploy.isFailed)
+                     // For successfully executed deploy, get the result and block info
+                     for {
+                       data              <- getDataAtParRaw(deployIdCh, blockHash)
+                       (par, lightBlock) = data
+                       success           = ProcessedWithSuccess(par, lightBlock)
+                     } yield DeployExecStatus().withProcessedWithSuccess(success)
+                   else
+                     for {
+                       // For failed deploy, get the error and block info
+                       deployStatusOpt <- executionTracker.findDeploy(deployId)
+                       lightBlock      = getLightBlockInfo(block)
+                       errMsg = deployStatusOpt
+                         .collect { case DeployStatusError(errorMsg) => errorMsg }
+                         .getOrElse(
+                           "<deploy error message not available in cache or deploy executed on another node>"
+                         )
+                       error = ProcessedWithError(errMsg, lightBlock)
+                     } yield DeployExecStatus().withProcessedWithError(error)
+        } yield status
+      }
     }
 
-    def notProcessed(status: String): F[DeployExecStatus] =
-      DeployExecStatus().withNotProcessed(NotProcessed(status)).pure
+    def findPooledDeploy: OptionT[F, DeployExecStatus] = {
+      val deployPooled = BlockDagStorage[F].containsDeployInPool(deployId).map(_.guard[Option])
+      OptionT(deployPooled).as {
+        // Deploy found in the pool, waiting to be executed and added to a block
+        notProcessed("Pooled")
+      }
+    }
 
-    def unknown = "Unknown"
+    def findCurrentlyExecutedDeploy: OptionT[F, DeployExecStatus] = {
+      val deployStatusOptT = OptionT(executionTracker.findDeploy(deployId))
+      deployStatusOptT.map { _ =>
+        // Status found, block creation in progress, deploy execution started
+        notProcessed("Running")
+      }
+    }
 
-    def statusF: F[DeployExecStatus] =
-      for {
-        blockHashOpt <- BlockDagStorage[F].lookupByDeployId(deployId)
+    def findPooledOrRunningDeploy: OptionT[F, DeployExecStatus] =
+      findPooledDeploy.semiflatMap { pulled =>
+        // Find if pooled deploy is running, if not return pooled
+        findCurrentlyExecutedDeploy.getOrElse(pulled)
+      }
 
-        // TODO: Don't use isDefined on Option because it's implementation detail, try to use map/flatMap/orElse.
-        isDeployInBlock = blockHashOpt.isDefined
-        isDeployInPool  <- BlockDagStorage[F].pooledDeploys.map(_.contains(deployId))
+    // Deploy not found in the system, unknown
+    def unknownDeploy: DeployExecStatus = notProcessed("Unknown")
 
-        deployExistsOpt <- executionTracker.deployExists(deployId)
+    // Find deploy status, result, error, ...
+    // 1. find deploy added to a block
+    // 2. find deploy in pool or in execution
+    // 3. return unknown for rest (in API v2 this should be error 404)
+    val result = findProcessedDeployResultAndStatus orElse findPooledOrRunningDeploy getOrElse unknownDeploy
 
-        // TODO: Don't use isDefined on Option because it's implementation detail, try to use map/flatMap/orElse.
-        deployIsTracked = deployExistsOpt.isDefined
-
-        s <- if (isDeployInBlock) {
-              if (deployIsTracked) {
-                // TODO: Don't use get directly on Option.
-                val statusExistsOpt = deployExistsOpt.get
-
-                // TODO: Don't create deeply nested if/match expressions which are prone to errors,
-                //  hard to read and almost impossible to change later.
-
-                // TODO: Don't use isDefined on Option because it's implementation detail, try to use map/flatMap/orElse.
-                if (statusExistsOpt.isDefined) {
-                  withSeqParAndBlockInfo(blockHashOpt) {
-                    case (seqPar, blockInfo) =>
-                      statusExistsOpt.get match {
-                        case DeployStatusSuccess =>
-                          val success = ProcessedWithSuccess(seqPar, blockInfo)
-                          DeployExecStatus().withProcessedWithSuccess(success)
-                        case DeployStatusError(s) =>
-                          DeployExecStatus().withProcessedWithError(
-                            ProcessedWithError(s, blockInfo)
-                          )
-                      }
-                  }
-                } else notProcessed("In Progress")
-              } else notProcessed(unknown)
-            } else notProcessed(if (isDeployInPool) "Pooled" else unknown)
-      } yield s
-    statusF.map(_.asRight[Error]).handleErrorWith(_.getMessage.asLeft[DeployExecStatus].pure)
+    // TODO: error can have empty message
+    result.attempt.map(_.leftMap(_.getMessage))
   }
-
-  private def liftToBlockApiErr[A](x: Either[String, A]): F[A] =
-    x.leftMap(new Exception(_)).liftTo[F]
 
   override def createBlock(isAsync: Boolean = false): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
@@ -669,24 +681,33 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
   override def getDataAtPar(
       par: Par,
-      blockHashStr: String,
+      blockHashHex: String,
       usePreStateHash: Boolean
-  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
-    val blockHashOpt = blockHashStr.hexToByteString
-    val dataF = for {
-      hashDecoded <- blockHashOpt.liftTo(new Exception(s"$blockHashStr is not a valid block hash."))
-      blockOpt    <- BlockStore[F].get1(hashDecoded)
-      block       <- blockOpt.liftTo(new Exception(s"Block $blockHashStr not found."))
-      sortedPar   <- parSortable.sortMatch[F](par).map(_.term)
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
+    Sync[F]
+      .defer {
+        for {
+          blockHash <- blockHashHex.hexToByteString.liftTo(
+                        new Exception(s"Invalid block hash base 16 encoding, $blockHashHex")
+                      )
+          result <- getDataAtParRaw(par, blockHash, usePreStateHash)
+        } yield result
+      }
+      .attempt
+      .map(_.leftMap(_.getMessage))
+
+  private def getDataAtParRaw(
+      par: Par,
+      blockHash: ByteString,
+      usePreStateHash: Boolean = false
+  ): F[(Seq[Par], LightBlockInfo)] =
+    for {
+      block     <- BlockStore[F].getUnsafe(blockHash)
+      sortedPar <- parSortable.sortMatch[F](par).map(_.term)
       stateHash = if (usePreStateHash) block.body.state.preStateHash
       else block.body.state.postStateHash
       data <- RuntimeManager[F].getData(stateHash)(sortedPar)
       lbi  = getLightBlockInfo(block)
     } yield (data, lbi)
-
-    dataF
-      .map(_.asRight[Error])
-      .handleErrorWith(_.getMessage.asLeft[(Seq[Par], LightBlockInfo)].pure)
-  }
 
 }

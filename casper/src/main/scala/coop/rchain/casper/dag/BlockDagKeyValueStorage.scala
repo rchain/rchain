@@ -242,6 +242,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   override def pooledDeploys: F[Map[DeployId, Signed[DeployData]]] = deployStore.toMap
 
+  override def containsDeployInPool(deployId: DeployId): F[Boolean] = deployStore.contains(deployId)
+
   // Map of deploys being executed and execution results
   private val expiredMap = TrieMap.empty[DeployId, Unit]
 }

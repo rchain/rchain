@@ -109,12 +109,12 @@ message DeployExecStatus {
 
 message ProcessedWithSuccess {
   repeated Par deployResult = 1;
-  BlockInfo block           = 2 [(scalapb.field).no_box = true];
+  LightBlockInfo block           = 2 [(scalapb.field).no_box = true];
 }
 
 message ProcessedWithError {
   string deployError = 1;
-  BlockInfo block    = 2 [(scalapb.field).no_box = true];
+  LightBlockInfo block    = 2 [(scalapb.field).no_box = true];
 }
 
 message NotProcessed {

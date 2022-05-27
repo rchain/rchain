@@ -70,7 +70,9 @@ object WebApi {
       blockApi
         .deployStatus(deploySignature.unsafeHexToByteString)
         .flatMap(_.liftToBlockApiErr)
-        .map(toDeployExecStatus)
+        .flatMap(
+          toDeployExecStatus(_).liftTo(new Exception("Deploy status protobuf message error"))
+        )
 
     def listenForDataAtName(req: DataAtNameRequest): F[DataAtNameResponse] =
       blockApi
@@ -192,12 +194,12 @@ object WebApi {
 
   final case class ProcessedWithSuccess(
       deployResult: Seq[RhoExpr],
-      block: BlockInfo
+      block: LightBlockInfo
   ) extends DeployExecStatus
 
   final case class ProcessedWithError(
       deployError: String,
-      block: BlockInfo
+      block: LightBlockInfo
   ) extends DeployExecStatus
 
   final case class NotProcessed(status: String) extends DeployExecStatus
@@ -365,18 +367,18 @@ object WebApi {
 
   private def toDeployExecStatus(
       status: coop.rchain.casper.protocol.deploy.v1.DeployExecStatus
-  ): DeployExecStatus = {
+  ): Option[DeployExecStatus] = {
     import coop.rchain.casper.protocol.deploy.v1.DeployExecStatus.{Status => DepSt}
     status.status match {
       case DepSt.ProcessedWithSuccess(s) =>
         ProcessedWithSuccess(
           s.deployResult.map(exprFromParProto(_).get),
           s.block
-        )
+        ).some
       case DepSt.ProcessedWithError(s) =>
-        ProcessedWithError(s.deployError, s.block)
-      case DepSt.NotProcessed(s) => NotProcessed(s.status)
-      case DepSt.Empty           => NotProcessed("Unknown")
+        ProcessedWithError(s.deployError, s.block).some
+      case DepSt.NotProcessed(s) => NotProcessed(s.status).some
+      case DepSt.Empty           => none
     }
   }
 

@@ -12,18 +12,23 @@ trait BlockExecutionTracker[F[_]] {
 }
 
 sealed trait DeployStatus
-case object DeployStatusSuccess                    extends DeployStatus
+case object DeployStatusStarted                    extends DeployStatus
 final case class DeployStatusError(status: String) extends DeployStatus
 
 final class StatefulExecutionTracker[F[_]: Sync] extends BlockExecutionTracker[F] {
-  private val state = Ref.unsafe(Map.empty[DeployId, Option[DeployStatus]])
+  private val state = Ref.unsafe(Map.empty[DeployId, DeployStatus])
 
-  override def execStarted(d: DeployId): F[Unit] = state.update(_ + (d -> none[DeployStatus]))
-  override def execComplete(d: DeployId, res: EvaluateResult): F[Unit] = {
-    val err    = res.errors.map(_.getMessage).mkString("\n")
-    val status = if (res.succeeded) DeployStatusSuccess else DeployStatusError(err)
-    state.update(_ + (d -> status.some))
-  }
+  override def execStarted(d: DeployId): F[Unit] = state.update(_ + (d -> DeployStatusStarted))
+  override def execComplete(d: DeployId, res: EvaluateResult): F[Unit] =
+    if (res.succeeded) {
+      // When deploy succeeded, remove from tracking
+      state.update(_ - d)
+    } else {
+      // If deploy fails update status with errors
+      // TODO: error can have empty message
+      val err = res.errors.map(_.getMessage).mkString("\n")
+      state.update(_ + (d -> DeployStatusError(err)))
+    }
 
-  def deployExists(d: DeployId): F[Option[Option[DeployStatus]]] = state.get.map(_.get(d))
+  def findDeploy(d: DeployId): F[Option[DeployStatus]] = state.get.map(_.get(d))
 }
