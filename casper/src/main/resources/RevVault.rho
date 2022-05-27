@@ -15,29 +15,42 @@
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
 new
-  RevVault, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
-  rl(`rho:registry:lookup`), RevAddress(`rho:rev:address`),
-  MakeMintCh, AuthKeyCh, EitherCh, TreeHashMapCh,
+  RevVault,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  rl(`rho:registry:lookup`),
+  RevAddress(`rho:rev:address`),
+  MakeMintCh,
+  AuthKeyCh,
+  EitherCh,
+  TreeHashMapCh,
+  uriOut,
   _makeVault,
   _newVault,
   _create,
   _revVault,
   _transferTemplate,
   _depositTemplate,
-  deployerId(`rho:rchain:deployerId`)
+  deployerId(`rho:rchain:deployerId`),
+  systemContractManagerCh,
+  dispatcherCh,
+  configPublicKeyCheckCh
 in {
   rl!(`rho:rchain:makeMint`, *MakeMintCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
   rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
+  rl!(`rho:registry:systemContractManager`, *systemContractManagerCh) |
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
   for (@(_, MakeMint) <- MakeMintCh &
        @(_, AuthKey)  <- AuthKeyCh &
        @(_, Either)   <- EitherCh &
-       TreeHashMap    <- TreeHashMapCh) {
+       @(_, TreeHashMap)    <- TreeHashMapCh &
+       @(_, systemContractManager) <- systemContractManagerCh &
+       @(_, configPublicKeyCheck)<- configPublicKeyCheckCh) {
     // Each invocation of the RevVault contract uses a different mint.
     new mintCh, vaultMapStore, initVault in {
       // Initializes the vaultMapStore.
-      TreeHashMap!("init", 2, *vaultMapStore) |
+      @TreeHashMap!("init", 2, *vaultMapStore) |
       for (@vaultMap <- vaultMapStore) {
         // Called from RevGenerator:
         //   RevVault!("init", *ret)
@@ -48,7 +61,7 @@ in {
           initContinue!() |
           contract RevVault(@"init", ret) = {
             for (<- initContinue) {
-              ret!(*TreeHashMap, vaultMap, *initVault, *initContinue)
+              ret!(TreeHashMap, vaultMap, *initVault, *initContinue)
             }
           }
         } |
@@ -101,7 +114,7 @@ in {
                   // Valid Rev address returns Right and we proceed with creation/search.
                   _ => {
                     new createVault, vaultCh, getVaultCh in {
-                      TreeHashMap!("get", vaultMap, revAddress, *getVaultCh) |
+                      @TreeHashMap!("get", vaultMap, revAddress, *getVaultCh) |
                       for (@vault <- getVaultCh) {
                         if (vault != Nil) {
                           // If vault is in the store, return (true, vault).
@@ -147,7 +160,7 @@ in {
               for (@eitherVault <- resCh) {
                 match eitherVault {
                   (true, vault) => {
-                    TreeHashMap!("set", vaultMap, revAddress, vault, *ackCh) |
+                    @TreeHashMap!("set", vaultMap, revAddress, vault, *ackCh) |
                     for (_ <- ackCh) {
                       retCh!(eitherVault)
                     }
@@ -269,12 +282,23 @@ in {
               }
             }
           } |
-
-          rs!(
-            (9223372036854775807, bundle+{*RevVault}),
-            *deployerId,
-            *uriOut
-          )
+          // Method to extract the current state of the RevVault contract.
+          // Returns the current `vaultMap`.
+          for (ret <- @(*RevVault, "extractState")){
+            ret!({"vaultMap":vaultMap, "revVaultUnf": *_revVault})
+          } |
+          // Insert the signed, write-only dispatcher contract into the registry uri map
+          @systemContractManager!("createDispatcher", *RevVault, *dispatcherCh)|
+          contract @(*RevVault, "securityCheck")(@deployerId, ret) = {
+            @configPublicKeyCheck!(deployerId, *ret)
+          } |
+          for (revVaultDispatcher <- dispatcherCh){
+            rs!(
+              (9223372036854775807, bundle+{*revVaultDispatcher}),
+              *deployerId,
+              *uriOut
+            )
+          }
         }
       }
     }

@@ -1,12 +1,12 @@
-new RevVaultCh, MultiSigRevVaultCh, POSCh, multiSigCh, RevVaultCh,
+new RevVaultCh, MultiSigRevVaultCh, PosCh, multiSigCh, RevVaultCh,
     deployerAuthCh, rl(`rho:registry:lookup`), 
     deployerId(`rho:rchain:deployerId`), stdout(`rho:io:stdout`),
     transferRet, vaultCh in {
-  rl!(`rho:rchain:pos`, *POSCh) |
+  rl!(`rho:rchain:pos`, *PosCh) |
   rl!(`rho:rchain:revVault`, *RevVaultCh) |
   rl!(`rho:rchain:multiSigRevVault`, *MultiSigRevVaultCh) |
-  for (@(_, POS) <- POSCh;@(_, RevVault) <- RevVaultCh ; @(_, MultiSigVault) <- MultiSigRevVaultCh) {
-    @POS!("getCoopVault", *multiSigCh)|
+  for (@(_, Pos) <- PosCh;@(_, RevVault) <- RevVaultCh ; @(_, MultiSigVault) <- MultiSigRevVaultCh) {
+    @Pos!("getCoopVault", *multiSigCh)|
     @MultiSigVault!("deployerAuthKey", *deployerId, *deployerAuthCh) |
     @RevVault!("findOrCreate", "$$targetAddr$$", *vaultCh)|
     stdout!(("get library right"))|

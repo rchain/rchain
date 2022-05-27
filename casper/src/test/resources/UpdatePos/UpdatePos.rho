@@ -1,0 +1,31 @@
+new
+  deployId(`rho:rchain:deployId`),
+  updateContract,
+  rl(`rho:registry:lookup`),
+  rlret,
+  _authKey,
+  stdout(`rho:io:stdout`),
+  updateRet,
+  deployerID(`rho:rchain:deployerId`)
+in {
+  for (Pos, conRet <- updateContract){
+    contract Pos(@"sayHello", ret) = {
+      ret!("hello")
+    }|
+    conRet!(*Pos)
+  } |
+  stdout!(("update pos start!!!!!"))|
+  rl!(`rho:registry:systemContractManager`, *rlret)|
+  for(@(_, systemContractManager) <- rlret){
+    stdout!(("propose get multisig ok", systemContractManager))|
+    @systemContractManager!("update",
+                  *deployerID,
+                  `rho:rchain:pos`,
+                  *updateContract,
+                  *updateRet)|
+    for (@result <- updateRet){
+      stdout!((result, "pos update result"))|
+      deployId!(result)
+    }
+  }
+}

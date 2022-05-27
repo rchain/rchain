@@ -15,24 +15,36 @@
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
 
-new MultiSigRevVault,
-    rs(`rho:registry:insertSigned:secp256k1`), uriOut,
-    rl(`rho:registry:lookup`),
-    _multiSigRevVault,
-    RevVaultCh,
-    AuthKeyCh,
-    ListOpsCh,
-    deployerId(`rho:rchain:deployerId`)
+new
+  MultiSigRevVault,
+  rs(`rho:registry:insertSigned:secp256k1`), uriOut,
+  rl(`rho:registry:lookup`),
+  _multiSigRevVault,
+  RevVaultCh,
+  AuthKeyCh,
+  ListOpsCh,
+  deployerId(`rho:rchain:deployerId`),
+  systemContractManagerCh,
+  dispatcherCh,
+  configPublicKeyCheckCh
 in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:rchain:revVault`, *RevVaultCh) |
+  rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
   for(@(_, ListOps) <- ListOpsCh &
       @(_, AuthKey) <- AuthKeyCh &
-      @(_, RevVault) <- RevVaultCh) {
-
+      @(_, RevVault) <- RevVaultCh &
+      @(_, systemContractManager) <- systemContractManagerCh &
+      @(_, configPublicKeyCheck)<- configPublicKeyCheckCh) {
+    // Creates a sealer/unsealer pair and return on `ret`
     contract MultiSigRevVault(@"makeSealerUnsealer", ret) = {
-      new mapStore, sealer, unsealer in {
+      new
+        mapStore,
+        sealer,
+        unsealer
+      in {
         mapStore!({}) |
         contract sealer(@value, retS) = {
           for (@map <- mapStore) {
@@ -54,7 +66,7 @@ in {
         ret!((*sealer, *unsealer))
       }
     } |
-
+    // Returns a MultiSigRevVault auth key for `deployerId` on `ret`
     contract MultiSigRevVault(@"deployerAuthKey", deployerId, ret) = {
       new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
         DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
@@ -64,12 +76,10 @@ in {
         }
       }
     } |
-
-    // MultiSig
+    // MultiSig vault creation method
     // Returns (false, errorMsg) or (true, (multiSigVault, revAddress, revVault))
     contract MultiSigRevVault(@"create", @publicKeys, @unsealers, @quorumSize, ret) = {
-      if (quorumSize > publicKeys.length() + unsealers.length() or
-          quorumSize <= 0) {
+      if (quorumSize <= 0 || quorumSize > publicKeys.length() + unsealers.length()) {
         ret!((false, "invalid quorum size"))
       } else {
         new unf, authKeyCh, RevAddress(`rho:rev:address`), revAddrCh in {
@@ -129,7 +139,6 @@ in {
                         }
                       }
                     } |
-
                     // Creates transfer and "signs" with first account.
                     // auth is either a deployerAuthKey or
                     //                a sealed (*multiSig, targetRevAddress, amount, *ret) tuple
@@ -176,7 +185,6 @@ in {
                         }
                       }
                     } |
-
                     // Confirms transfer transaction.
                     // auth is either a deployerAuthKey or
                     //                a sealed (*multiSig, targetRevAddress, amount, nonce, *ret) tuple
@@ -260,10 +268,21 @@ in {
         } // new
       } // quorum size
     } |
-    rs!(
-      (9223372036854775807, bundle+{*MultiSigRevVault}),
-      *deployerId,
-      *uriOut
-    )
+    // Method required for updates.
+    for (ret <- @(*MultiSigRevVault, "extractState")){
+      ret!({"multiSigVaultUnf": *_multiSigRevVault})
+    } |
+    @systemContractManager!("createDispatcher", *MultiSigRevVault, *dispatcherCh)|
+    contract @(*MultiSigRevVault, "securityCheck")(@deployerId, ret) = {
+      @configPublicKeyCheck!(deployerId, *ret)
+    } |
+    for (multiSigRevVaultDispatcher <- dispatcherCh){
+      // Inserts signed write-only MultiSigRevVault dispatcher contract into the registry
+      rs!(
+        (9223372036854775807, bundle+{*multiSigRevVaultDispatcher}),
+        *deployerId,
+        *uriOut
+      )
+    }
   }
 }

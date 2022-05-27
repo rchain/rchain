@@ -14,18 +14,23 @@
  9.  | 4,         | registry           | uri = rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry:lookup`), ListOpsCh,
-  deployerId(`rho:rchain:deployerId`) in {
+
+new
+  Either,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  uriOut,
+  rl(`rho:registry:lookup`),
+  ListOpsCh,
+  deployerId(`rho:rchain:deployerId`)
+in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   for(@(_, ListOps) <- ListOpsCh) {
-
     // Like fromNillable, except it takes `valueCh` and reads it to obtain the `value` parameter
     contract Either(@"fromNillable <-", valueCh, @nilValue, return) = {
       for (@value <- valueCh) {
         Either!("fromNillable", value, nilValue, *return)
       }
     } |
-
     // Lifts a value into Either, putting Nil-s into Left and using Right otherwise.
     contract Either(@"fromNillable", @value, @nilValue, return) = {
       match value {
@@ -33,14 +38,12 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         _   => return!((true, value))
       }
     } |
-
     // Like fromBoolean, except it takes `successCh` and reads it to obtain the `success` parameter
     contract Either(@"fromBoolean <-", successCh, @nilSuccess, return) = {
       for (@success <- successCh) {
         Either!("fromBoolean", success, nilSuccess, *return)
       }
     } |
-
     // Lifts a Boolean into Either, making `false` into Left and using Right otherwise.
     contract Either(@"fromBoolean", @success, @failureMessage, return) = {
       match success {
@@ -48,14 +51,12 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         true  => return!((true, Nil))
       }
     } |
-
     // Like fromSingletonList, except it takes `listCh` and reads it to obtain the `list` parameter
     contract Either(@"fromSingletonList <-", listCh, @failureMessage, return) = {
       for (@list <- listCh) {
         Either!("fromSingletonList", list, failureMessage, *return)
       }
     } |
-
     // Converts a singleton list into Either, making the single element into Right
     // and using Left if it's not a singleton list.
     contract Either(@"fromSingletonList", @list, @failureMessage, return) = {
@@ -65,14 +66,12 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         _       => return!((false, "Invalid argument, expected a list of at most 1 element"))
       }
     } |
-
     // Like fromNillableError, except it takes `errorCh` and reads it to obtain the `error` parameter
     contract Either(@"fromNillableError <-", errorCh, return) = {
       for (@error <- errorCh) {
         Either!("fromNillableError", error, *return)
       }
     } |
-
     // Lifts an error into Either, putting Nil-s into Right and using Left otherwise.
     contract Either(@"fromNillableError", @error, return) = {
       match error {
@@ -80,7 +79,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         _   => return!((false, error))
       }
     } |
-
     // Like productR, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
     contract Either(@"productR <-", aCh, bCh, return) = {
       for (@a <- aCh) {
@@ -89,7 +87,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         }
       }
     } |
-
     // Combines two eithers, discarding the first Right value and keeping the second.  Propagates Lefts.
     contract Either(@"productR", @a, @b, return) = {
       match (a, b) {
@@ -97,7 +94,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         _ => return!(b)
       }
     } |
-
     // Like map2, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
     contract Either(@"map2 <-", aCh, bCh, @f, return) = {
       for (@a <- aCh) {
@@ -106,7 +102,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         }
       }
     } |
-
     // Like map2Clean, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
     contract Either(@"map2Clean <-", aCh, bCh, @f, @state, return) = {
       for (@a <- aCh) {
@@ -115,7 +110,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         }
       }
     } |
-
     // Composes two eithers `a: A` and `b: B` using the function `f`. See cats.Apply.map2 for details.`
     contract Either(@"map2", @a, @b, @f, return) = {
       match (a, b) {
@@ -136,7 +130,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         }
       }
     } |
-
     // Like map2, but allows passing state to f instead of making f close over it.
     contract Either(@"map2Clean", @a, @b, @f, @state, return) = {
       match (a, b) {
@@ -157,21 +150,18 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         }
       }
     } |
-
     // Like flatMap, except it takes `eitherCh` and reads it to obtain the `either` parameter
     contract Either(@"flatMap <-", eitherCh, f, return) = {
       for (@either <- eitherCh) {
         Either!("flatMap", either, *f, *return)
       }
     } |
-
     // Like flatMapClean, except it takes `eitherCh` and reads it to obtain the `either` parameter
     contract Either(@"flatMapClean <-", eitherCh, f, @state, return) = {
       for (@either <- eitherCh) {
         Either!("flatMapClean", either, *f, state, *return)
       }
     } |
-
     // Right-biased flatMap; f must also return an Either
     contract Either(@"flatMap", @either, f, return) = {
       match either {
@@ -179,7 +169,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         (false, _)    => { return!(either) }
       }
     } |
-
     // Like flatMap, except it allows passing state to f instead of making f close over it.
     contract Either(@"flatMapClean", @either, f, @state, return) = {
       match either {
@@ -187,21 +176,18 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         (false, _)    => { return!(either) }
       }
     } |
-
     // Like map, except it takes `eitherCh` and reads it to obtain the `either` parameter
     contract Either(@"map <-", eitherCh, f, return) = {
       for (@either <- eitherCh) {
         Either!("map", either, *f, *return)
       }
     } |
-
     // Like mapClean, except it takes `eitherCh` and reads it to obtain the `either` parameter
     contract Either(@"mapClean <-", eitherCh, f, @state, return) = {
       for (@either <- eitherCh) {
         Either!("mapClean", either, *f, state, *return)
       }
     } |
-
     // Right-biased map to transform an Either
     contract Either(@"map", @either, f, return) = {
       match either {
@@ -216,7 +202,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         (false, _) => return!(either)
       }
     } |
-
     // Like map, except it allows passing state to f instead of making f close over it.
     contract Either(@"mapClean", @either, f, @state, return) = {
       match either {
@@ -231,12 +216,10 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         (false, _) => return!(either)
       }
     } |
-
     new combinator in {
       contract combinator(_, @head, @accumulatedValue, return) = {
         Either!("flatMap", accumulatedValue, head, *return)
       } |
-
       // Composes a list of functions returning Either into a
       // single result by using flatMap. Similar to following Scala code:
       // for {
@@ -249,7 +232,6 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
         @ListOps!("foldClean", functions, (true, input), *combinator, Nil, *return)
       }
     } |
-
     new combinator in {
       contract combinator(_, @(function, state), @accumulatedValue, return) = {
         Either!("flatMapClean", accumulatedValue, function, state, *return)
@@ -261,7 +243,7 @@ new  Either, rs(`rho:registry:insertSigned:secp256k1`), uriOut, rl(`rho:registry
       }
     }
   } |
-  
+  // Insert the signed, write-only contract into the registry uri map
   rs!(
     (9223372036854775807, bundle+{*Either}),
     *deployerId,

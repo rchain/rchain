@@ -19,8 +19,8 @@ abstract class CompiledRholangSource[Env](val code: String, val normalizerEnv: N
 object CompiledRholangSource {
   def loadSource(classpath: String) = {
     val fileContent = Source.fromResource(classpath).mkString
-    s"""//Loaded from resource file <<$classpath>>
-       #$fileContent
+    s"""#$fileContent
+       #//Loaded from resource file <<$classpath>>
        #""".stripMargin('#')
   }
 

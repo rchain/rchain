@@ -171,7 +171,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     } yield (finalStateHash.toByteString, res)
 
   /**
-    * Evaluates deploy with cost accounting (PoS Pre-charge and Refund calls)
+    * Evaluates deploy with cost accounting (Pos Pre-charge and Refund calls)
     */
   def playDeployWithCostAccounting(
       deploy: Signed[DeployData]
@@ -588,8 +588,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     s"""
        # new return, rl(`rho:registry:lookup`), poSCh in {
        #   rl!(`rho:rchain:pos`, *poSCh) |
-       #   for(@(_, PoS) <- poSCh) {
-       #     @PoS!("getActiveValidators", *return)
+       #   for(@(_, Pos) <- poSCh) {
+       #     @Pos!("getActiveValidators", *return)
        #   }
        # }
        """.stripMargin('#')
@@ -598,8 +598,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     s"""
        # new return, rl(`rho:registry:lookup`), poSCh in {
        #   rl!(`rho:rchain:pos`, *poSCh) |
-       #   for(@(_, PoS) <- poSCh) {
-       #     @PoS!("getBonds", *return)
+       #   for(@(_, Pos) <- poSCh) {
+       #     @Pos!("getBonds", *return)
        #   }
        # }
        """.stripMargin('#')

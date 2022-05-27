@@ -56,12 +56,11 @@ object StateBalanceMain {
 
   // hard-coded value in RevVault.rho
   val genesisVaultMapDepth = 2
-  // The way to get this Unforgeable name needs reporting casper to get all the concrete comm events.
-  // Anyway, as long as RevVault.rho and genesis doesn't change, this value would be fixed.
-  val genesisVaultMapPar: Par = GPrivate(
-    "b4eaa1e833c310affa0927042fab4fca13482da0f1863253fbfd556ff54f4988".unsafeHexToByteString
-  )
 
+  // TODO support mainnet1 and mainnetx
+  val mainnet1VaultMapPar: Par = GPrivate(
+    "af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeHexToByteString
+  )
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
     val options   = StateOptions(args)
@@ -79,7 +78,6 @@ object StateBalanceMain {
       stateBalances <- StateBalances.read(
                         blockHash,
                         genesisVaultMapDepth,
-                        genesisVaultMapPar,
                         dataDir
                       )
       _ = {

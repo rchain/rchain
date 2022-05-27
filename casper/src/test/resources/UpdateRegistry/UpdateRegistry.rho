@@ -1,0 +1,32 @@
+new
+  deployId(`rho:rchain:deployId`),
+  updateContract,
+  rl(`rho:registry:lookup`),
+  rlret,
+  stdout(`rho:io:stdout`),
+  updateRet,
+  deployerID(`rho:rchain:deployerId`),
+  systemContractManager2,
+  oldStateCh
+in {
+  for (oldSystemContractManager, ret <- updateContract){
+    contract oldSystemContractManager(@"sayHello", returnCh) = {
+      returnCh!("hello")
+    } |
+    ret!(*oldSystemContractManager)
+  } |
+  stdout!(("update blessed registry start!!!!!"))|
+  rl!(`rho:registry:systemContractManager`, *rlret)|
+  for(@(_, oriSystemContractManager) <- rlret){
+    stdout!(("update get multisig ok", oriSystemContractManager))|
+    @oriSystemContractManager!("update",
+                  *deployerID,
+                  `rho:registry:systemContractManager`,
+                  *updateContract,
+                  *updateRet)|
+    for (@result <- updateRet){
+      stdout!((result, "update result")) |
+      deployId!(result)
+    }
+  }
+}

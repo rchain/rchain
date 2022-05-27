@@ -14,13 +14,17 @@
  9.  | 4,         | registry           | uri = rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new 
+
+new
   AuthKey,
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
   _authKey,
-  stdout(`rho:io:stdout`),
-  deployerId(`rho:rchain:deployerId`)
+  deployerId(`rho:rchain:deployerId`),
+  rl(`rho:registry:lookup`),
+  systemContractManagerCh,
+  dispatcherCh,
+  configPublicKeyCheckCh
 in {
 
   // An `AuthKey` is a means for creating a safe authentication token based on a process / unfograble name
@@ -67,12 +71,26 @@ in {
       }
     }
   } |
+  // Method required for updates.
+  for (ret <- @(*AuthKey, "extractState")) {
+    ret!({"authKeyUnf": *_authKey})
+  }  |
 
-  rs!(
-    (9223372036854775807, bundle+{*AuthKey}),
-    *deployerId,
-    *uriOut
-  )
+  rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
+  for (@(_, systemContractManager) <- systemContractManagerCh & @(_, configPublicKeyCheck)<- configPublicKeyCheckCh){
+    @systemContractManager!("createDispatcher", *AuthKey, *dispatcherCh)|
+    contract @(*AuthKey, "securityCheck")(@deployerId, ret) = {
+      @configPublicKeyCheck!(deployerId, *ret)
+    } |
+    for (dispatcher <- dispatcherCh){
+      // Inserts signed write-only AuthKey dispatcher contract into the registry
+      rs!(
+        (9223372036854775807, bundle+{*dispatcher}),
+        *deployerId,
+        *uriOut
+      )
+    }
+  }
+
 }
-  
-  

@@ -1,15 +1,25 @@
-new _registryStore,
-    lookupCh,
-    bootstrapLookup(`rho:registry:lookup`),
-    insertArbitraryCh,
-    bootstrapInsertArbitrary(`rho:registry:insertArbitrary`),
-    insertSignedCh,
-    bootstrapInsertSigned(`rho:registry:insertSigned:secp256k1`),
-    buildUri,
-    ops(`rho:registry:ops`),
-    TreeHashMap
+new
+  _registryStore,
+  lookupCh,
+  bootstrapLookup(`rho:registry:lookup`),
+  insertArbitraryCh,
+  bootstrapInsertArbitrary(`rho:registry:insertArbitrary`),
+  insertSignedCh,
+  bootstrapInsertSigned(`rho:registry:insertSigned:secp256k1`),
+  locToken,
+  buildUri,
+  ops(`rho:registry:ops`),
+  secpVerify(`rho:crypto:secp256k1Verify`),
+  blake2b256(`rho:crypto:blake2b256Hash`),
+  TreeHashMap,
+  TreeHashMapLoc,
+  TreeHashMapDispatcher,
+  secpVerify(`rho:crypto:secp256k1Verify`),
+  blake2b256(`rho:crypto:blake2b256Hash`),
+  storeToken,
+  systemContractManager,
+  configPublicKeyCheck
 in {
-
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
   // that method assumes the registry already exists.
@@ -51,10 +61,24 @@ in {
   //     }
   //   }
   // }
-
+  contract configPublicKeyCheck(@deployerId, ret) = {
+    let @coopPubKey <- // fc743bd08a822d544bfbe05a5663fc325039a44c8f0c7fbea95a85517da5c36b private
+      "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf".hexToBytes()
+    in {
+      new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
+        DeployerIdOps!("pubKeyBytes", deployerId, *deployerPubKeyBytesCh) |
+        for (@deployerPubKeyBytes <- deployerPubKeyBytesCh){
+          if (deployerPubKeyBytes == coopPubKey){
+            ret!((true, Nil))
+          } else {
+            ret!((false, "You have no permissions to update system contract!"))
+          }
+        }
+      }
+    }
+  } |
   new MakeNode, ByteArrayToNybbleList,
-      TreeHashMapSetter, TreeHashMapGetter, TreeHashMapContains, TreeHashMapUpdater,
-      powersCh, storeToken, nodeGet in {
+      TreeHashMapSetter, TreeHashMapGetter, TreeHashMapContains, TreeHashMapUpdater, nodeGet in {
     match [1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536] {
       powers => {
         contract MakeNode(@initVal, @node) = {
@@ -82,7 +106,7 @@ in {
             ret!(*map)
           }
         } |
-
+        // Internal, recursive TreeHashMap get method
         contract TreeHashMapGetter(@map, @nybList, @n, @len, @suffix, ret) = {
           // Look up the value of the node at (map, nybList.slice(0, n + 1))
           new valCh in {
@@ -330,101 +354,229 @@ in {
               }
             }
           }
+        } |
+        // Returns the current map
+        for (ret <- @(*TreeHashMap, "extractState")){
+          for (@map <<- _registryStore) {
+            ret!({"registryMap": map, "storeToken": *storeToken})
+          }
+        } |
+        contract @(*TreeHashMap, "securityCheck")(@deployerId, ret) = {
+          configPublicKeyCheck!(deployerId, *ret)
         }
       }
     }
   } |
-
-  // Use 4 * 8 = 32-bit paths to leaf nodes.
-  TreeHashMap!("init", 4, *_registryStore) |
-  new ack in {
-    for (@map <<- _registryStore) {
-      TreeHashMap!("set", map, `rho:lang:treeHashMap`, bundle+{*TreeHashMap}, *ack)
-    } |
-
-    for (_ <- ack) {
-      bootstrapLookup!(*lookupCh) | // this will work only once
-      for (lookup <- lookupCh) {
-        contract lookup(@uriOrShorthand, ret) = {
-          match {
-            `rho:lang:either` : `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn`,
-            `rho:lang:listOps` : `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks`,
-            `rho:lang:nonNegativeNumber` : `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9`,
-            `rho:rchain:authKey` : `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i`,
-            `rho:rchain:makeMint` : `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc`,
-            `rho:rchain:pos` : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
-            `rho:rchain:revVault` : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
-            `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
-          } {
-            shorthands => {
+  // blessed contract uri shorthand map
+  let @shorthands <- {
+    `rho:lang:either`             : `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn`,
+    `rho:lang:listOps`            : `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks`,
+    `rho:lang:nonNegativeNumber`  : `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9`,
+    `rho:rchain:authKey`          : `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i`,
+    `rho:rchain:makeMint`         : `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc`,
+    `rho:rchain:pos`              : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
+    `rho:rchain:revVault`         : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
+    `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
+    } in {
+      // Use 4 * 8 = 32-bit paths to leaf nodes.
+      TreeHashMap!("init", 4, *_registryStore) |
+      new ack, ack2, createDispatcherRet in {
+        // Store write-only `TreeHashMap` bundle on the node with prefix ``rho:lang:treeHashMap``
+        for (@map <<- _registryStore) {
+          systemContractManager!("createDispatcher", *TreeHashMap, *createDispatcherRet)|
+          for (TreeHashMapDispatcher <- createDispatcherRet){
+            TreeHashMap!("set", map, `rho:lang:treeHashMap`, (9223372036854775807, bundle+{*TreeHashMapDispatcher}), *ack) |
+            TreeHashMap!("set", map, `rho:rchain:configPublicKeyCheck`, (9223372036854775807, bundle+{*configPublicKeyCheck}), *ack2)
+          }
+        } |
+        // Wait for the set to finish, then register `lookupCh` as the uri/shorthand lookup channel
+        for (_ <- ack) {
+          // Registers `lookupCh` as a lookup channel for the registry
+          bootstrapLookup!(*lookupCh) | // this will work only once
+          for (lookup <- lookupCh) {
+            contract lookup(@uriOrShorthand, ret) = {
               for (@map <<- _registryStore) {
                 TreeHashMap!("get", map, shorthands.getOrElse(uriOrShorthand, uriOrShorthand), *ret)
               }
             }
           }
         }
-      }
-    }
-  } |
-
-  bootstrapInsertArbitrary!(*insertArbitraryCh) | // this will work only once
-  for (insertArbitrary <- insertArbitraryCh) {
-    contract insertArbitrary(@data, ret) = {
-
-      new seed, uriCh in {
-        ops!("buildUri", *seed.toByteArray(), *uriCh) |
-        for (@uri <- uriCh) {
-          for (@map <<- _registryStore) {
-            new ack in {
-              TreeHashMap!("set", map, uri, data, *ack) |
-              for (_ <- ack) {
-                ret!(uri)
+      } |
+      // Registers `insertArbitraryCh` as an insertArbitrary channel for the registry
+      bootstrapInsertArbitrary!(*insertArbitraryCh) | // this will work only once
+      for (insertArbitrary <- insertArbitraryCh) {
+        // Generates uri and seed to store and access `data` in the registry, returns the generated uri on `ret`
+        contract insertArbitrary(@data, ret) = {
+          new
+            seed,
+            uriCh
+          in {
+            ops!("buildUri", *seed.toByteArray(), *uriCh) |
+            for (@uri <- uriCh) {
+              for (@map <<- _registryStore) {
+                new ack in {
+                  TreeHashMap!("set", map, uri, data, *ack) |
+                  for (_ <- ack) {
+                    ret!(uri)
+                  }
+                }
               }
             }
           }
         }
-      }
-    }
-  } |
-
-  bootstrapInsertSigned!(*insertSignedCh) | // this will work only once
-  for (insertSigned <- insertSignedCh) {
-
-    contract insertSigned(@(nonce, data), deployerID, ret) = {
-      new uriCh, hashCh, verifyCh, deployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
-        deployerIdOps!("pubKeyBytes", *deployerID, *deployerPubKeyBytesCh) |
-        for (@pubKeyBytes <- deployerPubKeyBytesCh){
-          ops!("buildUri", pubKeyBytes, *uriCh) |
-          for (@uri <- uriCh) {
-            for (@map <<- _registryStore) {
-              new responseCh in {
-                TreeHashMap!("get", map, uri, *responseCh) |
-                for (@response <- responseCh) {
-                  match response {
-                    Nil => {
-                      new ack in {
-                        TreeHashMap!("set", map, uri, (nonce, data), *ack) |
-                        for (_ <- ack) {
-                          ret!(uri)
-                        }
-                      }
-                    }
-                    (oldNonce, _) => {
-                      if (nonce > oldNonce) {
-                        new ack in {
-                          TreeHashMap!("set", map, uri, (nonce, data), *ack) |
-                          for (_ <- ack) {
-                            ret!(uri)
+      } |
+      // Registers `insertSignedCh` as an insertSigned channel in the registry
+      bootstrapInsertSigned!(*insertSignedCh) | // this will work only once
+      for (insertSigned <- insertSignedCh) {
+        // Verifies signature and inserts data into registry
+        // Returns generated uri on `ret`
+        contract insertSigned(@(nonce, data), deployerID, ret) = {
+          new uriCh, hashCh, verifyCh, deployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
+            deployerIdOps!("pubKeyBytes", *deployerID, *deployerPubKeyBytesCh) |
+            for (@pubKeyBytes <- deployerPubKeyBytesCh){
+              ops!("buildUri", pubKeyBytes, *uriCh) |
+              for (@uri <- uriCh) {
+                for (@map <<- _registryStore) {
+                  new responseCh in {
+                    TreeHashMap!("get", map, uri, *responseCh) |
+                    for (@response <- responseCh) {
+                      match response {
+                        Nil => {
+                          new ack in {
+                            TreeHashMap!("set", map, uri, (nonce, data), *ack) |
+                            for (_ <- ack) {
+                              ret!(uri)
+                            }
                           }
                         }
-                      } else {
-                        ret!(Nil)
+                        (oldNonce, _) => {
+                          if (nonce > oldNonce) {
+                            new ack in {
+                              TreeHashMap!("set", map, uri, (nonce, data), *ack) |
+                              for (_ <- ack) {
+                                ret!(uri)
+                              }
+                            }
+                          } else {
+                            ret!(Nil)
+                          }
+                        }
                       }
                     }
                   }
                 }
               }
             }
+          }
+        }
+      } |
+    {
+      // ------
+      // Update
+      // deployerID: (`rho:rchain:deployerId`)
+      // uri:   the uri you want to update.  `rho:rchain:pos` etc.
+      // updateContract:   the update consume which take the old state
+      // ret:   channel which returns the update result
+      contract systemContractManager(@"update", @securityData, @uri, @updateContract, ret) = {
+        // there is an update proposal for `uri`
+        new rl(`rho:registry:lookup`), rlRet, locRet in {
+          rl!(uri, *rlRet)|
+          for (@(_, dispatcher) <- rlRet) {
+            @(*locToken, dispatcher)!(*locRet)|
+            for (loc <- locRet) {
+              for (oldLib <<- loc){
+                new securityCh in {
+                  @(*oldLib, "securityCheck")!(securityData, *securityCh)|
+                  for (@res <-securityCh){
+                    match res {
+                      (true, Nil) => {
+                        for (oldLib <- loc) {
+                          new newRet in {
+                            // launch new contract instance with the old instance
+                            @updateContract!(*oldLib, *newRet) |
+                            for (@meth <- newRet){
+                              // write new method entry point to location channel
+                              loc!(meth) |
+                              ret!((true, Nil))
+                            }
+                          }
+                        }
+                      }
+                      (false, errorMsg) => ret!(res)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } |
+      contract systemContractManager(@"createDispatcher", @lib, ret) = {
+        new loc, dispatcher in {
+          loc!(lib) |
+          contract dispatcher(@arg1) = {
+            for (realAK <<- loc) {
+              realAK!(arg1)
+            }
+          } |
+          contract dispatcher(@arg1, @arg2) = {
+            for (realAK <<- loc) {
+              realAK!(arg1, arg2)
+            }
+          } |
+          contract dispatcher(@arg1, @arg2, @arg3) = {
+            for (realAK <<- loc) {
+              realAK!(arg1, arg2, arg3)
+            }
+          } |
+          contract dispatcher(@arg1, @arg2, @arg3, @arg4) = {
+            for (realAK <<- loc) {
+              realAK!(arg1, arg2, arg3, arg4)
+            }
+          } |
+          contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+            for (realAK <<- loc) {
+              realAK!(arg1, arg2, arg3, arg4, arg5)
+            }
+          } |
+          contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+            for (realAK <<- loc) {
+              realAK!(arg1, arg2, arg3, arg4, arg5, arg6)
+            }
+          } |
+          contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+            for (realAK <<- loc) {
+              realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+            }
+          } |
+          contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+            for (realAK <<- loc) {
+              realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+            }
+          } |
+          contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+            for (realAK <<- loc) {
+              realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+            }
+          } |
+          contract @(*locToken, bundle+{*dispatcher})(locRet) = {
+            locRet!(*loc)
+          } |
+          ret!(*dispatcher)
+        }
+      } |
+      for (ret <- @(*systemContractManager, "extractState")){
+        ret!({"locToken": *locToken})
+      } |
+      contract @(*systemContractManager, "securityCheck")(@deployerId, ret) = {
+        configPublicKeyCheck!(deployerId, *ret)
+      } |
+      new ack, createDispatcherRet in {
+        for (@map <<- _registryStore) {
+          // add systemContractManager dispatcher to the uri map
+          systemContractManager!("createDispatcher", *systemContractManager, *createDispatcherRet)|
+          for (systemContractManagerDispatcher <- createDispatcherRet){
+            TreeHashMap!("set", map, `rho:registry:systemContractManager`, (9223372036854775807, bundle+{*systemContractManagerDispatcher}), *ack)
           }
         }
       }

@@ -14,8 +14,14 @@
  9.  | 4,         | registry           | uri = rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new  NonNegativeNumber, MergeableTag, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
-  deployerId(`rho:rchain:deployerId`) in {
+
+new
+  NonNegativeNumber,
+  MergeableTag,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  uriOut,
+  deployerId(`rho:rchain:deployerId`)
+in {
   contract NonNegativeNumber(@init, return) = {
     new this, valueStore in {
       contract this(@"add", @x, success) = {
@@ -60,7 +66,7 @@ new  NonNegativeNumber, MergeableTag, rs(`rho:registry:insertSigned:secp256k1`),
       }
     }
   } |
-
+  // Insert the contract location in the registry location map
   rs!(
     (9223372036854775807, bundle+{*NonNegativeNumber}),
     *deployerId,

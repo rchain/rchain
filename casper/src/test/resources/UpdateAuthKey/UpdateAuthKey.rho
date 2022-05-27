@@ -1,0 +1,69 @@
+new
+  deployId(`rho:rchain:deployId`),
+  updateContract,
+  NewAuthKey,
+  AuthStateCh,
+  rl(`rho:registry:lookup`),
+  rlret,
+  _authKey,
+  stdout(`rho:io:stdout`),
+  updateRet,
+  deployerID(`rho:rchain:deployerId`),
+  oldStateCh,
+  configPublicKeyCheckCh
+in {
+  for ( oldAuthKey, ret <- updateContract){
+    stdout!(("get the old lib", *oldAuthKey)) |
+    @(*oldAuthKey, "extractState")!(*oldStateCh) |
+    for (oldAuthKeyState <- oldStateCh){
+      stdout!(("get the old lib state", *oldAuthKeyState)) |
+      AuthStateCh!(0)|
+      contract NewAuthKey(@"make", @shape, ret) = {
+        new authKey in {
+          contract authKey(@"challenge", retCh) = {
+            retCh!(bundle0{ (*_authKey, shape)})
+          } |
+          ret!(bundle+{*authKey})
+        }
+      } |
+      contract NewAuthKey(@"check", key, @shape, ret) = {
+        new responseCh in {
+          key!("challenge", *responseCh) |
+          for (@response <- responseCh) {
+            ret!(response == { bundle0{ (*_authKey, shape) } } )
+          }
+        }
+      } |
+      contract NewAuthKey(@"add", @number, ret) = {
+        for (@ori <- AuthStateCh){
+          ret!(number + ori)|
+          AuthStateCh!(number + ori)
+        }
+      } |
+      for (ret <- @(*NewAuthKey, "extractState")){
+        for (@number <<- AuthStateCh){
+          ret!(number)
+        }
+      } | 
+      ret!(*NewAuthKey)
+    } 
+  } |
+  stdout!(("propose start!!!!!"))|
+  rl!(`rho:registry:systemContractManager`, *rlret)|
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
+  for(@(_, systemContractManager) <- rlret & @(_, configPublicKeyCheck)<- configPublicKeyCheckCh){
+    stdout!(("propose get multisig ok", systemContractManager))|
+    contract @(*NewAuthKey, "securityCheck")(@deployerId, ret) = {
+      @configPublicKeyCheck!(deployerId, *ret)
+    } |
+    @systemContractManager!("update",
+                  *deployerID,
+                  `rho:rchain:authKey`,
+                  *updateContract,
+                  *updateRet)|
+    for (@result <- updateRet){
+      stdout!((result, "update result")) |
+      deployId!(result)
+    }
+  }
+}

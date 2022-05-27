@@ -9,11 +9,13 @@ import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.storage.serializePar
 import coop.rchain.rholang.interpreter.{RhoRuntime, RhoType}
 import coop.rchain.shared.Serialize
 
 import scala.annotation.tailrec
+import scala.collection.compat.immutable.LazyList
 
 /**
   * Traverse a Rholang Trie.
@@ -73,13 +75,10 @@ object RhoTrieTraverser {
   private def nodeMapStore(mapWithNyb: Par) =
     Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenUnforgeable))))))
 
-  private val storeTokenUnforgeable = {
+  private val storeTokenUnforgeable: Par = {
     val rand =
       Tools.unforgeableNameRng(StandardDeploys.registryPubKey, StandardDeploys.registryTimestamp)
-    (0 to 5).foreach(_ => rand.next())
-    val newRand = rand.splitShort(6)
-    (0 to 6).foreach(_ => newRand.next())
-    val target = newRand.next()
+    val target = LazyList.continually(rand.next()).drop(9).head
     Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target))))))
   }
 

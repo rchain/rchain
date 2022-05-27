@@ -101,8 +101,8 @@ object TransactionBalances {
                     |  poSCh
                     |in {
                     |  rl!(`rho:rchain:pos`, *poSCh) |
-                    |  for(@(_, PoS) <- poSCh) {
-                    |    @PoS!("getActiveValidatorVaults", *return)
+                    |  for(@(_, Pos) <- poSCh) {
+                    |    @Pos!("getActiveValidatorVaults", *return)
                     |  }
                     |}""".stripMargin
     for {
