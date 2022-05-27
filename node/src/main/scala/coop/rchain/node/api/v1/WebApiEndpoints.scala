@@ -4,6 +4,7 @@ import coop.rchain.casper.protocol.{BlockInfo, LightBlockInfo}
 import coop.rchain.node.api.WebApi.{
   ApiStatus,
   DataAtNameByBlockHashRequest,
+  DeployExecStatus,
   DeployRequest,
   ExploreDeployRequest,
   RhoDataResponse
@@ -33,6 +34,13 @@ trait WebApiEndpoints
   val deploy: Endpoint[DeployRequest, String] = endpoint(
     post(path / "deploy", jsonRequest[DeployRequest]),
     ok(jsonResponse[String])
+  )
+
+  val deployStatus: Endpoint[String, DeployExecStatus] = endpoint(
+    get(path / "deploy-status" / deploySignature),
+    ok(jsonResponse[DeployExecStatus]),
+    docs =
+      EndpointDocs().withDescription("Get status of deploy with specified deploy signature".some)
   )
 
   val exploreDeploy: Endpoint[String, RhoDataResponse] = endpoint(
@@ -74,4 +82,6 @@ trait WebApiEndpoints
   // Segments
 
   lazy val hashString = segment[String](name = "hash", docs = "Hex encoded string".some)
+  lazy val deploySignature =
+    segment[String](name = "deploySignature", docs = "Signature of deploy as HEX string".some)
 }

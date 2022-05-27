@@ -3,18 +3,9 @@ package coop.rchain.node.api
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.ProposeFunction
-import coop.rchain.casper.api.BlockApiImpl.LatestBlockMessageError
 import coop.rchain.casper.api.BlockApi
-import coop.rchain.casper.protocol.{
-  BlockInfo,
-  DataWithBlockInfo,
-  DeployData,
-  LightBlockInfo,
-  Status
-}
-import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.casper.api.BlockApiImpl.LatestBlockMessageError
+import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
@@ -29,6 +20,8 @@ trait WebApi[F[_]] {
 
   // Write data (deploy)
   def deploy(request: DeployRequest): F[String]
+
+  def deployStatus(deployId: String): F[DeployExecStatus]
 
   // Read data (listen)
   def listenForDataAtName(request: DataAtNameRequest): F[DataAtNameResponse]
@@ -72,6 +65,12 @@ object WebApi {
       toSignedDeploy(request)
         .flatMap(blockApi.deploy)
         .flatMap(_.liftToBlockApiErr)
+
+    def deployStatus(deploySignature: String): F[DeployExecStatus] =
+      blockApi
+        .deployStatus(deploySignature.unsafeHexToByteString)
+        .flatMap(_.liftToBlockApiErr)
+        .map(toDeployExecStatus)
 
     def listenForDataAtName(req: DataAtNameRequest): F[DataAtNameResponse] =
       blockApi
@@ -189,6 +188,20 @@ object WebApi {
       block: LightBlockInfo
   )
 
+  sealed trait DeployExecStatus
+
+  final case class ProcessedWithSuccess(
+      deployResult: Seq[RhoExpr],
+      block: BlockInfo
+  ) extends DeployExecStatus
+
+  final case class ProcessedWithError(
+      deployError: String,
+      block: BlockInfo
+  ) extends DeployExecStatus
+
+  final case class NotProcessed(status: String) extends DeployExecStatus
+
   final case class RhoDataResponse(
       expr: Seq[RhoExpr],
       block: LightBlockInfo
@@ -217,7 +230,7 @@ object WebApi {
 
   import WebApiSyntax._
 
-  def toApiStatus(status: Status) =
+  def toApiStatus(status: coop.rchain.casper.protocol.Status) =
     ApiStatus(
       version = VersionInfo(api = status.version.api, node = status.version.node),
       address = status.address,
@@ -348,6 +361,23 @@ object WebApi {
       RhoExprWithBlock(expr, block) +: acc
     }
     DataAtNameResponse(exprsWithBlock, length)
+  }
+
+  private def toDeployExecStatus(
+      status: coop.rchain.casper.protocol.deploy.v1.DeployExecStatus
+  ): DeployExecStatus = {
+    import coop.rchain.casper.protocol.deploy.v1.DeployExecStatus.{Status => DepSt}
+    status.status match {
+      case DepSt.ProcessedWithSuccess(s) =>
+        ProcessedWithSuccess(
+          s.deployResult.map(exprFromParProto(_).get),
+          s.block
+        )
+      case DepSt.ProcessedWithError(s) =>
+        ProcessedWithError(s.deployError, s.block)
+      case DepSt.NotProcessed(s) => NotProcessed(s.status)
+      case DepSt.Empty           => NotProcessed("Unknown")
+    }
   }
 
   private def toRhoDataResponse(data: (Seq[Par], LightBlockInfo)): RhoDataResponse = {
