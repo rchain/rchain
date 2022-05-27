@@ -87,8 +87,7 @@ case class TestNode[F[_]: Sync: Timer](
     rpConfAskEffect: RPConfAsk[F],
     eventPublisherEffect: EventPublisher[F],
     casperShardConf: CasperShardConf,
-    routingMessageQueue: Queue[F, RoutingMessage],
-    etState: Ref[F, Map[DeployId, Option[DeployStatus]]]
+    routingMessageQueue: Queue[F, RoutingMessage]
 )(implicit concurrentF: Concurrent[F]) {
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...
@@ -539,8 +538,6 @@ object TestNode {
                  // Remove TransportLayer handling in TestNode (too low level for these tests)
                  routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
 
-                 etState <- Ref[F].of(Map.empty[DeployId, Option[DeployStatus]])
-
                  node = new TestNode[F](
                    name,
                    currentPeerNode,
@@ -578,8 +575,7 @@ object TestNode {
                    blockRetrieverEffect = blockRetriever,
                    metricEffect = metricEff,
                    casperShardConf = shardConf,
-                   routingMessageQueue = routingMessageQueue,
-                   etState = etState
+                   routingMessageQueue = routingMessageQueue
                  )
                } yield node
              })

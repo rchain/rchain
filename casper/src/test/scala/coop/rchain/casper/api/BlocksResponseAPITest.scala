@@ -44,9 +44,6 @@ class BlocksResponseAPITest
     mkRuntimeManager("block-response-api-test")
   val maxBlockLimit = 50
 
-  val etState: Ref[Task, Map[DeployId, Option[DeployStatus]]] =
-    Ref[Task].of(Map.empty[DeployId, Option[DeployStatus]]).runSyncUnsafe()
-
   private def createDagWith8Blocks(
       implicit blockstore: BlockStore[Task],
       dagstore: BlockDagStorage[Task]
@@ -111,7 +108,7 @@ class BlocksResponseAPITest
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
           genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
-          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit, etState)
+          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
           blocksResponse <- blockApi.getBlocks(10)
         } yield blocksResponse.right.get.length should be(8)
       }
@@ -121,7 +118,7 @@ class BlocksResponseAPITest
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
         genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
-        blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit, etState)
+        blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
         blocksResponse <- blockApi.getBlocks(2)
       } yield blocksResponse.right.get.length should be(3)
     }
@@ -132,7 +129,7 @@ class BlocksResponseAPITest
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
           genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
-          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit, etState)
+          blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
           blocksResponse <- blockApi.getBlocksByHeights(2, 5)
           blocks         = blocksResponse.right.get
           _              = blocks.length should be(5)

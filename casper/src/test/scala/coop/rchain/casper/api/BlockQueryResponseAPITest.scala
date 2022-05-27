@@ -71,9 +71,6 @@ class BlockQueryResponseAPITest
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 
-  val etState: Ref[Task, Map[DeployId, Option[DeployStatus]]] =
-    Ref[Task].of(Map.empty[DeployId, Option[DeployStatus]]).unsafeRunSync(scheduler)
-
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlock" should "return successful block info response" in withStorage {
@@ -81,7 +78,7 @@ class BlockQueryResponseAPITest
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
           _                  <- prepareDagStorage[Task]
-          blockApi           <- createBlockApi[Task]("", 1, etState)
+          blockApi           <- createBlockApi[Task]("", 1)
           hash               = secondBlock.blockHash.toHexString
           blockQueryResponse <- blockApi.getBlock(hash)
           _ = inside(blockQueryResponse) {
@@ -128,7 +125,7 @@ class BlockQueryResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
-          blockApi           <- createBlockApi[Task]("", 1, etState)
+          blockApi           <- createBlockApi[Task]("", 1)
           hash               = badTestHashQuery
           blockQueryResponse <- blockApi.getBlock(hash)
           _ = inside(blockQueryResponse) {
@@ -145,7 +142,7 @@ class BlockQueryResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
-          blockApi           <- createBlockApi[Task]("", 1, etState)
+          blockApi           <- createBlockApi[Task]("", 1)
           hash               = invalidHexQuery
           blockQueryResponse <- blockApi.getBlock(hash)
           _ = inside(blockQueryResponse) {
@@ -162,7 +159,7 @@ class BlockQueryResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
-          blockApi           <- createBlockApi[Task]("", 1, etState)
+          blockApi           <- createBlockApi[Task]("", 1)
           hash               = tooShortQuery
           blockQueryResponse <- blockApi.getBlock(hash)
           _ = inside(blockQueryResponse) {
@@ -180,7 +177,7 @@ class BlockQueryResponseAPITest
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
           _                  <- prepareDagStorage[Task]
-          blockApi           <- createBlockApi[Task]("", 1, etState)
+          blockApi           <- createBlockApi[Task]("", 1)
           deployId           = randomDeploys.head.deploy.sig
           blockQueryResponse <- blockApi.findDeploy(deployId)
           _ = inside(blockQueryResponse) {
@@ -223,7 +220,7 @@ class BlockQueryResponseAPITest
     implicit blockStore => implicit blockDagStorage =>
       runtimeManagerResource.use { implicit runtimeManager =>
         for {
-          blockApi           <- createBlockApi[Task]("", 1, etState)
+          blockApi           <- createBlockApi[Task]("", 1)
           deployId           = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
           blockQueryResponse <- blockApi.findDeploy(deployId)
           _ = inside(blockQueryResponse) {

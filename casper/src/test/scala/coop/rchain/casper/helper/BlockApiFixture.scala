@@ -6,7 +6,7 @@ import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.{DeployStatus, ValidatorIdentity}
+import coop.rchain.casper.{DeployStatus, StatefulExecutionTracker, ValidatorIdentity}
 import coop.rchain.casper.api.BlockApiImpl
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.comm.rp.Connect.Connection
@@ -19,7 +19,6 @@ trait BlockApiFixture {
   def createBlockApi[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
       shardId: String,
       maxDepthLimit: Int,
-      etState: Ref[F, Map[DeployId, Option[DeployStatus]]],
       validatorIdOpt: Option[ValidatorIdentity] = none
   ): F[BlockApiImpl[F]] = {
     val thisNode = peerNode("testNode", 1234)
@@ -36,7 +35,7 @@ trait BlockApiFixture {
       triggerPropose = none,
       proposerStateRefOpt = none,
       autoPropose = false,
-      etState
+      executionTracker = new StatefulExecutionTracker[F]
     )
   }
 
@@ -57,7 +56,7 @@ trait BlockApiFixture {
       triggerPropose = none,
       proposerStateRefOpt = none,
       autoPropose = false,
-      etState = node.etState
+      executionTracker = new StatefulExecutionTracker[F]
     )
   }
 

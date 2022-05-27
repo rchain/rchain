@@ -96,8 +96,7 @@ object Setup {
       _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
 
       // Block execution tracker
-      etState          <- Ref[F].of(Map.empty[DeployId, Option[DeployStatus]])
-      executionTracker = ExecutionTracker[F](etState)
+      executionTracker = new StatefulExecutionTracker[F]
 
       // Block storage
       blockStore    <- BlockStore(rnodeStoreManager)
@@ -294,7 +293,7 @@ object Setup {
           triggerProposeFOpt,
           proposerStateRefOpt,
           conf.autopropose,
-          etState
+          executionTracker
         )
       }
 

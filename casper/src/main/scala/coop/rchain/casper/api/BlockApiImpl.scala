@@ -58,7 +58,7 @@ object BlockApiImpl {
       triggerPropose: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       autoPropose: Boolean,
-      etState: Ref[F, Map[DeployId, Option[DeployStatus]]]
+      executionTracker: StatefulExecutionTracker[F]
   ): F[BlockApiImpl[F]] =
     Sync[F].delay(
       new BlockApiImpl(
@@ -74,7 +74,7 @@ object BlockApiImpl {
         triggerPropose,
         proposerStateRefOpt,
         autoPropose,
-        etState
+        executionTracker
       )
     )
 
@@ -100,7 +100,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     triggerProposeOpt: Option[ProposeFunction[F]],
     proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
     autoPropose: Boolean,
-    etState: Ref[F, Map[DeployId, Option[DeployStatus]]]
+    executionTracker: StatefulExecutionTracker[F]
 ) extends BlockApi[F] {
   import BlockApiImpl._
 
@@ -206,7 +206,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         isDeployInBlock = blockHashOpt.isDefined
         isDeployInPool  <- BlockDagStorage[F].pooledDeploys.map(_.contains(deployId))
 
-        deployExistsOpt <- etState.get.map(state => state.get(deployId))
+        deployExistsOpt <- executionTracker.deployExists(deployId)
         deployIsTracked = deployExistsOpt.isDefined
 
         s <- if (isDeployInBlock) {

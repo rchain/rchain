@@ -6,7 +6,7 @@ import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.{BlockExecutionTracker, ExecutionTracker}
+import coop.rchain.casper.{BlockExecutionTracker, StatefulExecutionTracker}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
