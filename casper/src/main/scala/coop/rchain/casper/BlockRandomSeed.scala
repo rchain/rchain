@@ -1,3 +1,5 @@
+package coop.rchain.casper
+
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rspace.hashing.Blake2b256Hash
