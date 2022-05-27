@@ -233,7 +233,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   }
 
   private def liftToBlockApiErr[A](x: Either[String, A]): F[A] =
-    x.leftMap(new BlockApiException(_)).liftTo[F]
+    x.leftMap(new Exception(_)).liftTo[F]
 
   override def createBlock(isAsync: Boolean = false): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
