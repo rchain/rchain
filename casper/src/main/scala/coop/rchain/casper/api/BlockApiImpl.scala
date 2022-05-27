@@ -182,6 +182,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   }
 
   override def deployStatus(deployId: DeployId): F[ApiErr[DeployExecStatus]] = {
+    // TODO: Don't use Option in input arguments, except in cases where it carries information.
     def withSeqParAndBlockInfo(
         blockHashOpt: Option[BlockHash]
     )(f: (Seq[Par], BlockInfo) => DeployExecStatus): F[DeployExecStatus] = {
@@ -202,16 +203,26 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
     def statusF: F[DeployExecStatus] =
       for {
-        blockHashOpt    <- BlockDagStorage[F].lookupByDeployId(deployId)
+        blockHashOpt <- BlockDagStorage[F].lookupByDeployId(deployId)
+
+        // TODO: Don't use isDefined on Option because it's implementation detail, try to use map/flatMap/orElse.
         isDeployInBlock = blockHashOpt.isDefined
         isDeployInPool  <- BlockDagStorage[F].pooledDeploys.map(_.contains(deployId))
 
         deployExistsOpt <- executionTracker.deployExists(deployId)
+
+        // TODO: Don't use isDefined on Option because it's implementation detail, try to use map/flatMap/orElse.
         deployIsTracked = deployExistsOpt.isDefined
 
         s <- if (isDeployInBlock) {
               if (deployIsTracked) {
+                // TODO: Don't use get directly on Option.
                 val statusExistsOpt = deployExistsOpt.get
+
+                // TODO: Don't create deeply nested if/match expressions which are prone to errors,
+                //  hard to read and almost impossible to change later.
+
+                // TODO: Don't use isDefined on Option because it's implementation detail, try to use map/flatMap/orElse.
                 if (statusExistsOpt.isDefined) {
                   withSeqParAndBlockInfo(blockHashOpt) {
                     case (seqPar, blockInfo) =>
