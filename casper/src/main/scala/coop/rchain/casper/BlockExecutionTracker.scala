@@ -15,8 +15,15 @@ sealed trait DeployStatus
 case object DeployStatusStarted                    extends DeployStatus
 final case class DeployStatusError(status: String) extends DeployStatus
 
-final class StatefulExecutionTracker[F[_]: Sync] extends BlockExecutionTracker[F] {
-  private val state = Ref.unsafe(Map.empty[DeployId, DeployStatus])
+object StatefulExecutionTracker {
+  def apply[F[_]: Sync]: F[StatefulExecutionTracker[F]] =
+    for {
+      ref <- Ref.of(Map.empty[DeployId, DeployStatus])
+    } yield new StatefulExecutionTracker(ref)
+}
+
+final class StatefulExecutionTracker[F[_]: Sync](state: Ref[F, Map[DeployId, DeployStatus]])
+    extends BlockExecutionTracker[F] {
 
   override def execStarted(d: DeployId): F[Unit] = state.update(_ + (d -> DeployStatusStarted))
   override def execComplete(d: DeployId, res: EvaluateResult): F[Unit] =

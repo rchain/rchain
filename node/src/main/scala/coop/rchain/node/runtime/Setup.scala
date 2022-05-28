@@ -96,7 +96,7 @@ object Setup {
       _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
 
       // Block execution tracker
-      executionTracker = new StatefulExecutionTracker[F]
+      executionTracker <- StatefulExecutionTracker[F]
 
       // Block storage
       blockStore    <- BlockStore(rnodeStoreManager)
