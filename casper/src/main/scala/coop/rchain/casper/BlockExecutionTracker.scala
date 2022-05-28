@@ -5,6 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.rholang.interpreter.EvaluateResult
+import coop.rchain.sdk._
 
 trait BlockExecutionTracker[F[_]] {
   def execStarted(d: DeployId): F[Unit]
@@ -30,8 +31,7 @@ final class StatefulExecutionTracker[F[_]: Sync](state: Ref[F, Map[DeployId, Dep
     state
       .update(_ + (d -> DeployStatusError {
         // If deploy fails update status with errors
-        // TODO: error can have empty message
-        res.errors.map(_.getMessage).mkString("\n")
+        res.errors.map(_.getMessageSafe).mkString("\n")
       }))
       .whenA(res.failed)
 

@@ -39,6 +39,7 @@ import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.RhoType.DeployId
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
+import coop.rchain.sdk._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
@@ -254,8 +255,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     // 3. return unknown for rest (in API v2 this should be error 404)
     val result = findProcessedDeployResultAndStatus orElse findPooledOrRunningDeploy getOrElse unknownDeploy
 
-    // TODO: error can have empty message
-    result.attempt.map(_.leftMap(_.getMessage))
+    result.attempt.map(_.leftMap(_.getMessageSafe))
   }
 
   override def createBlock(isAsync: Boolean = false): F[ApiErr[String]] = {
@@ -694,7 +694,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         } yield result
       }
       .attempt
-      .map(_.leftMap(_.getMessage))
+      .map(_.leftMap(_.getMessageSafe))
 
   private def getDataAtParRaw(
       par: Par,
@@ -709,5 +709,4 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       data <- RuntimeManager[F].getData(stateHash)(sortedPar)
       lbi  = getLightBlockInfo(block)
     } yield (data, lbi)
-
 }
