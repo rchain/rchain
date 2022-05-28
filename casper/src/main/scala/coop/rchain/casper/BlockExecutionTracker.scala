@@ -27,15 +27,13 @@ final class StatefulExecutionTracker[F[_]: Sync](state: Ref[F, Map[DeployId, Dep
 
   override def execStarted(d: DeployId): F[Unit] = state.update(_ + (d -> DeployStatusStarted))
   override def execComplete(d: DeployId, res: EvaluateResult): F[Unit] =
-    if (res.succeeded) {
-      // When deploy succeeded, remove from tracking
-      state.update(_ - d)
-    } else {
-      // If deploy fails update status with errors
-      // TODO: error can have empty message
-      val err = res.errors.map(_.getMessage).mkString("\n")
-      state.update(_ + (d -> DeployStatusError(err)))
-    }
+    state
+      .update(_ + (d -> DeployStatusError {
+        // If deploy fails update status with errors
+        // TODO: error can have empty message
+        res.errors.map(_.getMessage).mkString("\n")
+      }))
+      .whenA(res.failed)
 
   def findDeploy(d: DeployId): F[Option[DeployStatus]] = state.get.map(_.get(d))
 }
