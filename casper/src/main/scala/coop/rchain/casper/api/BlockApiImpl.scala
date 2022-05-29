@@ -39,7 +39,7 @@ import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.RhoType.DeployId
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import coop.rchain.sdk._
+import coop.rchain.sdk.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
