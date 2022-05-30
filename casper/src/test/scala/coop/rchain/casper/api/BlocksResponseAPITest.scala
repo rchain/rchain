@@ -1,12 +1,9 @@
 package coop.rchain.casper.api
 
 import cats.effect.Resource
-import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.DeployStatus
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper._

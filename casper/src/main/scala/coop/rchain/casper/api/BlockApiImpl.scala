@@ -226,18 +226,14 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
     def findPooledDeploy: OptionT[F, DeployExecStatus] = {
       val deployPooled = BlockDagStorage[F].containsDeployInPool(deployId).map(_.guard[Option])
-      OptionT(deployPooled).as {
-        // Deploy found in the pool, waiting to be executed and added to a block
-        notProcessed("Pooled")
-      }
+      // Deploy found in the pool, waiting to be executed and added to a block
+      OptionT(deployPooled).as(notProcessed("Pooled"))
     }
 
     def findCurrentlyExecutedDeploy: OptionT[F, DeployExecStatus] = {
       val deployStatusOptT = OptionT(executionTracker.findDeploy(deployId))
-      deployStatusOptT.map { _ =>
-        // Status found, block creation in progress, deploy execution started
-        notProcessed("Running")
-      }
+      // Status found, block creation in progress, deploy execution started
+      deployStatusOptT.as(notProcessed("Running"))
     }
 
     def findPooledOrRunningDeploy: OptionT[F, DeployExecStatus] =

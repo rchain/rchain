@@ -1,13 +1,11 @@
 package coop.rchain.casper.api
 
-import cats.effect.concurrent.Ref
 import cats.effect.{Resource, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol._
