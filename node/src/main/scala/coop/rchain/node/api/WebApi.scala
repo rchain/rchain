@@ -170,7 +170,7 @@ object WebApi {
   )
 
   final case class DataAtNameByBlockHashRequest(
-      name: RhoUnforg,
+      name: RhoExpr,
       blockHash: String,
       usePreStateHash: Boolean
   )
@@ -263,6 +263,7 @@ object WebApi {
   // Binary converters - protobuf uses ByteString and in JSON is base16 string
 
   private def toHex(bs: ByteString) = Base16.encode(bs.toByteArray)
+  private def fromHex(s: String)    = s.unsafeDecodeHex.toByteString
 
   // RhoExpr from protobuf
 
@@ -323,6 +324,30 @@ object WebApi {
       ExprMap(fields.toMap).some
     } else none
 
+  private def parProtoFromExpr(exp: RhoExpr): Par = {
+    def exprToPar(exp: Expr): Par = Par(exprs = Seq(exp))
+
+    exp match {
+      // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
+      case ExprPar(data)   => exprToPar(Expr().withEListBody(EList(data.map(parProtoFromExpr))))
+      case ExprTuple(data) => exprToPar(Expr().withETupleBody(ETuple(data.map(parProtoFromExpr))))
+      case ExprList(data)  => exprToPar(Expr().withEListBody(EList(data.map(parProtoFromExpr))))
+      case ExprSet(data)   => exprToPar(Expr().withESetBody(ParSet(data.map(parProtoFromExpr))))
+      case ExprMap(data) =>
+        exprToPar(Expr().withEMapBody(ParMap(data.map {
+          case (k, v) => (parProtoFromExpr(ExprString(k)), parProtoFromExpr(v))
+        }.toList)))
+      // Terminal expressions (here is the data)
+      case ExprBool(data)   => exprToPar(Expr().withGBool(data))
+      case ExprInt(data)    => exprToPar(Expr().withGInt(data))
+      case ExprString(data) => exprToPar(Expr().withGString(data))
+      case ExprUri(data)    => exprToPar(Expr().withGUri(data))
+      // Binary data is encoded as base16 string
+      case ExprBytes(data)  => exprToPar(Expr().withGByteArray(fromHex(data)))
+      case ExprUnforg(data) => unforgToPar(data)
+    }
+  }
+
   private def unforgFromProto(un: GUnforgeable): Option[ExprUnforg] =
     if (un.unfInstance.isGPrivateBody)
       mkUnforgExpr(UnforgPrivate, un.unfInstance.gPrivateBody.get.id).some
@@ -345,13 +370,14 @@ object WebApi {
     case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(name.unsafeHexToByteString))
   }
 
+  private def unforgToPar(unforg: RhoUnforg): Par =
+    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(unforg))))
+
   // Data request/response protobuf wrappers
 
-  private def toPar(req: DataAtNameRequest): Par =
-    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
+  private def toPar(req: DataAtNameRequest): Par = unforgToPar(req.name)
 
-  private def toPar(req: DataAtNameByBlockHashRequest): Par =
-    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
+  private def toPar(req: DataAtNameByBlockHashRequest): Par = parProtoFromExpr(req.name)
 
   private def toDataAtNameResponse(req: (Seq[DataWithBlockInfo], Int)): DataAtNameResponse = {
     val (dbs, length) = req
