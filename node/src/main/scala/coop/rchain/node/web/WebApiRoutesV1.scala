@@ -64,15 +64,36 @@ final case class WebApiRoutesV1[F[_]: Concurrent: Log](
   val publicRoutes = routesFromEndpoints(
     // Status
     status.implementedByEffect(const(webApi.status)),
-    // Get data
+    // Prepare deploy
+    prepareDeployGet.implementedByEffect(const(webApi.prepareDeploy(none))),
+    prepareDeployPost.implementedByEffect(req => webApi.prepareDeploy(req.some)),
+    // Deploy
+    deploy.implementedByEffect(webApi.deploy),
     exploreDeploy.implementedByEffect(
       webApi.exploratoryDeploy(_, blockHash = none, usePreStateHash = false)
     ),
-    // Deploy
-    deploy.implementedByEffect(webApi.deploy),
+    exploreDeployByBlockHash.implementedByEffect(
+      req =>
+        if (req.blockHash.isEmpty)
+          webApi.exploratoryDeploy(req.term, none[String], req.usePreStateHash)
+        else
+          webApi.exploratoryDeploy(req.term, Some(req.blockHash), req.usePreStateHash)
+    ),
+    // Get data
+    dataAtName.implementedByEffect(webApi.listenForDataAtName),
+    dataAtNameByBlockHash.implementedByEffect(webApi.getDataAtPar),
     // Blocks
+    lastFinalizedBlock.implementedByEffect(const(webApi.lastFinalizedBlock)),
+    getBlock.implementedByEffect(webApi.getBlock),
     getBlocks.implementedByEffect(const(webApi.getBlocks(1))),
-    getBlock.implementedByEffect(webApi.getBlock)
+    getBlocksByHeights.implementedByEffect {
+      case (start, end) => webApi.getBlocksByHeights(start, end)
+    },
+    getBlocksByDepth.implementedByEffect(webApi.getBlocks),
+    findDeploy.implementedByEffect(webApi.findDeploy),
+    isFinalized.implementedByEffect(webApi.isFinalized),
+    // Transactions
+    getTransaction.implementedByEffect(webApi.getTransaction)
   )
 }
 
