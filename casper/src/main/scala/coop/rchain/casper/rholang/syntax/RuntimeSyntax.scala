@@ -524,14 +524,13 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     runtime.evaluate(
       deploy.data.term,
       Cost(deploy.data.phloLimit),
-      NormalizerEnv(deploy).toEnv
-    )(Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp))
+      NormalizerEnv(deploy).toEnv,
+      Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
+    )
   }
 
   def evaluateSystemSource[S <: SystemDeploy](systemDeploy: S): F[EvaluateResult] =
-    runtime.evaluate(systemDeploy.source, Cost.UNSAFE_MAX, systemDeploy.env)(
-      systemDeploy.rand
-    )
+    runtime.evaluate(systemDeploy.source, Cost.UNSAFE_MAX, systemDeploy.env, systemDeploy.rand)
 
   def getDataPar(channel: Par)(implicit f: Functor[F]): F[Seq[Par]] =
     runtime.getData(channel).map(_.flatMap(_.a.pars))

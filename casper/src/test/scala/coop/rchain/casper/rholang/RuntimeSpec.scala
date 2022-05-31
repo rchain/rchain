@@ -72,13 +72,13 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
         |""".stripMargin
 
     // random seed should be always to the same to make sure everything is the same
-    implicit val random =
+    val random =
       Tools.rng(Blake2b256Hash.create(Array[Byte](1)).toByteString.toByteArray)
 
     for {
       store      <- kvm.rSpaceStores
       runtime    <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
-      r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
+      r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty, random)
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
       expectedHash = Blake2b256Hash.fromHex(

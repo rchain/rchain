@@ -158,10 +158,9 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         // Base state
         _ <- baseTerms.zipWithIndex.toList.traverse {
               case (term, i) =>
-                implicit val r = baseRhoSeed
                 for {
                   baseRes <- runtime
-                              .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par])
+                              .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par], baseRhoSeed)
                   _ = assert(baseRes.errors.isEmpty, s"BASE $i: ${baseRes.errors}")
                 } yield ()
             }

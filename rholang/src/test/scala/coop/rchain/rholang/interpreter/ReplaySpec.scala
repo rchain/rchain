@@ -78,11 +78,7 @@ class ReplaySpec extends AnyFlatSpec with Matchers {
       startReplayState <- replayRuntime.createSoftCheckpoint
 
       // Execute play
-      playResult <- runtime.evaluate(
-                     term,
-                     initialPhlo,
-                     Map.empty
-                   )(rand)
+      playResult <- runtime.evaluate(term, initialPhlo, Map.empty, rand)
 
       // Create play snapshot (diff)
       playSnapshot              <- runtime.createSoftCheckpoint
@@ -93,11 +89,7 @@ class ReplaySpec extends AnyFlatSpec with Matchers {
 
       // Execute replay
       replayResult <- replayRuntime
-                       .evaluate(
-                         term,
-                         initialPhlo,
-                         Map.empty
-                       )(rand)
+                       .evaluate(term, initialPhlo, Map.empty, rand)
                        .onError {
                          case _: Throwable =>
                            println(s"Executed term: $term")
