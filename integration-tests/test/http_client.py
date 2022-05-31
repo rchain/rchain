@@ -91,6 +91,14 @@ class HttpClient():
         message = rep.json()
         return DataResponse(exprs=message['exprs'], length=message['length'])
 
+    def data_at_name_by_block_hash(self, name: str, data, block_hash: str, use_pre_state_hash: bool):
+        data_at_name_by_block_hash_url = self.url + '/data-at-name-by-block-hash'
+        rep = requests.post(data_at_name_by_block_hash_url,
+                            json={"name": {name: {"data": data}}, "blockHash": block_hash,
+                                  "usePreStateHash": use_pre_state_hash})
+        _check_reponse(rep)
+        return rep.json()
+
     def last_finalized_block(self) -> Dict:
         last_finalized_block_url = self.url + '/last-finalized-block'
         rep = requests.get(last_finalized_block_url)
