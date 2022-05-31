@@ -113,8 +113,14 @@ object BlockCreator {
         deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
         r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
               for {
-                now                 <- Time[F].currentMillis
-                blockData           = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+                now <- Time[F].currentMillis
+                blockData = BlockData(
+                  now,
+                  nextBlockNum,
+                  validatorIdentity.publicKey,
+                  nextSeqNum,
+                  shardId
+                )
                 computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,

@@ -63,7 +63,8 @@ class MergingCases extends AnyFlatSpec with Matchers {
             d1.data.timestamp,
             blockNum,
             stateTransitionCreator,
-            seqNum
+            seqNum,
+            genesis.shardId
           )
           r <- runtimeManager.computeState(baseState)(
                 userDeploys,

@@ -78,7 +78,13 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
       res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
               Nil,
-              BlockData(deploy.data.timestamp, 0, genesisContext.validatorPks.head, 0)
+              BlockData(
+                deploy.data.timestamp,
+                0,
+                genesisContext.validatorPks.head,
+                0,
+                genesis.shardId
+              )
             )
       (hash, Seq(result), _) = res
     } yield (hash, result)
@@ -94,7 +100,8 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         processedDeploy.deploy.data.timestamp,
         0,
         genesisContext.validatorPks.head,
-        0
+        0,
+        genesis.shardId
       ),
       withCostAccounting = true
     )
@@ -130,14 +137,14 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
     for {
       runtime <- runtimeManager.spawnRuntime
-      _       <- runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
+      _       <- runtime.setBlockData(BlockData.fromBlock(genesis))
       r <- runtime.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
             case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, _, playResult)) =>
               assert(resultAssertion(playResult))
               for {
                 runtimeReplay <- runtimeManager.spawnReplayRuntime
                 _ <- runtimeReplay.setBlockData(
-                      BlockData(0, 0, genesisContext.validatorPks.head, 0)
+                      BlockData(0, 0, genesisContext.validatorPks.head, 0, genesis.shardId)
                     )
 
                 // Replay System Deploy
@@ -323,7 +330,8 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                                                  time,
                                                  0L,
                                                  genesisContext.validatorPks.head,
-                                                 0
+                                                 0,
+                                                 genesis.shardId
                                                )
                                              )
         (playStateHash0, processedDeploys0, processedSysDeploys0) = playStateHash0AndProcessedDeploys0
@@ -335,7 +343,8 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                                              time,
                                              0L,
                                              genesisContext.validatorPks.head,
-                                             0
+                                             0,
+                                             genesis.shardId
                                            ),
                                            withCostAccounting = true
                                          )
@@ -356,7 +365,8 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                                                  time,
                                                  0L,
                                                  genesisContext.validatorPks.head,
-                                                 0
+                                                 0,
+                                                 genesis.shardId
                                                )
                                              )
         (playStateHash1, processedDeploys1, processedSysDeploys1) = playStateHash1AndProcessedDeploys1
@@ -368,7 +378,8 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                                              time,
                                              0L,
                                              genesisContext.validatorPks.head,
-                                             0
+                                             0,
+                                             genesis.shardId
                                            ),
                                            withCostAccounting = true
                                          )
@@ -546,7 +557,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                  )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0)
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0, genesis.shardId)
         invalidBlocks = Map.empty[BlockHash, Validator]
         computeStateResult <- runtimeManager.computeState(genPostState)(
                                deploy :: Nil,
@@ -587,7 +598,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                   )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0)
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0, genesis.shardId)
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr
                         .computeState(genPostState)(
@@ -733,7 +744,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0)
+        blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0, genesis.shardId)
         invalidBlocks = Map.empty[BlockHash, Validator]
         newState <- runtimeManager
                      .computeState(genPostState)(
@@ -796,8 +807,14 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
       deploy <- ConstructDeploy.sourceDeployNowF(term)
       result <- runtimeManagerResource.use { rm =>
                  for {
-                   time          <- timeF.currentMillis
-                   blockData     = BlockData(time, 1L, genesisContext.validatorPks.head, 1)
+                   time <- timeF.currentMillis
+                   blockData = BlockData(
+                     time,
+                     1L,
+                     genesisContext.validatorPks.head,
+                     1,
+                     genesis.shardId
+                   )
                    invalidBlocks = Map.empty[BlockHash, Validator]
                    newState <- rm.computeState(genPostState)(
                                 Seq(deploy),

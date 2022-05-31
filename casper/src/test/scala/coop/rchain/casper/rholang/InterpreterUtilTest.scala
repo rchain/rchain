@@ -92,7 +92,8 @@ class InterpreterUtilTest
                       // TODO this should be blockNumber
                       blockNumber,
                       genesisContext.validatorPks.head,
-                      seqNum
+                      seqNum,
+                      genesis.shardId
                     ),
                     preState
                   )

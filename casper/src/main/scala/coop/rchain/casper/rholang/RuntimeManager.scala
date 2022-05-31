@@ -57,7 +57,8 @@ trait RuntimeManager[F[_]] {
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
-      blockNumber: Long
+      blockNumber: Long,
+      shardId: String
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]]
@@ -131,7 +132,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       mergeableChs = usrMergeable ++ sysMergeable
 
       // Block data used for mergeable key
-      BlockData(_, _, sender, seqNum) = blockData
+      BlockData(_, _, sender, seqNum, _) = blockData
       // Convert from final to diff values and persist mergeable (number) channels for post-state hash
       preStateHash  = startHash.toBlake2b256Hash
       postSTateHash = stateHash.toBlake2b256Hash
@@ -142,10 +143,11 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
-      blockNumber: Long
+      blockNumber: Long,
+      shardId: String
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
     spawnRuntime
-      .flatMap(_.computeGenesis(terms, blockTime, blockNumber))
+      .flatMap(_.computeGenesis(terms, blockTime, blockNumber, shardId))
       .flatMap {
         case (preState, stateHash, processed) =>
           val (processedDeploys, mergeableChs, _) =
@@ -176,7 +178,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       EitherT(replayOp).semiflatMap {
         case (stateHash, mergeableChs) =>
           // Block data used for mergeable key
-          val BlockData(_, _, sender, seqNum) = blockData
+          val BlockData(_, _, sender, seqNum, _) = blockData
           // Convert from final to diff values and persist mergeable (number) channels for post-state hash
           val preStateHash = startHash.toBlake2b256Hash
           this

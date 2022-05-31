@@ -136,7 +136,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
-      blockNumber: Long
+      blockNumber: Long,
+      shardId: String
   )(
       implicit s: Sync[F],
       span: Span[F],
@@ -145,7 +146,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     Span[F].traceI("compute-genesis") {
       for {
         _ <- runtime.setBlockData(
-              BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0)
+              BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0, shardId)
             )
         genesisPreStateHash           <- emptyStateHash
         playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData)

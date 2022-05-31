@@ -90,7 +90,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
       systemDeploys = CloseBlockDeploy(
         SystemDeployUtil.generateCloseDeployRandomSeed(validator, seqNum)
       ) :: Nil
-      blockData = BlockData(txDeploy.data.timestamp, blockNum, validator, seqNum)
+      blockData = BlockData(txDeploy.data.timestamp, blockNum, validator, seqNum, genesis.shardId)
       r         <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, blockData)
     } yield r
   }

@@ -69,7 +69,7 @@ object Genesis {
     val blessedTerms = defaultBlessedTerms(proofOfStake, vaults, genesis.shardId)
 
     RuntimeManager[F]
-      .computeGenesis(blessedTerms, blockTimestamp, genesis.blockNumber)
+      .computeGenesis(blessedTerms, blockTimestamp, genesis.blockNumber, genesis.shardId)
       .map {
         case (startHash, stateHash, processedDeploys) =>
           createProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
