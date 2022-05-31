@@ -6,6 +6,7 @@ import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
@@ -64,7 +65,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
         for {
           hash1 <- runtime.emptyStateHash
           _     <- runtime.reset(Blake2b256Hash.fromByteString(hash1))
-          rd    <- runtime.processDeploy(StandardDeploys.registry(SHARD_ID))
+          rd    <- runtime.processDeploy(StandardDeploys.registry(SHARD_ID), Blake2b512Random.random)
           check <- runtime.createCheckpoint
           _     <- runtime.reset(check.root)
           initialTrieRes <- runtime.processDeploy(
@@ -73,7 +74,8 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
                                  trieInitializedRho,
                                  1L,
                                  phloLimit = 50000000
-                               )
+                               ),
+                             Blake2b512Random.random
                            )
           (initialTrie, _) = initialTrieRes
           _                = assert(!initialTrie.isFailed)

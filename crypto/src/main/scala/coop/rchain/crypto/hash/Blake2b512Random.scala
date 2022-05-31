@@ -8,6 +8,7 @@ import scalapb.TypeMapper
 import java.nio.{ByteBuffer, ByteOrder, LongBuffer}
 import java.security.SecureRandom
 import scala.annotation.tailrec
+import scala.util.Random
 
 /** Blake2b512 based splittable and mergeable random number generator
   * specialized for generating 256-bit unforgeable names.
@@ -137,6 +138,9 @@ object Blake2b512Random {
     new SecureRandom().nextBytes(bytes)
     apply(bytes)
   }
+
+  def random: Blake2b512Random =
+    Blake2b512Random(Random.nextInt())
 
   def apply(init: Array[Byte]): Blake2b512Random =
     apply(init, 0, init.length)

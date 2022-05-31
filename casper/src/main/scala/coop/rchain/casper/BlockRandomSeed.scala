@@ -26,4 +26,8 @@ object BlockRandomSeed {
 
   def generateRandomNumber(blockRandomSeed: BlockRandomSeed): Blake2b512Random =
     Blake2b512Random(encode(blockRandomSeed))
+
+  val PreChargeSplitIndex: Byte  = 1.toByte
+  val UserDeploySplitIndex: Byte = 2.toByte
+  val RefundSplitIndex: Byte     = 3.toByte
 }

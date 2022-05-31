@@ -32,7 +32,7 @@ import coop.rchain.casper.rholang.types.SystemDeployPlatformFailure.{
 }
 import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
-import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
+import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource, PrettyPrinter}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.implicits._
@@ -55,6 +55,9 @@ import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.shared.{Base16, Log}
 import RuntimeSyntax._
 import coop.rchain.casper.rholang.RuntimeDeployResult._
+import coop.rchain.crypto.hash.Blake2b512Random
+
+import scala.collection.compat.immutable.LazyList
 
 trait RuntimeSyntax {
   implicit final def casperSyntaxRholangRuntime[F[_]](
@@ -106,8 +109,21 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     Span[F].traceI("compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
+        rand = BlockRandomSeed.generateRandomNumber(
+          BlockRandomSeed(
+            blockData.shardId,
+            blockData.blockNumber,
+            blockData.sender,
+            Blake2b256Hash.fromByteString(startHash)
+          )
+        )
         deployProcessResult <- Span[F].withMarks("play-deploys") {
-                                playDeploys(startHash, terms, playDeployWithCostAccounting)
+                                playDeploys(
+                                  startHash,
+                                  terms,
+                                  playDeployWithCostAccounting,
+                                  rand
+                                )
                               }
         (startHash, processedDeploys) = deployProcessResult
         systemDeployProcessResult <- {
@@ -144,12 +160,19 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       log: Log[F]
   ): F[(StateHash, StateHash, Seq[UserDeployRuntimeResult])] =
     Span[F].traceI("compute-genesis") {
+      val blockData = BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0, shardId)
       for {
-        _ <- runtime.setBlockData(
-              BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0, shardId)
-            )
-        genesisPreStateHash           <- emptyStateHash
-        playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData)
+        _                   <- runtime.setBlockData(blockData)
+        genesisPreStateHash <- emptyStateHash
+        rand = BlockRandomSeed.generateRandomNumber(
+          BlockRandomSeed(
+            blockData.shardId,
+            blockData.blockNumber,
+            blockData.sender,
+            Blake2b256Hash.fromByteString(genesisPreStateHash)
+          )
+        )
+        playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData, rand)
         (stateHash, processedDeploys) = playResult
       } yield (genesisPreStateHash, stateHash, processedDeploys)
     }
@@ -162,11 +185,14 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   def playDeploys(
       startHash: StateHash,
       terms: Seq[Signed[DeployData]],
-      processDeploy: Signed[DeployData] => F[UserDeployRuntimeResult]
+      processDeploy: (Signed[DeployData], Blake2b512Random) => F[UserDeployRuntimeResult],
+      rand: Blake2b512Random
   )(implicit m: Monad[F]): F[(StateHash, Seq[UserDeployRuntimeResult])] =
     for {
-      _               <- runtime.reset(startHash.toBlake2b256Hash)
-      res             <- terms.toList.traverse(processDeploy)
+      _ <- runtime.reset(startHash.toBlake2b256Hash)
+      res <- terms.zipWithIndex.toList.traverse {
+              case (d, i) => processDeploy(d, rand.splitShort(i.toShort))
+            }
       finalCheckpoint <- runtime.createCheckpoint
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
@@ -175,7 +201,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     * Evaluates deploy with cost accounting (Pos Pre-charge and Refund calls)
     */
   def playDeployWithCostAccounting(
-      deploy: Signed[DeployData]
+      deploy: Signed[DeployData],
+      rand: Blake2b512Random
   )(implicit s: Sync[F], log: Log[F], span: Span[F]): F[UserDeployRuntimeResult] = {
     // Pre-charge system deploy evaluator
     val preChargeF: F[(Vector[Event], Either[SystemDeployUserError, Unit], Set[Par])] =
@@ -183,7 +210,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
         new PreChargeDeploy(
           deploy.data.totalPhloCharge,
           deploy.pk,
-          SystemDeployUtil.generatePreChargeDeployRandomSeed(deploy)
+          rand.splitByte(BlockRandomSeed.PreChargeSplitIndex)
         )
       )
     // Refund system deploy evaluator
@@ -191,7 +218,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
         amount: Long
     ): F[(Vector[Event], Either[SystemDeployUserError, Unit], Set[Par])] =
       playSystemDeployInternal(
-        new RefundDeploy(amount, SystemDeployUtil.generateRefundDeployRandomSeed(deploy))
+        new RefundDeploy(amount, rand.splitByte(BlockRandomSeed.RefundSplitIndex))
       )
 
     // Event logs and mergeable channels are accumulated inside local state
@@ -224,7 +251,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       // Creates user deploy evaluator with diagnostics
       val userDeployDiag = Span[F].traceI("user-deploy")(
         // Evaluates user deploy and append event log to local state
-        processDeploy(deploy).flatTap {
+        processDeploy(deploy, rand.splitByte(BlockRandomSeed.UserDeploySplitIndex)).flatTap {
           case (pd, r) => st.update(_.add(pd.deployLog, r.mergeable))
         }
       )
@@ -270,14 +297,15 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     * Evaluates deploy
     */
   def processDeploy(
-      deploy: Signed[DeployData]
+      deploy: Signed[DeployData],
+      rand: Blake2b512Random
   )(implicit s: Sync[F], span: Span[F], log: Log[F]): F[(ProcessedDeploy, EvaluateResult)] =
     Span[F].withMarks("play-deploy") {
       for {
         fallback <- runtime.createSoftCheckpoint
 
         // Evaluate deploy
-        evaluateResult <- evaluate(deploy)
+        evaluateResult <- evaluate(deploy, rand)
 
         checkpoint <- runtime.createSoftCheckpoint
 
@@ -296,9 +324,10 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     }
 
   def processDeployWithMergeableData(
-      deploy: Signed[DeployData]
+      deploy: Signed[DeployData],
+      rand: Blake2b512Random
   )(implicit s: Sync[F], span: Span[F], log: Log[F]): F[UserDeployRuntimeResult] =
-    processDeploy(deploy) flatMap {
+    processDeploy(deploy, rand) flatMap {
       case (pd, result @ EvaluateResult(_, _, mergeChs)) =>
         for {
           mergeableData <- getNumberChannelsData(mergeChs)
@@ -527,6 +556,16 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       Cost(deploy.data.phloLimit),
       NormalizerEnv(deploy).toEnv,
       Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
+    )
+  }
+
+  def evaluate(deploy: Signed[DeployData], rand: Blake2b512Random): F[EvaluateResult] = {
+    import coop.rchain.models.rholang.implicits._
+    runtime.evaluate(
+      deploy.data.term,
+      Cost(deploy.data.phloLimit),
+      NormalizerEnv(deploy).toEnv,
+      rand
     )
   }
 
