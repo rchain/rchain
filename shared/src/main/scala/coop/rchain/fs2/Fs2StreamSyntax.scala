@@ -39,8 +39,28 @@ class Fs2StreamOps[F[_], A](
   /**
     * Variant of [[Stream.evalFilterAsync]] with parallelism bound to number of processors.
     */
-  def evalFilterAsyncProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[Boolean]): Stream[F2, A] =
+  def evalFilterAsyncProcBounded[F2[x] >: F[x]: Concurrent](f: A => F2[Boolean]): Stream[F2, A] =
     stream.evalFilterAsync[F2](availableProcessors)(f)
+
+  /**
+    * Variant of [[Stream.evalFilterAsync]] without keeping order of results.
+    */
+  def evalFilterAsyncUnordered[F2[x] >: F[x]: Concurrent](
+      maxConcurrent: Int
+  )(f: A => F2[Boolean]): Stream[F2, A] =
+    stream
+      .parEvalMapUnordered[F2, Stream[F2, A]](maxConcurrent) { o =>
+        f(o).map(if (_) Stream.emit(o) else Stream.empty)
+      }
+      .flatten
+
+  /**
+    * Variant of [[evalFilterAsyncUnordered]] with parallelism bound to number of processors.
+    */
+  def evalFilterAsyncUnorderedProcBounded[F2[x] >: F[x]: Concurrent](
+      f: A => F2[Boolean]
+  ): Stream[F2, A] =
+    evalFilterAsyncUnordered[F2](availableProcessors)(f)
 
   /**
     * Variation of [[Stream.takeWhile]] including ending element selected by predicate.
