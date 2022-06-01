@@ -1,0 +1,25 @@
+new 
+   return, rl(`rho:registry:lookup`), poSCh, stdout(`rho:io:stdout`), 
+     deployerId(`rho:rchain:deployerId`), transferRetCh 
+in {
+   rl!(`rho:rchain:pos`, *poSCh) |
+   stdout!(("start rholang code")) |
+   match (
+    "%TARGET_ADDR",
+    %AMOUNT
+   ) {
+       (targetAddr, amount) => {
+         stdout!(("start contract")) |
+         for(@(_, PoS) <- poSCh) {
+           @PoS!("posVaultTransfer", targetAddr, amount, *deployerId, *transferRetCh) |
+           stdout!(("contract executed")) | 
+           for (@result <- transferRetCh){
+             match result{
+               (true, _) =>{stdout!("%LOG_MARKER Successfully reason: ${reason}" %%{"reason": "Nil"})}
+               (false, reason) => {stdout!("%LOG_MARKER Failing reason: ${reason}" %%{"reason": reason})}
+            }
+          }   
+        } 
+      }
+    }
+}

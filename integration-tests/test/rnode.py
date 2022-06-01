@@ -514,6 +514,7 @@ def make_bootstrap_node(
     number_of_active_validators: int = 10,
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
+    pos_vault_pub_key: str = '0432946f7f91f8f767d7c3d43674faf83586dffbd1b8f9278a5c72820dc20308836299f47575ff27f4a736b72e63d91c3cd853641861f64e08ee5f9204fc708df6',
     min_phlo_price: int = 1,
     shard_id: str = default_shard_id
 ) -> Node:
@@ -537,6 +538,7 @@ def make_bootstrap_node(
         "--number-of-active-validators":    number_of_active_validators,
         "--epoch-length":                   epoch_length,
         "--quarantine-length":              quarantine_length,
+        "--pos-vault-pub-key":              pos_vault_pub_key,
         "--min-phlo-price":                 min_phlo_price,
         "--shard-name":                     shard_id
     }
@@ -749,7 +751,8 @@ def started_bootstrap(
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
     min_phlo_price: int = 1,
-    shard_id: str = default_shard_id
+    shard_id: str = default_shard_id,
+    pos_vault_pub_key: str = '0432946f7f91f8f767d7c3d43674faf83586dffbd1b8f9278a5c72820dc20308836299f47575ff27f4a736b72e63d91c3cd853641861f64e08ee5f9204fc708df6'
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
@@ -765,7 +768,8 @@ def started_bootstrap(
         epoch_length=epoch_length,
         quarantine_length=quarantine_length,
         min_phlo_price=min_phlo_price,
-        shard_id=shard_id
+        shard_id=shard_id,
+        pos_vault_pub_key=pos_vault_pub_key
     )
     try:
         wait_for_node_started(context, bootstrap_node)
@@ -773,7 +777,7 @@ def started_bootstrap(
     finally:
         bootstrap_node.cleanup()
 
-
+#pylint: disable=R0913
 @contextlib.contextmanager
 def started_bootstrap_with_network(
     context: TestingContext,
@@ -786,6 +790,8 @@ def started_bootstrap_with_network(
     shard_id: str = default_shard_id,
     extra_volumes: Optional[List[str]] = None,
     wait_for_approved_block: bool = False,
+    pos_vault_pub_key: str = ''
+
 ) -> Generator[Node, None, None]:
     with docker_network(context, context.docker) as network:
         with started_bootstrap(
@@ -798,11 +804,12 @@ def started_bootstrap_with_network(
                 epoch_length=epoch_length,
                 quarantine_length=quarantine_length,
                 min_phlo_price=min_phlo_price,
-                shard_id=shard_id
+                shard_id=shard_id,
+                pos_vault_pub_key=pos_vault_pub_key
         ) as bootstrap:
             if wait_for_approved_block:
                 wait_for_approved_block_received_handler_state(context, bootstrap)
             yield bootstrap
 
 ready_bootstrap_with_network = functools.partial(started_bootstrap_with_network,
-        wait_for_approved_block=True)
+                                                 wait_for_approved_block=True)
