@@ -7,7 +7,7 @@ import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
 import org.scalacheck.Prop
 import org.scalatest.FlatSpec
-import org.scalatest.prop.Checkers
+import org.scalatestplus.scalacheck.Checkers
 import scodec.DecodeResult
 
 class Blake2b256HashTests extends FlatSpec with Checkers {

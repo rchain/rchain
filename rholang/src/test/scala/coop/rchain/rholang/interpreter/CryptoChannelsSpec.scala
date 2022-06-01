@@ -22,7 +22,7 @@ import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import org.scalatest.prop.PropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.{fixture, Assertion, Matchers, Outcome}
 
 import java.nio.file.Files
@@ -32,7 +32,7 @@ import scala.concurrent.duration._
 
 class CryptoChannelsSpec
     extends fixture.FlatSpec
-    with PropertyChecks
+    with ScalaCheckPropertyChecks
     with Matchers
     with TripleEqualsSupport {
 

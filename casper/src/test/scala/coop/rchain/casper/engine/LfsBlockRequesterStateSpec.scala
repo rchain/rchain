@@ -2,10 +2,13 @@ package coop.rchain.casper.engine
 
 import cats.syntax.all._
 import coop.rchain.casper.engine.LfsBlockRequester.{ReceiveInfo, ST}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
-class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+class LfsBlockRequesterStateSpec
+    extends FlatSpec
+    with Matchers
+    with ScalaCheckDrivenPropertyChecks {
 
   "getNext" should "return empty list when called again" in {
     val st = ST(Set(10))

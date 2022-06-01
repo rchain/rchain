@@ -6,14 +6,14 @@ import coop.rchain.models.testImplicits._
 import coop.rchain.models.testUtils.TestUtils.forAllSimilarA
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Shrink}
-import org.scalatest.prop.PropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.Function.tupled
 import scala.collection.immutable.BitSet
 import scala.reflect.ClassTag
 
-class EqualMSpec extends FlatSpec with PropertyChecks with Matchers {
+class EqualMSpec extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(sizeRange = 25, minSuccessful = 100)

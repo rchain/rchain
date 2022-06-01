@@ -17,7 +17,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Gen
 import org.scalatest._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 final case class KeyValue(key: String, value: String)
 final case class UpdatingKeyValue(key: String, oriValue: String, updatingValue: String) {
@@ -48,7 +48,7 @@ final case class UpdatingKeyValue(key: String, oriValue: String, updatingValue: 
   */
 class TreeHashMapMergeabilitySpec
     extends FlatSpec
-    with GeneratorDrivenPropertyChecks
+    with ScalaCheckDrivenPropertyChecks
     with ComputeMerge {
 
   private val keyValuesGen: Gen[KeyValue] = for {

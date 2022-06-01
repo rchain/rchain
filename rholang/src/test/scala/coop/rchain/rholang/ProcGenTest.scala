@@ -8,9 +8,9 @@ import monix.eval.Coeval
 import org.scalacheck.Arbitrary
 import org.scalacheck.Test.Parameters
 import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.prop.PropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-class ProcGenTest extends FlatSpec with PropertyChecks with Matchers {
+class ProcGenTest extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
   implicit val procArbitrary = Arbitrary(
     ProcGen.topLevelGen(5).map(PrettyPrinted[Proc](_, PrettyPrinter.print))

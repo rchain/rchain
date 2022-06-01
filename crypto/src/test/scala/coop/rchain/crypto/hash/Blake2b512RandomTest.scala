@@ -4,7 +4,8 @@ import coop.rchain.shared.Stopwatch
 import org.scalacheck.{Arbitrary, Prop}
 import coop.rchain.shared.Base16
 import org.scalatest._
-import org.scalatest.prop.{Checkers, Configuration}
+import org.scalatest.prop.Configuration
+import org.scalatestplus.scalacheck.Checkers
 
 import java.nio.charset.StandardCharsets
 import java.util.Arrays

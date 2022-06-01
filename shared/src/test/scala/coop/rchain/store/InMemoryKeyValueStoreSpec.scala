@@ -5,7 +5,7 @@ import cats.syntax.all._
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.codecs.{int64, utf8}
 
@@ -46,7 +46,7 @@ class KeyValueStoreSut[F[_]: Sync: KeyValueStoreManager] {
     } yield result.toMap
 }
 
-class InMemoryKeyValueStoreSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+class InMemoryKeyValueStoreSpec extends FlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
   implicit val scheduler = monix.execution.Scheduler.global
 
   def genData: Gen[Map[Long, String]] = {

@@ -17,7 +17,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
@@ -92,7 +92,7 @@ abstract class HistoryRepositoryGenerativeDefinition
     extends FlatSpec
     with Matchers
     with OptionValues
-    with GeneratorDrivenPropertyChecks {
+    with ScalaCheckDrivenPropertyChecks {
 
   val serializeString  = implicitly[Serialize[String]]
   val serializePattern = implicitly[Serialize[Pattern]]

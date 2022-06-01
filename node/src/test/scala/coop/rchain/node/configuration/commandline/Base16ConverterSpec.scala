@@ -1,8 +1,8 @@
 package coop.rchain.node.configuration.commandline
 import org.scalatest.{Matchers, PropSpec}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-class Base16ConverterSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
+class Base16ConverterSpec extends PropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   property("parse returns error for bad characters") {
 
     forAll { s: String =>

@@ -10,12 +10,12 @@ import coop.rchain.rholang.interpreter.errors.SubstituteError
 import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
 import org.scalacheck.Gen
-import org.scalatest.prop.PropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
-class SubSpec extends FlatSpec with Matchers with PropertyChecks {
+class SubSpec extends FlatSpec with Matchers with ScalaCheckPropertyChecks {
 
   behavior of "Substitute"
 

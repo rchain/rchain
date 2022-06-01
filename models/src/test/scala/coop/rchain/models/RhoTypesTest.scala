@@ -9,14 +9,14 @@ import coop.rchain.models.testImplicits._
 import coop.rchain.shared.Serialize
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Shrink}
-import org.scalatest.prop.PropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import scalapb.GeneratedMessageCompanion
 
 import scala.collection.immutable.BitSet
 import scala.reflect.ClassTag
 
-class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
+class RhoTypesTest extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   //FIXME crank that up and fix the resulting errors
   implicit override val generatorDrivenConfig =
@@ -78,7 +78,7 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
 
 }
 
-class BitSetBytesMapperTest extends FlatSpec with PropertyChecks with Matchers {
+class BitSetBytesMapperTest extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
   "BitSetBytesMapper" should "encode example BitSet-s as expected" in {
     checkMapping(BitSet(), byteString())
     checkMapping(BitSet(0), byteString(1))

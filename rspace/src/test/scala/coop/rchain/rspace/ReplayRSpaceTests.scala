@@ -22,7 +22,7 @@ import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 import org.scalacheck._
 import org.scalatest._
-import org.scalatest.prop._
+import org.scalatestplus.scalacheck._
 
 import scala.collection.SortedSet
 import scala.util.Random
@@ -1227,7 +1227,7 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
     extends FlatSpec
     with Matchers
     with OptionValues
-    with PropertyChecks {
+    with ScalaCheckPropertyChecks {
   val logger = Logger(this.getClass.getName.stripSuffix("$"))
 
   implicit override val generatorDrivenConfig =

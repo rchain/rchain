@@ -16,7 +16,7 @@ import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import org.scalatest.prop.PropertyChecks._
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks._
 import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
 
 import java.nio.file.{Files, Path}
