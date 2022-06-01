@@ -18,11 +18,7 @@ import scodec.bits.ByteVector
 import java.nio.ByteBuffer
 import scala.concurrent.duration._
 
-class RadixTreeSpec
-    extends AnyFlatSpec
-    with Matchers
-    with OptionValues
-    with InMemoryHistoryTestBase {
+class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
   "appending leaf in empty tree" should "create tree with one node" in withImplAndStore {
     (impl, _) =>
       val dataSet = radixKV("1122334455", "01")

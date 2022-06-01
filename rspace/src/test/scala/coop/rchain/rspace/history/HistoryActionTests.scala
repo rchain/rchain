@@ -17,7 +17,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
 
-class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryTestBase {
+class HistoryActionTests extends AnyFlatSpec with Matchers {
 
   "creating and read one record" should "works" in withEmptyHistory { emptyHistoryF =>
     val data = insert(_zeros) :: Nil
@@ -289,12 +289,6 @@ class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryT
     f(emptyHistory, store).runSyncUnsafe(20.seconds)
   }
 
-  def skipShouldHaveAffix(t: Trie, bytes: KeySegment): Assertion =
-    t match {
-      case Skip(affix, _) => affix.toSeq.toList shouldBe bytes.value
-      case p              => fail("unknown trie prefix" + p)
-    }
-
   def randomKey(size: Int): KeySegment =
     KeySegment(List.fill(size)((Random.nextInt(256) - 128).toByte))
 
@@ -320,7 +314,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryT
 object TestData {
 
   val _zeros: KeySegment     = KeySegment(List.fill(32)(0.toByte))
-  val _zerosOnes: KeySegment = KeySegment((List.fill(16)(0.toByte) ++ List.fill(16)(1.toByte)))
+  val _zerosOnes: KeySegment = KeySegment(List.fill(16)(0.toByte) ++ List.fill(16)(1.toByte))
   val _31zeros: KeySegment   = KeySegment(List.fill(31)(0.toByte))
 
   def zerosAnd(i: Int): KeySegment = _31zeros :+ i.toByte
