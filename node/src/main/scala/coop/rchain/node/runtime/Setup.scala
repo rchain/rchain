@@ -86,15 +86,6 @@ object Setup {
       // RNode key-value store manager / manages LMDB databases
       rnodeStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
 
-      // TODO: Old BlockStore migration message, remove after couple of releases from v0.11.0.
-      oldBlockStoreExists = conf.storage.dataDir.resolve("blockstore/storage").toFile.exists
-      oldBlockStoreMsg    = s"""
-       |Old file-based block storage detected (blockstore/storage). To use this version of RNode please first do the migration.
-       |Migration should be done with RNode version v0.10.2. More info can be found in PR:
-       |https://github.com/rchain/rchain/pull/3342
-      """.stripMargin
-      _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
-
       // Block execution tracker
       executionTracker <- StatefulExecutionTracker[F]
 
