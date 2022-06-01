@@ -463,6 +463,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "the number of the active validators"
     )
 
+    val posVaultPubKey = opt[String](
+      descr = "Public key for transfers from the PoS vault"
+    )
+
     val prometheus = opt[Flag](
       descr = "Enable the Prometheus metrics reporter"
     )

@@ -34,5 +34,6 @@ final case class GenesisBlockData(
     genesisBlockNumber: Long,
     numberOfActiveValidators: Int,
     posMultiSigPublicKeys: List[String],
-    posMultiSigQuorum: Int
+    posMultiSigQuorum: Int,
+    posVaultPubKey: String
 )

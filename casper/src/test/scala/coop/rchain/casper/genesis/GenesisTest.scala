@@ -301,7 +301,8 @@ object GenesisTest {
                            numberOfActiveValidators = numberOfActiveValidators,
                            validators = validators,
                            posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
-                           posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
+                           posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1,
+                           posVaultPubKey = GenesisBuilder.defaultPosVaultPubKey
                          ),
                          vaults = vaults,
                          blockNumber = blockNumber,

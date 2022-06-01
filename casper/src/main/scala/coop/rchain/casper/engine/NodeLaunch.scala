@@ -55,6 +55,11 @@ object NodeLaunch {
 
     def createStoreBroadcastGenesis: F[Unit] =
       for {
+        _ <- Log[F]
+              .warn(
+                "Public key for PoS vault is not set, manual transfer from PoS vault will be disabled (config 'pos-vault-pub-key')"
+              )
+              .whenA(conf.genesisBlockData.posVaultPubKey.isEmpty)
         genesisBlock <- createGenesisBlockFromConfig(conf)
         genBlockStr  = PrettyPrinter.buildString(genesisBlock)
         _            <- Log[F].info(s"Sending ApprovedBlock $genBlockStr to peers...")
@@ -181,7 +186,8 @@ object NodeLaunch {
       conf.genesisBlockData.quarantineLength,
       conf.genesisBlockData.numberOfActiveValidators,
       conf.genesisBlockData.posMultiSigPublicKeys,
-      conf.genesisBlockData.posMultiSigQuorum
+      conf.genesisBlockData.posMultiSigQuorum,
+      conf.genesisBlockData.posVaultPubKey
     )
 
   def createGenesisBlock[F[_]: Concurrent: ContextShift: Time: RuntimeManager: Log](
@@ -196,7 +202,8 @@ object NodeLaunch {
       quarantineLength: Int,
       numberOfActiveValidators: Int,
       posMultiSigPublicKeys: List[String],
-      posMultiSigQuorum: Int
+      posMultiSigQuorum: Int,
+      posVaultPubKey: String
   ): F[BlockMessage] =
     for {
       blockTimestamp <- Time[F].currentMillis
@@ -221,7 +228,8 @@ object NodeLaunch {
                            numberOfActiveValidators = numberOfActiveValidators,
                            validators = validators,
                            posMultiSigPublicKeys = posMultiSigPublicKeys,
-                           posMultiSigQuorum = posMultiSigQuorum
+                           posMultiSigQuorum = posMultiSigQuorum,
+                           posVaultPubKey = posVaultPubKey
                          ),
                          vaults = vaults,
                          blockNumber = blockNumber
