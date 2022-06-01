@@ -182,7 +182,6 @@ object Setup {
         conf.casper.minPhloPrice
       )
 
-      envVars             = EnvVars.envVars[F]
       blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
