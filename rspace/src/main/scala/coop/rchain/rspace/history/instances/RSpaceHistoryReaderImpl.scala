@@ -61,7 +61,7 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
       key: Blake2b256Hash
   ): F[Option[PersistedData]] =
     targetHistory
-      .read(prefix +: key.bytes)
+      .read(KeySegment(prefix +: key.bytes))
       .flatMap(_.flatTraverse(leafStore.get1))
 
   override def base: HistoryReaderBase[F, C, P, A, K] = {

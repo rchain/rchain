@@ -27,11 +27,7 @@ class RadixTreeSpec
     (impl, _) =>
       val dataSet = radixKV("1122334455", "01")
       for {
-        item1 <- impl.update(
-                  RadixTree.EmptyItem,
-                  dataSet.rKey,
-                  dataSet.rValue
-                )
+        item1 <- impl.update(RadixTree.EmptyItem, dataSet.rKey, dataSet.rValue)
 
         newRootNode    <- impl.constructNodeFromItem(item1.get)
         printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE LEAF", noPrintFlag = true)
@@ -49,11 +45,7 @@ class RadixTreeSpec
     (impl, _) =>
       val dataSet = List(radixKV("1122334455", "01"), radixKV("112233AABB", "02"))
       for {
-        item1Opt <- impl.update(
-                     RadixTree.EmptyItem,
-                     dataSet.head.rKey,
-                     dataSet.head.rValue
-                   )
+        item1Opt <- impl.update(RadixTree.EmptyItem, dataSet.head.rKey, dataSet.head.rValue)
 
         rootNode1    <- impl.constructNodeFromItem(item1Opt.get)
         printedTree1 <- impl.printTree(rootNode1, "TREE WITH ONE LEAF", noPrintFlag = true)
@@ -63,11 +55,7 @@ class RadixTreeSpec
           "   [11]LEAF: prefix = 22334455, data = 0000...0001"
         )
 
-        item2Opt <- impl.update(
-                     item1Opt.get,
-                     dataSet(1).rKey,
-                     dataSet(1).rValue
-                   )
+        item2Opt <- impl.update(item1Opt.get, dataSet(1).rKey, dataSet(1).rValue)
 
         rootNode2 <- impl.constructNodeFromItem(item2Opt.get)
         printedTree2 <- impl.printTree(
@@ -91,17 +79,9 @@ class RadixTreeSpec
     (impl, _) =>
       val dataSet = List(radixKV("1122334455", "01"), radixKV("AABBCCDDEE", "02"))
       for {
-        rootItem1Opt <- impl.update(
-                         RadixTree.EmptyItem,
-                         dataSet.head.rKey,
-                         dataSet.head.rValue
-                       )
+        rootItem1Opt <- impl.update(RadixTree.EmptyItem, dataSet.head.rKey, dataSet.head.rValue)
 
-        rootItem2Opt <- impl.update(
-                         rootItem1Opt.get,
-                         dataSet(1).rKey,
-                         dataSet(1).rValue
-                       )
+        rootItem2Opt <- impl.update(rootItem1Opt.get, dataSet(1).rKey, dataSet(1).rValue)
 
         rootNode <- impl.constructNodeFromItem(rootItem2Opt.get)
 
@@ -125,12 +105,8 @@ class RadixTreeSpec
       // Create tree with one leaf
       item1Opt <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
 
-      rootNode1 <- impl.constructNodeFromItem(item1Opt.get)
-      printedTree1 <- impl.printTree(
-                       rootNode1,
-                       "TREE WITH ONE LEAF",
-                       noPrintFlag = true
-                     )
+      rootNode1    <- impl.constructNodeFromItem(item1Opt.get)
+      printedTree1 <- impl.printTree(rootNode1, "TREE WITH ONE LEAF", noPrintFlag = true)
 
       item2Opt  <- impl.update(item1Opt.get, newKVPair.rKey, newKVPair.rValue)
       rootNode2 <- impl.constructNodeFromItem(item2Opt.get)
@@ -174,17 +150,11 @@ class RadixTreeSpec
 
   "RadixTreeImpl" should "not allow to radix key smaller than NodePtr key" in withImplAndStore {
     (impl, _) =>
-      val initialItem           = NodePtr(createBV("11223344"), createBlakeHash("01"))
+      val initialItem           = NodePtr(createKeySegment("11223344"), createBlakeHash("01"))
       val wrongKVPair           = radixKV("11", "FF")
       val referenceErrorMessage = s"assertion failed: Radix key should be longer than NodePtr key."
       for {
-        err <- impl
-                .update(
-                  initialItem,
-                  wrongKVPair.rKey,
-                  wrongKVPair.rValue
-                )
-                .attempt
+        err <- impl.update(initialItem, wrongKVPair.rKey, wrongKVPair.rValue).attempt
 
         ex = err.left.get
         _  = ex shouldBe a[AssertionError]
@@ -194,7 +164,7 @@ class RadixTreeSpec
 
   "deleting non - existent data" should "return none" in withImplAndStore { (impl, _) =>
     val initialKVPair  = radixKV("1122334455", "01")
-    val nonExistentKey = createBV("FFFFFFFFFF")
+    val nonExistentKey = createKeySegment("FFFFFFFFFF")
     for {
       // Create tree with one node
       itemOpt <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
@@ -231,17 +201,9 @@ class RadixTreeSpec
     (impl, _) =>
       val dataSet = List(radixKV("1122334455", "01"), radixKV("AABBCCDDEE", "02"))
       for {
-        rootItem1Opt <- impl.update(
-                         RadixTree.EmptyItem,
-                         dataSet.head.rKey,
-                         dataSet.head.rValue
-                       )
+        rootItem1Opt <- impl.update(RadixTree.EmptyItem, dataSet.head.rKey, dataSet.head.rValue)
 
-        rootItem2Opt <- impl.update(
-                         rootItem1Opt.get,
-                         dataSet(1).rKey,
-                         dataSet(1).rValue
-                       )
+        rootItem2Opt <- impl.update(rootItem1Opt.get, dataSet(1).rKey, dataSet(1).rValue)
 
         rootNode1 <- impl.constructNodeFromItem(rootItem2Opt.get)
         printedTree1 <- impl.printTree(
@@ -281,16 +243,8 @@ class RadixTreeSpec
     (impl, _) =>
       val dataSet = List(radixKV("1122334455", "01"), radixKV("11223344FF", "02"))
       for {
-        item1Opt <- impl.update(
-                     RadixTree.EmptyItem,
-                     dataSet.head.rKey,
-                     dataSet.head.rValue
-                   )
-        item2Opt <- impl.update(
-                     item1Opt.get,
-                     dataSet(1).rKey,
-                     dataSet(1).rValue
-                   )
+        item1Opt <- impl.update(RadixTree.EmptyItem, dataSet.head.rKey, dataSet.head.rValue)
+        item2Opt <- impl.update(item1Opt.get, dataSet(1).rKey, dataSet(1).rValue)
 
         rootNode1 <- impl.constructNodeFromItem(item2Opt.get)
         printedTree1 <- impl.printTree(
@@ -340,7 +294,7 @@ class RadixTreeSpec
       itemOpt  <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
       rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
-      notExistingKey = createBV("0000")
+      notExistingKey = createKeySegment("0000")
       readDataOpt    <- impl.read(rootNode, notExistingKey)
 
       _ = readDataOpt shouldBe none
@@ -395,11 +349,11 @@ class RadixTreeSpec
   // Data for test are given from RadixTree specification
   "encoding and then decoding a node" should "give this node" in {
     val leaf = Leaf(
-      createBV("FFFF"),
+      createKeySegment("FFFF"),
       createBlakeHash("0000000000000000000000000000000000000000000000000000000000000001")
     )
     val nodePtr = NodePtr(
-      createBV(""),
+      createKeySegment(""),
       createBlakeHash("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
     )
     val referenceNode = emptyNode
@@ -451,8 +405,8 @@ class RadixTreeSpec
 
   "tree with saveAndCommit" should "be built correctly and not create artefacts in KV - store" in withImplAndStore {
     (impl, inMemoStore) =>
-      def createDeleteActions(keys: List[ByteVector]): List[DeleteAction] =
-        keys.map(key => DeleteAction(key.toSeq))
+      def createDeleteActions(keys: List[KeySegment]): List[DeleteAction] =
+        keys.map(key => DeleteAction(key))
 
       /* treeDataSet:
             key      |   value
@@ -642,24 +596,65 @@ class RadixTreeSpec
   }
 
   "function commonPrefix" should "return correct prefixes" in {
-    val v12345 = ByteVector(1, 2, 3, 4, 5)
-    val v1245  = ByteVector(1, 2, 4, 5)
-    val v123   = ByteVector(1, 2, 3)
-    val v12367 = ByteVector(1, 2, 3, 6, 7)
-    val v22345 = ByteVector(2, 2, 3, 4, 5)
-    val res1   = RadixTree.commonPrefix(v12345, v1245)
-    val res2   = RadixTree.commonPrefix(v12345, v123)
-    val res3   = RadixTree.commonPrefix(v12345, ByteVector.empty)
-    val res4   = RadixTree.commonPrefix(v12345, v12367)
-    val res5   = RadixTree.commonPrefix(v22345, v12345)
-    val res6   = RadixTree.commonPrefix(ByteVector.empty, ByteVector.empty)
+    import coop.rchain.rspace.history.KeySegment._
+    val v12345 = KeySegment(ByteVector(1, 2, 3, 4, 5))
+    val v1245  = KeySegment(ByteVector(1, 2, 4, 5))
+    val v123   = KeySegment(ByteVector(1, 2, 3))
+    val v12367 = KeySegment(ByteVector(1, 2, 3, 6, 7))
+    val v22345 = KeySegment(ByteVector(2, 2, 3, 4, 5))
+    val res1   = commonPrefix(v12345, v1245)
+    val res2   = commonPrefix(v12345, v123)
+    val res3   = commonPrefix(v12345, KeySegment.empty)
+    val res4   = commonPrefix(v12345, v12367)
+    val res5   = commonPrefix(v22345, v12345)
+    val res6   = commonPrefix(KeySegment.empty, KeySegment.empty)
 
-    res1 shouldBe (ByteVector(1, 2), ByteVector(3, 4, 5), ByteVector(4, 5))
-    res2 shouldBe (ByteVector(1, 2, 3), ByteVector(4, 5), ByteVector.empty)
-    res3 shouldBe (ByteVector.empty, ByteVector(1, 2, 3, 4, 5), ByteVector.empty)
-    res4 shouldBe (ByteVector(1, 2, 3), ByteVector(4, 5), ByteVector(6, 7))
-    res5 shouldBe (ByteVector.empty, ByteVector(2, 2, 3, 4, 5), ByteVector(1, 2, 3, 4, 5))
-    res6 shouldBe (ByteVector.empty, ByteVector.empty, ByteVector.empty)
+    val referenceRes1 = (
+      KeySegment(ByteVector(1, 2)),
+      KeySegment(ByteVector(3, 4, 5)),
+      KeySegment(ByteVector(4, 5))
+    )
+
+    val referenceRes2 = (
+      KeySegment(ByteVector(1, 2, 3)),
+      KeySegment(ByteVector(4, 5)),
+      KeySegment.empty
+    )
+
+    val referenceRes3 =
+      (KeySegment.empty, KeySegment(ByteVector(1, 2, 3, 4, 5)), KeySegment.empty)
+
+    val referenceRes4 = (
+      KeySegment(ByteVector(1, 2, 3)),
+      KeySegment(ByteVector(4, 5)),
+      KeySegment(ByteVector(6, 7))
+    )
+
+    val referenceRes5 = (
+      KeySegment.empty,
+      KeySegment(ByteVector(2, 2, 3, 4, 5)),
+      KeySegment(ByteVector(1, 2, 3, 4, 5))
+    )
+
+    val referenceRes6 = (KeySegment.empty, KeySegment.empty, KeySegment.empty)
+
+    res1 shouldBe referenceRes1
+    res2 shouldBe referenceRes2
+    res3 shouldBe referenceRes3
+    res4 shouldBe referenceRes4
+    res5 shouldBe referenceRes5
+    res6 shouldBe referenceRes6
+  }
+
+  "create KeySegment object with key size more than 127 bytes" should "be stopped with exception" in {
+    try {
+      val seqLongKey = Seq.fill(128)(0.toByte)
+      KeySegment(seqLongKey)
+    } catch {
+      case ex: Exception =>
+        ex shouldBe a[Exception]
+        ex.getMessage shouldBe "requirement failed: Size of key segment is more than 127"
+    }
   }
 
   def createBlakeHash(s: String): Blake2b256Hash = {
@@ -669,16 +664,18 @@ class RadixTreeSpec
   }
 
   def createBV(s: String): ByteVector = ByteVector(Base16.unsafeDecode(s))
+
+  def createKeySegment(s: String): KeySegment = KeySegment(createBV(s))
   def createInsertActions(dataSet: List[radixKV]): List[InsertAction] =
     dataSet.map { ds =>
-      InsertAction(ds.rKey.toSeq, ds.rValue)
+      InsertAction(ds.rKey, ds.rValue)
     }
 
-  case class radixKV(rKey: ByteVector, rValue: Blake2b256Hash)
+  case class radixKV(rKey: KeySegment, rValue: Blake2b256Hash)
 
   object radixKV {
     def apply(strKey: String, strValue: String): radixKV =
-      new radixKV(createBV(strKey), createBlakeHash(strValue))
+      new radixKV(createKeySegment(strKey), createBlakeHash(strValue))
   }
 
   /*
@@ -718,12 +715,12 @@ class RadixTreeSpec
       skipSize: Int,     // skip size
       withSkip: Boolean, // start with skip is true
       exportData: ExportData,
-      lastPrefix: Option[ByteVector] // last prefix
+      lastPrefix: Option[KeySegment] // last prefix
   )
 
   case class MultipageExportResults(
-      firstExport: (ExportData, Option[ByteVector]),
-      reconstructExport: (ExportData, Option[ByteVector])
+      firstExport: (ExportData, Option[KeySegment]),
+      reconstructExport: (ExportData, Option[KeySegment])
   )
 
   def validateMultipageExport(
@@ -768,8 +765,9 @@ class RadixTreeSpec
     }
 
     // Initialize structure for export
-    val initSeq        = Seq[ByteVector]()
-    val initExportData = ExportData(initSeq, Seq.empty, initSeq, initSeq, Seq.empty)
+    val initSeq = Seq[ByteVector]()
+    val initExportData =
+      ExportData(Seq[KeySegment](), Seq.empty, initSeq, Seq[KeySegment](), Seq.empty)
     val initParameters = ExportParameters(
       rootHash,
       store,
@@ -777,7 +775,7 @@ class RadixTreeSpec
       skipSize = 0,
       withSkip,
       initExportData,
-      Option(ByteVector.empty)
+      Option(KeySegment.empty)
     )
     for {
       allExport        <- initParameters.tailRecM(multipageExport)

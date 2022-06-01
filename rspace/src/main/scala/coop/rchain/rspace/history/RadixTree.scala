@@ -7,6 +7,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueTypedStore
 import scodec.bits.ByteVector
+import coop.rchain.rspace.history.KeySegment._
 
 import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap
@@ -28,14 +29,14 @@ object RadixTree {
     * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
     * @param value stores radixValue. Always contains 32 bytes.
     */
-  final case class Leaf(prefix: ByteVector, value: Blake2b256Hash) extends Item
+  final case class Leaf(prefix: KeySegment, value: Blake2b256Hash) extends Item
 
   /**
     * NodePtr is pointer to the next child [[Node]]. Contains 2 fields.
     * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
     * @param ptr stores hash of the child node (see section Storing of tree). Always contains 32 bytes.
     */
-  final case class NodePtr(prefix: ByteVector, ptr: Blake2b256Hash) extends Item
+  final case class NodePtr(prefix: KeySegment, ptr: Blake2b256Hash) extends Item
 
   /**
     * Base type for nodes in Radix History.
@@ -137,7 +138,7 @@ object RadixTree {
               arr(posSecondByte) = encodeLeafSecondByte(prefixSize)
               // Fill prefix
               val posPrefixStart = posSecondByte + 1
-              for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix(i.toLong)
+              for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix.value(i.toLong)
               // Fill leafValue
               val posValueStart = posPrefixStart + prefixSize
               for (i <- 0 until defSize) arr(posValueStart + i) = value.bytes(i.toLong)
@@ -152,7 +153,7 @@ object RadixTree {
               arr(posSecondByte) = encodeNodePtrSecondByte(prefixSize)
               // Fill prefix
               val posPrefixStart = posSecondByte + 1
-              for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix(i.toLong)
+              for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix.value(i.toLong)
               // Fill ptr
               val posPtrStart = posPrefixStart + prefixSize
               for (i <- 0 until defSize) arr(posPtrStart + i) = ptr.bytes(i.toLong)
@@ -178,10 +179,7 @@ object RadixTree {
         if (pos0 == maxSize) node // End of deserialization
         else {
           val idxItem: Int = byteToInt(arr(pos0)) // Take first byte - it's item's index
-          assert(
-            node(idxItem) == EmptyItem,
-            "Error during deserialization: wrong index of item."
-          )
+          assert(node(idxItem) == EmptyItem, "Error during deserialization: wrong index of item.")
           val pos1       = pos0 + 1
           val secondByte = arr(pos1) // Take second byte
 
@@ -201,8 +199,8 @@ object RadixTree {
 
           // Decoding type of non-empty item
           val item =
-            if (isLeaf(secondByte)) Leaf(ByteVector(prefix), Blake2b256Hash.fromByteArray(valOrPtr))
-            else NodePtr(ByteVector(prefix), Blake2b256Hash.fromByteArray(valOrPtr))
+            if (isLeaf(secondByte)) Leaf(KeySegment(prefix), Blake2b256Hash.fromByteArray(valOrPtr))
+            else NodePtr(KeySegment(prefix), Blake2b256Hash.fromByteArray(valOrPtr))
 
           val nodeNext = node.updated(idxItem, item)
 
@@ -216,24 +214,6 @@ object RadixTree {
           throw new Exception("Error during deserialization: invalid data format", cause)
       }
     }
-  }
-
-  /**
-    * Find the common part of b1 and b2.
-    *
-    * @return (Common part , rest of b1, rest of b2).
-    */
-  def commonPrefix(b1: ByteVector, b2: ByteVector): (ByteVector, ByteVector, ByteVector) = {
-    @tailrec
-    def go(common: ByteVector, l: ByteVector, r: ByteVector): (ByteVector, ByteVector, ByteVector) =
-      if (r.isEmpty || l.isEmpty) (common, l, r)
-      else {
-        val lHead = l.head
-        val rHead = r.head
-        if (lHead == rHead) go(common :+ lHead, l.tail, r.tail)
-        else (common, l, r)
-      }
-    go(ByteVector.empty, b1, b2)
   }
 
   /**
@@ -258,10 +238,10 @@ object RadixTree {
     * @param leafValues Leaf values (it's pointer for data in datastore)
     */
   final case class ExportData(
-      nodePrefixes: Seq[ByteVector],
+      nodePrefixes: Seq[KeySegment],
       nodeKeys: Seq[Blake2b256Hash],
       nodeValues: Seq[ByteVector],
-      leafPrefixes: Seq[ByteVector],
+      leafPrefixes: Seq[KeySegment],
       leafValues: Seq[Blake2b256Hash]
   )
 
@@ -299,14 +279,14 @@ object RadixTree {
     */
   def sequentialExport[F[_]: Sync](
       rootHash: Blake2b256Hash,
-      lastPrefix: Option[ByteVector],
+      lastPrefix: Option[KeySegment],
       skipSize: Int,
       takeSize: Int,
       getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]],
       settings: ExportDataSettings
-  ): F[(ExportData, Option[ByteVector])] = {
+  ): F[(ExportData, Option[KeySegment])] = {
     final case class NodeData(
-        prefix: ByteVector,
+        prefix: KeySegment,
         decoded: Node,
         lastItemIndex: Option[Byte]
     )
@@ -314,8 +294,8 @@ object RadixTree {
 
     final case class NodePathData(
         hash: Blake2b256Hash,   // Hash of node for load
-        nodePrefix: ByteVector, // Prefix of this node
-        restPrefix: ByteVector, // Prefix that describes the rest of the Path
+        nodePrefix: KeySegment, // Prefix of this node
+        restPrefix: KeySegment, // Prefix that describes the rest of the Path
         path: Path              // Return path
     )
 
@@ -331,7 +311,7 @@ object RadixTree {
               commonPrefix(p.restPrefix.tail, ptrPrefix)
             assert(
               ptrPrefixRest.isEmpty,
-              s"Export error: node with prefix ${(p.nodePrefix ++ p.restPrefix).toHex} not found."
+              s"Export error: node with prefix ${(p.nodePrefix ++ p.restPrefix).value.toHex} not found."
             )
             NodePathData(
               ptr,
@@ -391,14 +371,13 @@ object RadixTree {
 
     def addLeaf(
         p: StepData,
-        leafPrefix: ByteVector,
+        leafPrefix: KeySegment,
         leafHash: Blake2b256Hash,
         itemIndex: Byte,
-        curNodePrefix: ByteVector,
+        curNodePrefix: KeySegment,
         newPath: Vector[NodeData]
     ): StepData =
-      if (p.skip > 0)
-        StepData(newPath, p.skip, p.take, p.expData)
+      if (p.skip > 0) StepData(newPath, p.skip, p.take, p.expData)
       else {
         val newLP = if (settings.flagLeafPrefixes) {
           val newSingleLP = (curNodePrefix :+ itemIndex) ++ leafPrefix
@@ -419,15 +398,15 @@ object RadixTree {
 
     def addNodePtr(
         p: StepData,
-        ptrPrefix: ByteVector,
+        ptrPrefix: KeySegment,
         ptr: Blake2b256Hash,
         itemIndex: Byte,
-        curNodePrefix: ByteVector,
+        curNodePrefix: KeySegment,
         newPath: Vector[NodeData]
     ): F[StepData] = {
       def constructNodePtrData(
           childPath: Vector[NodeData],
-          childNP: ByteVector,
+          childNP: KeySegment,
           childNV: ByteVector
       ) = {
         val newNP =
@@ -467,7 +446,7 @@ object RadixTree {
         itemIndex: Byte,
         item: Item,
         curNode: Node,
-        curNodePrefix: ByteVector
+        curNodePrefix: KeySegment
     ): F[StepData] = Sync[F].defer {
       val newCurNodeData = NodeData(curNodePrefix, curNode, itemIndex.some)
       val newPath        = newCurNodeData +: p.path.tail
@@ -484,17 +463,19 @@ object RadixTree {
     /**
       * Export one element (Node or Leaf) and recursively move to the next step.
       */
-    def exportStep(p: StepData): F[Either[StepData, (ExportData, Option[ByteVector])]] =
+    def exportStep(p: StepData): F[Either[StepData, (ExportData, Option[KeySegment])]] =
       Sync[F].defer {
         if (p.path.isEmpty) // End of Tree
-          (p.expData, Option.empty[ByteVector]).asRight[StepData].pure
+          (p.expData, Option.empty[KeySegment]).asRight[StepData].pure
         else {
           val curNodeData   = p.path.head
           val curNodePrefix = curNodeData.prefix
           val curNode       = curNodeData.decoded
 
           if ((p.skip, p.take) == (0, 0))
-            (p.expData, curNodePrefix.some).asRight[StepData].pure // End of skip&take counter
+            (p.expData, curNodePrefix.some)
+              .asRight[StepData]
+              .pure // End of skip&take counter
           else {
             val nextNotEmptyItemOpt = findNextNonEmptyItem(curNode, curNodeData.lastItemIndex)
             val newStepDataF = nextNotEmptyItemOpt
@@ -519,14 +500,14 @@ object RadixTree {
       for {
         rootParams <- NodePathData(
                        rootHash,
-                       ByteVector.empty,
-                       lastPrefix.getOrElse(ByteVector.empty),
+                       KeySegment.empty,
+                       lastPrefix.getOrElse(KeySegment.empty),
                        Vector()
                      ).pure
         noRootStart  = (emptyExportData, skipSize, takeSize)     // Start from next node after lastPrefix
         skippedStart = (emptyExportData, skipSize - 1, takeSize) // Skipped node start
         rootExportData = {
-          val newNP = if (settings.flagNodePrefixes) Vector(ByteVector.empty) else Vector()
+          val newNP = if (settings.flagNodePrefixes) Vector(KeySegment.empty) else Vector()
           val newNK =
             if (settings.flagNodeKeys) Vector(rootHash) else Vector()
           val newNV = if (settings.flagNodeValues) Vector(rootNodeSer) else Vector()
@@ -679,11 +660,11 @@ object RadixTree {
     /**
       * Read leaf data with prefix. If data not found, returned [[None]]
       */
-    final def read(startNode: Node, startPrefix: ByteVector): F[Option[Blake2b256Hash]] = {
-      type Params = (Node, ByteVector)
+    final def read(startNode: Node, startPrefix: KeySegment): F[Option[Blake2b256Hash]] = {
+      type Params = (Node, KeySegment)
       def loop(params: Params): F[Either[Params, Option[Blake2b256Hash]]] =
         params match {
-          case (_, ByteVector.empty) =>
+          case (_, KeySegment.empty) =>
             Option.empty[Blake2b256Hash].asRight[Params].pure // Not found
           case (curNode, prefix) =>
             curNode(byteToInt(prefix.head)) match {
@@ -728,7 +709,7 @@ object RadixTree {
       */
     def constructNodeFromItem(item: Item): F[Node] =
       item match {
-        case NodePtr(ByteVector.empty, ptr) => loadNode(ptr)
+        case NodePtr(KeySegment.empty, ptr) => loadNode(ptr)
         case _                              => Sync[F].delay(createNodeFromItem(item))
       }
 
@@ -737,7 +718,7 @@ object RadixTree {
       */
     private def saveNodeAndCreateItem(
         node: Node,
-        prefix: ByteVector,
+        prefix: KeySegment,
         compaction: Boolean = true
     ): Item =
       if (compaction) {
@@ -749,9 +730,11 @@ object RadixTree {
             nonEmptyItems.head match {
               case EmptyItem => EmptyItem
               case Leaf(leafPrefix, value) =>
-                Leaf(prefix ++ ByteVector(idxItem) ++ leafPrefix, value)
+                val newPrefix = prefix ++ KeySegment(ByteVector(idxItem)) ++ leafPrefix
+                Leaf(newPrefix, value)
               case NodePtr(nodePtrPrefix, ptr) =>
-                NodePtr(prefix ++ ByteVector(idxItem) ++ nodePtrPrefix, ptr)
+                val newPrefix = prefix ++ KeySegment(ByteVector(idxItem)) ++ nodePtrPrefix
+                NodePtr(newPrefix, ptr)
             }
           case 2 => // 2 or more items are not empty.
             NodePtr(prefix, saveNode(node))
@@ -768,14 +751,14 @@ object RadixTree {
       */
     def update(
         curItem: Item,
-        insPrefix: ByteVector,
+        insPrefix: KeySegment,
         insValue: Blake2b256Hash
     ): F[Option[Item]] = {
 
       def insertNewNodeToChild(
           childPtr: Blake2b256Hash,
-          childPrefix: ByteVector,
-          insPrefix: ByteVector
+          childPrefix: KeySegment,
+          insPrefix: KeySegment
       ) =
         for {
           childNode                      <- loadNode(childPtr)
@@ -807,10 +790,7 @@ object RadixTree {
               val (commPrefix, insPrefixRest, leafPrefixRest) = commonPrefix(insPrefix, leafPrefix)
               val newNode = emptyNode
                 .updated(byteToInt(leafPrefixRest.head), Leaf(leafPrefixRest.tail, leafValue))
-                .updated(
-                  byteToInt(insPrefixRest.head),
-                  Leaf(insPrefixRest.tail, insValue)
-                )
+                .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
               saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
             }
 
@@ -823,10 +803,7 @@ object RadixTree {
               // Create child node, insert existing Ptr and new leaf in this node.
               val newNode = emptyNode
                 .updated(byteToInt(ptrPrefixRest.head), NodePtr(ptrPrefixRest.tail, ptr))
-                .updated(
-                  byteToInt(insPrefixRest.head),
-                  Leaf(insPrefixRest.tail, insValue)
-                )
+                .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
               saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
             }
         }
@@ -840,18 +817,21 @@ object RadixTree {
       * If not found leaf with  delPrefix - return [[None]].
       * @return Updated current item.
       */
-    def delete(curItem: Item, delPrefix: ByteVector): F[Option[Item]] = {
+    def delete(curItem: Item, delPrefix: KeySegment): F[Option[Item]] = {
       def deleteFromChildNode(
           childPtr: Blake2b256Hash,
-          childPrefix: ByteVector,
-          delPrefix: ByteVector
+          childPrefix: KeySegment,
+          delPrefix: KeySegment
       ): F[Option[Item]] =
         for {
           childNode                   <- loadNode(childPtr)
           (delItemIdx, delItemPrefix) = (byteToInt(delPrefix.head), delPrefix.tail)
           childItemOpt                <- delete(childNode(delItemIdx), delItemPrefix)
           newChildNode = childItemOpt.map { childItem =>
-            saveNodeAndCreateItem(childNode.updated(delItemIdx, childItem), childPrefix)
+            saveNodeAndCreateItem(
+              childNode.updated(delItemIdx, childItem),
+              childPrefix
+            )
           }
         } yield newChildNode
 
@@ -884,8 +864,8 @@ object RadixTree {
       def processOneAction(action: HistoryAction, item: Item, itemIdx: Int) =
         for {
           newItem <- action match {
-                      case InsertAction(key, hash) => update(item, ByteVector(key).tail, hash)
-                      case DeleteAction(key)       => delete(item, ByteVector(key).tail)
+                      case InsertAction(key, hash) => update(item, key.tail, hash)
+                      case DeleteAction(key)       => delete(item, key.tail)
                     }
         } yield (itemIdx, newItem)
 
@@ -905,7 +885,7 @@ object RadixTree {
           createdNode <- constructNodeFromItem(item)
           newActions  = trimKeys(actions)
           newNodeOpt  <- makeActions(createdNode, newActions)
-          newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, ByteVector.empty))
+          newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, KeySegment.empty))
         } yield (itemIdx, newItem)
 
       // If we have more than 1 action. We can create more parallel processes.
@@ -988,7 +968,7 @@ object RadixTree {
         (firstSymbol ++ secondSymbol).toUpperCase()
       }
 
-      def constructPrefixStr(prefix: ByteVector): String =
+      def constructPrefixStr(prefix: KeySegment): String =
         if (prefix.isEmpty) "empty" else prefix.toHex.toUpperCase
 
       def constructLeafValueStr(leafValue: Blake2b256Hash) =
@@ -997,7 +977,7 @@ object RadixTree {
       def constructLeafStr(
           indent: String,
           idx: Int,
-          leafPrefix: ByteVector,
+          leafPrefix: KeySegment,
           leafValue: Blake2b256Hash
       ) = {
         val idxStr    = constructIdxStr(idx)
@@ -1009,7 +989,7 @@ object RadixTree {
       def constructNodePtrStr(
           indent: String,
           idx: Int,
-          ptrPrefix: ByteVector
+          ptrPrefix: KeySegment
       ) = {
         val idxStr    = constructIdxStr(idx)
         val prefixStr = constructPrefixStr(ptrPrefix)
@@ -1024,7 +1004,8 @@ object RadixTree {
           itemVectors <- node.zipWithIndex.traverse {
                           case (EmptyItem, _) => Vector[String]().pure
                           case (Leaf(leafPrefix, value), idx) =>
-                            val leafStr = constructLeafStr(indent, idx, leafPrefix, value)
+                            val leafStr =
+                              constructLeafStr(indent, idx, leafPrefix, value)
                             Vector(leafStr).pure
                           case (NodePtr(ptrPrefix, ptr), idx) =>
                             for {

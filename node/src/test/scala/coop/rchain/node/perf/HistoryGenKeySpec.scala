@@ -197,7 +197,8 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
 
       def readAndVerify(h: History[F], tasks: List[Blake2b256Hash]) =
         tasks.traverse { t =>
-          h.read(t.bytes).map(readVal => assert(readVal.contains(t), "Test read not passed"))
+          val tKey = KeySegment(t.bytes)
+          h.read(tKey).map(readVal => assert(readVal.contains(t), "Test read not passed"))
         }
 
       def calcSizeBytesAndNumRecords(h: HistoryType[F]): Option[(Long, Int)] =
@@ -283,11 +284,11 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
             case (initData, i) =>
               for {
                 initHashes        <- Sync[F].delay(genInitTasks.toList)
-                initInsertActions = initHashes.map(x => InsertAction(x.bytes.toArray.toList, x))
+                initInsertActions = initHashes.map(x => InsertAction(KeySegment(x.bytes), x))
 
                 insReadDelHashes = genTasks.toList
-                insertActions    = insReadDelHashes.map(x => InsertAction(x.bytes.toArray.toList, x))
-                deleteActions    = insReadDelHashes.map(x => DeleteAction(x.bytes.toArray.toList))
+                insertActions    = insReadDelHashes.map(x => InsertAction(KeySegment(x.bytes), x))
+                deleteActions    = insReadDelHashes.map(x => DeleteAction(KeySegment(x.bytes)))
                 historyInitW     <- getHistory(v0)
                 historyInit      <- getHistory(v0)
 

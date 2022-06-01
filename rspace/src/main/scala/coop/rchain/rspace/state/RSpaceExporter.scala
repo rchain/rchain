@@ -3,6 +3,7 @@ package coop.rchain.rspace.state
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.history.KeySegment
 import coop.rchain.rspace.history.RadixTree._
 import coop.rchain.state.{TrieExporter, TrieNode}
 import scodec.bits.ByteVector
@@ -43,7 +44,7 @@ object RSpaceExporter {
         assert(prefixSeq.size >= 5, "Invalid path during export.")
         val (sizePrefix: Int, seq) = (prefixSeq.head.bytes.head & 0xff, prefixSeq.tail)
         val prefix128: ByteVector  = seq.head.bytes ++ seq(1).bytes ++ seq(2).bytes ++ seq(3).bytes
-        prefix128.take(sizePrefix.toLong).some
+        KeySegment(prefix128.take(sizePrefix.toLong)).some
       }
 
     def constructNodes(leafKeys: Seq[Blake2b256Hash], nodeKeys: Seq[Blake2b256Hash]) = {
@@ -99,7 +100,9 @@ object RSpaceExporter {
 
         nodesWithoutLast = nodes.dropRight(1)
 
-        lastPath = newLastPrefixOpt.map(constructLastPath(_, rootHash)).getOrElse(Vector())
+        lastPath = newLastPrefixOpt
+          .map(prefix => constructLastPath(prefix.value, rootHash))
+          .getOrElse(Vector())
 
         lastHistoryNode = nodeKeys.lastOption
           .map(constructLastNode(_, lastPath))

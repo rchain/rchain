@@ -81,7 +81,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val dataHash        = Blake2b256Hash.create(dataLeafEncoded)
         (
           (dataHash, Some(dataLeaf)),
-          InsertAction(PREFIX_DATUM +: i.hash.bytes.toSeq.toList, dataHash)
+          InsertAction(KeySegment(PREFIX_DATUM +: i.hash.bytes), dataHash)
         )
       case i: TrieInsertConsume[P, K] =>
         val data              = encodeContinuations(i.continuations)(serializeP, serializeK)
@@ -91,7 +91,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val continuationsHash = Blake2b256Hash.create(continuationsLeafEncoded)
         (
           (continuationsHash, Some(continuationsLeaf)),
-          InsertAction(PREFIX_KONT +: i.hash.bytes.toSeq.toList, continuationsHash)
+          InsertAction(KeySegment(PREFIX_KONT +: i.hash.bytes), continuationsHash)
         )
       case i: TrieInsertJoins[C] =>
         val data             = encodeJoins(i.joins)(serializeC)
@@ -100,7 +100,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val joinsHash        = Blake2b256Hash.create(joinsLeafEncoded)
         (
           (joinsHash, Some(joinsLeaf)),
-          InsertAction(PREFIX_JOINS +: i.hash.bytes.toSeq.toList, joinsHash)
+          InsertAction(KeySegment(PREFIX_JOINS +: i.hash.bytes), joinsHash)
         )
       case i: TrieInsertBinaryProduce =>
         val data            = encodeDatumsBinary(i.data)
@@ -109,7 +109,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val dataHash        = Blake2b256Hash.create(dataLeafEncoded)
         (
           (dataHash, Some(dataLeaf)),
-          InsertAction(PREFIX_DATUM +: i.hash.bytes.toSeq.toList, dataHash)
+          InsertAction(KeySegment(PREFIX_DATUM +: i.hash.bytes), dataHash)
         )
       case i: TrieInsertBinaryConsume =>
         val data              = encodeContinuationsBinary(i.continuations)
@@ -119,7 +119,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val continuationsHash = Blake2b256Hash.create(continuationsLeafEncoded)
         (
           (continuationsHash, Some(continuationsLeaf)),
-          InsertAction(PREFIX_KONT +: i.hash.bytes.toSeq.toList, continuationsHash)
+          InsertAction(KeySegment(PREFIX_KONT +: i.hash.bytes), continuationsHash)
         )
       case i: TrieInsertBinaryJoins =>
         val data             = encodeJoinsBinary(i.joins)
@@ -128,14 +128,14 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         val joinsHash        = Blake2b256Hash.create(joinsLeafEncoded)
         (
           (joinsHash, Some(joinsLeaf)),
-          InsertAction(PREFIX_JOINS +: i.hash.bytes.toSeq.toList, joinsHash)
+          InsertAction(KeySegment(PREFIX_JOINS +: i.hash.bytes), joinsHash)
         )
       case d: TrieDeleteProduce =>
-        ((d.hash, None), DeleteAction(PREFIX_DATUM +: d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(KeySegment(PREFIX_DATUM +: d.hash.bytes)))
       case d: TrieDeleteConsume =>
-        ((d.hash, None), DeleteAction(PREFIX_KONT +: d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(KeySegment(PREFIX_KONT +: d.hash.bytes)))
       case d: TrieDeleteJoins =>
-        ((d.hash, None), DeleteAction(PREFIX_JOINS +: d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(KeySegment(PREFIX_JOINS +: d.hash.bytes)))
     }
   }
 
