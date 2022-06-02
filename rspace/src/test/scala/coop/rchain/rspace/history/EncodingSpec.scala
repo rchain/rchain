@@ -6,9 +6,9 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, _}
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.test.ArbitraryInstances._
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 class EncodingSpec extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 

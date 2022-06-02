@@ -7,10 +7,10 @@ import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.testImplicits._
 import monix.eval.Coeval
 import org.scalacheck.Arbitrary
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.immutable.BitSet
 import scala.reflect.ClassTag

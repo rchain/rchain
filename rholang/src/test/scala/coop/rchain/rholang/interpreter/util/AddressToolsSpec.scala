@@ -1,9 +1,9 @@
 package coop.rchain.rholang.interpreter.util
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import org.scalacheck._
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import coop.rchain.crypto.PublicKey
 import coop.rchain.rholang.interpreter.util.codec.Base58
 import coop.rchain.shared.{Base16, EqualitySpecUtils}

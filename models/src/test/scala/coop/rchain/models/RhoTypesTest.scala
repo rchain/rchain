@@ -9,10 +9,10 @@ import coop.rchain.models.testImplicits._
 import coop.rchain.shared.Serialize
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Shrink}
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import scalapb.GeneratedMessageCompanion
 
 import scala.collection.immutable.BitSet

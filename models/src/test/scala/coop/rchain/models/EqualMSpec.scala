@@ -6,10 +6,10 @@ import coop.rchain.models.testImplicits._
 import coop.rchain.models.testUtils.TestUtils.forAllSimilarA
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Shrink}
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.Function.tupled
 import scala.collection.immutable.BitSet

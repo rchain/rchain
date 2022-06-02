@@ -22,10 +22,10 @@ import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.{Assertion, Outcome}
 import org.scalatest.flatspec.FixtureAnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import java.nio.file.Files
 import scala.collection.immutable.BitSet

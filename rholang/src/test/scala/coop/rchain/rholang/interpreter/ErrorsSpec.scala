@@ -3,10 +3,10 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, UnrecognizedInterpreterError}
 import org.scalacheck.ScalacheckShapeless._
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 class ErrorsSpec extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 

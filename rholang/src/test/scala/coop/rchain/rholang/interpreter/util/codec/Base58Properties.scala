@@ -3,9 +3,9 @@ package coop.rchain.rholang.interpreter.util.codec
 import java.math.BigInteger
 
 import org.scalacheck.{Gen, Shrink}
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 class Base58Properties extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   implicit val propertyCheckConfiguration =

@@ -8,10 +8,10 @@ import coop.rchain.shared.Log
 import coop.rchain.store.{KeyValueStoreSut, LmdbStoreManager}
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 import scala.reflect.io.{Directory, Path}
 import scala.util.Random

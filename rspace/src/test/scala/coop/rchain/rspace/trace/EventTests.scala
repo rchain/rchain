@@ -8,9 +8,9 @@ import coop.rchain.rspace.serializers.ScodecSerialize.{RichAttempt, _}
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.util
 import coop.rchain.shared.Serialize
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import scodec.codecs.{ignore => cignore, _}
 
 class EventTests extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {

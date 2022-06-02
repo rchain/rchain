@@ -10,9 +10,9 @@ import coop.rchain.rholang.interpreter.errors.SubstituteError
 import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
 import org.scalacheck.Gen
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.immutable.BitSet
 

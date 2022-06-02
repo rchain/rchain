@@ -5,9 +5,9 @@ import cats.syntax.all._
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import scodec.codecs.{int64, utf8}
 
 class KeyValueStoreSut[F[_]: Sync: KeyValueStoreManager] {

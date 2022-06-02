@@ -18,9 +18,9 @@ import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Test.Parameters
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.concurrent.duration._
 

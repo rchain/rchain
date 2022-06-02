@@ -25,11 +25,11 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
-import org.scalatestplus.scalacheck.Checkers
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import org.scalatest.{AppendedClues, Assertion}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.Checkers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._

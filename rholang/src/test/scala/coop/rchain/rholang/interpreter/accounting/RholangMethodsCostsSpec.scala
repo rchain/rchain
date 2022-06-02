@@ -16,10 +16,10 @@ import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks._
 import org.scalatest.{Assertion, BeforeAndAfterAll}
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks._
 
 import java.nio.file.{Files, Path}
 import scala.collection.immutable.BitSet

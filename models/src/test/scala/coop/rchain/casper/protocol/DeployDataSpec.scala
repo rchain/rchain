@@ -2,9 +2,9 @@ package coop.rchain.casper.protocol
 
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 class DeployDataSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   implicit val ddArb: Arbitrary[DeployData] = Arbitrary(
