@@ -8,8 +8,10 @@ import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class PeerTableSpec extends FlatSpec with Matchers with Inside {
+class PeerTableSpec extends AnyFlatSpec with Matchers with Inside {
   val addressWidth = 8
   val endpoint     = Endpoint("", 0, 0)
   val home         = PeerNode(NodeIdentifier(randBytes(addressWidth)), endpoint)

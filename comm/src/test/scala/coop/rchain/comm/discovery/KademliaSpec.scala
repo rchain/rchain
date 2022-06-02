@@ -7,9 +7,11 @@ import cats.Id
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 
-import org.scalatest._
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
+class KademliaSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach {
   val local = createPeer("00000001")
   val peer0 = createPeer("00000010")
   val peer1 = createPeer("00001000")

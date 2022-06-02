@@ -10,13 +10,19 @@ import coop.rchain.shared.syntax.{sharedSyntaxKeyValueStore, sharedSyntaxKeyValu
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueTypedStore}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers, OptionValues}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.OptionValues
 import scodec.bits.ByteVector
 
 import java.nio.ByteBuffer
 import scala.concurrent.duration._
 
-class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
+class RadixTreeSpec
+    extends AnyFlatSpec
+    with Matchers
+    with OptionValues
+    with InMemoryHistoryTestBase {
   "appending leaf in empty tree" should "create tree with one node" in withImplAndStore {
     (impl, _) =>
       val dataSet = radixKV("1122334455", "01")

@@ -10,12 +10,14 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.reactive.Observable
-import org.scalatest._
+import org.scalatest.Inside
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.concurrent.TrieMap
 import scala.util.Random
 
-class StreamHandlerSpec extends FunSpec with Matchers with Inside {
+class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
 
   implicit val log: Log.NOPLog[Task] = new Log.NOPLog[Task]()
 

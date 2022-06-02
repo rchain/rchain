@@ -24,11 +24,13 @@ import coop.rchain.rholang.interpreter.compiler.normalizer.{
 }
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import monix.eval.Coeval
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.BitSet
 
-class BoolPrinterSpec extends FlatSpec with Matchers {
+class BoolPrinterSpec extends AnyFlatSpec with Matchers {
 
   "GBool(true)" should "Print as \"" + true + "\"" in {
     val btrue = new BoolTrue()
@@ -41,7 +43,7 @@ class BoolPrinterSpec extends FlatSpec with Matchers {
   }
 }
 
-class GroundPrinterSpec extends FlatSpec with Matchers {
+class GroundPrinterSpec extends AnyFlatSpec with Matchers {
 
   "GroundInt" should "Print as \"" + 7 + "\"" in {
     val gi             = new GroundInt("7")
@@ -62,7 +64,7 @@ class GroundPrinterSpec extends FlatSpec with Matchers {
   }
 }
 
-class CollectPrinterSpec extends FlatSpec with Matchers {
+class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 
   val inputs = ProcVisitInputs(
     Par(),
@@ -152,7 +154,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
   }
 }
 
-class ProcPrinterSpec extends FlatSpec with Matchers {
+class ProcPrinterSpec extends AnyFlatSpec with Matchers {
   val inputs                                   = ProcVisitInputs(Par(), BoundMapChain.empty, FreeMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
@@ -985,7 +987,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   )
 }
 
-class IncrementTester extends FlatSpec with Matchers {
+class IncrementTester extends AnyFlatSpec with Matchers {
 
   val printer = PrettyPrinter()
 
@@ -1014,7 +1016,7 @@ class IncrementTester extends FlatSpec with Matchers {
   }
 }
 
-class NamePrinterSpec extends FlatSpec with Matchers {
+class NamePrinterSpec extends AnyFlatSpec with Matchers {
 
   val inputs                                   = NameVisitInputs(BoundMapChain.empty, FreeMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty

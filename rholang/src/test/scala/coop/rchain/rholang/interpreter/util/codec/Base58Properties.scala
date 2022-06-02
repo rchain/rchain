@@ -4,9 +4,10 @@ import java.math.BigInteger
 
 import org.scalacheck.{Gen, Shrink}
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import org.scalatest.{Matchers, PropSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.propspec.AnyPropSpec
 
-class Base58Properties extends PropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
+class Base58Properties extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   implicit val propertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 10000, sizeRange = 200)
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny

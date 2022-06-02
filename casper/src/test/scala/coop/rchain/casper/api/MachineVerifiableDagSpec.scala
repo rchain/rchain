@@ -6,9 +6,10 @@ import coop.rchain.models.BlockHash.BlockHash
 
 import coop.rchain.models.syntax._
 import cats._, cats.syntax.all._
-import org.scalatest.{FunSpec, Matchers}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class MachineVerifiableDagSpec extends FunSpec with Matchers {
+class MachineVerifiableDagSpec extends AnyFunSpec with Matchers {
 
   import VerifiableEdge._
 

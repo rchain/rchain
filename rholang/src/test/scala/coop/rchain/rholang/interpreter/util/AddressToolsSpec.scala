@@ -2,12 +2,13 @@ package coop.rchain.rholang.interpreter.util
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import org.scalacheck._
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import org.scalatest.{Matchers, PropSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.propspec.AnyPropSpec
 import coop.rchain.crypto.PublicKey
 import coop.rchain.rholang.interpreter.util.codec.Base58
 import coop.rchain.shared.{Base16, EqualitySpecUtils}
 
-class AddressToolsSpec extends PropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
+class AddressToolsSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   implicit val propertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 10000, sizeRange = 200)
 

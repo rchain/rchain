@@ -3,10 +3,11 @@ package coop.rchain.casper.engine
 import cats.syntax.all._
 import coop.rchain.casper.engine.LfsBlockRequester.{ReceiveInfo, ST}
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class LfsBlockRequesterStateSpec
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with ScalaCheckDrivenPropertyChecks {
 

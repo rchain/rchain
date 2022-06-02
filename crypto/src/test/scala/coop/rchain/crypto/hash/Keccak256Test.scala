@@ -1,9 +1,11 @@
 package coop.rchain.crypto.hash
 
 import coop.rchain.shared.Base16
-import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
+import org.scalatest.{AppendedClues, BeforeAndAfterEach}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class Keccak256Test extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
+class Keccak256Test extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
   describe("Keccak256 hashing algorithm") {
     it("encodes empty") {
       val result = Base16.encode(Keccak256.hash("".getBytes))

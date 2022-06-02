@@ -2,9 +2,15 @@ package coop.rchain.node.mergeablity
 
 import coop.rchain.node.mergeablity.OperationOn0Ch._
 import coop.rchain.node.mergeablity.RhoState.emptyState
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
-class BaseMergeability extends FlatSpec with Matchers with Inspectors with BasicMergeabilityRules {
+class BaseMergeability
+    extends AnyFlatSpec
+    with Matchers
+    with Inspectors
+    with BasicMergeabilityRules {
   it should "!X !X" in MergeableCase(S0)(S0)(Nil)(S0.rstate ++ S0.rstate)
   it should "!X !4" in MergeableCase(S0)(F1)(S1)(S0.rstate)
   it should "!X (!4)" in MergeableCase(S0)(S0, F_)(Nil)(S0.rstate)

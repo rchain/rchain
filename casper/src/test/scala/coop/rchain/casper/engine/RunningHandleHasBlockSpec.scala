@@ -27,11 +27,13 @@ import coop.rchain.casper.engine.NodeRunning.{
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.metrics.Metrics
 import monix.eval.Task
-import org.scalatest._
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 import monix.execution.Scheduler.Implicits.global
 import cats.syntax.all._
 
-class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Matchers {
+class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   val local: PeerNode = peerNode("src", 40400)
 

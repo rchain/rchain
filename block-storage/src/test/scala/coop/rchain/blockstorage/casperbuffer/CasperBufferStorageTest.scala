@@ -7,12 +7,13 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log.NOPLog
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
-import org.scalatest.{FlatSpecLike, Matchers}
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.shared.syntax._
 import coop.rchain.models.blockImplicits._
 
-class CasperBufferStorageTest extends FlatSpecLike with Matchers {
+class CasperBufferStorageTest extends AnyFlatSpecLike with Matchers {
 
   implicit val log     = new NOPLog[Task]()
   implicit val metrics = new Metrics.MetricsNOP[Task]

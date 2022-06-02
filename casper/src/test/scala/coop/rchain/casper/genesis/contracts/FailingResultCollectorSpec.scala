@@ -7,11 +7,13 @@ import coop.rchain.casper.helper.{
 }
 import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
-import org.scalatest.{AppendedClues, FlatSpec, Matchers}
+import org.scalatest.AppendedClues
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
-class FailingResultCollectorSpec extends FlatSpec with AppendedClues with Matchers {
+class FailingResultCollectorSpec extends AnyFlatSpec with AppendedClues with Matchers {
   def clue(clueMsg: String, attempt: Long) = s"$clueMsg (attempt $attempt)"
   def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
     test match {

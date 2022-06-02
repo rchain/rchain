@@ -6,11 +6,11 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
 import org.scalacheck.Prop
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.Checkers
 import scodec.DecodeResult
 
-class Blake2b256HashTests extends FlatSpec with Checkers {
+class Blake2b256HashTests extends AnyFlatSpec with Checkers {
 
   "The bytes of a Blake2b256 hash" should "be the same as if it was created directly" in {
 

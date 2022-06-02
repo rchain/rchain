@@ -3,9 +3,10 @@ package coop.rchain.models
 import coop.rchain.models.Expr.ExprInstance.{EMapBody, GInt, GString}
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class ParMapSpec extends FlatSpec with Matchers {
+class ParMapSpec extends AnyFlatSpec with Matchers {
 
   "ParMap" should "serialize like EMap" in {
     val map = ParMap(

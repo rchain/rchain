@@ -25,12 +25,14 @@ import coop.rchain.p2p.EffectsTestInstances.{
 }
 import coop.rchain.shared._
 import monix.eval.Task
-import org.scalatest._
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 import monix.execution.Scheduler.Implicits.global
 
 import scala.concurrent.duration._
 
-class BlockRetrieverRequestAllSpec extends FunSpec with BeforeAndAfterEach with Matchers {
+class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
 

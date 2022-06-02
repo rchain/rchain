@@ -7,9 +7,9 @@ import coop.rchain.node.revvaultexport.mainnet1.StateBalanceMain
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class VaultBalanceGetterTest extends FlatSpec {
+class VaultBalanceGetterTest extends AnyFlatSpec {
   val genesis               = buildGenesis()
   val genesisInitialBalance = 9000000
   "Get balance from VaultPar" should "return balance" in {

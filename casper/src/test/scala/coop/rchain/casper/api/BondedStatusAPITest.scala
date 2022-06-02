@@ -15,10 +15,12 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{EitherValues, FlatSpec, Matchers}
+import org.scalatest.EitherValues
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class BondedStatusAPITest
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with EitherValues
     with BlockGenerator
@@ -39,7 +41,7 @@ class BondedStatusAPITest
       blockApi <- createBlockApi(node)
       res <- blockApi
               .bondStatus(ByteString.copyFrom(publicKey.bytes), block.some)
-              .map(_.right.value)
+              .map(_.value)
     } yield res
 
   "bondStatus" should "return true for bonded validator" in effectTest {

@@ -13,11 +13,13 @@ import coop.rchain.models.testImplicits._
 import coop.rchain.models.testUtils.TestUtils.sort
 import monix.eval.Coeval
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.BitSet
 
-class SortedParHashSetSpec extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
+class SortedParHashSetSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   val pars: Seq[Par] = {
     val parGround =

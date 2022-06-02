@@ -1,12 +1,13 @@
 package coop.rchain.rholang.interpreter
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import scala.collection.mutable
 
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.Par
 
-class EnvSpec extends FlatSpec with Matchers {
+class EnvSpec extends AnyFlatSpec with Matchers {
 
   val source0: Par = GPrivateBuilder()
   val source1: Par = GPrivateBuilder()

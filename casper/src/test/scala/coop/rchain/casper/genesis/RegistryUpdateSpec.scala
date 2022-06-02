@@ -11,11 +11,13 @@ import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
 import scala.io.Source
 
-class RegistryUpdateSpec extends FlatSpec with Matchers with Inspectors {
+class RegistryUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 

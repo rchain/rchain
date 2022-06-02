@@ -14,6 +14,8 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck._
 import scodec.bits.ByteVector
 
@@ -21,7 +23,7 @@ import scala.collection.SortedSet
 import scala.concurrent.duration._
 import scala.util.Random
 
-trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
+trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSize = 0, sizeRange = 10, minSuccessful = 20)

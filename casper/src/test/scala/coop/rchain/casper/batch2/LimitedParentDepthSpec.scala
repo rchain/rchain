@@ -8,9 +8,10 @@ import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class LimitedParentDepthSpec extends FlatSpec with Matchers {
+class LimitedParentDepthSpec extends AnyFlatSpec with Matchers {
   implicit val scheduler = Scheduler.fixedPool("limited-parent-depth-scheduler", 2)
   implicit val timeEff   = new LogicalTime[Task]
 

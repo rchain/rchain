@@ -17,6 +17,8 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 import java.nio.file.{Files, Path}
@@ -89,7 +91,7 @@ class InMemHistoryRepositoryGenerativeSpec
 }
 
 abstract class HistoryRepositoryGenerativeDefinition
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with OptionValues
     with ScalaCheckDrivenPropertyChecks {

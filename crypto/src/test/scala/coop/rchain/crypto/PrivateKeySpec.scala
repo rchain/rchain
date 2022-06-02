@@ -1,9 +1,9 @@
 package coop.rchain.crypto
 
 import coop.rchain.shared.EqualitySpecUtils
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class PrivateKeySpec extends FlatSpec {
+class PrivateKeySpec extends AnyFlatSpec {
 
   "PrivateKey" must "define value-based equality and hashCode" in {
     EqualitySpecUtils.checkValueBasedEquality(

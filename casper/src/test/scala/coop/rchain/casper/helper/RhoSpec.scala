@@ -22,7 +22,9 @@ import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{AppendedClues, FlatSpec, Matchers}
+import org.scalatest.AppendedClues
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
@@ -31,7 +33,7 @@ class RhoSpec(
     extraNonGenesisDeploys: Seq[Signed[DeployData]],
     executionTimeout: FiniteDuration,
     genesisParameters: GenesisParameters = GenesisBuilder.buildGenesisParameters()
-) extends FlatSpec
+) extends AnyFlatSpec
     with AppendedClues
     with Matchers {
 

@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.interpreter.ParBuilderUtil.assertCompiledEqual
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
-class SequentialConsumeSpec extends WordSpec with Matchers {
+class SequentialConsumeSpec extends AnyWordSpec with Matchers {
 
   "The normalizer" should {
 

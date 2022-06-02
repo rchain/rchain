@@ -3,7 +3,8 @@ package coop.rchain.crypto.hash
 import coop.rchain.shared.Stopwatch
 import org.scalacheck.{Arbitrary, Prop}
 import coop.rchain.shared.Base16
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.Configuration
 import org.scalatestplus.scalacheck.Checkers
 
@@ -19,7 +20,7 @@ import scala.concurrent.duration.FiniteDuration
   * For the rollover tests, we use the block format which is 112 bytes of path
   * info, followed by 16 bytes of length info in little endian format.
   */
-class Blake2b512RandomTest extends FlatSpec with Matchers with Checkers with Configuration {
+class Blake2b512RandomTest extends AnyFlatSpec with Matchers with Checkers with Configuration {
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 1000)
 

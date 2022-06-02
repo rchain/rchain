@@ -15,10 +15,12 @@ import coop.rchain.models.syntax._
 import coop.rchain.shared.scalatestcontrib.effectTest
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{EitherValues, FlatSpec, Matchers}
+import org.scalatest.EitherValues
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class ExploratoryDeployAPITest
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with EitherValues
     with BlockGenerator
@@ -68,7 +70,7 @@ class ExploratoryDeployAPITest
                      "new return in { for (@data <- @\"store\") {return!(data)}}",
                      b2.blockHash
                    )
-          (par, b) = result.right.value
+          (par, b) = result.value
           _        = b.blockHash shouldBe PrettyPrinter.buildStringNoLimit(b2.blockHash)
           _ = par match {
             case Seq(Par(_, _, _, Seq(expr), _, _, _, _, _, _)) =>

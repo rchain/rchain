@@ -1,8 +1,10 @@
 package coop.rchain.crypto.signatures
 import coop.rchain.shared.Base16
-import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
+import org.scalatest.{AppendedClues, BeforeAndAfterEach}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class Ed25519Test extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
+class Ed25519Test extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
   describe("Ed25519") {
 
     it("computes public key from secret key") {

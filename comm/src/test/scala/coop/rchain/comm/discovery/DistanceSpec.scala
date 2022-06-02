@@ -5,11 +5,12 @@ import cats.{catsInstancesForId => _, _}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 import coop.rchain.shared.Base16
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.util.Random
 
-class DistanceSpec extends FlatSpec with Matchers {
+class DistanceSpec extends AnyFlatSpec with Matchers {
   private def randBytes(nbytes: Int): Array[Byte] = {
     val arr = Array.fill(nbytes)(0.toByte)
     Random.nextBytes(arr)

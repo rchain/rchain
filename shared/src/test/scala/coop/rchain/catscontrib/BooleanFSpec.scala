@@ -2,9 +2,10 @@ package coop.rchain.catscontrib
 
 import cats._
 import cats.syntax.all._
-import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class BooleanFSpec extends FunSpec with Matchers with ToBooleanF {
+class BooleanFSpec extends AnyFunSpec with Matchers with ToBooleanF {
 
   describe("boolean OR") {
     it("FALSE || FALSE = FALSE") {

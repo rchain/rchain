@@ -9,8 +9,10 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class ConnectionsSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
+class ConnectionsSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   implicit val logEff    = new Log.NOPLog[Id]
   implicit val timeEff   = new LogicalTime[Id]

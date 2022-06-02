@@ -2,10 +2,11 @@ package coop.rchain.casper.engine
 
 import coop.rchain.casper.engine.LfsTupleSpaceRequester.ST
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class LfsStateRequesterStateSpec
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with ScalaCheckDrivenPropertyChecks {
 

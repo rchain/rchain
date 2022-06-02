@@ -1,11 +1,12 @@
 package coop.rchain.rspace.concurrent
 
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.Metrics
 
-class TwoStepLockTest extends FlatSpec with Matchers {
+class TwoStepLockTest extends AnyFlatSpec with Matchers {
 
   import monix.execution.Scheduler
   implicit val s       = Scheduler.fixedPool("test-scheduler", 8)

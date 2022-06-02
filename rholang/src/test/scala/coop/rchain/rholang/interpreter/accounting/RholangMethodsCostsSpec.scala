@@ -17,14 +17,16 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks._
-import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
+import org.scalatest.{Assertion, BeforeAndAfterAll}
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 
 import java.nio.file.{Files, Path}
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
 
 class RholangMethodsCostsSpec
-    extends WordSpec
+    extends AnyWordSpec
     with TripleEqualsSupport
     with Matchers
     with BeforeAndAfterAll {

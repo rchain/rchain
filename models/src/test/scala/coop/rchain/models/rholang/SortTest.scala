@@ -12,7 +12,8 @@ import coop.rchain.models.testUtils.TestUtils.forAllSimilarA
 import coop.rchain.models.{New, _}
 import monix.eval.Coeval
 import org.scalacheck.Arbitrary
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.immutable.BitSet
@@ -21,7 +22,7 @@ object SortTest {
   def sort[T: Sortable](t: T) = Sortable[T].sortMatch[Coeval](t).value
 }
 
-class ScoredTermSpec extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
+class ScoredTermSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   behavior of "ScoredTerm"
 
@@ -191,7 +192,7 @@ class ScoredTermSpec extends FlatSpec with ScalaCheckPropertyChecks with Matcher
   }
 }
 
-class VarSortMatcherSpec extends FlatSpec with Matchers {
+class VarSortMatcherSpec extends AnyFlatSpec with Matchers {
   "Different kinds of variables" should "bin separately" in {
     val parVars = Par(
       exprs = List(
@@ -224,7 +225,7 @@ class VarSortMatcherSpec extends FlatSpec with Matchers {
   }
 }
 
-class ParSortMatcherSpec extends FlatSpec with Matchers {
+class ParSortMatcherSpec extends AnyFlatSpec with Matchers {
 
   behavior of "Par"
 

@@ -6,7 +6,8 @@ import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.shared.Log
 import monix.eval.Task
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 import coop.rchain.rholang.syntax._
 
 import scala.concurrent.duration._
@@ -14,7 +15,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, ReduceError}
 import monix.execution.Scheduler.Implicits.global
 
-class ShortCircuitBooleanSpec extends WordSpec with Matchers {
+class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
   implicit val logF: Log[Task]            = Log.log[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()

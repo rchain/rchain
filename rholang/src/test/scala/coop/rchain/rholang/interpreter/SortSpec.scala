@@ -3,13 +3,14 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter.Sortable
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import coop.rchain.models.rholang.sorter.ScoredTerm
 import monix.eval.Coeval
 
 import scala.collection.immutable.BitSet
 
-class SortSpec extends FlatSpec with Matchers {
+class SortSpec extends AnyFlatSpec with Matchers {
 
   "GroundSortMatcher" should "discern sets with and without remainder" in {
     assertOrder[Expr](

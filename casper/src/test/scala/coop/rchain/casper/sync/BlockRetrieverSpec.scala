@@ -7,7 +7,9 @@ import coop.rchain.casper.engine.Setup.peerNode
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.protocol.{CommUtil, HasBlockRequest, PacketTypeTag}
-import org.scalatest.{BeforeAndAfterEach, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 import coop.rchain.catscontrib.TaskContrib._
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.casper.protocol._
@@ -24,7 +26,7 @@ import coop.rchain.p2p.EffectsTestInstances.{createRPConfAsk, LogStub, Transport
 import coop.rchain.shared.Cell
 import monix.eval.Task
 
-class BlockRetrieverSpec extends FunSpec with BeforeAndAfterEach with Matchers {
+class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
 

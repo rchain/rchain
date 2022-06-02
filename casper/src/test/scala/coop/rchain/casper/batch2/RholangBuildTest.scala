@@ -12,9 +12,10 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Base16, RChainScheduler}
 import coop.rchain.shared.scalatestcontrib._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class RholangBuildTest extends FlatSpec with Matchers {
+class RholangBuildTest extends AnyFlatSpec with Matchers {
 
   implicit val scheduler = RChainScheduler.interpreterScheduler
   val genesis            = buildGenesis()

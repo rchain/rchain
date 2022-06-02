@@ -16,7 +16,9 @@ import coop.rchain.shared.{Log, Serialize}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks
-import org.scalatest.{Assertions, FlatSpec, Matchers}
+import org.scalatest.Assertions
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
@@ -59,7 +61,7 @@ object StackSafetySpec extends Assertions {
 
 }
 
-class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Matchers {
+class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Matchers {
   import StackSafetySpec._
 
   val mapSize     = 1024L * 1024L * 1024L
@@ -216,7 +218,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
 
 }
 
-class AstTypeclassesStackSafetySpec extends FlatSpec with Matchers {
+class AstTypeclassesStackSafetySpec extends AnyFlatSpec with Matchers {
 
   behavior of "AST typeclasses"
 

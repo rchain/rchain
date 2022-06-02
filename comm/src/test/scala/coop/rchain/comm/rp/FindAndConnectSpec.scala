@@ -6,6 +6,8 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.metrics.Metrics
 import scala.concurrent.duration._
 import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.enablers.Containing
 import cats.{catsInstancesForId => _, _}, cats.data._, cats.syntax.all._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
@@ -14,7 +16,11 @@ import coop.rchain.shared._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.rp.ProtocolHelper._
 
-class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
+class FindAndConnectSpec
+    extends AnyFunSpec
+    with Matchers
+    with BeforeAndAfterEach
+    with AppendedClues {
 
   import ScalaTestCats._
 

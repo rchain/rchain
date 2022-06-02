@@ -1,6 +1,7 @@
 package coop.rchain.rholang
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
@@ -13,7 +14,7 @@ import monix.execution.Scheduler.Implicits.global
 
 import scala.concurrent.duration._
 
-class PeekSpec extends FlatSpec with Matchers {
+class PeekSpec extends AnyFlatSpec with Matchers {
 
   import Resources._
   import InterpreterUtil._

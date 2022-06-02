@@ -1,8 +1,9 @@
 package coop.rchain.shared
 import coop.rchain.shared.Resources.withResource
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class ResourcesSpec extends FlatSpec with Matchers {
+class ResourcesSpec extends AnyFlatSpec with Matchers {
 
   val resource = new AutoCloseable {
     override def close(): Unit = throw new Exception("close")

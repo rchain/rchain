@@ -2,9 +2,10 @@ package coop.rchain.rspace.merging
 
 import coop.rchain.rspace.merger.EventLogMergingLogic._
 import coop.rchain.shared.Stopwatch
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class EventsMergingLogicSpec extends FlatSpec with Matchers {
+class EventsMergingLogicSpec extends AnyFlatSpec with Matchers {
   // some random conflict maps and rejection options, computed manually
   "rejection options" should "be computed correctly" in {
     computeRejectionOptions(

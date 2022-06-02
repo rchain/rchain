@@ -6,7 +6,8 @@ import coop.rchain.shared.syntax._
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import scodec.codecs.{int64, utf8}
 
 class KeyValueStoreSut[F[_]: Sync: KeyValueStoreManager] {
@@ -46,7 +47,10 @@ class KeyValueStoreSut[F[_]: Sync: KeyValueStoreManager] {
     } yield result.toMap
 }
 
-class InMemoryKeyValueStoreSpec extends FlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
+class InMemoryKeyValueStoreSpec
+    extends AnyFlatSpec
+    with Matchers
+    with ScalaCheckDrivenPropertyChecks {
   implicit val scheduler = monix.execution.Scheduler.global
 
   def genData: Gen[Map[Long, String]] = {

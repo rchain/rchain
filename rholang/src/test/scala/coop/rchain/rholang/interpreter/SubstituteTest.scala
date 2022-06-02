@@ -11,11 +11,12 @@ import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
 import org.scalacheck.Gen
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.BitSet
 
-class SubSpec extends FlatSpec with Matchers with ScalaCheckPropertyChecks {
+class SubSpec extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
 
   behavior of "Substitute"
 
@@ -46,7 +47,7 @@ class SubSpec extends FlatSpec with Matchers with ScalaCheckPropertyChecks {
   }
 }
 
-class VarSubSpec extends FlatSpec with Matchers {
+class VarSubSpec extends AnyFlatSpec with Matchers {
   implicit val depth: Int = 0
   "FreeVar" should "throw an error" in {
     val source: Par            = GPrivateBuilder()
@@ -76,7 +77,7 @@ class VarSubSpec extends FlatSpec with Matchers {
   }
 }
 
-class SendSubSpec extends FlatSpec with Matchers {
+class SendSubSpec extends AnyFlatSpec with Matchers {
   implicit val depth: Int = 0
   "Send" should "leave variables not in evironment alone." in {
 
@@ -163,7 +164,7 @@ class SendSubSpec extends FlatSpec with Matchers {
   }
 }
 
-class NewSubSpec extends FlatSpec with Matchers {
+class NewSubSpec extends AnyFlatSpec with Matchers {
   implicit val depth: Int = 0
   "New" should "only substitute body of expression" in {
     val source: Par  = GPrivateBuilder()
@@ -219,7 +220,7 @@ class NewSubSpec extends FlatSpec with Matchers {
   }
 }
 
-class EvalSubSpec extends FlatSpec with Matchers {
+class EvalSubSpec extends AnyFlatSpec with Matchers {
   implicit val depth: Int = 0
   "Eval" should "remove Eval/Quote pairs." in {
     implicit val env: Env[Par] = Env.makeEnv(GPrivateBuilder("one"), GPrivateBuilder("zero"))
@@ -231,7 +232,7 @@ class EvalSubSpec extends FlatSpec with Matchers {
   }
 }
 
-class BundleSubSpec extends FlatSpec with Matchers {
+class BundleSubSpec extends AnyFlatSpec with Matchers {
   implicit val depth: Int = 0
   "Bundle" should "substitute within the body of the bundle." in {
     val source: Par  = GPrivateBuilder()
@@ -279,7 +280,7 @@ class BundleSubSpec extends FlatSpec with Matchers {
   }
 }
 
-class VarRefSubSpec extends FlatSpec with Matchers {
+class VarRefSubSpec extends AnyFlatSpec with Matchers {
   implicit val depth: Int = 1
   "VarRef" should "be replaced at correct depth" in {
     val source: Par         = GPrivateBuilder()
@@ -326,7 +327,7 @@ class VarRefSubSpec extends FlatSpec with Matchers {
   }
 }
 
-class OpSubSpec extends FlatSpec with Matchers {
+class OpSubSpec extends AnyFlatSpec with Matchers {
   implicit val depth: Int = 0
   "EPlusPlus" should "be substituted correctly" in {
     val source: Par            = Send(EVar(BoundVar(0)), List(Par()), false, BitSet(0))

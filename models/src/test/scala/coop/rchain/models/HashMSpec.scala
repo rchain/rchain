@@ -8,13 +8,15 @@ import coop.rchain.models.testImplicits._
 import monix.eval.Coeval
 import org.scalacheck.Arbitrary
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.BitSet
 import scala.reflect.ClassTag
 import scala.runtime.ScalaRunTime
 
-class HashMSpec extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
+class HashMSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(sizeRange = 100, minSuccessful = 50)

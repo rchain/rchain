@@ -4,11 +4,12 @@ import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.{Par, ReceiveBind, Var}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import monix.eval.Coeval
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{FreeMap, ReceiveBindsSortMatcher, VarSort}
 
-class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
+class ReceiveSortMatcherSpec extends AnyFlatSpec with Matchers {
   val emptyMap = FreeMap.empty[VarSort]
   "Binds" should "Presort based on their channel and then pattern" in {
     val binds: List[(List[Par], Option[Var], Par, FreeMap[VarSort])] =

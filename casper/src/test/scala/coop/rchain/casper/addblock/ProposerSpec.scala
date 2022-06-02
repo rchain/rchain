@@ -16,9 +16,10 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
+class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture {
 
   /** declarations of input functions for proposer */
   def getCasperSnapshotF[F[_]: Applicative]: F[CasperSnapshot] =

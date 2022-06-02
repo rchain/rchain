@@ -5,9 +5,10 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.errors.LexerError
 import monix.eval.Coeval
 import org.scalatest.EitherValues._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class LexerTest extends FlatSpec with Matchers {
+class LexerTest extends AnyFlatSpec with Matchers {
 
   def attemptMkTerm(input: String): Either[Throwable, Par] =
     Compiler[Coeval].sourceToADT(input).runAttempt()

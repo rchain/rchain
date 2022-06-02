@@ -1,9 +1,15 @@
 package coop.rchain.node.mergeablity
 
 import coop.rchain.node.mergeablity.OperationOn0Ch._
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
-class JoinMergeability extends FlatSpec with Matchers with Inspectors with BasicMergeabilityRules {
+class JoinMergeability
+    extends AnyFlatSpec
+    with Matchers
+    with Inspectors
+    with BasicMergeabilityRules {
   it should "J S S" in ConflictingCase(S0)(S1)(J_)(J_.rstate ++ S0.rstate)(
     J_.rstate ++ S1.rstate
   )

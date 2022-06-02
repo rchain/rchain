@@ -19,7 +19,9 @@ import coop.rchain.state.TrieNode
 import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers, OptionValues}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.OptionValues
 import scodec.bits.ByteVector
 
 import java.nio.ByteBuffer
@@ -28,7 +30,7 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 class HistoryRepositorySpec
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with OptionValues
     with InMemoryHistoryRepositoryTestBase {

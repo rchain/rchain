@@ -7,10 +7,11 @@ import coop.rchain.rholang.ast.rholang_mercury.PrettyPrinter
 import monix.eval.Coeval
 import org.scalacheck.Arbitrary
 import org.scalacheck.Test.Parameters
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-class ProcGenTest extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
+class ProcGenTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
   implicit val procArbitrary = Arbitrary(
     ProcGen.topLevelGen(5).map(PrettyPrinted[Proc](_, PrettyPrinter.print))

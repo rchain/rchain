@@ -9,10 +9,12 @@ import coop.rchain.models.blockImplicits._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpecLike
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 trait BlockDagStorageTest
-    extends FlatSpecLike
+    extends AnyFlatSpecLike
     with Matchers
     with OptionValues
     with EitherValues

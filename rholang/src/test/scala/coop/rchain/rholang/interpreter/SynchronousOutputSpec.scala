@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.interpreter.ParBuilderUtil.assertCompiledEqual
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class SynchronousOutputSpec extends FlatSpec with Matchers {
+class SynchronousOutputSpec extends AnyFlatSpec with Matchers {
 
   "';'" should "have a higher precedence than '|' 2" in {
     val s = "@3!?(3). | @1!?(1) ; @2!?(2). "

@@ -14,11 +14,12 @@ import coop.rchain.shared.{Log, Time}
 import fs2.Stream
 import fs2.concurrent.Queue
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
-class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2StreamMatchers {
+class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
 
   def mkHash(s: String) = ByteString.copyFromUtf8(s)
 

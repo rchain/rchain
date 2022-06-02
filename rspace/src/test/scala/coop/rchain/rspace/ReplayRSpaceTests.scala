@@ -22,6 +22,8 @@ import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 import org.scalacheck._
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck._
 
 import scala.collection.SortedSet
@@ -1224,7 +1226,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with OptionValues
     with ScalaCheckPropertyChecks {

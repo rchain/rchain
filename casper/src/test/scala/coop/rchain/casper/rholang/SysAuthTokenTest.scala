@@ -1,8 +1,9 @@
 package coop.rchain.casper.rholang
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class SysAuthTokenTest extends FlatSpec with Matchers {
+class SysAuthTokenTest extends AnyFlatSpec with Matchers {
   "SysAuthToken" should "be accessible from "
 
 }

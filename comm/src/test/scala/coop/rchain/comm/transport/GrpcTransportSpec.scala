@@ -11,11 +11,13 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 import org.scalatest._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.collection.mutable
 import scala.util.Random
 
-class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
+class GrpcTransportSpec extends AnyWordSpecLike with Matchers with Inside {
 
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
   implicit val scheduler: Scheduler   = Scheduler.Implicits.global

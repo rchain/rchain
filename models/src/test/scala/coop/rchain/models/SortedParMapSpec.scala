@@ -14,9 +14,11 @@ import coop.rchain.models.testImplicits._
 import coop.rchain.models.testUtils.TestUtils.sort
 import monix.eval.Coeval
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class SortedParMapSpec extends FlatSpec with ScalaCheckPropertyChecks with Matchers {
+class SortedParMapSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   private[this] def toKVpair(pair: (Par, Par)): KeyValuePair = KeyValuePair(pair._1, pair._2)
 

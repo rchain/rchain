@@ -27,13 +27,15 @@ import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
 import org.scalatestplus.scalacheck.Checkers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
+import org.scalatest.{AppendedClues, Assertion}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 
 class CostAccountingSpec
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with ScalaCheckPropertyChecks
     with Checkers

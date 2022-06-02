@@ -11,11 +11,11 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
 import scala.util.Random
 
-class RhoTrieTraverserTest extends FlatSpec {
+class RhoTrieTraverserTest extends AnyFlatSpec {
   private val SHARD_ID = "root-shard"
 
   "traverse the TreeHashMap" should "work" in {

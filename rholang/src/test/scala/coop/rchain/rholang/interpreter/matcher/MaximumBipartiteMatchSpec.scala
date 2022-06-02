@@ -1,9 +1,11 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.data.Writer
 import cats.{Id, Monad}
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MaximumBipartiteMatchSpec extends FlatSpec with Matchers {
+class MaximumBipartiteMatchSpec extends AnyFlatSpec with Matchers {
 
   val edges = Map(
     //  A - 1

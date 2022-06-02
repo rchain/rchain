@@ -16,7 +16,8 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Gen
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 final case class KeyValue(key: String, value: String)
@@ -47,7 +48,7 @@ final case class UpdatingKeyValue(key: String, oriValue: String, updatingValue: 
   * `set` and `update` would be mergeable when they don't modified the common NYBBLE NODEs or the same SUFFIX VALUE
   */
 class TreeHashMapMergeabilitySpec
-    extends FlatSpec
+    extends AnyFlatSpec
     with ScalaCheckDrivenPropertyChecks
     with ComputeMerge {
 

@@ -7,9 +7,10 @@ import coop.rchain.rspace.internal.{Datum, _}
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class EncodingSpec extends FlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
+class EncodingSpec extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
   type Continuation = WaitingContinuation[Pattern, StringsCaptor]
   type Join         = Seq[String]

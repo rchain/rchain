@@ -15,9 +15,11 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
-class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
+class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
   val genesis: GenesisContext = buildGenesis()
 
   def checkTransactionAPI(term: String, phloLimit: Long, phloPrice: Long, deployKey: PrivateKey) =

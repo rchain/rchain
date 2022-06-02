@@ -15,11 +15,13 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.Inside.inside
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
 import scala.io.Source
 
-class PosUpdateSpec extends FlatSpec with Matchers with Inspectors {
+class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 

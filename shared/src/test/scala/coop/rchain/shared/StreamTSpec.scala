@@ -3,12 +3,13 @@ package coop.rchain.shared
 import cats._
 import cats.syntax.all._
 
-import org.scalatest.{FunSpec, Matchers}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 import scala.util.{Failure, Success, Try}
 
-class StreamTSpec extends FunSpec with Matchers with ScalaCheckDrivenPropertyChecks {
+class StreamTSpec extends AnyFunSpec with Matchers with ScalaCheckDrivenPropertyChecks {
   import StreamTSpec._
 
   describe("StreamT") {

@@ -2,9 +2,10 @@ package coop.rchain.rholang.interpreter.util
 
 import coop.rchain.crypto.PublicKey
 import coop.rchain.shared.Base16
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class RevAddressSpec extends FlatSpec with Matchers {
+class RevAddressSpec extends AnyFlatSpec with Matchers {
   "fromPublicKey" should "work correctly" in {
     val pk =
       PublicKey(
