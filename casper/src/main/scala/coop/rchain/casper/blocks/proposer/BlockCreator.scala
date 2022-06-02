@@ -11,14 +11,17 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil.computeParentsPostState
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
-import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, SystemDeployUtil}
+import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.{BlockRandomSeed, CasperSnapshot, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.{Log, Stopwatch, Time}
 
 object BlockCreator {
@@ -61,27 +64,31 @@ object BlockCreator {
           validUnique = valid -- s.deploysInScope
         } yield validUnique
 
-      def prepareSlashingDeploys(seqNum: Int): F[Seq[SlashDeploy]] =
-        for {
-          ilm <- s.dag.invalidLatestMessages
-          // if the node is already not active as per main parent, the node won't slash once more
-          ilmFromBonded = ilm.toList.filter {
-            case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L
+      final case class SlashingStatus(invalidLatestMessages: Map[Validator, BlockHash]) {
+        lazy val ilmFromBonded = invalidLatestMessages.toList.filter {
+          case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L
+        }
+
+        def prepareSlashingDeploys(
+            rand: Blake2b512Random,
+            startIndex: Int
+        ): F[List[SlashDeploy]] = {
+          val slashingDeploysWithBlocks = ilmFromBonded.zipWithIndex.map {
+            case ((slashedValidator, invalidBlock), i) =>
+              (SlashDeploy(slashedValidator, rand.splitByte((i + startIndex).toByte)), invalidBlock)
           }
-          slashingDeploysWithBlocks = ilmFromBonded.map {
-            case (slashedValidator, invalidBlock) =>
-              val rnd = SystemDeployUtil.generateSlashDeployRandomSeed(selfId, seqNum)
-              (SlashDeploy(slashedValidator, rnd), invalidBlock)
+          slashingDeploysWithBlocks.traverse {
+            case (sd, invalidBlock) =>
+              Log[F]
+                .info(
+                  s"Issuing slashing deploy justified by block ${PrettyPrinter.buildString(invalidBlock)}"
+                )
+                .as(sd)
           }
-          slashingDeploys <- slashingDeploysWithBlocks.traverse {
-                              case (sd, invalidBlock) =>
-                                Log[F]
-                                  .info(
-                                    s"Issuing slashing deploy justified by block ${PrettyPrinter.buildString(invalidBlock)}"
-                                  )
-                                  .as(sd)
-                            }
-        } yield slashingDeploys
+        }
+
+        def needSlashing: Boolean = ilmFromBonded.nonEmpty
+      }
 
       def prepareDummyDeploy(blockNumber: Long, shardId: String): Seq[Signed[DeployData]] =
         dummyDeployOpt match {
@@ -101,17 +108,13 @@ object BlockCreator {
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
-        shardId         = s.onChainState.shardConf.shardName
-        userDeploys     <- prepareUserDeploys(nextBlockNum)
-        dummyDeploys    = prepareDummyDeploy(nextBlockNum, shardId)
-        slashingDeploys <- prepareSlashingDeploys(nextSeqNum)
-        // make sure closeBlock is the last system Deploy
-        systemDeploys = slashingDeploys :+ CloseBlockDeploy(
-          SystemDeployUtil
-            .generateCloseDeployRandomSeed(selfId, nextSeqNum)
-        )
-        deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
-        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
+        shardId        = s.onChainState.shardConf.shardName
+        userDeploys    <- prepareUserDeploys(nextBlockNum)
+        dummyDeploys   = prepareDummyDeploy(nextBlockNum, shardId)
+        ilm            <- s.dag.invalidLatestMessages
+        slashingStatus = SlashingStatus(ilm)
+        deploys        = userDeploys ++ dummyDeploys
+        r <- if (deploys.nonEmpty || slashingStatus.needSlashing)
               for {
                 now <- Time[F].currentMillis
                 blockData = BlockData(
@@ -122,6 +125,12 @@ object BlockCreator {
                   shardId
                 )
                 computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
+                rand                = BlockRandomSeed.fromBlockData(blockData, computedParentsInfo._1)
+                slashingDeploys     <- slashingStatus.prepareSlashingDeploys(rand, deploys.size)
+                // make sure closeBlock is the last system Deploy
+                systemDeploys = slashingDeploys :+ CloseBlockDeploy(
+                  rand.splitByte((deploys.size + slashingDeploys.size).toByte)
+                )
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
                                    systemDeploys,

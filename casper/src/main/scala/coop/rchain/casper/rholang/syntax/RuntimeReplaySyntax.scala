@@ -5,7 +5,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource}
 import coop.rchain.casper.protocol.{
   CloseBlockSystemDeployData,
   Empty,
@@ -43,6 +43,7 @@ import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.Log
 import RuntimeReplaySyntax._
 import coop.rchain.casper.syntax._
+import coop.rchain.crypto.hash.Blake2b512Random
 
 trait RuntimeReplaySyntax {
   implicit final def casperSyntaxRholangRuntimeReplay[F[_]](
@@ -73,13 +74,15 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
   ): F[Either[ReplayFailure, (Blake2b256Hash, Seq[NumberChannelsEndVal])]] =
     Span[F].traceI("replay-compute-state") {
       for {
-        _ <- runtime.setBlockData(blockData)
+        _    <- runtime.setBlockData(blockData)
+        rand = BlockRandomSeed.fromBlockData(blockData, startHash)
         result <- replayDeploys(
                    startHash,
+                   rand,
                    terms,
                    systemDeploys,
-                   replayDeployE(withCostAccounting)(_).value,
-                   replayBlockSystemDeployDiag(blockData)
+                   replayDeployE(withCostAccounting)(_, _).value,
+                   replayBlockSystemDeployDiag
                  )
       } yield result
     }
@@ -91,33 +94,44 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
     */
   def replayDeploys(
       startHash: StateHash,
+      rand: Blake2b512Random,
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
-      replayDeploy: ProcessedDeploy => F[Either[ReplayFailure, NumberChannelsEndVal]],
-      replaySystemDeploy: ProcessedSystemDeploy => F[Either[ReplayFailure, NumberChannelsEndVal]]
+      replayDeploy: (
+          ProcessedDeploy,
+          Blake2b512Random
+      ) => F[Either[ReplayFailure, NumberChannelsEndVal]],
+      replaySystemDeploy: (
+          ProcessedSystemDeploy,
+          Blake2b512Random
+      ) => F[Either[ReplayFailure, NumberChannelsEndVal]]
   )(
       implicit s: Sync[F],
       span: Span[F]
   ): F[Either[ReplayFailure, (Blake2b256Hash, Vector[NumberChannelsEndVal])]] = {
-    type Params[D] = (Seq[D], Vector[NumberChannelsEndVal])
+    type Params[D] = (Seq[D], Vector[NumberChannelsEndVal], Int)
 
-    val deploys = (terms, Vector[NumberChannelsEndVal]()).tailRecM {
-      case (Seq(), mergeable) =>
+    val deploys = (terms, Vector[NumberChannelsEndVal](), 0).tailRecM {
+      case (Seq(), mergeable, _) =>
         mergeable.asRight[ReplayFailure].asRight[Params[ProcessedDeploy]].pure[F]
-      case (ts, mergeable) =>
+      case (ts, mergeable, randIndex) =>
         Span[F].traceI("replay-deploy") {
-          replayDeploy(ts.head).map { a =>
-            a.map(x => (ts.tail, mergeable :+ x)).swap.map(_.asLeft[Vector[NumberChannelsEndVal]])
+          replayDeploy(ts.head, rand.splitShort(randIndex.toShort)).map { a =>
+            a.map(x => (ts.tail, mergeable :+ x, randIndex + 1))
+              .swap
+              .map(_.asLeft[Vector[NumberChannelsEndVal]])
           }
         }
     }
-    val sysDeploys = (systemDeploys, Vector[NumberChannelsEndVal]()).tailRecM {
-      case (Seq(), mergeable) =>
+    val sysDeploys = (systemDeploys, Vector[NumberChannelsEndVal](), terms.length).tailRecM {
+      case (Seq(), mergeable, _) =>
         mergeable.asRight[ReplayFailure].asRight[Params[ProcessedSystemDeploy]].pure[F]
-      case (ts, mergeable) =>
+      case (ts, mergeable, randIndex) =>
         Span[F].traceI("replay-sys-deploy") {
-          replaySystemDeploy(ts.head).map { a =>
-            a.map(x => (ts.tail, mergeable :+ x)).swap.map(_.asLeft[Vector[NumberChannelsEndVal]])
+          replaySystemDeploy(ts.head, rand.splitByte(randIndex.toByte)).map { a =>
+            a.map(x => (ts.tail, mergeable :+ x, randIndex + 1))
+              .swap
+              .map(_.asLeft[Vector[NumberChannelsEndVal]])
           }
         }
     }
@@ -137,20 +151,9 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
     }.value
   }
 
-  /**
-    * REPLAY Evaluates deploy
-    */
-  def replayDeploy(withCostAccounting: Boolean)(
-      processedDeploy: ProcessedDeploy
-  )(
-      implicit s: Sync[F],
-      span: Span[F],
-      log: Log[F]
-  ): F[Option[ReplayFailure]] =
-    replayDeployE(withCostAccounting)(processedDeploy).swap.toOption.value
-
   def replayDeployE(withCostAccounting: Boolean)(
-      processedDeploy: ProcessedDeploy
+      processedDeploy: ProcessedDeploy,
+      rand: Blake2b512Random
   )(
       implicit s: Sync[F],
       span: Span[F],
@@ -165,7 +168,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
             new PreChargeDeploy(
               processedDeploy.deploy.data.totalPhloCharge,
               processedDeploy.deploy.pk,
-              SystemDeployUtil.generatePreChargeDeployRandomSeed(processedDeploy.deploy)
+              rand.splitByte(BlockRandomSeed.PreChargeSplitIndex)
             ),
             expectedFailure
           ).semiflatTap {
@@ -184,7 +187,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
           replaySystemDeployInternal(
             new RefundDeploy(
               processedDeploy.refundAmount,
-              SystemDeployUtil.generateRefundDeployRandomSeed(processedDeploy.deploy)
+              rand.splitByte(BlockRandomSeed.RefundSplitIndex)
             ),
             None
           ).semiflatTap {
@@ -203,7 +206,10 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
         .liftF {
           runtime.withSoftTransaction {
             for {
-              result <- runtime.evaluate(processedDeploy.deploy)
+              result <- runtime.evaluate(
+                         processedDeploy.deploy,
+                         rand.splitByte(BlockRandomSeed.UserDeploySplitIndex)
+                       )
 
               logErrors = printDeployErrors(processedDeploy.deploy.sig, result.errors)
               /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
@@ -257,28 +263,26 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
   /**
     * Evaluates System deploy with checkpoint to get final state hash
     */
-  def replayBlockSystemDeployDiag(blockData: BlockData)(
-      processedSystemDeploy: ProcessedSystemDeploy
+  def replayBlockSystemDeployDiag(
+      processedSystemDeploy: ProcessedSystemDeploy,
+      rand: Blake2b512Random
   )(
       implicit s: Sync[F],
       span: Span[F]
   ): F[Either[ReplayFailure, NumberChannelsEndVal]] =
     Span[F].withMarks("replay-system-deploy")(
-      replayBlockSystemDeploy(blockData)(processedSystemDeploy).value
+      replayBlockSystemDeploy(processedSystemDeploy, rand).value
     )
 
-  def replayBlockSystemDeploy(blockData: BlockData)(
-      processedSysDeploy: ProcessedSystemDeploy
+  def replayBlockSystemDeploy(
+      processedSysDeploy: ProcessedSystemDeploy,
+      rand: Blake2b512Random
   )(implicit s: Sync[F], span: Span[F]): EitherT[F, ReplayFailure, NumberChannelsEndVal] = {
     import processedSysDeploy._
-    val sender = ByteString.copyFrom(blockData.sender.bytes)
     systemDeploy match {
       case SlashSystemDeployData(slashedValidator) =>
         val slashDeploy = {
-          SlashDeploy(
-            slashedValidator,
-            SystemDeployUtil.generateSlashDeployRandomSeed(sender, blockData.seqNum)
-          )
+          SlashDeploy(slashedValidator, rand)
         }
         rigWithCheck(
           processedSysDeploy,
@@ -289,9 +293,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
           }
         ).map(_._1)
       case CloseBlockSystemDeployData =>
-        val closeBlockDeploy = CloseBlockDeploy(
-          SystemDeployUtil.generateCloseDeployRandomSeed(sender, blockData.seqNum)
-        )
+        val closeBlockDeploy = CloseBlockDeploy(rand)
         rigWithCheck(
           processedSysDeploy,
           replaySystemDeployInternal(closeBlockDeploy, none).semiflatMap {

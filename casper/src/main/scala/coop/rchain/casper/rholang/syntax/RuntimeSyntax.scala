@@ -108,15 +108,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   ): F[(StateHash, Seq[UserDeployRuntimeResult], Seq[SystemDeployRuntimeResult])] =
     Span[F].traceI("compute-state") {
       for {
-        _ <- runtime.setBlockData(blockData)
-        rand = BlockRandomSeed.generateRandomNumber(
-          BlockRandomSeed(
-            blockData.shardId,
-            blockData.blockNumber,
-            blockData.sender,
-            Blake2b256Hash.fromByteString(startHash)
-          )
-        )
+        _    <- runtime.setBlockData(blockData)
+        rand = BlockRandomSeed.fromBlockData(blockData, startHash)
         deployProcessResult <- Span[F].withMarks("play-deploys") {
                                 playDeploys(
                                   startHash,
@@ -162,16 +155,9 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     Span[F].traceI("compute-genesis") {
       val blockData = BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0, shardId)
       for {
-        _                   <- runtime.setBlockData(blockData)
-        genesisPreStateHash <- emptyStateHash
-        rand = BlockRandomSeed.generateRandomNumber(
-          BlockRandomSeed(
-            blockData.shardId,
-            blockData.blockNumber,
-            blockData.sender,
-            Blake2b256Hash.fromByteString(genesisPreStateHash)
-          )
-        )
+        _                             <- runtime.setBlockData(blockData)
+        genesisPreStateHash           <- emptyStateHash
+        rand                          = BlockRandomSeed.fromBlockData(blockData, genesisPreStateHash)
         playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData, rand)
         (stateHash, processedDeploys) = playResult
       } yield (genesisPreStateHash, stateHash, processedDeploys)

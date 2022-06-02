@@ -4,12 +4,13 @@ import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
-import coop.rchain.casper.rholang.{Resources, RuntimeManager, SystemDeployUtil}
+import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Secp256k1
@@ -85,13 +86,12 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
         .address
         .toBase58
     for {
-      txDeploy    <- ConstructDeploy.sourceDeployNowF(txRho(payerAddr, payeeAddr), sec = payerKey)
-      userDeploys = txDeploy :: Nil
-      systemDeploys = CloseBlockDeploy(
-        SystemDeployUtil.generateCloseDeployRandomSeed(validator, seqNum)
-      ) :: Nil
-      blockData = BlockData(txDeploy.data.timestamp, blockNum, validator, seqNum, genesis.shardId)
-      r         <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, blockData)
+      txDeploy      <- ConstructDeploy.sourceDeployNowF(txRho(payerAddr, payeeAddr), sec = payerKey)
+      userDeploys   = txDeploy :: Nil
+      blockData     = BlockData(txDeploy.data.timestamp, blockNum, validator, seqNum, genesis.shardId)
+      rand          = BlockRandomSeed.fromBlockData(blockData, baseState)
+      systemDeploys = CloseBlockDeploy(rand.splitByte(userDeploys.length.toByte)) :: Nil
+      r             <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, blockData)
     } yield r
   }
 

@@ -7,7 +7,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.{BlockRandomSeed, PrettyPrinter}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{
   BlockMessage,
@@ -18,6 +18,7 @@ import coop.rchain.casper.protocol.{
 import coop.rchain.casper.reporting.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
@@ -102,15 +103,16 @@ object ReportingCasper {
           _         <- reportingRuntime.setBlockData(blockdata)
 
           // Reset runtime (in-memory) state
-          _ <- reportingRuntime.reset(Blake2b256Hash.fromByteString(preStateHash))
-
+          _    <- reportingRuntime.reset(Blake2b256Hash.fromByteString(preStateHash))
+          rand = BlockRandomSeed.fromBlockData(blockdata, preStateHash)
           // Replay block deploys with reporting
           res <- replayDeploys(
                   reportingRuntime,
                   block.body.deploys,
                   block.body.systemDeploys,
                   blockdata,
-                  withCostAccounting
+                  withCostAccounting,
+                  rand
                 )
         } yield res
 
@@ -119,25 +121,31 @@ object ReportingCasper {
           terms: Seq[ProcessedDeploy],
           systemDeploys: Seq[ProcessedSystemDeploy],
           blockData: BlockData,
-          withCostAccounting: Boolean
+          withCostAccounting: Boolean,
+          rand: Blake2b512Random
       ): F[ReplayResult] =
         for {
-          res <- terms.toList.traverse { term =>
-                  Log[F].info(s"Replay user deploy ${PrettyPrinter.buildString(term.deploy.sig)}") *>
-                    runtime
-                      .replayDeployE(withCostAccounting)(term)
-                      .semiflatMap(_ => runtime.getReport)
-                      .getOrElse(Seq.empty)
-                      .map(DeployReportResult(term, _))
+          res <- terms.zipWithIndex.toList.traverse {
+                  case (term, i) =>
+                    Log[F].info(s"Replay user deploy ${PrettyPrinter.buildString(term.deploy.sig)}") *>
+                      runtime
+                        .replayDeployE(withCostAccounting)(term, rand.splitByte(i.toByte))
+                        .semiflatMap(_ => runtime.getReport)
+                        .getOrElse(Seq.empty)
+                        .map(DeployReportResult(term, _))
                 }
-
-          sysRes <- systemDeploys.toList.traverse { term =>
-                     Log[F].info(s"Replay system deploy ${term.systemDeploy}") *>
-                       runtime
-                         .replayBlockSystemDeploy(blockData)(term)
-                         .semiflatMap(_ => runtime.getReport)
-                         .getOrElse(Seq.empty)
-                         .map(SystemDeployReportResult(term.systemDeploy, _))
+          termsLength = terms.size
+          sysRes <- systemDeploys.zipWithIndex.toList.traverse {
+                     case (term, i) =>
+                       Log[F].info(s"Replay system deploy ${term.systemDeploy}") *>
+                         runtime
+                           .replayBlockSystemDeploy(
+                             term,
+                             rand.splitByte((i + termsLength).toByte)
+                           )
+                           .semiflatMap(_ => runtime.getReport)
+                           .getOrElse(Seq.empty)
+                           .map(SystemDeployReportResult(term.systemDeploy, _))
                    }
 
           checkPoint <- runtime.createCheckpoint

@@ -2,8 +2,9 @@ package coop.rchain.casper.merging
 
 import cats.effect.Resource
 import cats.syntax.all._
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
-import coop.rchain.casper.rholang.{Resources, RuntimeManager, SystemDeployUtil}
+import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.models.BlockHash.BlockHash
@@ -11,6 +12,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.EventLogMergingLogic.computeRelatedSets
 import coop.rchain.rspace.merger.{EventLogIndex, EventLogMergingLogic}
 import coop.rchain.shared.scalatestcontrib.effectTest
@@ -52,13 +54,15 @@ class MergingCases extends AnyFlatSpec with Matchers {
           d1          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer1Key)
           d2          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer2Key)
           userDeploys = Seq(d1, d2)
-          systemDeploys = CloseBlockDeploy(
-            SystemDeployUtil
-              .generateCloseDeployRandomSeed(
-                stateTransitionCreator,
-                seqNum
-              )
-          ) :: Nil
+          rand = BlockRandomSeed.generateRandomNumber(
+            BlockRandomSeed(
+              genesis.shardId,
+              blockNum,
+              stateTransitionCreator,
+              Blake2b256Hash.fromByteString(baseState)
+            )
+          )
+          systemDeploys = CloseBlockDeploy(rand.splitByte(3.toByte)) :: Nil
           blockData = BlockData(
             d1.data.timestamp,
             blockNum,
