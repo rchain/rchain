@@ -5,7 +5,6 @@ sealed trait BlockStatus
 object BlockStatus {
   def valid: ValidBlock                    = ValidBlock.Valid
   def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
-  def missingBlocks: BlockError            = BlockError.MissingBlocks
   def invalidFormat: BlockError            = InvalidBlock.InvalidFormat
   def invalidSender: BlockError            = InvalidBlock.InvalidSender
   def invalidVersion: BlockError           = InvalidBlock.InvalidVersion
@@ -20,7 +19,6 @@ object BlockStatus {
   def invalidBondsCache: BlockError        = InvalidBlock.InvalidBondsCache
   def containsExpiredDeploy: BlockError    = InvalidBlock.ContainsExpiredDeploy
   def containsFutureDeploy: BlockError     = InvalidBlock.ContainsFutureDeploy
-  def notOfInterest: BlockError            = InvalidBlock.NotOfInterest
   def lowDeployCost: BlockError            = InvalidBlock.LowDeployCost
 }
 
@@ -31,7 +29,6 @@ object ValidBlock {
 
 sealed trait BlockError extends BlockStatus
 object BlockError {
-  case object MissingBlocks                      extends BlockError
   final case class BlockException(ex: Throwable) extends BlockError
 }
 
@@ -53,7 +50,6 @@ object InvalidBlock {
   case object InvalidRejectedDeploy   extends InvalidBlock
   case object ContainsExpiredDeploy   extends InvalidBlock
   case object ContainsFutureDeploy    extends InvalidBlock
-  case object NotOfInterest           extends InvalidBlock
   case object LowDeployCost           extends InvalidBlock
 
   val slashableOffenses: Set[InvalidBlock] =
