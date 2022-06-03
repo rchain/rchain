@@ -1,7 +1,6 @@
 package coop.rchain.comm.rp
 
 import cats.{catsInstancesForId => _, _}
-import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
@@ -12,11 +11,11 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.should.Matchers
 class ConnectSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
