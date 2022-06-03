@@ -1,14 +1,16 @@
 package coop.rchain.casper.batch2
 
 import cats.syntax.all._
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
-import coop.rchain.casper.rholang.Tools
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.{Base16, RChainScheduler}
 import coop.rchain.shared.scalatestcontrib._
@@ -49,9 +51,12 @@ class RholangBuildTest extends AnyFlatSpec with Matchers {
                    )
           signedBlock <- node.addBlock(deploy)
           _           = logEff.warns should be(Nil)
+          blockData   = BlockData.fromBlock(signedBlock)
+          rand        = BlockRandomSeed.fromBlockData(blockData, signedBlock.body.state.preStateHash)
+          unfHex      = rand.splitByte(0.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex).next()
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
-                Base16.encode(Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp).next())
+                unfHex.toHexString
               ).map(
                 _ shouldBe Seq(
                   s"""([4, 6, 10, 14], "The timestamp is ${signedBlock.header.timestamp}")"""

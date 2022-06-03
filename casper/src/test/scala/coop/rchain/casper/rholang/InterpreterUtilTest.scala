@@ -411,7 +411,8 @@ class InterpreterUtilTest
                             Seq(genesis),
                             deploys,
                             dag1,
-                            runtimeManager
+                            runtimeManager,
+                            blockNumber = 1L
                           )
       Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
       block <- createBlock[Task](
@@ -462,7 +463,8 @@ class InterpreterUtilTest
                               Seq(genesis),
                               deploys,
                               dag1,
-                              runtimeManager
+                              runtimeManager,
+                              1L
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
@@ -521,7 +523,8 @@ class InterpreterUtilTest
                               Seq(genesis),
                               deploys,
                               dag1,
-                              runtimeManager
+                              runtimeManager,
+                              1L
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
@@ -577,7 +580,8 @@ class InterpreterUtilTest
                               Seq(genesis),
                               deploys,
                               dag1,
-                              runtimeManager
+                              runtimeManager,
+                              1L
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
@@ -626,7 +630,7 @@ class InterpreterUtilTest
                                 deploys,
                                 dag1,
                                 runtimeManager,
-                                (i + 1).toLong,
+                                1L,
                                 (i + 1)
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
@@ -662,7 +666,8 @@ class InterpreterUtilTest
                               Seq(genesis),
                               deploys,
                               dag1,
-                              runtimeManager
+                              runtimeManager,
+                              1L
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         //create single deploy with log that includes excess comm events
@@ -717,7 +722,7 @@ class InterpreterUtilTest
                                 deploys,
                                 dag1,
                                 runtimeManager,
-                                (i + 1).toLong,
+                                1L,
                                 (i + 1)
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint

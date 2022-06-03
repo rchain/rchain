@@ -116,7 +116,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
         mergeable.asRight[ReplayFailure].asRight[Params[ProcessedDeploy]].pure[F]
       case (ts, mergeable, randIndex) =>
         Span[F].traceI("replay-deploy") {
-          replayDeploy(ts.head, rand.splitShort(randIndex.toShort)).map { a =>
+          replayDeploy(ts.head, rand.splitByte(randIndex.toByte)).map { a =>
             a.map(x => (ts.tail, mergeable :+ x, randIndex + 1))
               .swap
               .map(_.asLeft[Vector[NumberChannelsEndVal]])

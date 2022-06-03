@@ -54,15 +54,6 @@ class MergingCases extends AnyFlatSpec with Matchers {
           d1          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer1Key)
           d2          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer2Key)
           userDeploys = Seq(d1, d2)
-          rand = BlockRandomSeed.generateRandomNumber(
-            BlockRandomSeed(
-              genesis.shardId,
-              blockNum,
-              stateTransitionCreator,
-              Blake2b256Hash.fromByteString(baseState)
-            )
-          )
-          systemDeploys = CloseBlockDeploy(rand.splitByte(3.toByte)) :: Nil
           blockData = BlockData(
             d1.data.timestamp,
             blockNum,
@@ -70,6 +61,8 @@ class MergingCases extends AnyFlatSpec with Matchers {
             seqNum,
             genesis.shardId
           )
+          rand          = BlockRandomSeed.fromBlockData(blockData, baseState)
+          systemDeploys = CloseBlockDeploy(rand.splitByte(3.toByte)) :: Nil
           r <- runtimeManager.computeState(baseState)(
                 userDeploys,
                 systemDeploys,

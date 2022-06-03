@@ -137,16 +137,15 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
       replaySystemDeploy: S
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
     for {
-      runtime <- runtimeManager.spawnRuntime
-      _       <- runtime.setBlockData(BlockData.fromBlock(genesis))
+      runtime   <- runtimeManager.spawnRuntime
+      blockData = BlockData.fromBlock(genesis)
+      _         <- runtime.setBlockData(blockData)
       r <- runtime.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
             case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, _, playResult)) =>
               assert(resultAssertion(playResult))
               for {
                 runtimeReplay <- runtimeManager.spawnReplayRuntime
-                _ <- runtimeReplay.setBlockData(
-                      BlockData(0, 0, genesisContext.validatorPks.head, 0, genesis.shardId)
-                    )
+                _             <- runtimeReplay.setBlockData(blockData)
 
                 // Replay System Deploy
                 r <- execReplaySystemDeploy(

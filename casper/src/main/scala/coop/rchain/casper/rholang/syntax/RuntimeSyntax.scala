@@ -177,7 +177,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     for {
       _ <- runtime.reset(startHash.toBlake2b256Hash)
       res <- terms.zipWithIndex.toList.traverse {
-              case (d, i) => processDeploy(d, rand.splitShort(i.toShort))
+              case (d, i) => processDeploy(d, rand.splitByte(i.toByte))
             }
       finalCheckpoint <- runtime.createCheckpoint
       finalStateHash  = finalCheckpoint.root
@@ -313,7 +313,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       deploy: Signed[DeployData],
       rand: Blake2b512Random
   )(implicit s: Sync[F], span: Span[F], log: Log[F]): F[UserDeployRuntimeResult] =
-    processDeploy(deploy, rand) flatMap {
+    processDeploy(deploy, rand.splitByte(BlockRandomSeed.UserDeploySplitIndex)) flatMap {
       case (pd, result @ EvaluateResult(_, _, mergeChs)) =>
         for {
           mergeableData <- getNumberChannelsData(mergeChs)
