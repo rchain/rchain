@@ -36,6 +36,8 @@ object Validate {
   def ignore(b: BlockMessage, reason: String): String =
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
+  /* Validation of block with logging included */
+
   def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
     signatureVerifiers
       .get(b.sigAlgorithm)

@@ -125,15 +125,17 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       )
     } yield status
 
-  override def deploy(d: Signed[DeployData]): F[ApiErr[String]] = Span[F].trace(deploySource) {
+  override def deploy(deploy: Signed[DeployData]): F[ApiErr[String]] = Span[F].trace(deploySource) {
     def casperDeploy: F[ApiErr[String]] =
       for {
-        r <- makeDeploy(d).map(
-              _.bimap(
-                err => err.details,
-                res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
+        r <- MultiParentCasper
+              .deploy(deploy)
+              .map(
+                _.bimap(
+                  err => err.details,
+                  res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
+                )
               )
-            )
         // Call a propose if autoPropose flag is on
         _ <- triggerProposeOpt.traverse(_(true)) whenA autoPropose
       } yield r
@@ -146,12 +148,12 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
     // Check if deploy's shardId equals to node shardId
     val shardIdError = new RuntimeException(
-      s"Deploy shardId '${d.data.shardId}' is not as expected network shard '$shardId'."
+      s"Deploy shardId '${deploy.data.shardId}' is not as expected network shard '$shardId'."
     ).raiseError[F, ApiErr[String]]
-    val shardIdCheck = shardIdError.whenA(d.data.shardId != shardId)
+    val shardIdCheck = shardIdError.whenA(deploy.data.shardId != shardId)
 
     // Check if deploy is signed with system keys
-    val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
+    val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(deploy.pk)
     val forbiddenKeyError = new RuntimeException(
       s"Deploy refused because it's signed with forbidden private key."
     ).raiseError[F, ApiErr[String]]
@@ -159,28 +161,11 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
     // Check if deploy has minimum phlo price
     val minPriceError = new RuntimeException(
-      s"Phlo price ${d.data.phloPrice} is less than minimum price $minPhloPrice."
+      s"Phlo price ${deploy.data.phloPrice} is less than minimum price $minPhloPrice."
     ).raiseError[F, ApiErr[String]]
-    val minPhloPriceCheck = minPriceError.whenA(d.data.phloPrice < minPhloPrice)
+    val minPhloPriceCheck = minPriceError.whenA(deploy.data.phloPrice < minPhloPrice)
 
     readOnlyCheck >> shardIdCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> casperDeploy
-  }
-
-  private def makeDeploy(d: Signed[DeployData]): F[Either[ParsingError, DeployId]] = {
-    import coop.rchain.models.rholang.implicits._
-
-    def addDeploy(deploy: Signed[DeployData]): F[DeployId] =
-      for {
-        _ <- BlockDagStorage[F].addDeploy(deploy)
-        _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
-      } yield deploy.sig
-
-    InterpreterUtil
-      .mkTerm(d.data.term, NormalizerEnv(d))
-      .bitraverse(
-        err => parsingError(s"Error in parsing term: \n$err").pure[F],
-        _ => addDeploy(d)
-      )
   }
 
   override def deployStatus(deployId: DeployId): F[ApiErr[DeployExecStatus]] = {
