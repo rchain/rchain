@@ -1,15 +1,12 @@
 package coop.rchain.casper.engine
 
-import cats.Monad
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.NodeSyncing.logNoApprovedBlockAvailable
@@ -43,26 +40,22 @@ object NodeSyncing {
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       finished: Deferred[F, Unit],
-      blockProcessingQueue: Queue[F, BlockMessage],
-      blocksInProcessing: Ref[F, Set[BlockHash]],
+      incomingBlocksQueue: Queue[F, BlockMessage],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
       trimState: Boolean = true
   ): F[NodeSyncing[F]] =
     for {
-      blockResponseQueue <- Queue.bounded[F, BlockMessage](50)
       stateResponseQueue <- Queue.bounded[F, StoreItemsMessage](50)
       engine = new NodeSyncing(
         finished,
-        blockProcessingQueue,
-        blocksInProcessing,
+        incomingBlocksQueue,
         casperShardConf,
         validatorId,
-        blockResponseQueue,
         stateResponseQueue,
         trimState
       )
@@ -87,15 +80,13 @@ class NodeSyncing[F[_]
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
     finished: Deferred[F, Unit],
-    blockProcessingQueue: Queue[F, BlockMessage],
-    blocksInProcessing: Ref[F, Set[BlockHash]],
+    incomingBlocksQueue: Queue[F, BlockMessage],
     casperShardConf: CasperShardConf,
     validatorId: Option[ValidatorIdentity],
-    blockMessageQueue: Queue[F, BlockMessage],
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
     trimState: Boolean = true
 ) {
@@ -116,7 +107,7 @@ class NodeSyncing[F[_]
     case b: BlockMessage =>
       Log[F]
         .info(s"BlockMessage received ${PrettyPrinter.buildString(b, short = true)} from $peer.") *>
-        blockMessageQueue.enqueue1(b)
+        incomingBlocksQueue.enqueue1(b)
 
     case _ => ().pure
   }
@@ -198,7 +189,7 @@ class NodeSyncing[F[_]
       // Request all blocks for Last Finalized State
       blockRequestStream <- LfsBlockRequester.stream(
                              approvedBlock,
-                             blockMessageQueue,
+                             incomingBlocksQueue.dequeue,
                              minBlockNumberForDeployLifespan,
                              hash => CommUtil[F].broadcastRequestForBlock(hash, 1.some),
                              requestTimeout = 30.seconds,

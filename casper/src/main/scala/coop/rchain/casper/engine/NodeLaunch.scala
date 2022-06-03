@@ -1,13 +1,12 @@
 package coop.rchain.casper.engine
 
 import cats.Parallel
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage.approvedStore.ApprovedStore
-import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
@@ -21,7 +20,6 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
@@ -39,12 +37,11 @@ object NodeLaunch {
     /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       packets: Stream[F, PeerMessage],
-      blockProcessingQueue: Queue[F, BlockMessage],
-      blocksInProcessing: Ref[F, Set[BlockHash]],
+      incomingBlocksQueue: Queue[F, BlockMessage],
       conf: CasperConf,
       trimState: Boolean,
       disableStateExporter: Boolean,
@@ -81,8 +78,7 @@ object NodeLaunch {
         finished    <- Deferred[F, Unit]
         engine <- NodeSyncing[F](
                    finished,
-                   blockProcessingQueue,
-                   blocksInProcessing,
+                   incomingBlocksQueue,
                    casperShardConf,
                    validatorId,
                    trimState
@@ -97,8 +93,7 @@ object NodeLaunch {
     def startRunningMode: F[Unit] =
       for {
         engine <- NodeRunning[F](
-                   blockProcessingQueue,
-                   blocksInProcessing,
+                   incomingBlocksQueue,
                    validatorIdentityOpt,
                    disableStateExporter
                  )
@@ -108,47 +103,6 @@ object NodeLaunch {
         _ <- Log[F].info(s"Making a transition to Running state.")
         _ <- CommUtil[F].sendForkChoiceTipRequest
         _ <- handleMessages.compile.drain
-      } yield ()
-
-    // TODO: move this as part of future block receiver
-    def connectToExistingNetwork: F[Unit] =
-      for {
-        // Ask peers for fork choice tips
-        _ <- CommUtil[F].sendForkChoiceTipRequest
-
-        pendants <- CasperBufferStorage[F].getPendants
-        // pendantsReceived are either
-        // 1. blocks that were received while catching up but not end up in casper buffer, e.g. node were restarted
-        // or
-        // 2. blocks which dependencies are in DAG, so they can be added to DAG
-        // In both scenarios the way to proceed is to send them to Casper
-        pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
-        _ <- Log[F].info(
-              s"Checking pendant hashes: ${pendantsStored.size} items in CasperBuffer."
-            )
-        _ <- pendantsStored
-            // we just need to send blocks to Casper. Nothing to do with results of block processing here,
-            // so ignoring them
-              .traverse_(
-                hash =>
-                  for {
-                    block <- BlockStore[F].get1(hash).map(_.get)
-                    _ <- Log[F].info(
-                          s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
-                            s"is available in BlockStore, sending to Casper."
-                        )
-                    dag <- BlockDagStorage[F].getRepresentation
-                    dc  = dag.contains(hash)
-                    _ <- Log[F]
-                          .error(
-                            s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
-                              s"is available in DAG, database is supposedly in inconsistent state."
-                          )
-                          .whenA(dc)
-                    _ <- BlockRetriever[F].ackReceive(hash)
-                    _ <- blockProcessingQueue.enqueue1(block)
-                  } yield ()
-              )
       } yield ()
 
     for {
@@ -164,7 +118,6 @@ object NodeLaunch {
           } else {
             Log[F].info("Reconnecting to existing network...")
           }
-      _ <- connectToExistingNetwork
 
       // Transition to running mode
       _ <- startRunningMode

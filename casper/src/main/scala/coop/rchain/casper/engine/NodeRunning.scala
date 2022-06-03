@@ -1,13 +1,11 @@
 package coop.rchain.casper.engine
 
 import cats.Monad
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.protocol.{CommUtil, _}
@@ -33,17 +31,15 @@ object NodeRunning {
   /* Execution */   : Concurrent: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : RPConfAsk: ConnectionsCell
-  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics] // format: on
   (
       blockProcessingQueue: Queue[F, BlockMessage],
-      blocksInProcessing: Ref[F, Set[BlockHash]],
       validatorId: Option[ValidatorIdentity],
       disableStateExporter: Boolean
   ): F[NodeRunning[F]] = Sync[F].delay(
     new NodeRunning[F](
       blockProcessingQueue,
-      blocksInProcessing,
       validatorId,
       disableStateExporter
     )
@@ -260,22 +256,24 @@ class NodeRunning[F[_]
   /* Execution */   : Concurrent: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
-  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: Metrics] // format: on
 (
-    blockProcessingQueue: Queue[F, BlockMessage],
-    blocksInProcessing: Ref[F, Set[BlockHash]],
+    incomingBlocksQueue: Queue[F, BlockMessage],
     validatorId: Option[ValidatorIdentity],
     disableStateExporter: Boolean
 ) {
   import NodeRunning._
 
-  private def ignoreCasperMessage(hash: BlockHash): F[Boolean] =
-    MultiParentCasper.blockReceived(hash)
+  /**
+    * Check if block is stored in the BlockStore
+    */
+  private def checkBlockReceived(hash: BlockHash): F[Boolean] =
+    BlockStore[F].contains(hash)
 
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case h: BlockHashMessage =>
-      handleBlockHashMessage(peer, h)(ignoreCasperMessage)
+      handleBlockHashMessage(peer, h)(checkBlockReceived)
 
     case b: BlockMessage =>
       for {
@@ -289,12 +287,12 @@ class NodeRunning[F[_]
                   )
                   .whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))
             }
-        _ <- ignoreCasperMessage(b.blockHash).ifM(
+        _ <- checkBlockReceived(b.blockHash).ifM(
               Log[F].debug(
                 s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
               ),
-              blockProcessingQueue.enqueue1(b) <* Log[F].debug(
+              incomingBlocksQueue.enqueue1(b) <* Log[F].debug(
                 s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
               )
@@ -305,11 +303,12 @@ class NodeRunning[F[_]
 
     case hbr: HasBlockRequest =>
       // Return blocks only available in the DAG (validated)
+      // - blocks can be returned from BlockStore if downloaded from latest in the DAG and not from tips
       for {
         dag <- BlockDagStorage[F].getRepresentation
         res <- handleHasBlockRequest(peer, hbr)(dag.contains(_).pure[F])
       } yield res
-    case hb: HasBlock => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
+    case hb: HasBlock => handleHasBlockMessage(peer, hb)(checkBlockReceived)
 
     case _: ForkChoiceTipRequest.type => handleForkChoiceTipRequest(peer)
 
