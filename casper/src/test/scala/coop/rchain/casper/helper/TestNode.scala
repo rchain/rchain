@@ -5,11 +5,9 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
 import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper
@@ -42,7 +40,6 @@ import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
 import fs2.concurrent.Queue
-import fs2.{Pipe, Stream}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertions
@@ -64,9 +61,7 @@ case class TestNode[F[_]: Sync: Timer](
     maxParentDepth: Option[Int] = Int.MaxValue.some,
     isReadOnly: Boolean = false,
     triggerProposeFOpt: Option[ProposeFunction[F]],
-    blockProcessorQueue: Queue[F, BlockMessage],
-    blockProcessorState: Ref[F, Set[BlockHash]],
-    blockProcessingPipe: Pipe[F, BlockMessage, ValidBlockProcessing],
+    processBlock: BlockMessage => F[ValidBlockProcessing],
     blockStoreEffect: BlockStore[F],
     approvedStoreEffect: ApprovedStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
@@ -74,7 +69,6 @@ case class TestNode[F[_]: Sync: Timer](
     blockRetrieverEffect: BlockRetriever[F],
     metricEffect: Metrics[F],
     spanEffect: Span[F],
-    casperBufferStorageEffect: CasperBufferStorage[F],
     runtimeManagerEffect: RuntimeManager[F],
     rhoHistoryRepositoryEffect: RhoHistoryRepository[F],
     logEffect: LogStub[F],
@@ -106,7 +100,6 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val br: BlockRetriever[F]                          = blockRetrieverEffect
   implicit val me: Metrics[F]                                 = metricEffect
   implicit val sp: Span[F]                                    = spanEffect
-  implicit val cbs: CasperBufferStorage[F]                    = casperBufferStorageEffect
   implicit val runtimeManager: RuntimeManager[F]              = runtimeManagerEffect
   implicit val rhoHistoryRepository: RhoHistoryRepository[F]  = rhoHistoryRepositoryEffect
   implicit val scch: SynchronyConstraintChecker[F]            = syncConstraintCheckerEffect
@@ -146,7 +139,7 @@ case class TestNode[F[_]: Sync: Timer](
     MultiParentCasper.deploy[F](dd)
 
   def addBlock(block: BlockMessage): F[ValidBlockProcessing] =
-    Stream(block).through(blockProcessingPipe).compile.lastOrError
+    processBlock(block)
 
   def addBlock(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     addBlockStatus(ValidBlock.Valid.asRight)(deployDatums: _*)
@@ -154,7 +147,7 @@ case class TestNode[F[_]: Sync: Timer](
   def publishBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
     for {
       block <- addBlock(deployDatums: _*)
-      _     <- nodes.toList.filter(_ != this).traverse_(_.processBlock(block))
+      _     <- nodes.toList.filter(_ != this).traverse_(_.addBlock(block))
     } yield block
 
   def propagateBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
@@ -165,8 +158,8 @@ case class TestNode[F[_]: Sync: Timer](
       _ <- Log[F].debug(
             s"${name} ! [${PrettyPrinter.buildString(block, true)}] => ${targets.map(_.name).mkString(" ; ")}"
           )
-      _ <- (targets).toList.traverse_ { node =>
-            node.processBlock(block)
+      _ <- targets.toList.traverse_ { node =>
+            node.addBlock(block)
           }
     } yield block
 
@@ -176,7 +169,7 @@ case class TestNode[F[_]: Sync: Timer](
     for {
       r              <- createBlock(deployDatums: _*)
       Created(block) = r
-      status         <- processBlock(block)
+      status         <- addBlock(block)
       _              = assert(status == expectedStatus)
     } yield block
 
@@ -201,17 +194,12 @@ case class TestNode[F[_]: Sync: Timer](
       createBlockResult <- BlockCreator.create(cs, validatorIdOpt.get)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
-                case _ =>
+                case err =>
                   concurrentF.raiseError[BlockMessage](
-                    new Throwable(s"failed creating block")
+                    new Throwable(s"failed creating block: $err")
                   )
               }
     } yield block
-
-  def processBlock(b: BlockMessage): F[ValidBlockProcessing] =
-    for {
-      r <- Stream(b).through(blockProcessingPipe).compile.lastOrError
-    } yield r
 
   def handleReceive(): F[Unit] =
     tls
@@ -225,12 +213,12 @@ case class TestNode[F[_]: Sync: Timer](
                     .fold(
                       err =>
                         Log[F]
-                          .warn(s"Could not extract casper message shardConffrom packet")
+                          .warn(s"Could not extract casper message from packet")
                           .as(CommunicationResponse.notHandled(UnknownCommError(""))),
                       message =>
                         message match {
                           case b: BlockMessage =>
-                            processBlock(b).as(CommunicationResponse.handledWithoutMessage)
+                            addBlock(b).as(CommunicationResponse.handledWithoutMessage)
                           case _ => handle[F](p, routingMessageQueue)
                         }
                     )
@@ -296,7 +284,7 @@ case class TestNode[F[_]: Sync: Timer](
   def syncWith(node1: TestNode[F], node2: TestNode[F], rest: TestNode[F]*): F[Unit] =
     syncWith(IndexedSeq(node1, node2) ++ rest)
 
-  def contains(hash: BlockHash) = MultiParentCasper.blockReceived(hash)
+  def contains(hash: BlockHash) = blockDagStorage.getRepresentation.map(_.contains(hash))
 
   def knowsAbout(blockHash: BlockHash) =
     (contains(blockHash), RequestedBlocks.contains[F](blockHash)).mapN(_ || _)
@@ -304,8 +292,6 @@ case class TestNode[F[_]: Sync: Timer](
   def shutoff() = transportLayerEff.clear(local)
 
   val lastFinalizedBlock = MultiParentCasper.lastFinalizedBlock
-
-  val fetchDependencies = MultiParentCasper.fetchDependencies
 }
 
 object TestNode {
@@ -420,14 +406,13 @@ object TestNode {
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val spanEff   = new NoopSpan[F]
     for {
-      newStorageDir       <- Resources.copyStorage[F](storageDir)
-      kvm                 <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore          <- Resource.eval(BlockStore(kvm))
-      approvedStore       <- Resource.eval(approvedStore.create(kvm))
-      blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
-      casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
-      rSpaceStore         <- Resource.eval(kvm.rSpaceStores)
-      mStore              <- Resource.eval(RuntimeManager.mergeableStore(kvm))
+      newStorageDir   <- Resources.copyStorage[F](storageDir)
+      kvm             <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
+      blockStore      <- Resource.eval(BlockStore(kvm))
+      approvedStore   <- Resource.eval(approvedStore.create(kvm))
+      blockDagStorage <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
+      rSpaceStore     <- Resource.eval(kvm.rSpaceStores)
+      mStore          <- Resource.eval(RuntimeManager.mergeableStore(kvm))
       runtimeManager <- Resource.eval(
                          RuntimeManager(
                            rSpaceStore,
@@ -461,7 +446,6 @@ object TestNode {
                implicit val bs                         = blockStore
                implicit val as                         = approvedStore
                implicit val bds                        = blockDagStorage
-               implicit val cbs                        = casperBufferStorage
                implicit val rm                         = runtimeManager
                implicit val rhr                        = runtimeManager.getHistoryRepo
                implicit val logEff                     = new LogStub[F](Log.log[F])
@@ -501,32 +485,18 @@ object TestNode {
                          r <- d.get
                        } yield r
                  )
-                 // Block processor
-                 blockProcessor = BlockProcessor[F](shardConf)
 
-                 blockProcessingPipe = {
-                   in: fs2.Stream[F, BlockMessage] =>
-                     in.evalMap(b => {
-                       blockProcessor
-                         .checkIfOfInterest(b)
-                         .ifM(
-                           blockProcessor
-                             .checkIfWellFormedAndStore(b)
-                             .ifM(
-                               blockProcessor
-                                 .checkDependenciesWithEffects(b)
-                                 .ifM(
-                                   blockProcessor.validateWithEffects(b),
-                                   BlockStatus.missingBlocks.asLeft[ValidBlock].pure[F]
-                                 ),
-                               BlockStatus.invalidFormat.asLeft[ValidBlock].pure[F]
-                             ),
-                           BlockStatus.notOfInterest.asLeft[ValidBlock].pure[F]
-                         )
-                     })
+                 // Validate block and add it to the DAG
+                 // - sync version without block receiver and block processor async processing
+                 saveAndValidateBlock = (block: BlockMessage) => {
+                   import coop.rchain.blockstorage.syntax._
+
+                   val getCasperSnapshot = MultiParentCasper.getSnapshot[F](shardConf)
+                   for {
+                     _      <- BlockStore[F].put(block)
+                     result <- BlockProcessor.validateAndAddToDag(block, getCasperSnapshot)
+                   } yield result
                  }
-                 blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
-                 blockProcessorState <- Ref.of[F, Set[BlockHash]](Set.empty)
 
                  // Remove TransportLayer handling in TestNode (too low level for these tests)
                  routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
@@ -545,13 +515,10 @@ object TestNode {
                    maxParentDepth,
                    isReadOnly = isReadOnly,
                    triggerProposeFOpt = triggerProposeFOpt,
-                   blockProcessorQueue = blockProcessorQueue,
-                   blockProcessorState = blockProcessorState,
-                   blockProcessingPipe = blockProcessingPipe,
+                   processBlock = saveAndValidateBlock,
                    blockStoreEffect = bs,
                    approvedStoreEffect = as,
                    blockDagStorageEffect = bds,
-                   casperBufferStorageEffect = cbs,
                    runtimeManagerEffect = rm,
                    rhoHistoryRepositoryEffect = rhr,
                    spanEffect = spanEff,

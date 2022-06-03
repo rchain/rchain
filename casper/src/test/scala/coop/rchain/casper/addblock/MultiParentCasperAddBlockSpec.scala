@@ -217,7 +217,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
         illSignedBlock = validatorId
           .signBlock(block)
-        status <- node.processBlock(illSignedBlock)
+        status <- node.addBlock(illSignedBlock)
       } yield (status shouldBe Left(InvalidSender))
     }
   }
@@ -289,8 +289,8 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         basicDeployData1  <- ConstructDeploy.basicDeployData[Effect](1)
         signedBlock1Prime <- nodes(0).createBlockUnsafe(basicDeployData1)
 
-        _ <- nodes(0).processBlock(signedBlock1)
-        _ <- nodes(0).processBlock(signedBlock1Prime)
+        _ <- nodes(0).addBlock(signedBlock1)
+        _ <- nodes(0).addBlock(signedBlock1Prime)
 
         _ <- nodes(1).syncWith(nodes(0))
 
@@ -315,11 +315,11 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         signedBlock1      <- nodes(0).createBlockUnsafe(deployDatas(0))
         signedBlock1Prime <- nodes(0).createBlockUnsafe(deployDatas(1))
 
-        _ <- nodes(1).processBlock(signedBlock1)
+        _ <- nodes(1).addBlock(signedBlock1)
         _ <- nodes(0).shutoff() //nodes(0) misses this block
         _ <- nodes(2).shutoff() //nodes(2) misses this block
 
-        _ <- nodes(0).processBlock(signedBlock1Prime)
+        _ <- nodes(0).addBlock(signedBlock1Prime)
         _ <- nodes(2).syncWith(nodes(0))
         _ <- nodes(1).shutoff() //nodes(1) misses this block
 
@@ -393,7 +393,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
                                           signedInvalidBlock
                                         )
 
-        _ <- nodes(1).processBlock(blockWithInvalidJustification)
+        _ <- nodes(1).addBlock(blockWithInvalidJustification)
         _ <- nodes(0)
               .shutoff() // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
 
@@ -428,7 +428,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
 
     def add(node: TestNode[Effect], signed: BlockMessage) =
       Sync[Effect].attempt(
-        node.processBlock(signed)
+        node.addBlock(signed)
       )
 
     TestNode
@@ -474,17 +474,18 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
       for {
         deployData <- ConstructDeploy
                        .basicDeployData[Effect](0, shardId = SHARD_ID)
-        signedBlock  <- nodes(0).deploy(deployData) >> nodes(0).createBlockUnsafe()
-        invalidBlock = signedBlock.copy(seqNum = 47)
-        status1      <- nodes(1).processBlock(invalidBlock)
-        status2      <- nodes(2).processBlock(invalidBlock)
-        signedBlock2 <- nodes(1).createBlockUnsafe()
-        status3      <- nodes(1).processBlock(signedBlock2)
-        bonds        <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
-        _            = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
-        _            <- nodes(2).handleReceive()
-        signedBlock3 <- nodes(2).createBlockUnsafe()
-        status4      <- nodes(2).processBlock(signedBlock3)
+        signedBlock   <- nodes(0).deploy(deployData) >> nodes(0).createBlockUnsafe()
+        invalidBlock  = signedBlock.copy(seqNum = 47)
+        invalidSigned = nodes(0).validatorIdOpt.get.signBlock(invalidBlock)
+        status1       <- nodes(1).addBlock(invalidSigned)
+        status2       <- nodes(2).addBlock(invalidSigned)
+        signedBlock2  <- nodes(1).createBlockUnsafe()
+        status3       <- nodes(1).addBlock(signedBlock2)
+        bonds         <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
+        _             = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
+        _             <- nodes(2).handleReceive()
+        signedBlock3  <- nodes(2).createBlockUnsafe()
+        status4       <- nodes(2).addBlock(signedBlock3)
       } yield {
         status1 should be(Left(InvalidSequenceNumber))
         status2 should be(Left(InvalidSequenceNumber))

@@ -21,7 +21,9 @@ class MultiParentCasperCommunicationSpec extends AnyFlatSpec with Matchers with 
 
   val genesis = buildGenesis()
 
-  "MultiParentCasper" should "ask peers for blocks it is missing" in effectTest {
+  // TODO: this test is meaningless as a unit test
+  //  - missing dependencies should be resolved on block receiver stage and tested there
+  "MultiParentCasper" should "ask peers for blocks it is missing" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deploy1 <- ConstructDeploy.sourceDeployNowF(
@@ -151,7 +153,6 @@ class MultiParentCasperCommunicationSpec extends AnyFlatSpec with Matchers with 
           // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
 
           // And then we assume fetchDependencies eventually gets called
-          _ <- nodes(1).fetchDependencies
           _ <- nodes(0).handleReceive()
           _ <- nodes(0).handleReceive()
 

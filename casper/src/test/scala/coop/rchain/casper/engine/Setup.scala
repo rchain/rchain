@@ -2,7 +2,6 @@ package coop.rchain.casper.engine
 
 import cats._
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.casper._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.BlockRetriever.RequestState
@@ -116,10 +115,6 @@ object Setup {
     implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
     implicit val blockRetriever                 = BlockRetriever.of[Task]
-
-    implicit val casperBuffer = CasperBufferKeyValueStorage
-      .create[Task](spaceKVManager)
-      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     implicit val blockProcessingQueue = Queue
       .unbounded[Task, BlockMessage]
