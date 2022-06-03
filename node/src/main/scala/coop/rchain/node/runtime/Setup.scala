@@ -203,11 +203,15 @@ object Setup {
       incomingBlocksQueue <- Queue.unbounded[F, BlockMessage]
       // Queue of validated blocks, result of block processor
       validatedBlocksQueue <- Queue.unbounded[F, BlockMessage]
+      // Validated blocks stream with auto-propose trigger
+      validatedBlocksStream = validatedBlocksQueue.dequeue.evalTap { _ =>
+        // If auto-propose is enabled, trigger propose immediately after block finished validation
+        triggerProposeFOpt.traverse(_(true)) whenA conf.autopropose
+      }
 
       // Block receiver, incoming blocks from peers
-      incomingBlockStream   = incomingBlocksQueue.dequeue
-      validatedBlocksStream = validatedBlocksQueue.dequeue
-      blockReceiverState    <- Ref.of(BlockReceiverState[BlockHash])
+      incomingBlockStream = incomingBlocksQueue.dequeue
+      blockReceiverState  <- Ref.of(BlockReceiverState[BlockHash])
       blockReceiverStream <- {
         implicit val (bs, bd, br) = (blockStore, blockDagStorage, blockRetriever)
         BlockReceiver[F](
@@ -228,9 +232,6 @@ object Setup {
           validatedBlocksQueue,
           MultiParentCasper.getSnapshot[F](casperShardConf)
         )
-      }.evalTap { _ =>
-        // If auto-propose is enabled, trigger propose immediately after block finished validation
-        triggerProposeFOpt.traverse(_(true)) whenA conf.autopropose
       }
 
       // Network packets handler (queue)
