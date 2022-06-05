@@ -6,7 +6,6 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsBlockRequester.ST
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.TestTime
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits
