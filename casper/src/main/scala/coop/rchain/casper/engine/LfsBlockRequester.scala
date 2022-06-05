@@ -1,14 +1,14 @@
 package coop.rchain.casper.engine
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, Time}
 import fs2.Stream
 import fs2.concurrent.Queue
 
@@ -149,7 +149,7 @@ object LfsBlockRequester {
     * @param validateBlock Check if received block is valid
     * @return fs2.Stream processing all blocks
     */
-  def stream[F[_]: Concurrent: Time: Log](
+  def stream[F[_]: Concurrent: Timer: Log](
       approvedBlock: ApprovedBlock,
       responseQueue: Queue[F, BlockMessage],
       initialMinimumHeight: Long,
@@ -323,7 +323,7 @@ object LfsBlockRequester {
         */
       requestStream
         .evalMap(_ => st.get)
-        .onIdle(requestTimeout, resendRequests)
+        .evalOnIdle(resendRequests, requestTimeout)
         .terminateAfter(_.isFinished) concurrently responseStream
     }
 
