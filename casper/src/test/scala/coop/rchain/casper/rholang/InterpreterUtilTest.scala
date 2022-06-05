@@ -29,8 +29,6 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.duration.FiniteDuration
-
 class InterpreterUtilTest
     extends AnyFlatSpec
     with Matchers
@@ -38,19 +36,11 @@ class InterpreterUtilTest
     with BlockDagStorageFixture {
   import BlockGenerator.step
 
-  private class DiscreteTime extends Time[Task] {
-    private var currentTime                                  = 4L
-    override val currentMillis: Task[Long]                   = Task(currentTime)
-    override val nanoTime: Task[Long]                        = Task(currentTime)
-    override def sleep(duration: FiniteDuration): Task[Unit] = Task.sleep(duration)
-    def advance()                                            = Task(currentTime = currentTime + 1)
-  }
-
   implicit val logEff                    = new LogStub[Task]
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = new NoopSpan[Task]
   implicit val logSource: LogSource      = LogSource(this.getClass)
-  implicit private val timeEff           = new DiscreteTime
+  implicit private val timeEff           = Time.fromTimer[Task]
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
@@ -746,7 +736,6 @@ class InterpreterUtilTest
                              runtimeManager
                            )
           Right(tsHash) = validateResult
-          _             <- timeEff.advance()
         } yield tsHash.map(_.toHexString) should be(Some(computedTsHash.toHexString))
       }
   }
