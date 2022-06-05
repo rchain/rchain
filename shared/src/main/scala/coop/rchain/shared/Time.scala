@@ -1,11 +1,16 @@
 package coop.rchain.shared
 
-import cats._, cats.data._, cats.syntax.all._
+import cats.Monad
+import cats.data.EitherT
+import cats.effect.Timer
 import cats.tagless._
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib._
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, NANOSECONDS}
 
+// TODO: there is no reason for custom Timer definition, remove it
+//  - for testing TestScheduler (monix) ot TestContext (cats-laws) (TestControl cats.effect 3) should be used
 @autoFunctorK
 @autoSemigroupalK
 @autoProductNK
@@ -23,6 +28,16 @@ object Time extends TimeInstances {
       def currentMillis: T[F, Long]                   = TM.currentMillis.liftM[T]
       def nanoTime: T[F, Long]                        = TM.nanoTime.liftM[T]
       def sleep(duration: FiniteDuration): T[F, Unit] = TM.sleep(duration).liftM[T]
+    }
+
+  /**
+    * Default implementation from cats [[Timer]]
+    */
+  def fromTimer[F[_]](implicit timer: Timer[F]): Time[F] =
+    new Time[F] {
+      def currentMillis: F[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: F[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): F[Unit] = timer.sleep(duration)
     }
 }
 

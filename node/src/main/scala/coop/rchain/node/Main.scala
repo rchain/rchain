@@ -128,7 +128,7 @@ object Main {
         options.grpcMaxRecvMessageSize()
       )
 
-    implicit val time: Time[F] = effects.time
+    implicit val time: Time[F] = Time.fromTimer
 
     val program = subcommand(options) match {
       case Eval(files, printUnmatchedSendsOnly) =>
