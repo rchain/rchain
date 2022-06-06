@@ -7,7 +7,7 @@ import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.rholang.Resources.{copyStorage, mkTestRNodeStoreManager}
-import coop.rchain.casper.rholang.Tools
+import coop.rchain.casper.rholang.{Resources, Tools}
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.crypto.PrivateKey
@@ -143,7 +143,7 @@ class RhoSpec(
         .evalMap(
           RhoRuntime.createRuntime(
             _,
-            Genesis.NonNegativeMergeableTagName,
+            Resources.dummyMergeableTag,
             additionalSystemProcesses = testFrameworkContracts(testResultCollector)
           )
         )

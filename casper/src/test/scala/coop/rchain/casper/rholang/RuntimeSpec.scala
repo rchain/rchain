@@ -26,7 +26,7 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
 
     for {
       store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
+      runtime <- RhoRuntime.createRuntime(store, Resources.dummyMergeableTag)
 
       /**
         * Root hashes compatible with RChain main net network
@@ -77,7 +77,7 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
 
     for {
       store      <- kvm.rSpaceStores
-      runtime    <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
+      runtime    <- RhoRuntime.createRuntime(store, Resources.dummyMergeableTag)
       r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty, random)
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint

@@ -8,9 +8,10 @@ import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
-import coop.rchain.models.Par
+import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
@@ -23,6 +24,14 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
 
 object Resources {
+
+  // some tests doesn't require mergeable function could use some random tag
+  val dummyMergeableTag: Par = {
+    val rand = Blake2b512Random(10)
+    import coop.rchain.models.rholang.implicits._
+    GPrivate(ByteString.copyFrom(rand.next()))
+
+  }
 
   def mkTestRNodeStoreManager[F[_]: Concurrent: Log](
       dirPath: Path
@@ -43,7 +52,7 @@ object Resources {
 
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
       prefix: String,
-      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
+      mergeableTagName: Par = dummyMergeableTag
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
     mkTempDir[F](prefix)
       .evalMap(mkTestRNodeStoreManager[F])
@@ -53,7 +62,7 @@ object Resources {
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
   def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
       kvm: KeyValueStoreManager[F],
-      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
+      mergeableTagName: Par = dummyMergeableTag
   )(
       implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
@@ -88,7 +97,7 @@ object Resources {
       runtimeManagerWithHistory <- RuntimeManager.createWithHistory(
                                     rStore,
                                     mStore,
-                                    Genesis.NonNegativeMergeableTagName,
+                                    dummyMergeableTag,
                                     RuntimeManager.noOpExecutionTracker[F]
                                   )
     } yield runtimeManagerWithHistory

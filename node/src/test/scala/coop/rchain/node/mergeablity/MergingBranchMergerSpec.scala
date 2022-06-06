@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
@@ -40,9 +41,10 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
   implicit val timeF: Time[Task] = new LogicalTime[Task]
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
-    dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
-    rm  <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm))
+    dir          <- Resources.copyStorage[Task](genesisContext.storageDirectory)
+    kvm          <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
+    mergeableTag = Genesis.NonNegativeMergeableTagName(genesis.shardId, PublicKey(genesis.sender))
+    rm           <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
   } yield rm
 
   def txRho(payer: String, payee: String) =

@@ -6,7 +6,7 @@ import coop.rchain.casper.rholang.Resources
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, GenesisContext}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Par
 import coop.rchain.node.web.{PreCharge, Refund, Transaction, UserDeploy}
@@ -46,7 +46,10 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
                  )
         transactionAPI = Transaction[Task](
           blockReportAPI,
-          Par(unforgeables = Seq(Transaction.transferUnforgeable))
+          Transaction.transferUnforgeable(
+            this.genesis.genesisBlock.shardId,
+            PublicKey(this.genesis.genesisBlock.sender)
+          )
         )
         transferBlock <- validator.addBlock(deploy)
         _             <- readonly.addBlock(transferBlock)

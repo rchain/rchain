@@ -93,7 +93,7 @@ object Interactive {
     val kvm                                = RNodeKeyValueStoreManager[Task](p).unsafeRunSync
     val rspaceStore                        = kvm.rSpaceStores.runSyncUnsafe()
     val runtime =
-      RhoRuntime.createRuntime[Task](rspaceStore, Genesis.NonNegativeMergeableTagName).unsafeRunSync
+      RhoRuntime.createRuntime[Task](rspaceStore, Resources.dummyMergeableTag).unsafeRunSync
     new Interactive(runtime)
   }
 }

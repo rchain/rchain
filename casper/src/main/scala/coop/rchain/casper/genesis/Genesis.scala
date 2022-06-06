@@ -3,14 +3,18 @@ package coop.rchain.casper.genesis
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
-import coop.rchain.casper.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.{GPrivate, Par}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 final case class Genesis(
     shardId: String,
@@ -22,14 +26,23 @@ final case class Genesis(
 
 object Genesis {
 
-  val NonNegativeMergeableTagName: Par = {
-    val rand = Tools.unforgeableNameRng(
-      StandardDeploys.nonNegativeNumberPubKey,
-      StandardDeploys.nonNegativeNumberTimestamp
-    )
+  def NonNegativeMergeableTagName(shardId: String, validatorKey: PublicKey): Par = {
+    val rand = BlockRandomSeed(
+      shardId,
+      0,
+      validatorKey,
+      Blake2b256Hash.fromByteString(emptyStateHashFixed)
+    ).generateRandomNumber.splitByte(3.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
     import coop.rchain.models.rholang.implicits._
     val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
     GPrivate(ByteString.copyFrom(unforgeableByte))
+  }
+
+  // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
+  def MainnetNonNegativeMergeableTagName: Par = {
+    val rand = Blake2b512Random(10)
+    import coop.rchain.models.rholang.implicits._
+    GPrivate(ByteString.copyFrom(rand.next()))
   }
 
   def defaultBlessedTerms(

@@ -44,6 +44,7 @@ trait ComputeMerge {
     *
     */
   def computeMergeCase[F[_]: Concurrent: Span: Log: Metrics: Parallel: ContextShift](
+      baseDeployRand: Blake2b512Random,
       baseDeploySources: Seq[Signed[DeployData]],
       leftDeploySources: Seq[Signed[DeployData]],
       rightDeploySources: Seq[Signed[DeployData]],
@@ -61,7 +62,7 @@ trait ComputeMerge {
         case (runtime, _, historyRepo) =>
           for {
             baseDeploysRes <- baseDeploySources.toList.traverse(
-                               runtime.processDeployWithMergeableData(_, Blake2b512Random(10))
+                               runtime.processDeployWithMergeableData(_, baseDeployRand)
                              )
             (baseDeploys, baseMergeChs, _) = baseDeploysRes
               .map(UserDeployRuntimeResult.unapply(_).get)

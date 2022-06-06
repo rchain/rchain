@@ -122,7 +122,7 @@ object Setup {
                  .createWithHistory[F](
                    rStores,
                    mergeStore,
-                   Genesis.NonNegativeMergeableTagName,
+                   Genesis.MainnetNonNegativeMergeableTagName,
                    executionTracker
                  )
         } yield rm
@@ -322,7 +322,7 @@ object Setup {
       // Transaction API
       transactionAPI = Transaction[F](
         blockReportApi,
-        Par(unforgeables = Seq(Transaction.transferUnforgeable))
+        Transaction.MainnetTransferUnforgeable
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
 

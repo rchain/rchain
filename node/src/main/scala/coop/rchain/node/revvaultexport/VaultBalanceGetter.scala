@@ -56,10 +56,16 @@ object VaultBalanceGetter {
   def getAllVaultBalance[F[_]: Sync](
       vaultTreeHashMapDepth: Int,
       vaultChannel: Par,
+      storeTokenUnf: Par,
       runtime: RhoRuntime[F]
   ): F[List[(ByteString, Long)]] =
     for {
-      vaultMap <- RhoTrieTraverser.traverseTrie(vaultTreeHashMapDepth, vaultChannel, runtime)
+      vaultMap <- RhoTrieTraverser.traverseTrie(
+                   vaultTreeHashMapDepth,
+                   vaultChannel,
+                   storeTokenUnf,
+                   runtime
+                 )
       extracted = RhoTrieTraverser.vecParMapToMap(
         vaultMap,
         p => p.exprs.head.getGByteArray,

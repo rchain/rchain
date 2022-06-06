@@ -6,8 +6,12 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.rholang.Tools
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
@@ -39,13 +43,19 @@ object StateBalances {
   // the genesis vaultMap unforgeable name is no longer fixed for every chain.
   // It is undetermined and it depends on the genesis ceremony.
   // But we could try to get it from the extractState we added.
-  def getGenesisVaultMapPar[F[_]: Sync](runtime: RhoRuntime[F]): F[Par] = {
+  def getGenesisVaultMapPar[F[_]: Sync](
+      shardId: String,
+      validatorKey: PublicKey,
+      runtime: RhoRuntime[F]
+  ): F[Par] = {
     val revVault = {
-      val seedForRevVault = Tools.unforgeableNameRng(
-        StandardDeploys.revVaultPubKey,
-        StandardDeploys.revVaultTimestamp
-      )
-      val unfogeableBytes = seedForRevVault.next()
+      val rand = BlockRandomSeed(
+        shardId,
+        0,
+        validatorKey,
+        Blake2b256Hash.fromByteString(emptyStateHashFixed)
+      ).generateRandomNumber.splitByte(6.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
+      val unfogeableBytes = rand.next()
       Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(unfogeableBytes.toByteString)))))
     }
 
@@ -59,7 +69,16 @@ object StateBalances {
     } yield unf
   }
 
+  // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
+  def MainnetStoreTokenUnf: Par = {
+    val rand = Blake2b512Random(10)
+    import coop.rchain.models.rholang.implicits._
+    GPrivate(ByteString.copyFrom(rand.next()))
+  }
+
   def read[F[_]: Concurrent: Parallel: ContextShift](
+      shardId: String,
+      validatorKey: PublicKey,
       blockHash: String,
       vaultTreeHashMapDepth: Int,
       dataDir: Path
@@ -82,13 +101,14 @@ object StateBalances {
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
-      vaultChannel               <- getGenesisVaultMapPar(rhoRuntime)
+      vaultChannel               <- getGenesisVaultMapPar(shardId, validatorKey, rhoRuntime)
       _ <- rhoRuntime.reset(
             Blake2b256Hash.fromByteString(block.body.state.postStateHash)
           )
       balances <- VaultBalanceGetter.getAllVaultBalance(
                    vaultTreeHashMapDepth,
                    vaultChannel,
+                   MainnetStoreTokenUnf,
                    rhoRuntime
                  )
     } yield balances

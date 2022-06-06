@@ -4,6 +4,7 @@ import cats.effect.concurrent.Deferred
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
@@ -16,7 +17,10 @@ import coop.rchain.casper.protocol.{
   SingleReport,
   SlashSystemDeployDataProto
 }
+import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.casper.rholang.Tools
+import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.node.web.Transaction.TransactionStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -245,13 +249,23 @@ object Transaction {
   // 3. The random seed algorithm for unforgeable name of the deploy is changed
   //
   // This is not needed when onChain transfer history is implemented and deployed to new network in the future.
-  val transferUnforgeable = {
-    val seedForRevVault = Tools.unforgeableNameRng(
-      StandardDeploys.revVaultPubKey,
-      StandardDeploys.revVaultTimestamp
-    )
-    val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(10).next()
-    GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(unfogeableBytes))))
+  def transferUnforgeable(shardId: String, validatorKey: PublicKey): Par = {
+    val rand = BlockRandomSeed(
+      shardId,
+      0,
+      validatorKey,
+      Blake2b256Hash.fromByteString(emptyStateHashFixed)
+    ).generateRandomNumber.splitByte(6.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
+    val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
+    import coop.rchain.models.rholang.implicits._
+    GPrivate(ByteString.copyFrom(unfogeableBytes))
+  }
+
+  // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
+  def MainnetTransferUnforgeable: Par = {
+    val rand = Blake2b512Random(10)
+    import coop.rchain.models.rholang.implicits._
+    GPrivate(ByteString.copyFrom(rand.next()))
   }
 
   def apply[F[_]: Concurrent](

@@ -3,6 +3,7 @@ package coop.rchain.node.revvaultexport
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
+import coop.rchain.crypto.PublicKey
 import coop.rchain.node.revvaultexport.mainnet1.StateBalanceMain
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -50,10 +51,19 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
         runtime               <- node.runtimeManager.spawnRuntime
         _                     <- runtime.reset(genesisPostStateHash)
         vaultTreeHashMapDepth = StateBalanceMain.genesisVaultMapDepth
-        vaultChannel          <- StateBalances.getGenesisVaultMapPar(runtime)
+        vaultChannel <- StateBalances.getGenesisVaultMapPar(
+                         genesis.genesisBlock.shardId,
+                         PublicKey(genesis.genesisBlock.sender),
+                         runtime
+                       )
+        storeToken = RhoTrieTraverser.storeTokenUnforgeable(
+          genesis.genesisBlock.shardId,
+          PublicKey(genesis.genesisBlock.sender)
+        )
         balances <- VaultBalanceGetter.getAllVaultBalance(
                      vaultTreeHashMapDepth,
                      vaultChannel,
+                     storeToken,
                      runtime
                    )
         // 9000000 is hard coded in genesis block generation

@@ -7,7 +7,7 @@ import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -189,7 +189,7 @@ object GenesisBuilder {
       rStore         <- kvsManager.rSpaceStores
       mStore         <- RuntimeManager.mergeableStore(kvsManager)
       t              = RuntimeManager.noOpExecutionTracker[Task]
-      runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName, t)
+      runtimeManager <- RuntimeManager(rStore, mStore, Resources.dummyMergeableTag, t)
       genesis <- {
         implicit val rm = runtimeManager
         Genesis.createGenesisBlock[Task](genesisParameters)

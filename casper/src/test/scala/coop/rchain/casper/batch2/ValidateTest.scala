@@ -17,7 +17,7 @@ import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -564,7 +564,10 @@ class ValidateTest
         runtimeManager <- RuntimeManager[Task](
                            rStore,
                            mStore,
-                           Genesis.NonNegativeMergeableTagName,
+                           Genesis.NonNegativeMergeableTagName(
+                             genesis.shardId,
+                             PublicKey(genesis.sender)
+                           ),
                            RuntimeManager.noOpExecutionTracker[Task]
                          )
         dag <- blockDagStorage.getRepresentation
