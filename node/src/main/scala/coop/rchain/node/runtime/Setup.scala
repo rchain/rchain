@@ -218,7 +218,7 @@ object Setup {
           blockReceiverState,
           incomingBlockStream,
           validatedBlocksStream,
-          casperShardConf
+          casperShardConf.shardName
         )
       }
 

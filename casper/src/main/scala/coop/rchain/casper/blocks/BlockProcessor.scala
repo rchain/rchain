@@ -9,7 +9,7 @@ import coop.rchain.casper.protocol.{BlockMessage, CommUtil}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax.casperSyntaxCommUtil
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
 import fs2.Stream
 import fs2.concurrent.Queue
