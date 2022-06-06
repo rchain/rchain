@@ -188,7 +188,7 @@ object BlockReceiver {
     // TODO: add logging of missing dependencies
     // def logMissingDeps(b: BlockMessage) = Log[F].info(s"Block ${blockStr(b)} missing dependencies.")
 
-    // CHeck if input string is equal to configuration shard ID
+    // Check if input string is equal to configuration shard ID
     def checkIfEqualToConfigShardId(shardId: String) = {
       val isValid = confShardName == shardId
       def logMsg  = s"Ignored block with invalid shard, expected: $confShardName, received: $shardId"
