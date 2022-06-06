@@ -25,7 +25,7 @@ case object EndStoreBlock extends RecvStatus
 // Block sent to validation
 case object PendingValidation extends RecvStatus
 // Requested missing dependencies
-case object PendingRequest extends RecvStatus
+case object Requested extends RecvStatus
 
 object BlockReceiverState {
   def apply[MId]: BlockReceiverState[MId] = BlockReceiverState(
@@ -62,7 +62,7 @@ final case class BlockReceiverState[MId](
     */
   def beginStored(id: MId): (BlockReceiverState[MId], Boolean) = {
     // If state is not known or pending request, it's expected so continue with receiving
-    val expectedReceive = receiveSt.get(id).collect { case PendingRequest => true }.getOrElse(true)
+    val expectedReceive = receiveSt.get(id).collect { case Requested => true }.getOrElse(true)
     if (expectedReceive) {
       // Update state to begin received status
       val newReceiveSt = receiveSt + ((id, BeginStoreBlock))
@@ -94,7 +94,7 @@ final case class BlockReceiverState[MId](
 
           // Update block status to received and set unseen parents to Pending receive state
           val newReceiveStored  = receiveSt + ((id, EndStoreBlock))
-          val newPendingReceive = unseenParents.map((_, PendingRequest))
+          val newPendingReceive = unseenParents.map((_, Requested))
           val newReceiveSt      = newReceiveStored ++ newPendingReceive
 
           // Update children relations of received block
