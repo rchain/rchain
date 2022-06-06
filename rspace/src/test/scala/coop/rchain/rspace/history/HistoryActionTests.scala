@@ -2,7 +2,6 @@ package coop.rchain.rspace.history
 
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.History.KeyPath
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.shared.Base16
 import coop.rchain.store.InMemoryKeyValueStore
@@ -18,7 +17,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
 
-class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryTestBase {
+class HistoryActionTests extends AnyFlatSpec with Matchers {
 
   "creating and read one record" should "works" in withEmptyHistory { emptyHistoryF =>
     val data = insert(_zeros) :: Nil
@@ -226,7 +225,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryT
       val sizeInserts = 10000
       val sizeDeletes = 3000
       val sizeUpdates = 1000
-      val state       = TrieMap[KeyPath, Blake2b256Hash]()
+      val state       = TrieMap[KeySegment, Blake2b256Hash]()
       val inserts     = generateRandomInsert(0)
       for {
         emptyHistory <- emptyHistoryF
@@ -235,7 +234,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryT
               (
                   History[Task],
                   List[InsertAction],
-                  TrieMap[KeyPath, Blake2b256Hash]
+                  TrieMap[KeySegment, Blake2b256Hash]
               )
             ](emptyHistory, inserts, state) {
               case ((history, inserts, state), _) =>
@@ -290,13 +289,8 @@ class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryT
     f(emptyHistory, store).runSyncUnsafe(20.seconds)
   }
 
-  def skipShouldHaveAffix(t: Trie, bytes: KeyPath): Assertion =
-    t match {
-      case Skip(affix, _) => affix.toSeq.toList shouldBe bytes
-      case p              => fail("unknown trie prefix" + p)
-    }
-
-  def randomKey(size: Int): Seq[Byte] = List.fill(size)((Random.nextInt(256) - 128).toByte)
+  def randomKey(size: Int): KeySegment =
+    KeySegment(List.fill(size)((Random.nextInt(256) - 128).toByte))
 
   def generateRandomInsert(size: Int): List[InsertAction] = List.fill(size)(insert(randomKey(32)))
   def generateRandomDelete(size: Int): List[DeleteAction] = List.fill(size)(delete(randomKey(32)))
@@ -306,9 +300,9 @@ class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryT
     Random.shuffle(inserts).take(size).map(i => insert(i.key))
 
   def updateState(
-      state: TrieMap[KeyPath, Blake2b256Hash],
+      state: TrieMap[KeySegment, Blake2b256Hash],
       actions: List[HistoryAction]
-  ): TrieMap[KeyPath, Blake2b256Hash] = {
+  ): TrieMap[KeySegment, Blake2b256Hash] = {
     actions.map {
       case InsertAction(key, hash) => state.put(key, hash)
       case DeleteAction(key)       => state.remove(key)
@@ -319,26 +313,25 @@ class HistoryActionTests extends AnyFlatSpec with Matchers with InMemoryHistoryT
 
 object TestData {
 
-  implicit def toByteVector(bytes: KeyPath): ByteVector = ByteVector(bytes)
+  val _zeros: KeySegment     = KeySegment(List.fill(32)(0.toByte))
+  val _zerosOnes: KeySegment = KeySegment(List.fill(16)(0.toByte) ++ List.fill(16)(1.toByte))
+  val _31zeros: KeySegment   = KeySegment(List.fill(31)(0.toByte))
 
-  val _zeros: KeyPath           = List.fill(32)(0).map(_.toByte)
-  val _zerosOnes: KeyPath       = (List.fill(16)(0) ++ List.fill(16)(1)).map(_.toByte)
-  val _31zeros: KeyPath         = List.fill(31)(0).map(_.toByte)
-  def zerosAnd(i: Int): KeyPath = _31zeros :+ i.toByte
-  def prefixWithZeros(s: String): KeyPath = {
-    val a = List.fill(32 - s.length)(0).map(_.toByte)
-    val b = s.toCharArray.toList.map(_.asDigit).map(_.toByte)
-    a ++ b
+  def zerosAnd(i: Int): KeySegment = _31zeros :+ i.toByte
+  def prefixWithZeros(s: String): KeySegment = {
+    val a = List.fill(32 - s.length)(0.toByte)
+    val b = s.toCharArray.toList.map(_.asDigit.toByte)
+    KeySegment(a ++ b)
   }
 
-  def hexKey(s: String): Seq[Byte] = Base16.unsafeDecode(s).toList
+  def hexKey(s: String): KeySegment = KeySegment(Base16.unsafeDecode(s).toList)
 
   def randomBlake: Blake2b256Hash =
     Blake2b256Hash.create(Random.alphanumeric.take(32).map(_.toByte).toArray)
 
-  def zerosBlake: Blake2b256Hash = Blake2b256Hash.create(List.fill(32)(0).map(_.toByte).toArray)
+  def zerosBlake: Blake2b256Hash = Blake2b256Hash.create(List.fill(32)(0.toByte).toArray)
 
-  def insert(k: KeyPath): InsertAction = InsertAction(k, randomBlake)
+  def insert(k: KeySegment): InsertAction = InsertAction(k, randomBlake)
 
-  def delete(k: KeyPath): DeleteAction = DeleteAction(k)
+  def delete(k: KeySegment): DeleteAction = DeleteAction(k)
 }

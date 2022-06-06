@@ -203,7 +203,7 @@ object RuntimeException {
   def unapply(arg: RuntimeException): Option[String] = Option(arg.getMessage)
 }
 
-trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
+trait InMemoryHistoryRepositoryTestBase {
 
   def inmemRootsStore =
     new RootsStore[Task] {
