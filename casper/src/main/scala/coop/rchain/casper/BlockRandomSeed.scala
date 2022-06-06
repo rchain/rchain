@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed.encode
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
@@ -14,7 +15,10 @@ final case class BlockRandomSeed(
     blockNumber: Long,
     validatorPublicKey: PublicKey,
     preStateHash: Blake2b256Hash
-)
+) {
+  def generateRandomNumber: Blake2b512Random =
+    Blake2b512Random(encode(this))
+}
 
 object BlockRandomSeed {
   private val codecPublicKey: Codec[PublicKey] = variableSizeBytes(uint8, bytes)
@@ -26,18 +30,14 @@ object BlockRandomSeed {
   private def encode(blockRandomSeed: BlockRandomSeed): Array[Byte] =
     codecBlockRandomSeed.encode(blockRandomSeed).require.toByteArray
 
-  def generateRandomNumber(blockRandomSeed: BlockRandomSeed): Blake2b512Random =
-    Blake2b512Random(encode(blockRandomSeed))
-
   def fromBlockData(blockData: BlockData, stateHash: Blake2b256Hash): Blake2b512Random =
-    generateRandomNumber(
-      BlockRandomSeed(
-        blockData.shardId,
-        blockData.blockNumber,
-        blockData.sender,
-        stateHash
-      )
-    )
+    BlockRandomSeed(
+      blockData.shardId,
+      blockData.blockNumber,
+      blockData.sender,
+      stateHash
+    ).generateRandomNumber
+
   def fromBlockData(blockData: BlockData, stateHash: ByteString): Blake2b512Random =
     fromBlockData(blockData, Blake2b256Hash.fromByteString(stateHash))
 
