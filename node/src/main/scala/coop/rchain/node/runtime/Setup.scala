@@ -1,6 +1,6 @@
 package coop.rchain.node.runtime
 
-import cats.Parallel
+import cats.{Parallel, Show}
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
@@ -28,6 +28,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
+import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
@@ -39,6 +40,7 @@ import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.{ReportingRoutes, Transaction}
 import coop.rchain.rholang.interpreter.RhoRuntime
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
@@ -211,7 +213,10 @@ object Setup {
 
       // Block receiver, incoming blocks from peers
       incomingBlockStream = incomingBlocksQueue.dequeue
-      blockReceiverState  <- Ref.of(BlockReceiverState[BlockHash])
+      blockReceiverState <- {
+        implicit val hashShow = Show.show[BlockHash](_.toHexString)
+        Ref.of(BlockReceiverState[BlockHash])
+      }
       blockReceiverStream <- {
         implicit val (bs, bd, br) = (blockStore, blockDagStorage, blockRetriever)
         BlockReceiver[F](

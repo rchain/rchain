@@ -1,5 +1,6 @@
 package coop.rchain.casper.blocks
 
+import cats.Show
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
@@ -28,7 +29,7 @@ case object PendingValidation extends RecvStatus
 case object Requested extends RecvStatus
 
 object BlockReceiverState {
-  def apply[MId]: BlockReceiverState[MId] = BlockReceiverState(
+  def apply[MId: Show]: BlockReceiverState[MId] = BlockReceiverState(
     blocksSt = Map(),
     receiveSt = Map(),
     childRelations = Map()
@@ -41,7 +42,7 @@ object BlockReceiverState {
   * It consist of three events. Two to store blocks (begin and end) to prevent race when
   * storing blocks and finished when block is validated and added to the DAG (end of processing).
   */
-final case class BlockReceiverState[MId](
+final case class BlockReceiverState[MId: Show](
     /**
       * Blocks received and stored in BlockStore (not validated) with parent relations
       */
@@ -114,6 +115,8 @@ final case class BlockReceiverState[MId](
 
           (newState, unseenParents)
       }
+      // TODO: this should never happen, protected by assert
+      //  (maybe we need helper function to wrap the whole pattern or return error to caller (effect))
       .getOrElse((this, Set()))
   }
 
@@ -123,51 +126,53 @@ final case class BlockReceiverState[MId](
     * @return next blocks with validated dependencies
     */
   def finished(id: MId, parents: Set[MId]): (BlockReceiverState[MId], Set[MId]) = {
-    val parentsInState = blocksSt.get(id)
+    val parentsInState = blocksSt.contains(id)
     val isReceived = receiveSt.get(id).collect {
       case EndStoreBlock     =>
       case PendingValidation =>
     }
-    (parentsInState <* isReceived)
-      .as {
-        // Update blocks state
-        //  - remove finished block from child dependencies and remove finished block
-        //  - remove finished block from blocks state
-        val childs        = childRelations.get(id).toList.flatten
-        val updatedBlocks = childs.map(b => (b, blocksSt(b) - id)).toMap
-        val newBlocksSt   = blocksSt ++ updatedBlocks - id
+    // To finish block it must be present in the state (parents relations and at least stored)
+    assert(
+      parentsInState && isReceived.isDefined,
+      s"Calling finished on unexpected block hash ${id.show}."
+    )
 
-        // Get next blocks with all dependencies validated and not already in pending validation state
-        val depsValidated = updatedBlocks.filter {
-          case (bid, parents) =>
-            def pending = receiveSt.get(bid).contains(PendingValidation)
-            parents.isEmpty && !pending
-        }.keySet
+    // Update blocks state
+    //  - remove finished block from child dependencies and remove finished block
+    //  - remove finished block from blocks state
+    val childs        = childRelations.get(id).toList.flatten
+    val updatedBlocks = childs.map(b => (b, blocksSt(b) - id)).toMap
+    val newBlocksSt   = blocksSt ++ updatedBlocks - id
 
-        // Update received state
-        //  - set to pending validation state
-        //  - remove finished block from received state
-        val depsValidatedPending = depsValidated.map((_, PendingValidation))
-        val newReceiveSt         = receiveSt ++ depsValidatedPending - id
+    // Get next blocks with all dependencies validated and not already in pending validation state
+    val depsValidated = updatedBlocks.filter {
+      case (bid, parents) =>
+        def pending = receiveSt.get(bid).contains(PendingValidation)
+        parents.isEmpty && !pending
+    }.keySet
 
-        // Remove finished block from children relations
-        val newChildRelations = parents.foldLeft(childRelations) {
-          case (acc, parent) =>
-            val childs = acc.getOrElse(parent, Set()) - id
-            if (childs.isEmpty) acc - parent
-            else acc + ((parent, childs))
-        }
+    // Update received state
+    //  - set to pending validation state
+    //  - remove finished block from received state
+    val depsValidatedPending = depsValidated.map((_, PendingValidation))
+    val newReceiveSt         = receiveSt ++ depsValidatedPending - id
 
-        // New state
-        val newState = copy(
-          blocksSt = newBlocksSt,
-          receiveSt = newReceiveSt,
-          childRelations = newChildRelations
-        )
+    // Remove finished block from children relations
+    val newChildRelations = parents.foldLeft(childRelations) {
+      case (acc, parent) =>
+        val childs = acc.getOrElse(parent, Set()) - id
+        if (childs.isEmpty) acc - parent
+        else acc + ((parent, childs))
+    }
 
-        (newState, depsValidated)
-      }
-      .getOrElse((this, Set()))
+    // New state
+    val newState = copy(
+      blocksSt = newBlocksSt,
+      receiveSt = newReceiveSt,
+      childRelations = newChildRelations
+    )
+
+    (newState, depsValidated)
   }
 }
 
