@@ -2,11 +2,11 @@ package coop.rchain.store
 
 import cats.effect.Sync
 import cats.syntax.all._
+import coop.rchain.shared.ScalaCheckOps.forAllF
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.testing.scalatest.MonixTaskTest
-import org.scalacheck.effect.PropF
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -63,83 +63,63 @@ class InMemoryKeyValueStoreSpec
   }
 
   it should "put and get data from the store" in {
-    PropF
-      .forAllF(genData) { expected =>
-        implicit val kvm = InMemoryStoreManager[Task]
-        val sut          = new KeyValueStoreSut[Task]
-        val test = for {
-          result <- sut.testPutGet(expected)
-        } yield result shouldBe expected
-
-        test.void
-      }
-      .check()
-      .map(r => assert(r.passed, r.status.toString))
+    forAllF(genData) { expected =>
+      implicit val kvm = InMemoryStoreManager[Task]
+      val sut          = new KeyValueStoreSut[Task]
+      for {
+        result <- sut.testPutGet(expected)
+      } yield result shouldBe expected
+    }
   }
 
   it should "put and get all data from the store" in {
-    PropF
-      .forAllF(genData) { expected =>
-        implicit val kvm = InMemoryStoreManager[Task]
-        val sut          = new KeyValueStoreSut[Task]
-        val test = for {
-          result <- sut.testPutIterate(expected)
-        } yield result shouldBe expected
-
-        test.void
-      }
-      .check()
-      .map(r => assert(r.passed, r.status.toString))
+    forAllF(genData) { expected =>
+      implicit val kvm = InMemoryStoreManager[Task]
+      val sut          = new KeyValueStoreSut[Task]
+      for {
+        result <- sut.testPutIterate(expected)
+      } yield result shouldBe expected
+    }
   }
 
   it should "put and collect partial data from the store" in {
-    PropF
-      .forAllF(genData) { expected =>
-        implicit val kvm = InMemoryStoreManager[Task]
-        val sut          = new KeyValueStoreSut[Task]
+    forAllF(genData) { expected =>
+      implicit val kvm = InMemoryStoreManager[Task]
+      val sut          = new KeyValueStoreSut[Task]
 
-        val keys = expected.toList.map(_._1)
-        val kMin = keys.min
-        val kMax = keys.min
-        val kAvg = kMax - kMin / 2
-        // Filter expected values
-        val expectedFiltered = expected.filter {
-          case (k, _) => k >= kAvg
-        }
-
-        val test = for {
-          // Filter using partial function
-          result <- sut.testPutCollect(expected) {
-                     case (k, fv) if k >= kAvg => (k, fv())
-                   }
-        } yield result shouldBe expectedFiltered
-
-        test.void
+      val keys = expected.toList.map(_._1)
+      val kMin = keys.min
+      val kMax = keys.min
+      val kAvg = kMax - kMin / 2
+      // Filter expected values
+      val expectedFiltered = expected.filter {
+        case (k, _) => k >= kAvg
       }
-      .check()
-      .map(r => assert(r.passed, r.status.toString))
+
+      for {
+        // Filter using partial function
+        result <- sut.testPutCollect(expected) {
+                   case (k, fv) if k >= kAvg => (k, fv())
+                 }
+      } yield result shouldBe expectedFiltered
+    }
   }
 
   it should "not have deleted keys in the store" in {
-    PropF
-      .forAllF(genData) { input =>
-        implicit val kvm = InMemoryStoreManager[Task]
-        val sut          = new KeyValueStoreSut[Task]
-        val allKeys      = input.keysIterator.toVector
-        // Take some keys for deletion
-        val (getKeys, deleteKeys) = allKeys.splitAt(allKeys.size / 2)
-        val values                = getKeys.map(input.get)
-        // Expected input without deleted keys
-        val expected =
-          getKeys.zip(values).filter(_._2.nonEmpty).map { case (k, v) => (k, v.get) }.toMap
-        val test = for {
-          result <- sut.testPutDeleteGet(input, deleteKeys)
-        } yield result shouldBe expected
-
-        test.void
-      }
-      .check()
-      .map(r => assert(r.passed, r.status.toString))
+    forAllF(genData) { input =>
+      implicit val kvm = InMemoryStoreManager[Task]
+      val sut          = new KeyValueStoreSut[Task]
+      val allKeys      = input.keysIterator.toVector
+      // Take some keys for deletion
+      val (getKeys, deleteKeys) = allKeys.splitAt(allKeys.size / 2)
+      val values                = getKeys.map(input.get)
+      // Expected input without deleted keys
+      val expected =
+        getKeys.zip(values).filter(_._2.nonEmpty).map { case (k, v) => (k, v.get) }.toMap
+      for {
+        result <- sut.testPutDeleteGet(input, deleteKeys)
+      } yield result shouldBe expected
+    }
   }
 
 }
