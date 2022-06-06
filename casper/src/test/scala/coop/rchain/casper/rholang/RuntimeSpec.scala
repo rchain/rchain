@@ -9,16 +9,17 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
-import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
-import org.scalatest.flatspec.AnyFlatSpec
+import monix.execution.Scheduler
+import monix.testing.scalatest.MonixTaskTest
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class RuntimeSpec extends AnyFlatSpec with Matchers {
-  import monix.execution.Scheduler.Implicits.global
+class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
+  implicit override def scheduler: Scheduler = Scheduler.io("monix-task-support-spec")
 
-  "emptyStateHash" should "be the same as hard-coded cached value" in effectTest {
+  "emptyStateHash" should "be the same as hard-coded cached value" in {
     implicit val log: Log[Task]         = new Log.NOPLog[Task]
     implicit val span: Span[Task]       = new NoopSpan[Task]
     implicit val metrics: Metrics[Task] = new MetricsNOP[Task]
@@ -49,7 +50,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers {
     } yield emptyHashHardCoded shouldEqual emptyHash
   }
 
-  "stateHash after fixed rholang term execution " should "be hash fixed without hard fork" in effectTest {
+  "stateHash after fixed rholang term execution " should "be hash fixed without hard fork" in {
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val logger: Log[Task]         = Log.log[Task]
