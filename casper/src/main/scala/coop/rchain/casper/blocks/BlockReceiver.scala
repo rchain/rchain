@@ -196,7 +196,7 @@ object BlockReceiver {
     }
 
     // Check if block data is cryptographically safe and part of the same shard
-    def checkIntegrity(b: BlockMessage): F[Boolean] = Sync[F].defer {
+    def checkIfOfInterest(b: BlockMessage): F[Boolean] = Sync[F].defer {
       val validShard = checkIfEqualToConfigShardId(b.shardId)
       // TODO: 1. validation and logging in these checks should be separated
       //       2. logging of these block should indicate that information cannot be trusted
@@ -229,8 +229,8 @@ object BlockReceiver {
     def incomingBlocks(receiverOutputQueue: Queue[F, BlockHash]) =
       incomingBlocksStream
         .evalFilterAsyncUnorderedProcBounded { block =>
-          // Filter (ignore) blocks which doesn't pass integrity check
-          checkIntegrity(block).flatTap(logMalformed(block).unlessA(_))
+          // Filter (ignore) blocks that are not of interest (pass integrity check, incorrect shard or version, ...)
+          checkIfOfInterest(block).flatTap(logMalformed(block).unlessA(_))
         }
         .parEvalMapUnorderedProcBounded { block =>
           // Start block checking, mark begin of checking in the state (begin received "transaction")
