@@ -13,9 +13,11 @@ import coop.rchain.models.syntax._
 import coop.rchain.rholang.build.CompiledRholangTemplate
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
-class PosMultiSigTransferSpec extends FlatSpec with Matchers with Inspectors {
+class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
 

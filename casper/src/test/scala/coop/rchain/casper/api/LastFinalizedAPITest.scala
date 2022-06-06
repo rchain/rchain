@@ -11,11 +11,13 @@ import coop.rchain.models.syntax._
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{EitherValues, FlatSpec, Matchers}
+import org.scalatest.EitherValues
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 // TODO finalizer test for multiparent
 class LastFinalizedAPITest
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with EitherValues
     with BlockGenerator
@@ -30,7 +32,7 @@ class LastFinalizedAPITest
     for {
       blockApi <- createBlockApi(node)
       res      <- blockApi.isFinalized(block.blockHash.toHexString)
-    } yield res.right.value
+    } yield res.value
 
   /*
    * DAG Looks like this:

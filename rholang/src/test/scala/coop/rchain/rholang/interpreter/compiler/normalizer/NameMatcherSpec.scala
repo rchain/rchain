@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
@@ -18,7 +19,7 @@ import coop.rchain.rholang.interpreter.compiler.{
 }
 import monix.eval.Coeval
 
-class NameMatcherSpec extends FlatSpec with Matchers {
+class NameMatcherSpec extends AnyFlatSpec with Matchers {
   val inputs                                   = NameVisitInputs(BoundMapChain.empty[VarSort], FreeMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 

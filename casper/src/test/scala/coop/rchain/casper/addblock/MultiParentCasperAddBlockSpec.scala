@@ -23,11 +23,13 @@ import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable
 
-class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspectors {
+class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspectors {
 
   import InvalidBlock._
   import RSpaceUtil._

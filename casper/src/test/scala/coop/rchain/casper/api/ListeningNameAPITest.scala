@@ -12,8 +12,10 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class ListeningNameAPITest extends FlatSpec with Matchers with Inside with BlockApiFixture {
+class ListeningNameAPITest extends AnyFlatSpec with Matchers with Inside with BlockApiFixture {
 
   import GenesisBuilder._
 

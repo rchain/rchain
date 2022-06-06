@@ -8,14 +8,15 @@ import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Interpreter
 import coop.rchain.shared.{Log, Resources}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FunSuite, Matchers}
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers
 
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.io.Source
 
-class CompilerTests extends FunSuite with Matchers {
+class CompilerTests extends AnyFunSuite with Matchers {
   private val tmpPrefix                   = "rspace-store-"
   private val maxDuration                 = 5.seconds
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]

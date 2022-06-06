@@ -8,10 +8,11 @@ import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+class ProtoUtilTest extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
   "dependenciesHashesOf" should "return hashes of all justifications and parents of a block" in {
     forAll(blockElementGen()) { blockElement =>

@@ -8,11 +8,12 @@ import cats.syntax.all._
 
 import coop.rchain.comm.{NodeIdentifier, PeerNode}
 
-import org.scalatest._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
     extends KademliaRPCRuntime[F, E]
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers {
 
   val kademliaRpcName: String = this.getClass.getSimpleName.replace("Spec", "")

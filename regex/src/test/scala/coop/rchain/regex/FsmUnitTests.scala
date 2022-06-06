@@ -1,7 +1,8 @@
 package coop.rchain.regex
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class FsmUnitTests extends FlatSpec with Matchers {
+class FsmUnitTests extends AnyFlatSpec with Matchers {
   def ignore[A](a: => A): Unit = {
     val _: A = a
     ()

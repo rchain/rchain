@@ -3,9 +3,10 @@ package coop.rchain.casper.util
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.crypto.signatures._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class DeployValidationSpec extends FlatSpec with Matchers {
+class DeployValidationSpec extends AnyFlatSpec with Matchers {
   private val SHARD_ID = "root-shard"
 
   def createFromDeployDataProto(alg: SignaturesAlg) = {

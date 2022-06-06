@@ -1,8 +1,9 @@
 package coop.rchain.regex
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class RegexPatternUnitTests extends FlatSpec with Matchers {
+class RegexPatternUnitTests extends AnyFlatSpec with Matchers {
 
   "CharClassPattern equality" should "pass checks" in {
     assert(CharClassPattern("a") == CharClassPattern("a"))

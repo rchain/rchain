@@ -16,10 +16,12 @@ import coop.rchain.store.InMemoryStoreManager
 import monix.eval._
 import monix.execution.atomic.AtomicAny
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
+trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with OptionValues {
   type T    = ISpace[F, C, P, A, K]
   type ST   = HotStore[F, C, P, A, K]
   type HR   = HistoryRepository[F, C, P, A, K]

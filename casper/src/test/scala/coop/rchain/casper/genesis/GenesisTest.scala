@@ -24,12 +24,14 @@ import coop.rchain.shared.Time
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{EitherValues, FlatSpec, Matchers}
+import org.scalatest.EitherValues
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
 
-class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
+class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
   import GenesisTest._
 
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]

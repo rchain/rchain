@@ -12,11 +12,13 @@ import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
 import monix.eval.Coeval
 import org.scalacheck.{Arbitrary, Gen, Prop}
-import org.scalatest.{FlatSpec, FunSuite, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers
 import cats.instances.AllInstances
 import cats.syntax.AllSyntax
 
-class StreamTSpec extends FlatSpec with Matchers {
+class StreamTSpec extends AnyFlatSpec with Matchers {
 
   val maxDepth = StackSafetySpec.findMaxRecursionDepth()
 
@@ -107,7 +109,7 @@ class StreamTSpec extends FlatSpec with Matchers {
 }
 
 class StreamTLawsSpec
-    extends FunSuite
+    extends AnyFunSuite
     with LowPriorityDerivations
     with AllInstances
     with AllSyntax {

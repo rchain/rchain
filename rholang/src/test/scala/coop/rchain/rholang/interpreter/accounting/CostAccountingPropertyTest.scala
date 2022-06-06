@@ -18,12 +18,13 @@ import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Test.Parameters
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.concurrent.duration._
 
-class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Matchers {
+class CostAccountingPropertyTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   import CostAccountingPropertyTest._
 
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)

@@ -6,10 +6,11 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, _}
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.test.ArbitraryInstances._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-class EncodingSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+class EncodingSpec extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
   type Continuation = WaitingContinuation[Pattern, StringsCaptor]
   type Join         = Seq[String]

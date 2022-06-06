@@ -1,8 +1,9 @@
 package coop.rchain.models
 import monix.eval.Coeval
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MemoSpec extends FlatSpec with Matchers {
+class MemoSpec extends AnyFlatSpec with Matchers {
 
   behavior of "Memo"
 

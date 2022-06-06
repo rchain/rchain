@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.interpreter.ParBuilderUtil.assertCompiledEqual
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class ComplexConsumeSpec extends FlatSpec with Matchers {
+class ComplexConsumeSpec extends AnyFlatSpec with Matchers {
 
   "The normalizer" should "translate consumes with send-receive sources into COMMs" in {
 

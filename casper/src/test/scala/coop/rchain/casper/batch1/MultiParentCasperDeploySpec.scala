@@ -7,10 +7,12 @@ import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
 class MultiParentCasperDeploySpec
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with Inspectors
     with BlockApiFixture {

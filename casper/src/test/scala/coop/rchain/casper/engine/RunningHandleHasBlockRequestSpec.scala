@@ -13,9 +13,11 @@ import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
 import coop.rchain.p2p.EffectsTestInstances
 import monix.eval.Coeval
-import org.scalatest._
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach with Matchers {
+class RunningHandleHasBlockRequestSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   val hash = ByteString.copyFrom("hash", "UTF-8")
   val hbr  = HasBlockRequest(hash)

@@ -5,7 +5,7 @@ import coop.rchain.rholang.interpreter.compiler.Compiler
 import monix.eval.Coeval
 import org.scalatest.EitherValues._
 import org.scalatest.Assertion
-import org.scalatest.Matchers.convertToAnyShouldWrapper
+import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 
 object ParBuilderUtil {
 
@@ -13,6 +13,6 @@ object ParBuilderUtil {
     Compiler[Coeval].sourceToADT(rho, Map.empty[String, Par]).runAttempt
 
   def assertCompiledEqual(s: String, t: String): Assertion =
-    ParBuilderUtil.mkTerm(s).right.value shouldBe ParBuilderUtil.mkTerm(t).right.value
+    ParBuilderUtil.mkTerm(s).value shouldBe ParBuilderUtil.mkTerm(t).value
 
 }

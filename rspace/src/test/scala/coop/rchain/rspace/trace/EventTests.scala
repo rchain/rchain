@@ -8,11 +8,12 @@ import coop.rchain.rspace.serializers.ScodecSerialize.{RichAttempt, _}
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.util
 import coop.rchain.shared.Serialize
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import scodec.codecs.{ignore => cignore, _}
 
-class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+class EventTests extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
   "A Produce" should "contain the expected hash" in {
     forAll { (channel: String, data: String, persist: Boolean) =>

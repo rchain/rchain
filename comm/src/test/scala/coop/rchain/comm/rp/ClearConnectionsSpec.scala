@@ -17,9 +17,11 @@ import coop.rchain.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}
 import coop.rchain.shared._
 
 import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 class ClearConnectionsSpec
-    extends FunSpec
+    extends AnyFunSpec
     with Matchers
     with BeforeAndAfterEach
     with AppendedClues {

@@ -1,10 +1,11 @@
 package coop.rchain.rspace
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
 import coop.rchain.rspace.util.veccmp
 
-class UtilTests extends FlatSpec with Matchers {
+class UtilTests extends AnyFlatSpec with Matchers {
 
   "veccmp" should "work" in {
     val ve    = ByteVector.empty

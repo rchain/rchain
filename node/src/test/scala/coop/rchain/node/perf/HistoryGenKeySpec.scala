@@ -11,7 +11,9 @@ import coop.rchain.rspace.history.instances._
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Base16, Log, Stopwatch}
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
 
 import java.io.File
@@ -21,7 +23,7 @@ import java.nio.file.Files
 import scala.reflect.io.{Directory, Path}
 import scala.util.Random
 
-class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
+class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   object TypesOfHistory extends Enumeration {
     type TypeHistory = Value

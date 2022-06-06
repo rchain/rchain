@@ -17,9 +17,10 @@ import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MergingCases extends FlatSpec with Matchers {
+class MergingCases extends AnyFlatSpec with Matchers {
 
   val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 5)
   val genesis                    = genesisContext.genesisBlock

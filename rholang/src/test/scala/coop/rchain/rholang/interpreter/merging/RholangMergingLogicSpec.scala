@@ -5,9 +5,10 @@ import cats.syntax.all._
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class RholangMergingLogicSpec extends FlatSpec with Matchers {
+class RholangMergingLogicSpec extends AnyFlatSpec with Matchers {
 
   it should "calculate number channels difference" in effectTest {
 

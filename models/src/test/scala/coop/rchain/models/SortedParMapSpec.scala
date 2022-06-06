@@ -13,10 +13,12 @@ import coop.rchain.models.rholang.sorter.ordering._
 import coop.rchain.models.testImplicits._
 import coop.rchain.models.testUtils.TestUtils.sort
 import monix.eval.Coeval
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
+class SortedParMapSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   private[this] def toKVpair(pair: (Par, Par)): KeyValuePair = KeyValuePair(pair._1, pair._2)
 

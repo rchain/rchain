@@ -5,9 +5,10 @@ import java.security.spec.{ECGenParameterSpec, ECParameterSpec, ECPoint}
 import java.security.{AlgorithmParameters, PublicKey}
 
 import coop.rchain.crypto.util.CertificateHelper._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class CertificateHelperTest extends FlatSpec with Matchers {
+class CertificateHelperTest extends AnyFlatSpec with Matchers {
   val dummyPc = new PublicKey {
     override def getAlgorithm: String    = ???
     override def getFormat: String       = ???

@@ -1,9 +1,10 @@
 package coop.rchain.p2p
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import coop.rchain.comm._
 
-class URIParseSpec extends FlatSpec with Matchers {
+class URIParseSpec extends AnyFlatSpec with Matchers {
   def badAddressError(s: String): Either[ParseError, PeerNode] =
     Left(ParseError(s"bad address: $s"))
 

@@ -5,7 +5,7 @@ import monix.eval.Coeval
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.Assertion
-import org.scalatest.prop.GeneratorDrivenPropertyChecks._
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks._
 
 object TestUtils {
   def sort(par: Par): Par                                            = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()

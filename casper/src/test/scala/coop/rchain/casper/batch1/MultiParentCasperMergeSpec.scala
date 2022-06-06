@@ -7,11 +7,13 @@ import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 import coop.rchain.blockstorage.syntax._
 import monix.eval.Task
 
-class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors {
+class MultiParentCasperMergeSpec extends AnyFlatSpec with Matchers with Inspectors {
 
   import RSpaceUtil._
   import coop.rchain.casper.util.GenesisBuilder._

@@ -1,6 +1,8 @@
 package coop.rchain.shared
 
 import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 import cats._, cats.data._, cats.syntax.all._
 import coop.rchain.catscontrib._, Catscontrib._, TaskContrib._
@@ -9,7 +11,7 @@ import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
 import scala.collection.concurrent.TrieMap
 
-class CellSpec extends FunSpec with Matchers with BeforeAndAfterEach {
+class CellSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach {
 
   implicit val io: SchedulerService = Scheduler.io("test")
 

@@ -16,11 +16,12 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
-class DeployIdTest extends FlatSpec with Matchers {
+class DeployIdTest extends AnyFlatSpec with Matchers {
   implicit val log: Log[Task] = new Log.NOPLog[Task]()
 
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =

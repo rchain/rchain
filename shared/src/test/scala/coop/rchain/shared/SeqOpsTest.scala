@@ -1,10 +1,11 @@
 package coop.rchain.shared
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import scala.collection.immutable.Seq
 import coop.rchain.shared.SeqOps._
 
-class SeqOpsTest extends FlatSpec with Matchers {
+class SeqOpsTest extends AnyFlatSpec with Matchers {
 
   "dropIndex" should "remove first element" in {
     dropIndex(Seq(1, 2, 3), 0) shouldBe Seq(2, 3)

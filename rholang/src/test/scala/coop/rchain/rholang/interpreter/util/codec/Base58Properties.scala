@@ -3,10 +3,11 @@ package coop.rchain.rholang.interpreter.util.codec
 import java.math.BigInteger
 
 import org.scalacheck.{Gen, Shrink}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{Matchers, PropSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.propspec.AnyPropSpec
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-class Base58Properties extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
+class Base58Properties extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   implicit val propertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 10000, sizeRange = 200)
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny

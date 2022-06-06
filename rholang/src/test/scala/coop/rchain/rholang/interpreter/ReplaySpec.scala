@@ -10,11 +10,12 @@ import coop.rchain.rspace.SoftCheckpoint
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
-class ReplaySpec extends FlatSpec with Matchers {
+class ReplaySpec extends AnyFlatSpec with Matchers {
 
   // TODO: these tests are temporary and specific to bugs found in replay.
   // Testing execution for many iteration doesn't make sense.

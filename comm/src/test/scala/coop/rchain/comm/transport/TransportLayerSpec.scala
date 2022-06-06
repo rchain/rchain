@@ -8,10 +8,12 @@ import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.syntax._
 import org.scalatest._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
 abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
     extends TransportLayerRuntime[F, E]
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with Inside {
 

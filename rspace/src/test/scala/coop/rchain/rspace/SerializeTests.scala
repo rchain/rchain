@@ -6,11 +6,13 @@ import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
 import org.scalacheck.Prop
 import org.scalactic.anyvals.PosInt
-import org.scalatest.prop.{Checkers, Configuration}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.prop.Configuration
+import org.scalatestplus.scalacheck.Checkers
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import scodec.DecodeResult
 
-class SerializeTests extends FlatSpec with Matchers with Checkers with Configuration {
+class SerializeTests extends AnyFlatSpec with Matchers with Checkers with Configuration {
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(1000))

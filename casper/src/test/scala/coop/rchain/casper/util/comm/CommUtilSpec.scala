@@ -17,9 +17,11 @@ import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLaye
 import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest._
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
+class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   // TODO this is testing how CommUtil manipulates RequestedBlocks,
   //  is not a valid test anymore with introduction of BlockRetriever and us moving towards more use of TransportLayer.

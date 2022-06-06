@@ -28,9 +28,10 @@ import coop.rchain.store.InMemoryStoreManager
 import fs2.Stream
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MergingBranchMergerSpec extends FlatSpec with Matchers {
+class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
 
   val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 5)
   val genesis                    = genesisContext.genesisBlock

@@ -25,14 +25,21 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
-import org.scalatest.prop.Checkers.check
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
+import org.scalatest.{AppendedClues, Assertion}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.Checkers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 
-class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with AppendedClues {
+class CostAccountingSpec
+    extends AnyFlatSpec
+    with Matchers
+    with ScalaCheckPropertyChecks
+    with Checkers
+    with AppendedClues {
 
   private[this] def evaluateWithCostLog(
       initialPhlo: Long,

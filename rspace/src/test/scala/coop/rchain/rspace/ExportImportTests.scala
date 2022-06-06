@@ -16,11 +16,12 @@ import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.atomic.AtomicAny
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
 
 class ExportImportTests
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with InMemoryExportImportTestsBase[String, Pattern, String, String] {
 

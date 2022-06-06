@@ -2,10 +2,10 @@ package coop.rchain.models
 
 import coop.rchain.models.BundleOps._
 import coop.rchain.models.Expr.ExprInstance.GBool
-import org.scalatest.FunSuite
+import org.scalatest.funsuite.AnyFunSuite
 import coop.rchain.models.rholang.implicits._
 
-class BundleOpsSpec extends FunSuite {
+class BundleOpsSpec extends AnyFunSuite {
 
   test("should merge bundles' properties correctly") {
     val par = Par(exprs = Seq(Expr(GBool(true))))

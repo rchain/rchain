@@ -1,9 +1,10 @@
 package coop.rchain.crypto.encryption
 
-import org.scalatest._
-import prop._
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.propspec.AnyPropSpec
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-class Curve25519Spec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
+class Curve25519Spec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   property("encrypt and decrypt should give original message") {
     forAll((message: Array[Byte]) => {
       // given

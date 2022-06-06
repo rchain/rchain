@@ -20,7 +20,9 @@ import coop.rchain.shared.{Base16, Serialize}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks._
-import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
+import org.scalatest.{AppendedClues, Assertion}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
@@ -29,7 +31,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.Failure
 
-class ReduceSpec extends FlatSpec with Matchers with AppendedClues with PersistentStoreTester {
+class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
 

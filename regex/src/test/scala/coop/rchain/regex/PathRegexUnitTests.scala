@@ -1,8 +1,9 @@
 package coop.rchain.regex
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import scala.language.implicitConversions
 
-class PathRegexUnitTests extends FlatSpec with Matchers {
+class PathRegexUnitTests extends AnyFlatSpec with Matchers {
 
   class ExPathRegex(value: PathRegex) {
     def accept(matchCases: (String, Seq[String])*): ExPathRegex = {

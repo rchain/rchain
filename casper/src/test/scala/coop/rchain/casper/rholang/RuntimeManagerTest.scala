@@ -32,7 +32,8 @@ import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Base16, Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -52,7 +53,7 @@ object SystemDeployReplayResult {
     ReplayFailed(systemDeployError)
 }
 
-class RuntimeManagerTest extends FlatSpec with Matchers {
+class RuntimeManagerTest extends AnyFlatSpec with Matchers {
 
   implicit val timeF: Time[Task]         = new LogicalTime[Task]
   implicit val log: Log[Task]            = Log.log[Task]

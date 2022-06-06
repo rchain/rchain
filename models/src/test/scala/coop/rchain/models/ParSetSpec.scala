@@ -3,11 +3,12 @@ package coop.rchain.models
 import coop.rchain.models.Expr.ExprInstance.{ESetBody, GInt}
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.BitSet
 
-class ParSetSpec extends FlatSpec with Matchers {
+class ParSetSpec extends AnyFlatSpec with Matchers {
 
   "ParSet" should "serialize like raw ESet" in {
     val parGround =

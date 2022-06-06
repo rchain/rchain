@@ -5,13 +5,14 @@ import coop.rchain.comm.protocol.routing._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Gen
-import org.scalatest._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 import scala.collection.concurrent.TrieMap
 import scala.util.Random
 
-class PacketStoreRestoreSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChecks {
+class PacketStoreRestoreSpec extends AnyFunSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
   import PacketOps._
 

@@ -1,8 +1,10 @@
 package coop.rchain.crypto.hash
 import coop.rchain.shared.Base16
-import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
+import org.scalatest.{AppendedClues, BeforeAndAfterEach}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class Sha256Test extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
+class Sha256Test extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
   describe("Sha256 hashing algorithm") {
     it("encodes") {
       Base16.encode(Sha256.hash("".getBytes)) shouldBe "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

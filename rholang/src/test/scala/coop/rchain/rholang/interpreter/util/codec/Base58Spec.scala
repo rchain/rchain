@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter.util.codec
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop._
 
-class Base58Spec extends FlatSpec with TableDrivenPropertyChecks with Matchers {
+class Base58Spec extends AnyFlatSpec with TableDrivenPropertyChecks with Matchers {
   "encode empty array" should "be empty" in {
     val input = Array[Byte]()
     Base58.encode(input) should equal("")

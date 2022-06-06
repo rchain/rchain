@@ -4,11 +4,12 @@ import com.google.protobuf.ByteString
 import coop.rchain.crypto.signatures.Signed.{signatureHash}
 import coop.rchain.shared.Serialize
 import org.scalacheck.{Arbitrary, Gen, Shrink}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{Matchers, PropSpec}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.propspec.AnyPropSpec
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import scodec.bits.ByteVector
 
-class SignedSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
+class SignedSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
   implicit val serializable: Serialize[Array[Byte]] = new Serialize[Array[Byte]] {

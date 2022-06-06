@@ -11,13 +11,13 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util.{getK, runK, unpackOption}
 import coop.rchain.shared.Serialize
 import monix.eval.Task
-import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
+import org.scalatestplus.scalacheck._
 
 import scala.collection.SortedSet
 
 trait StorageActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
-    with GeneratorDrivenPropertyChecks
+    with ScalaCheckDrivenPropertyChecks
     with Checkers {
 
   implicit override val generatorDrivenConfig =

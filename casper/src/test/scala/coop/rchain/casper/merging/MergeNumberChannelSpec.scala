@@ -30,12 +30,12 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 import scodec.bits.ByteVector
 
 final case class DeployTestInfo(term: String, cost: Long, sig: String)
 
-class MergeNumberChannelSpec extends FlatSpec {
+class MergeNumberChannelSpec extends AnyFlatSpec {
 
   val rhoST = """
                 |new MergeableTag, stCh  in {

@@ -1,9 +1,15 @@
 package coop.rchain.node.mergeablity
 
 import coop.rchain.node.mergeablity.OperationOn0Ch._
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
-class PeekMergeability extends FlatSpec with Matchers with Inspectors with BasicMergeabilityRules {
+class PeekMergeability
+    extends AnyFlatSpec
+    with Matchers
+    with Inspectors
+    with BasicMergeabilityRules {
   // it should"PX !X"    in ConflictingCase(S0)(P_)(Nil)(S0.rstate)(P_.rstate) // non deteministic, depends on which exactly produce is commed
   it should "PX !4" in MergeableCase(P1)(F_)(S0)(P1.rstate)
   it should "PX (!4)" in MergeableCase(P1)(F_, S0)(Nil)(P1.rstate)

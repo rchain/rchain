@@ -12,11 +12,12 @@ import coop.rchain.rholang.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
-class InterpreterSpec extends FlatSpec with Matchers {
+class InterpreterSpec extends AnyFlatSpec with Matchers {
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
 

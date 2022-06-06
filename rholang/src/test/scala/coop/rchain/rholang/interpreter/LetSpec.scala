@@ -3,7 +3,9 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.rholang.interpreter.ParBuilderUtil.assertCompiledEqual
 import coop.rchain.rholang.interpreter.errors.{SyntaxError, UnexpectedProcContext}
 import org.scalatest.EitherValues._
-import org.scalatest.{Assertion, Matchers, WordSpec}
+import org.scalatest.Assertion
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 /**
   * This is the first Rholang test class introduced to test a new language construct that
@@ -12,7 +14,7 @@ import org.scalatest.{Assertion, Matchers, WordSpec}
   * corresponding to the same source, and (2) because this is the first construct that is
   * implemented in terms of a pre-existing Rholang constructs.
   */
-class LetSpec extends WordSpec with Matchers {
+class LetSpec extends AnyWordSpec with Matchers {
 
   "The lexer" should {
 

@@ -6,14 +6,15 @@ import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration._
-import org.scalatest.{FunSuite, Matchers}
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers
 import pureconfig.{ConfigReader, ConfigSource, ConvertHelpers}
 import pureconfig.generic.auto._
 
 import java.nio.file.Paths
 import scala.concurrent.duration._
 
-class HoconConfigurationSpec extends FunSuite with Matchers {
+class HoconConfigurationSpec extends AnyFunSuite with Matchers {
 
   test("Parse default config") {
     val defaultConfig = ConfigSource

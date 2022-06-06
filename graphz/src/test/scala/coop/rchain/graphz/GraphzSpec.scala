@@ -4,8 +4,10 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import monix.eval.Task
 import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
+class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   describe("Graphz") {
     it("simple graph") {

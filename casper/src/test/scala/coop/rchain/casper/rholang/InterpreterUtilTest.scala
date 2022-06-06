@@ -26,12 +26,13 @@ import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration.FiniteDuration
 
 class InterpreterUtilTest
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture {

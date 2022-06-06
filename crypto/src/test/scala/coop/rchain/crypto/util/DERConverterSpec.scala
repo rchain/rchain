@@ -5,10 +5,11 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.{Secp256k1, Secp256k1Eth}
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{Matchers, PropSpec}
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.propspec.AnyPropSpec
 
-class DERConverterSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
+class DERConverterSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
   implicit val arbBytes: Arbitrary[Array[Byte]] = arbContainer[Array, Byte]
 
   property("DER converter check with valid and non-empty input") {

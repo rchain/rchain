@@ -12,9 +12,10 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class RuntimeSpec extends FlatSpec with Matchers {
+class RuntimeSpec extends AnyFlatSpec with Matchers {
   import monix.execution.Scheduler.Implicits.global
 
   "emptyStateHash" should "be the same as hard-coded cached value" in effectTest {

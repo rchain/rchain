@@ -22,9 +22,11 @@ import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 class BlockQueryResponseAPITest
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with Inside
     with BlockDagStorageFixture

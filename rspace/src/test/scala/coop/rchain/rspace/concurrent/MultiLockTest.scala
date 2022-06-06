@@ -1,6 +1,7 @@
 package coop.rchain.rspace.concurrent
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import monix.eval.Task
 import scala.collection._
 import scala.collection.immutable.Seq
@@ -8,7 +9,7 @@ import scala.collection.immutable.Seq
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
 
-class MultiLockTest extends FlatSpec with Matchers {
+class MultiLockTest extends AnyFlatSpec with Matchers {
 
   import monix.execution.Scheduler
   implicit val s       = Scheduler.fixedPool("test-scheduler", 8)

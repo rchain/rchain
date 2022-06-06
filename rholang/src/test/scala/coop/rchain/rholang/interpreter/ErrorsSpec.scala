@@ -3,10 +3,12 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, UnrecognizedInterpreterError}
 import org.scalacheck.ScalacheckShapeless._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-class ErrorsSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+class ErrorsSpec extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
   "Using Throwable methods on InterpreterError" should "not cause exceptions itself" in {
     forAll { e: InterpreterError =>

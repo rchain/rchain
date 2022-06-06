@@ -10,10 +10,12 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib.effectTest
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.Inspectors
+import org.scalatest.matchers.should.Matchers
 
 // TODO Reenable after new finalizer is implemented.
-class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
+class SingleParentCasperSpec extends AnyFlatSpec with Matchers with Inspectors {
   implicit val timeEff = new LogicalTime[Effect]
 
   val genesis = buildGenesis()

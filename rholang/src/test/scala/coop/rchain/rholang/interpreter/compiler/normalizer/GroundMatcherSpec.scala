@@ -2,14 +2,15 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
 
-class GroundMatcherSpec extends FlatSpec with Matchers {
+class GroundMatcherSpec extends AnyFlatSpec with Matchers {
   "GroundInt" should "Compile as GInt" in {
     val gi                   = new GroundInt("7")
     val expectedResult: Expr = GInt(7)

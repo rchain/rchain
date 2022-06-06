@@ -3,6 +3,8 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Expr.ExprInstance._
@@ -23,7 +25,7 @@ import coop.rchain.rholang.interpreter.compiler.{
 }
 import monix.eval.Coeval
 
-class CollectMatcherSpec extends FlatSpec with Matchers {
+class CollectMatcherSpec extends AnyFlatSpec with Matchers {
   val inputs = ProcVisitInputs(
     Par(),
     BoundMapChain

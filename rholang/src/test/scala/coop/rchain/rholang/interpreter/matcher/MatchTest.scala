@@ -16,12 +16,14 @@ import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.concurrent.TimeLimits
 
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
 
-class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleEqualsSupport {
+class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with TripleEqualsSupport {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 

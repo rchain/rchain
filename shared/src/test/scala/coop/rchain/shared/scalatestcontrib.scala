@@ -5,7 +5,8 @@ import cats.syntax.functor._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{Assertion, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.matchers.should.Matchers
 
 object scalatestcontrib extends Matchers {
 

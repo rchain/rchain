@@ -15,13 +15,14 @@ import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.HashMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
-    extends FlatSpec
+    extends AnyFlatSpec
     with Matchers
     with BlockGenerator
     with BlockDagStorageFixture

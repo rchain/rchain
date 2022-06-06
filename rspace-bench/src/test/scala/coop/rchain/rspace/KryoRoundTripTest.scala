@@ -3,11 +3,13 @@ package coop.rchain.rspace
 import coop.rchain.models._
 import org.scalacheck._
 import org.scalatest._
-import org.scalatest.prop._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck._
 
 import scala.reflect.ClassTag
 
-class KryoRoundTripTest extends FlatSpec with PropertyChecks with Matchers {
+class KryoRoundTripTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSuccessful = 50, sizeRange = 250)
 

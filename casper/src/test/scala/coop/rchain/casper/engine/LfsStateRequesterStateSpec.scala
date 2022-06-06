@@ -1,10 +1,14 @@
 package coop.rchain.casper.engine
 
 import coop.rchain.casper.engine.LfsTupleSpaceRequester.ST
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
-class LfsStateRequesterStateSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+class LfsStateRequesterStateSpec
+    extends AnyFlatSpec
+    with Matchers
+    with ScalaCheckDrivenPropertyChecks {
 
   "getNext" should "return empty list when called again" in {
     val st = ST(Seq(10))

@@ -3,9 +3,9 @@ package coop.rchain.casper
 import coop.rchain.casper.merging.DeployChainIndex
 import coop.rchain.rspace.merger.EventLogMergingLogic.computeRejectionOptions
 import coop.rchain.shared.Stopwatch
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class MergingBenchmarkSpec extends FlatSpec {
+class MergingBenchmarkSpec extends AnyFlatSpec {
   "rejections option benchmark" should "for DeplyChainIndex" in {
     def conflictsMap[A](conflictingPairs: Set[List[A]]): Map[A, Set[A]] =
       conflictingPairs.foldLeft(Map.empty[A, Set[A]]) {

@@ -1,8 +1,9 @@
 package coop.rchain.regex
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MultiplierUnitTests extends FlatSpec with Matchers {
+class MultiplierUnitTests extends AnyFlatSpec with Matchers {
   "Multiplier tryParse" should "work" in {
     assert(Multiplier.tryParse("{10}") == (Multiplier(Some(10), Some(10)), 4))
     assert(Multiplier.tryParse("{2,}") == (Multiplier(Some(2), Multiplier.Inf), 4))

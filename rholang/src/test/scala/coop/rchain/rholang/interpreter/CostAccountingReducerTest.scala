@@ -23,11 +23,12 @@ import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
-class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
+class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqualsSupport {
 
   implicit val noopSpan: Span[Task]   = Span.noop
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
