@@ -9,10 +9,10 @@ import coop.rchain.casper.blocks.proposer.{
   CheckProposeConstraintsResult,
   TooFarAheadOfLastFinalized
 }
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.shared.Log
 
+// TODO: add comments how it works and adjust for multi-parent finalization
 final class LastFinalizedHeightConstraintChecker[F[_]: Sync: Log: BlockDagStorage] {
   def check(
       s: CasperSnapshot,
@@ -21,12 +21,11 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: Log: BlockDagStorag
     val validator                 = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
     val heightConstraintThreshold = s.onChainState.shardConf.heightConstraintThreshold
     for {
-      lastFinalizedBlockHash <- s.dag.lastFinalizedBlockUnsafe
-      lastFinalizedBlock     <- s.dag.lookupUnsafe(lastFinalizedBlockHash)
-      latestMessageOpt       <- s.dag.latestMessage(validator)
+      lastFinalizedBlock <- s.dag.lastFinalizedBlockHash.flatTraverse(s.dag.lookup(_))
+      latestMessageOpt   <- s.dag.latestMessage(validator)
       result <- latestMessageOpt match {
                  case Some(latestMessage) =>
-                   val latestFinalizedHeight = lastFinalizedBlock.blockNum
+                   val latestFinalizedHeight = lastFinalizedBlock.map(_.blockNum).getOrElse(-1L)
                    val heightDifference      = latestMessage.blockNum - latestFinalizedHeight
                    val result =
                      if (heightDifference <= heightConstraintThreshold)
@@ -36,9 +35,7 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: Log: BlockDagStorag
                      s"Latest message is $heightDifference blocks ahead of the last finalized block"
                    ) >> result.pure[F]
                  case None =>
-                   Sync[F].raiseError[CheckProposeConstraintsResult](
-                     new IllegalStateException("Validator does not have a latest message")
-                   )
+                   CheckProposeConstraintsResult.success.pure[F]
                }
     } yield result
   }
