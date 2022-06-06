@@ -65,7 +65,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
         for {
           hash1 <- runtime.emptyStateHash
           _     <- runtime.reset(Blake2b256Hash.fromByteString(hash1))
-          rd    <- runtime.processDeploy(StandardDeploys.registry(SHARD_ID), Blake2b512Random.random)
+          rd    <- runtime.processDeploy(StandardDeploys.registry(SHARD_ID), Blake2b512Random(10))
           check <- runtime.createCheckpoint
           _     <- runtime.reset(check.root)
           initialTrieRes <- runtime.processDeploy(
@@ -75,7 +75,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
                                  1L,
                                  phloLimit = 50000000
                                ),
-                             Blake2b512Random.random
+                             Blake2b512Random(10)
                            )
           (initialTrie, _) = initialTrieRes
           _                = assert(!initialTrie.isFailed)

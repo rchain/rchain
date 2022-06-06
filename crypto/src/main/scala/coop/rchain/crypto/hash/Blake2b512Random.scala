@@ -139,9 +139,6 @@ object Blake2b512Random {
     apply(bytes)
   }
 
-  def random: Blake2b512Random =
-    Blake2b512Random(Random.nextInt())
-
   def apply(init: Array[Byte]): Blake2b512Random =
     apply(init, 0, init.length)
 
