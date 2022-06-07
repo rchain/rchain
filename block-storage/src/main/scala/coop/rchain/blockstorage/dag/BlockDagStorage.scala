@@ -19,9 +19,16 @@ trait BlockDagStorage[F[_]] {
       finalizationEffect: Set[BlockHash] => F[Unit]
   ): F[Unit]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
+
+  /* Deploys included in the DAG */
+
   def lookupByDeployId(blockHash: DeployId): F[Option[BlockHash]]
+
+  /* Deploy pool, not processed (finalized) deploys */
+
   def addDeploy(d: Signed[DeployData]): F[Unit]
   def pooledDeploys: F[Map[DeployId, Signed[DeployData]]]
+  def containsDeployInPool(deployId: DeployId): F[Boolean]
 }
 
 object BlockDagStorage {

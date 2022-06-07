@@ -37,6 +37,12 @@ trait JsonSchemaDerivations extends JsonSchemaDerivationsBase {
   implicit lazy val lightBlockInfoSchema  : JsonSchema[LightBlockInfo]               = schemaRecord
   implicit lazy val deployInfoSchema      : JsonSchema[DeployInfo]                   = schemaRecord
   implicit lazy val blockInfoSchema       : JsonSchema[BlockInfo]                    = schemaRecord
+  
+  implicit lazy val deployExecStatusSchema    : JsonSchema[DeployExecStatus]     = schemaTagged
+  implicit lazy val processedWithSuccessSchema: JsonSchema[ProcessedWithSuccess] = schemaRecord
+  implicit lazy val processedWithErrorSchema  : JsonSchema[ProcessedWithError]   = schemaRecord
+  implicit lazy val notProcessedSchema        : JsonSchema[NotProcessed]         = schemaRecord
+  
 //  implicit lazy val transactionInfoSchema : JsonSchema[TransactionInfo]              = schemaRecord
 
   // Web API Rholang types (subset of protobuf generated types)

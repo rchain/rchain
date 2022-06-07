@@ -5,11 +5,11 @@ import cats.data.EitherT
 import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.casper.{BlockExecutionTracker, StatefulExecutionTracker}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeDeployResult._
-import coop.rchain.casper.rholang.RuntimeManager.{BlockExecutionTracker, MergeableStore, StateHash}
+import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.signatures.Signed
@@ -324,11 +324,6 @@ object RuntimeManager {
       scodec.codecs.bytes,
       deployMergeableDataSeqCodec
     )
-
-  trait BlockExecutionTracker[F[_]] {
-    def execStarted(d: DeployId): F[Unit]
-    def execComplete(d: DeployId, res: EvaluateResult): F[Unit]
-  }
 
   def noOpExecutionTracker[F[_]: Applicative]: BlockExecutionTracker[F] =
     new BlockExecutionTracker[F] {

@@ -109,6 +109,7 @@ final case class Deploy(
     location: String,
     shardId: String
 ) extends Command
+final case class DeployStatus(id: Array[Byte])                             extends Command
 final case class FindDeploy(id: Array[Byte])                               extends Command
 final case class Propose(printUnmatchedSends: Boolean)                     extends Command
 final case class ShowBlock(hash: String)                                   extends Command

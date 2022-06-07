@@ -2,12 +2,11 @@ package coop.rchain.node.web
 
 import cats.effect.Sync
 import cats.syntax.all._
-import cats.~>
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.RejectedDeployInfo
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
+import coop.rchain.sdk.syntax.all._
 import coop.rchain.shared.Log
 import io.circe.generic.semiauto._
 import org.http4s.{HttpRoutes, Response}
@@ -27,7 +26,6 @@ object WebApiRoutes {
     import dsl._
 
     implicit class ResponseErrorHandler(val res: F[Response[F]]) {
-      def getErrorMsg(ex: Throwable) = if (ex.getMessage == null) ex.toString else ex.getMessage
       def handleResponseError =
         res
           .handleErrorWith {
@@ -35,12 +33,12 @@ object WebApiRoutes {
             // TODO: introduce error codes
             case err: InvalidMessageBodyFailure =>
               // Request JSON parse errors
-              BadRequest(s"${getErrorMsg(err).take(250)}...".asJson)
+              BadRequest(s"${err.getMessageSafe.take(250)}...".asJson)
             // Errors from BlockAPI
-            case err: BlockApiException => BadRequest(getErrorMsg(err).asJson)
+            case err: BlockApiException => BadRequest(err.getMessageSafe.asJson)
             case err: Throwable         =>
               // Logging only unanticipated errors, not related to Block API or input parsing (user errors)
-              Log[F].error("HTTP API response error", err) *> BadRequest(getErrorMsg(err).asJson)
+              Log[F].error("HTTP API response error", err) *> BadRequest(err.getMessageSafe.asJson)
           }
     }
 

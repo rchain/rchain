@@ -18,7 +18,6 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.casper.rholang.RuntimeManager
-import coop.rchain.casper.rholang.RuntimeManager.BlockExecutionTracker
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.comm.RoutingMessage
@@ -96,6 +95,9 @@ object Setup {
       """.stripMargin
       _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
 
+      // Block execution tracker
+      executionTracker <- StatefulExecutionTracker[F]
+
       // Block storage
       blockStore    <- BlockStore(rnodeStoreManager)
       approvedStore <- approvedStore.create(rnodeStoreManager)
@@ -127,9 +129,8 @@ object Setup {
       runtimeManagerWithHistory <- {
         implicit val sp = span
         for {
-          rStores          <- rnodeStoreManager.rSpaceStores
-          mergeStore       <- RuntimeManager.mergeableStore(rnodeStoreManager)
-          executionTracker = BlockDagKeyValueStorage.executionTracker(blockDagStorage)
+          rStores    <- rnodeStoreManager.rSpaceStores
+          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
           rm <- RuntimeManager
                  .createWithHistory[F](
                    rStores,
@@ -291,7 +292,8 @@ object Setup {
           conf.devMode,
           triggerProposeFOpt,
           proposerStateRefOpt,
-          conf.autopropose
+          conf.autopropose,
+          executionTracker
         )
       }
 

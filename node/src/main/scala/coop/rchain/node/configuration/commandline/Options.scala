@@ -617,6 +617,19 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(deploy)
 
+  val deployStatus = new Subcommand("deploy-status") {
+    descr(
+      "Returns the status of the deploy with provided signature."
+    )
+    helpWidth(width)
+
+    val deploySignature = opt[Array[Byte]](
+      descr = "Signature of the deploy.",
+      required = true
+    )(Base16Converter)
+  }
+  addSubcommand(deployStatus)
+
   val showBlock = new Subcommand("show-block") {
     descr(
       "View properties of a block known by Casper on an existing running node." +

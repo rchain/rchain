@@ -1,6 +1,6 @@
 package coop.rchain.casper.dag
 
-import cats.{Alternative, Applicative, Monad}
+import cats.Monad
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
@@ -9,7 +9,7 @@ import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.codecs._
-import coop.rchain.blockstorage.dag.{BlockDagStorage, BlockMetadataStore, DagRepresentation}
+import coop.rchain.blockstorage.dag._
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
@@ -21,13 +21,11 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
 import coop.rchain.shared.syntax._
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage._
-import coop.rchain.casper.rholang.RuntimeManager.BlockExecutionTracker
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.EvaluateResult
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
-import fs2.Stream
 
 import scala.collection.concurrent.TrieMap
 
@@ -244,66 +242,15 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   override def pooledDeploys: F[Map[DeployId, Signed[DeployData]]] = deployStore.toMap
 
+  override def containsDeployInPool(deployId: DeployId): F[Boolean] = deployStore.contains(deployId)
+
   // Map of deploys being executed and execution results
-  private val execMap    = TrieMap.empty[DeployId, Option[String]]
   private val expiredMap = TrieMap.empty[DeployId, Unit]
-
-  def deployStatus(d: DeployId): F[String] = blockMetadataIndex.finalizedBlockSet.flatMap {
-    finalizedSet =>
-      val pooledF   = deployStore.contains(d)
-      val expiredF  = Sync[F].delay(execMap.contains(d))
-      val includedF = deployIndex.contains(d)
-      val orphanedF = invalidBlocksIndex.contains(d)
-      val finalizedF = deployIndex.get1(d).map { hashOpt =>
-        hashOpt.exists(h => finalizedSet.contains(h))
-      }
-      val inProgress = if (execMap.contains(d)) {
-        val done = execMap(d).nonEmpty
-        val r =
-          if (done) s"Executed, result: ${execMap(d).get}"
-          else "Execution is in progress."
-        r.some
-      } else none[String]
-
-      Stream(
-        inProgress.pure,
-        pooledF.map(v => v.guard[Option].as("Pooled")),
-        expiredF.map(v => v.guard[Option].as("Expired")),
-        orphanedF.map(v => v.guard[Option].as("Orphaned")),
-        includedF.map(v => v.guard[Option].as("Included")),
-        finalizedF.map(v => v.guard[Option].as("Finalized"))
-      ).covary[F]
-        .map(Stream.eval)
-        .flatten
-        .collectFirst { case Some(status) => status }
-        .compile
-        .last
-        .map(_.getOrElse("Unknown"))
-  }
-
-  def commitExecutionStarted(
-      d: DeployId
-  ): F[Unit] = Sync[F].delay { execMap.update(d, none[String]) }
-
-  def commitExecutionComplete(
-      d: DeployId,
-      status: String
-  ): F[Unit] = Sync[F].delay { execMap.update(d, status.some) }
 }
 
 object BlockDagKeyValueStorage {
   implicit private val BlockDagKeyValueStorage_FromFileMetricsSource: Source =
     Metrics.Source(BlockStorageMetricsSource, "dag-key-value-store")
-
-  def executionTracker[F[_]](blockDagStorage: BlockDagKeyValueStorage[F]) =
-    new BlockExecutionTracker[F] {
-      override def execStarted(d: DeployId): F[Unit] =
-        blockDagStorage.commitExecutionStarted(d)
-      override def execComplete(d: DeployId, res: EvaluateResult): F[Unit] = {
-        val err = res.errors.map(_.getMessage).mkString("\n")
-        blockDagStorage.commitExecutionComplete(d, if (err.isBlank) "Success" else err)
-      }
-    }
 
   private final case class DagStores[F[_]](
       metadata: BlockMetadataStore[F],

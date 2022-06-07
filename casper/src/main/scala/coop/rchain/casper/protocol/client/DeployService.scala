@@ -3,7 +3,7 @@ package coop.rchain.casper.protocol.client
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
+import coop.rchain.casper.protocol.deploy.v1.{DeployExecStatus, DeployServiceV1GrpcMonix}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Par
 import coop.rchain.models.either.implicits._
@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit
 
 trait DeployService[F[_]] {
   def deploy(d: Signed[DeployData]): F[Either[Seq[String], String]]
+  def deployStatus(deployId: FindDeployQuery): F[Either[Seq[String], DeployExecStatus]]
   def getBlock(q: BlockQuery): F[Either[Seq[String], String]]
   def getBlocks(q: BlocksQuery): F[Either[Seq[String], String]]
   def visualizeDag(q: VisualizeDagQuery): F[Either[Seq[String], String]]
@@ -58,6 +59,15 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
       .toEitherF(
         _.message.error,
         _.message.result
+      )
+
+  def deployStatus(deployId: FindDeployQuery): F[Either[Seq[String], DeployExecStatus]] =
+    stub
+      .deployStatus(deployId)
+      .fromTask
+      .toEitherF(
+        _.message.error,
+        _.message.deployExecStatus
       )
 
   def getBlock(q: BlockQuery): F[Either[Seq[String], String]] =

@@ -6,6 +6,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.api.BlockApi.ApiErr
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.deploy.v1.DeployExecStatus
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.{BlockMetadata, Par}
@@ -14,6 +15,8 @@ trait BlockApi[F[_]] {
   def status: F[Status]
 
   def deploy(d: Signed[DeployData]): F[ApiErr[String]]
+
+  def deployStatus(deployId: DeployId): F[ApiErr[DeployExecStatus]]
 
   def createBlock(isAsync: Boolean): F[ApiErr[String]]
 
