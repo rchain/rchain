@@ -11,13 +11,11 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
-import monix.execution.Scheduler
 import monix.testing.scalatest.MonixTaskTest
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
-  implicit override def scheduler: Scheduler = Scheduler.io("monix-task-support-spec")
 
   "emptyStateHash" should "be the same as hard-coded cached value" in {
     implicit val log: Log[Task]         = new Log.NOPLog[Task]
