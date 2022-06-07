@@ -2,7 +2,7 @@ package coop.rchain.casper.batch1
 
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
-import coop.rchain.casper.rholang.{RegistrySigGen, RuntimeManager}
+import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -68,8 +68,7 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
 
       def calculateUnforgeableName(timeStamp: Long): String =
         Base16.encode(
-          RegistrySigGen
-            .generateUnforgeableNameId(Secp256k1.toPublic(ConstructDeploy.defaultSec), timeStamp)
+          Tools.unforgeableNameRng(Secp256k1.toPublic(ConstructDeploy.defaultSec), timeStamp).next()
         )
 
       for {
