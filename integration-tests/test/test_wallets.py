@@ -15,7 +15,7 @@ from .conftest import (
 )
 from .rnode import (
     Node,
-    started_bootstrap_with_network,
+    started_bootstrap_with_network
 )
 from .common import (
     TestingContext,
@@ -48,6 +48,19 @@ def deploy_transfer(log_marker: str, node: Node, from_rev_addr: str, to_rev_addr
         phlo_limit=phlo_limit,
         phlo_price=phlo_price
     )
+def deploy_transfer_from_pos_vault(log_marker: str, node: Node, to_rev_addr: str, amount: int, private_key: PrivateKey, phlo_limit: int, phlo_price: int) -> str:
+    return node.deploy_contract_with_substitution(
+        substitute_dict={"%TARGET_ADDR": to_rev_addr, "%AMOUNT": str(amount), "%LOG_MARKER": log_marker},
+        rho_file_path="resources/wallets/transfer_from_pos_vault.rho",
+        private_key=private_key,
+        phlo_limit=phlo_limit,
+        phlo_price=phlo_price
+    )
+def transfer_from_pos_vault(context: TestingContext, node: Node, to_rev_addr: str, amount: int, private_key: PrivateKey, phlo_limit: int, phlo_price: int) -> None:
+    log_marker = random_string(context, 10)
+    transfer_funds_result_pattern = re.compile('"{} (Successfully|Failing) reason: (?P<reason>[a-zA-Z0-9 ]*)"'.format(log_marker))
+    deploy_transfer_from_pos_vault(log_marker, node, to_rev_addr, amount, private_key, phlo_limit, phlo_price)
+    wait_transfer_result(context, node, transfer_funds_result_pattern)
 
 def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_rev_addr: str, amount: int, private_key: PrivateKey, phlo_limit: int, phlo_price: int) -> None:
     """
@@ -73,6 +86,32 @@ def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, privat
     check_balance_match = wait_for_log_match_result(context, node, check_balance_pattern)
     return (blockHash, int(check_balance_match.group("balance")))
 
+
+def test_transfer_from_pos_vault(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
+    pos_vault_private_key = PrivateKey.generate()
+    genesis_vault = {
+        pos_vault_private_key: 50000000,
+        BOB_KEY: 0,
+        ALICE_KEY: 50000000
+    }
+
+    pos_vault_pub_key = pos_vault_private_key.get_public_key().to_hex()
+    with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
+            started_bootstrap_with_network(context=context, pos_vault_pub_key=pos_vault_pub_key) as bootstrap:
+        wait_for_approved_block_received_handler_state(context, bootstrap)
+        transfer_amount = 100000
+
+        # Check that money transfer from PoS vault with pos_vault_private_key finish successfully
+        bob_rev_address = BOB_KEY.get_public_key().get_rev_address()
+        transfer_from_pos_vault(context, bootstrap, bob_rev_address, transfer_amount, pos_vault_private_key, 1000000, 1)
+        _, bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, pos_vault_private_key, 1000000, 1)
+        assert bob_balance == transfer_amount
+
+        # Check that money transfer from PoS vault with other private key fails
+        with pytest.raises(TransderFundsError) as e:
+            transfer_from_pos_vault(context, bootstrap, bob_rev_address, transfer_amount, ALICE_KEY, 1000000, 1)
+        assert e.value.reason == "You have not permission to transfer"
+
 def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
         ALICE_KEY: 50000000
@@ -95,7 +134,6 @@ def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: 
 
         _, bob_balance = get_vault_balance(context, bootstrap, bob_rev_address, ALICE_KEY, 1000000, 1)
         assert bob_balance == transfer_amount
-
 
 def test_transfer_failed_with_invalid_key(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {

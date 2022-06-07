@@ -130,7 +130,8 @@ class HoconConfigurationSpec extends AnyFunSuite with Matchers {
           numberOfActiveValidators = 100,
           genesisBlockNumber = 0,
           posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
-          posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
+          posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1,
+          posVaultPubKey = ""
         ),
         minPhloPrice = 1,
         autogenShardSize = 5

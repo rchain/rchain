@@ -7,6 +7,7 @@
 // numberOfActiveValidators - max number of active validator in a shard
 // posMultiSigPublicKeys - public keys
 // posMultiSigQuorum - how many confirmations are necessary to use multi-sig vault
+// posVaultPubKey - public key for transfers from the PoS vault
 /*
 
 Life cycle in POS
@@ -147,7 +148,7 @@ in {
                         }
                       }
                     } else {
-                      transferRet!((false, "You have not permission to transfer."))
+                      transferRet!((false, "You have not permission to transfer"))
                     }
                   }
                 }
@@ -157,7 +158,7 @@ in {
           }
         }
       } |
-      createUnfVault!(*posVaultCh, "$$posPubKey$$") |
+      createUnfVault!(*posVaultCh, "$$posVaultPubKey$$") |
       for (@(posVaultUnf, posVaultAddr, posVault, humanControlHandle) <- posVaultCh){
         for (@posDeployerRevAddress <- posDeployerRevAddressCh;
             @posDeployerAuthKey    <- posDeployerAuthKeyCh)  {

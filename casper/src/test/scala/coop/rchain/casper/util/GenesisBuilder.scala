@@ -62,6 +62,9 @@ object GenesisBuilder {
     "047f0f0f5bbe1d6d1a8dac4d88a3957851940f39a57cd89d55fe25b536ab67e6d76fd3f365c83e5bfe11fe7117e549b1ae3dd39bfc867d1c725a4177692c4e7754"
   )
 
+  val defaultPosVaultPubKey =
+    "0432946f7f91f8f767d7c3d43674faf83586dffbd1b8f9278a5c72820dc20308836299f47575ff27f4a736b72e63d91c3cd853641861f64e08ee5f9204fc708df6"
+
   def buildGenesisParameters(
       validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
       genesisVaults: Seq[(PrivateKey, Long)],
@@ -84,7 +87,8 @@ object GenesisBuilder {
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq,
           posMultiSigPublicKeys = defaultPosMultiSigPublicKeys,
-          posMultiSigQuorum = defaultPosMultiSigPublicKeys.length - 1
+          posMultiSigQuorum = defaultPosMultiSigPublicKeys.length - 1,
+          posVaultPubKey = defaultPosVaultPubKey
         ),
         vaults = genesisVaults.toList.map {
           case (p, s) => Vault(RevAddress.fromPublicKey(Secp256k1.toPublic(p)).get, s)
@@ -116,7 +120,8 @@ object GenesisBuilder {
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq,
           posMultiSigPublicKeys = defaultPosMultiSigPublicKeys,
-          posMultiSigQuorum = defaultPosMultiSigPublicKeys.length - 1
+          posMultiSigQuorum = defaultPosMultiSigPublicKeys.length - 1,
+          posVaultPubKey = defaultPosVaultPubKey
         ),
         vaults = genesisVaults.toList.map(pair => predefinedVault(pair._2)) ++
           bonds.toList.map {

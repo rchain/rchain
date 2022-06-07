@@ -33,6 +33,12 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
     PrivateKey("87369d132ed6a7626dc4c5dfbaf41e954dd0ec55830e613a3f868c74d64a7a22".unsafeDecodeHex)
   val pub3          = Secp256k1.toPublic(p3)
   val validatorKeys = Seq((p1, pub1), (p2, pub2), (p3, pub3))
+
+  val pk1 = PrivateKey(
+    "1533219a4bea67e7b852101c8fb8e836e5812dd15f931d8d40a99eec9393ef22".unsafeDecodeHex
+  )
+
+  val genesisPubKey = Secp256k1.toPublic(pk1)
   val bonds         = Map(pub1 -> 1000000L, pub2 -> 1000000L, pub3 -> 1000000L)
 
   val genesisParam: GenesisParameters =
@@ -50,6 +56,7 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq,
           posMultiSigPublicKeys = Seq(pub1, pub2, pub3).map(p => p.bytes.toHexString).toList,
+          posVaultPubKey = genesisPubKey.bytes.toHexString,
           posMultiSigQuorum = 2
         ),
         vaults = List((pub1, 100000000000L), (pub2, 100000000000L), (pub3, 100000000000L)).map {
