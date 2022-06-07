@@ -69,12 +69,13 @@ object Dependencies {
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.17.0"
   val monix               = "io.monix"                   %% "monix"                     % monixVersion
+  val monixTesting        = "io.monix"                   %% "monix-testing-scalatest"   % "0.3.0"
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.4"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "3.0.0"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.15.0"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.15" % "1.3.0"  % "test"
-  val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.2.10" % "test"
+  val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.2.9" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimeLib   = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion
@@ -86,8 +87,8 @@ object Dependencies {
   val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier "linux-x86_64"
   val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier "linux-x86_64-fedora"
   val scalaCompat         = "org.scala-lang.modules"     %% "scala-collection-compat"   % "2.6.0"
-  val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.2.10"   % "test"
-  val scalatestPlus       = "org.scalatestplus"          %% "scalacheck-1-15"           % "3.2.10.0" % "test"
+  val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.2.9"   % "test"
+  val scalatestPlus       = "org.scalatestplus"          %% "scalacheck-1-15"           % "3.2.9.0" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.7"
   val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M4"
@@ -139,7 +140,7 @@ object Dependencies {
     "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
   )
 
-  private val testing = Seq(scalactic, scalatest, scalacheck, scalatestPlus)
+  private val testing = Seq(scalactic, scalatest, scalacheck, scalatestPlus, monixTesting)
 
   private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
 
