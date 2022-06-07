@@ -12,6 +12,7 @@ import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
@@ -47,12 +48,14 @@ trait RuntimeManager[F[_]] {
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      withCostAccounting: Boolean
+      withCostAccounting: Boolean,
+      rand: Blake2b512Random
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      blockData: BlockData
+      blockData: BlockData,
+      rand: Blake2b512Random
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
@@ -110,12 +113,13 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   def computeState(startHash: StateHash)(
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      blockData: BlockData
+      blockData: BlockData,
+      rand: Blake2b512Random
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     for {
       runtime  <- spawnRuntime
       _        <- terms.map(_.sig).toList.traverse(executionTracker.execStarted)
-      computed <- runtime.computeState(startHash, terms, systemDeploys, blockData)
+      computed <- runtime.computeState(startHash, terms, systemDeploys, blockData, rand)
       _ <- {
         val v = computed._2.map(tx => (tx.deploy.deploy.sig, tx.evalResult))
         v.toList.traverse((executionTracker.execComplete _).tupled)
@@ -132,7 +136,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       mergeableChs = usrMergeable ++ sysMergeable
 
       // Block data used for mergeable key
-      BlockData(_, _, sender, seqNum, _) = blockData
+      BlockData(_, _, sender, seqNum) = blockData
       // Convert from final to diff values and persist mergeable (number) channels for post-state hash
       preStateHash  = startHash.toBlake2b256Hash
       postSTateHash = stateHash.toBlake2b256Hash
@@ -165,7 +169,8 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      withCostAccounting: Boolean
+      withCostAccounting: Boolean,
+      rand: Blake2b512Random
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
       val replayOp = replayRuntime
@@ -173,12 +178,13 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
           terms,
           systemDeploys,
           blockData,
-          withCostAccounting
+          withCostAccounting,
+          rand
         )
       EitherT(replayOp).semiflatMap {
         case (stateHash, mergeableChs) =>
           // Block data used for mergeable key
-          val BlockData(_, _, sender, seqNum, _) = blockData
+          val BlockData(_, _, sender, seqNum) = blockData
           // Convert from final to diff values and persist mergeable (number) channels for post-state hash
           val preStateHash = startHash.toBlake2b256Hash
           this

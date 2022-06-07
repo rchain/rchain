@@ -71,8 +71,7 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
          """.stripMargin
 
       def calculateUnforgeableName(block: BlockMessage): String = {
-        val blockData = BlockData.fromBlock(block)
-        val rand      = BlockRandomSeed.fromBlockData(blockData, block.body.state.preStateHash)
+        val rand = BlockRandomSeed.fromBlock(block)
         rand
           .splitByte(0.toByte)
           .splitByte(BlockRandomSeed.UserDeploySplitIndex)

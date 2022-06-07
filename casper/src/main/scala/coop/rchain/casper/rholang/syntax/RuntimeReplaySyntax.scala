@@ -4,7 +4,6 @@ import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource}
 import coop.rchain.casper.protocol.{
   CloseBlockSystemDeployData,
@@ -14,7 +13,6 @@ import coop.rchain.casper.protocol.{
   SlashSystemDeployData
 }
 import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
-import coop.rchain.casper.rholang._
 import coop.rchain.casper.rholang.syntax.RuntimeSyntax.SysEvalResult
 import coop.rchain.casper.rholang.sysdeploys.{
   CloseBlockDeploy,
@@ -66,7 +64,8 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      withCostAccounting: Boolean
+      withCostAccounting: Boolean,
+      rand: Blake2b512Random
   )(
       implicit sync: Sync[F],
       span: Span[F],
@@ -74,8 +73,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
   ): F[Either[ReplayFailure, (Blake2b256Hash, Seq[NumberChannelsEndVal])]] =
     Span[F].traceI("replay-compute-state") {
       for {
-        _    <- runtime.setBlockData(blockData)
-        rand = BlockRandomSeed.fromBlockData(blockData, startHash)
+        _ <- runtime.setBlockData(blockData)
         result <- replayDeploys(
                    startHash,
                    rand,

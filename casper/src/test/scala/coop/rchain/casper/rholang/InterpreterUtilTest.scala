@@ -14,7 +14,7 @@ import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
-import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
+import coop.rchain.casper.{BlockRandomSeed, CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -22,6 +22,7 @@ import coop.rchain.models.PCost
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
@@ -81,7 +82,13 @@ class InterpreterUtilTest
             mkCasperSnapshot(dag),
             runtimeManager
           ).flatMap(
-              preState =>
+              preState => {
+                val rand = BlockRandomSeed(
+                  genesis.shardId,
+                  blockNumber,
+                  genesisContext.validatorPks.head,
+                  Blake2b256Hash.fromByteString(preState._1)
+                ).generateRandomNumber
                 InterpreterUtil
                   .computeDeploysCheckpoint[F](
                     deploys,
@@ -92,11 +99,12 @@ class InterpreterUtilTest
                       // TODO this should be blockNumber
                       blockNumber,
                       genesisContext.validatorPks.head,
-                      seqNum,
-                      genesis.shardId
+                      seqNum
                     ),
-                    preState
+                    preState,
+                    rand
                   )
+              }
             )
             .attempt
       )

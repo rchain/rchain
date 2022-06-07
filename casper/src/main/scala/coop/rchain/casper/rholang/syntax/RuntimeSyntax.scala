@@ -7,14 +7,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
-import coop.rchain.casper.protocol.{
-  Bond,
-  DeployData,
-  Event,
-  ProcessedDeploy,
-  ProcessedSystemDeploy,
-  SystemDeployData
-}
+import coop.rchain.casper.protocol.{Bond, DeployData, Event, ProcessedDeploy, SystemDeployData}
 import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
 import coop.rchain.casper.rholang._
 import coop.rchain.casper.rholang.syntax.RuntimeSyntax._
@@ -53,11 +46,8 @@ import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.shared.{Base16, Log}
-import RuntimeSyntax._
 import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.crypto.hash.Blake2b512Random
-
-import scala.collection.compat.immutable.LazyList
 
 trait RuntimeSyntax {
   implicit final def casperSyntaxRholangRuntime[F[_]](
@@ -100,7 +90,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       startHash: StateHash,
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      blockData: BlockData
+      blockData: BlockData,
+      rand: Blake2b512Random
   )(
       implicit s: Sync[F],
       span: Span[F],
@@ -108,8 +99,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   ): F[(StateHash, Seq[UserDeployRuntimeResult], Seq[SystemDeployRuntimeResult])] =
     Span[F].traceI("compute-state") {
       for {
-        _    <- runtime.setBlockData(blockData)
-        rand = BlockRandomSeed.fromBlockData(blockData, startHash)
+        _ <- runtime.setBlockData(blockData)
         deployProcessResult <- Span[F].withMarks("play-deploys") {
                                 playDeploys(
                                   startHash,
@@ -153,11 +143,17 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       log: Log[F]
   ): F[(StateHash, StateHash, Seq[UserDeployRuntimeResult])] =
     Span[F].traceI("compute-genesis") {
-      val blockData = BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0, shardId)
+      val pubkey    = PublicKey(Array[Byte]())
+      val blockData = BlockData(blockTime, blockNumber, pubkey, 0)
       for {
-        _                             <- runtime.setBlockData(blockData)
-        genesisPreStateHash           <- emptyStateHash
-        rand                          = BlockRandomSeed.fromBlockData(blockData, genesisPreStateHash)
+        _                   <- runtime.setBlockData(blockData)
+        genesisPreStateHash <- emptyStateHash
+        rand = BlockRandomSeed(
+          shardId,
+          blockNumber,
+          pubkey,
+          Blake2b256Hash.fromByteString(genesisPreStateHash)
+        ).generateRandomNumber
         playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData, rand)
         (stateHash, processedDeploys) = playResult
       } yield (genesisPreStateHash, stateHash, processedDeploys)

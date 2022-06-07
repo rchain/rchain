@@ -91,7 +91,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
                   )
         signedBlock2 <- node.addBlock(deploy2)
         blockData    = BlockData.fromBlock(signedBlock2)
-        rand         = BlockRandomSeed.fromBlockData(blockData, signedBlock2.body.state.preStateHash)
+        rand         = BlockRandomSeed.fromBlock(signedBlock2)
 
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,

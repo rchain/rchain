@@ -19,11 +19,11 @@ import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
@@ -110,12 +110,14 @@ object InterpreterUtil {
         _                  <- Span[F].mark("before-process-pre-state-hash")
         blockData          = BlockData.fromBlock(block)
         withCostAccounting = block.justifications.nonEmpty || block.header.parentsHashList.nonEmpty
+        rand               = BlockRandomSeed.fromBlock(block)
         replayResultF = runtimeManager
           .replayComputeState(initialStateHash)(
             internalDeploys,
             internalSystemDeploys,
             blockData,
-            withCostAccounting
+            withCostAccounting,
+            rand
           )
         replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
                          RetryPolicies.limitRetries(3), {
@@ -216,7 +218,8 @@ object InterpreterUtil {
       systemDeploys: Seq[SystemDeploy],
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
-      computedParentsInfo: (StateHash, Seq[ByteString])
+      computedParentsInfo: (StateHash, Seq[ByteString]),
+      rand: Blake2b512Random
   )(
       implicit spanF: Span[F]
   ): F[
@@ -228,7 +231,8 @@ object InterpreterUtil {
         result <- runtimeManager.computeState(preStateHash)(
                    deploys,
                    systemDeploys,
-                   blockData
+                   blockData,
+                   rand
                  )
         (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (

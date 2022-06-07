@@ -1,10 +1,9 @@
 package coop.rchain.casper
 
-import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockRandomSeed.encode
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
 import scodec.codecs.{bytes, uint8, ulong, utf8, variableSizeBytes}
@@ -30,16 +29,13 @@ object BlockRandomSeed {
   private def encode(blockRandomSeed: BlockRandomSeed): Array[Byte] =
     codecBlockRandomSeed.encode(blockRandomSeed).require.toByteArray
 
-  def fromBlockData(blockData: BlockData, stateHash: Blake2b256Hash): Blake2b512Random =
+  def fromBlock(block: BlockMessage): Blake2b512Random =
     BlockRandomSeed(
-      blockData.shardId,
-      blockData.blockNumber,
-      blockData.sender,
-      stateHash
+      block.shardId,
+      block.body.state.blockNumber,
+      PublicKey(block.sender),
+      Blake2b256Hash.fromByteString(block.body.state.preStateHash)
     ).generateRandomNumber
-
-  def fromBlockData(blockData: BlockData, stateHash: ByteString): Blake2b512Random =
-    fromBlockData(blockData, Blake2b256Hash.fromByteString(stateHash))
 
   val PreChargeSplitIndex: Byte  = 1.toByte
   val UserDeploySplitIndex: Byte = 2.toByte

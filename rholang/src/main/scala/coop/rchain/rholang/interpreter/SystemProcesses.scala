@@ -55,8 +55,7 @@ object SystemProcesses {
       timeStamp: Long,
       blockNumber: Long,
       sender: PublicKey,
-      seqNum: Int,
-      shardId: String
+      seqNum: Int
   )
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -127,14 +126,13 @@ object SystemProcesses {
       (fixedChannel, arity, remainder, bodyRef)
   }
   object BlockData {
-    def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")), 0, "")
+    def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")), 0)
     def fromBlock(template: BlockMessage) =
       BlockData(
         template.header.timestamp,
         template.body.state.blockNumber,
         PublicKey(template.sender),
-        template.seqNum,
-        template.shardId
+        template.seqNum
       )
   }
   type Contract[F[_]] = Seq[ListParWithRandom] => F[Unit]

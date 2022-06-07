@@ -15,7 +15,13 @@ import coop.rchain.casper.rholang.InterpreterUtil.{
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, CasperSnapshot, OnChainCasperState}
+import coop.rchain.casper.{
+  BlockRandomSeed,
+  CasperMetricsSource,
+  CasperShardConf,
+  CasperSnapshot,
+  OnChainCasperState
+}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -88,12 +94,14 @@ object BlockGenerator {
                               s,
                               runtimeManager
                             )
+      rand = BlockRandomSeed.fromBlock(b)
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],
                  runtimeManager,
                  BlockData.fromBlock(b),
-                 computedParentsInfo
+                 computedParentsInfo,
+                 rand
                ).attempt
       Right((preStateHash, postStateHash, processedDeploys, rejectedDeploys, _)) = result
     } yield (postStateHash, processedDeploys)

@@ -52,7 +52,7 @@ class RholangBuildTest extends AnyFlatSpec with Matchers {
           signedBlock <- node.addBlock(deploy)
           _           = logEff.warns should be(Nil)
           blockData   = BlockData.fromBlock(signedBlock)
-          rand        = BlockRandomSeed.fromBlockData(blockData, signedBlock.body.state.preStateHash)
+          rand        = BlockRandomSeed.fromBlock(signedBlock)
           unfHex      = rand.splitByte(0.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex).next()
           _ <- getDataAtPrivateChannel[Effect](
                 signedBlock,
