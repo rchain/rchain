@@ -1,9 +1,7 @@
 package coop.rchain.casper
 
 import cats.Applicative
-import cats.effect.Sync
 import cats.syntax.applicative._
-import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
 import com.google.protobuf.ByteString
@@ -12,7 +10,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.syntax._
-import coop.rchain.shared.{EnvVars, Log, LogSource}
+import coop.rchain.shared.{Log, LogSource}
 
 final case class ValidatorIdentity(
     publicKey: PublicKey,
@@ -44,7 +42,6 @@ final case class ValidatorIdentity(
 final case class Signature(pk: PublicKey, sigAlgorithm: String, signature: Array[Byte])
 
 object ValidatorIdentity {
-  private val RNodeValidatorPasswordEnvVar  = "RNODE_VALIDATOR_PASSWORD"
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def apply(
@@ -58,11 +55,6 @@ object ValidatorIdentity {
       Secp256k1.name
     )
   }
-
-  def getEnvVariablePassword[F[_]: Sync: EnvVars]: F[String] =
-    EnvVars[F].get(RNodeValidatorPasswordEnvVar) >>= (
-      _.liftTo(new Exception(s"Environment variable $RNodeValidatorPasswordEnvVar is unspecified"))
-    )
 
   def fromHex(privKeyHex: String): Option[ValidatorIdentity] =
     privKeyHex.decodeHex.map(PrivateKey(_)).map(ValidatorIdentity(_))

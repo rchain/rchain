@@ -3,28 +3,22 @@ package coop.rchain.casper.sync
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine
-import coop.rchain.casper.engine.Setup.peerNode
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.engine.BlockRetriever.RequestState
-import coop.rchain.casper.protocol.{CommUtil, HasBlockRequest, PacketTypeTag}
-import org.scalatest.BeforeAndAfterEach
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.should.Matchers
-import coop.rchain.catscontrib.TaskContrib._
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.casper.engine.Setup.peerNode
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.TestTime
-import coop.rchain.catscontrib.ski.kp
-import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.PeerNode
-import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{createRPConfAsk, LogStub, TransportLayerStub}
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, Time}
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
@@ -43,7 +37,7 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
     Cell.unsafe[Task, Connections](List(local))
   implicit val transportLayer = new TransportLayerStub[Task]
   implicit val rpConf         = createRPConfAsk[Task](local)
-  implicit val time           = TestTime.instance
+  implicit val time           = Time.fromTimer[Task]
   implicit val commUtil       = CommUtil.of[Task]
   implicit val blockRetriever = BlockRetriever.of[Task]
 

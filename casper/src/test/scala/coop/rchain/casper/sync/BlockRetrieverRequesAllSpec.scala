@@ -2,19 +2,17 @@ package coop.rchain.casper.sync
 
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
-import coop.rchain.casper.{engine, PrettyPrinter}
-import coop.rchain.casper.engine.BlockRetriever.{RequestState, RequestedBlocks}
-import coop.rchain.casper.engine.Setup.peerNode
-import coop.rchain.casper.engine.{BlockRetriever, NodeRunning}
+import coop.rchain.casper.engine
+import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.TestTime
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper.toPacket
-import coop.rchain.comm.rp.{ProtocolHelper, RPConf}
-import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}
+import coop.rchain.comm.rp.RPConf
+import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{
@@ -25,10 +23,10 @@ import coop.rchain.p2p.EffectsTestInstances.{
 }
 import coop.rchain.shared._
 import monix.eval.Task
-import org.scalatest.BeforeAndAfterEach
+import monix.execution.Scheduler.Implicits.global
+import org.scalatest._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
-import monix.execution.Scheduler.Implicits.global
 
 import scala.concurrent.duration._
 

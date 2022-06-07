@@ -123,13 +123,6 @@ case class TestNode[F[_]: Sync: Timer](
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
   implicit val rspaceMan = RSpaceStateManagerTestImpl()
-  val engine =
-    new coop.rchain.casper.engine.NodeRunning(
-      blockProcessorQueue,
-      blockProcessorState,
-      validatorIdOpt,
-      true
-    )
 
   def proposeSync: F[BlockHash] =
     for {

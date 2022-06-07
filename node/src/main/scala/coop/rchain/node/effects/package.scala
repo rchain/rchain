@@ -37,13 +37,6 @@ package object effects {
       kademliaRPC: KademliaRPC[F]
   ): NodeDiscovery[F] = NodeDiscovery.kademlia(id)
 
-  def time[F[_]](implicit timer: Timer[F]): Time[F] =
-    new Time[F] {
-      def currentMillis: F[Long]                   = timer.clock.realTime(MILLISECONDS)
-      def nanoTime: F[Long]                        = timer.clock.monotonic(NANOSECONDS)
-      def sleep(duration: FiniteDuration): F[Unit] = timer.sleep(duration)
-    }
-
   def kademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
       networkId: String,
       timeout: FiniteDuration,

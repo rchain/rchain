@@ -1,16 +1,15 @@
 package coop.rchain.casper.engine
 
-import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsBlockRequester.ST
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.TestTime
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.Log
 import fs2.Stream
 import fs2.concurrent.Queue
 import monix.eval.Task
@@ -83,7 +82,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * @param test test definition
     */
-  def createMock[F[_]: Concurrent: Time: Log](
+  def createMock[F[_]: Concurrent: Timer: Log](
       startBlock: BlockMessage,
       requestTimeout: FiniteDuration
   )(test: Mock[F] => F[Unit]): F[Unit] = {
@@ -138,8 +137,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     } yield ()
   }
 
-  implicit val logEff: Log[Task]   = Log.log[Task]
-  implicit val timeEff: Time[Task] = TestTime.instance
+  implicit val logEff: Log[Task] = Log.log[Task]
 
   import monix.execution.Scheduler.Implicits.global
 

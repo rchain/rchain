@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -9,7 +9,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceImporter
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, Stopwatch, Time}
+import coop.rchain.shared.{Log, Stopwatch}
 import fs2.concurrent.Queue
 import fs2.{Pure, Stream}
 import scodec.bits.ByteVector
@@ -93,7 +93,7 @@ object LfsTupleSpaceRequester {
     * @param validateTupleSpaceItems Check if received statet chunk is valid
     * @return fs2.Stream processing all tuple space state
     */
-  def stream[F[_]: Concurrent: Time: Log](
+  def stream[F[_]: Concurrent: Timer: Log](
       approvedBlock: ApprovedBlock,
       tupleSpaceMessageQueue: Queue[F, StoreItemsMessage],
       requestForStoreItem: (StatePartPath, Int) => F[Unit],
@@ -223,7 +223,7 @@ object LfsTupleSpaceRequester {
         */
       requestStream
         .evalMap(_ => st.get)
-        .onIdle(requestTimeout, resendRequests)
+        .evalOnIdle(resendRequests, requestTimeout)
         .terminateAfter(_.isFinished) concurrently responseStream
     }
 

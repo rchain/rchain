@@ -77,7 +77,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
 
       // Create instances of typeclasses
       metrics = diagnostics.effects.metrics[F]
-      time    = effects.time[F]
+      time    = Time.fromTimer[F]
 
       transport <- {
         implicit val m = metrics
