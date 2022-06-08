@@ -334,26 +334,30 @@ object WebApi {
   // RhoExpr to protobuf
 
   private def rhoExprToParProto(exp: RhoExpr): Par = {
-    def exprToPar(exp: Expr): Par = Par(exprs = Seq(exp))
+    def exprProtoToParProto(exp: Expr): Par = Par(exprs = Seq(exp))
 
     exp match {
       // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
-      case ExprPar(data)   => exprToPar(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
-      case ExprTuple(data) => exprToPar(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
-      case ExprList(data)  => exprToPar(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
-      case ExprSet(data)   => exprToPar(Expr().withESetBody(ParSet(data.map(rhoExprToParProto))))
+      case ExprPar(data) =>
+        exprProtoToParProto(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
+      case ExprTuple(data) =>
+        exprProtoToParProto(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
+      case ExprList(data) =>
+        exprProtoToParProto(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
+      case ExprSet(data) =>
+        exprProtoToParProto(Expr().withESetBody(ParSet(data.map(rhoExprToParProto))))
       case ExprMap(data) =>
-        exprToPar(Expr().withEMapBody(ParMap(data.map {
+        exprProtoToParProto(Expr().withEMapBody(ParMap(data.map {
           case (k, v) => (rhoExprToParProto(ExprString(k)), rhoExprToParProto(v))
         }.toList)))
       // Terminal expressions (here is the data)
-      case ExprBool(data)   => exprToPar(Expr().withGBool(data))
-      case ExprInt(data)    => exprToPar(Expr().withGInt(data))
-      case ExprString(data) => exprToPar(Expr().withGString(data))
-      case ExprUri(data)    => exprToPar(Expr().withGUri(data))
+      case ExprBool(data)   => exprProtoToParProto(Expr().withGBool(data))
+      case ExprInt(data)    => exprProtoToParProto(Expr().withGInt(data))
+      case ExprString(data) => exprProtoToParProto(Expr().withGString(data))
+      case ExprUri(data)    => exprProtoToParProto(Expr().withGUri(data))
       // Binary data is encoded as base16 string
       case ExprBytes(data) =>
-        exprToPar(Expr().withGByteArray(data.unsafeHexToByteString))
+        exprProtoToParProto(Expr().withGByteArray(data.unsafeHexToByteString))
       case ExprUnforg(data) => unforgToParProto(data)
     }
   }
