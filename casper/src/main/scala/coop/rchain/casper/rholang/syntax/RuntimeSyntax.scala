@@ -469,12 +469,12 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     )
 
     // Create return channel as first private name created in deploy term
-    val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
+    val rand = Blake2b512Random.apply(10)
     import coop.rchain.models.rholang.implicits._
-    val returnName: Par = GPrivate(ByteString.copyFrom(rand.next()))
+    val returnName: Par = GPrivate(ByteString.copyFrom(rand.copy().next()))
 
     // Execute deploy on top of specified block hash
-    captureResults(hash, deploy, returnName)
+    captureResults(hash, deploy, returnName, rand)
   }
 
   /* Checkpoints */
@@ -501,16 +501,21 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       deploy: Signed[DeployData]
   )(implicit s: Sync[F]): F[Seq[Par]] = {
     // Create return channel as first unforgeable name created in deploy term
-    val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
+    val rand = Blake2b512Random.apply(10)
     import coop.rchain.models.rholang.implicits._
-    val returnName: Par = GPrivate(ByteString.copyFrom(rand.next()))
-    captureResults(start, deploy, returnName)
+    val returnName: Par = GPrivate(ByteString.copyFrom(rand.copy().next()))
+    captureResults(start, deploy, returnName, rand)
   }
 
-  def captureResults(start: StateHash, deploy: Signed[DeployData], name: Par)(
+  def captureResults(
+      start: StateHash,
+      deploy: Signed[DeployData],
+      name: Par,
+      rand: Blake2b512Random
+  )(
       implicit s: Sync[F]
   ): F[Seq[Par]] =
-    captureResultsWithErrors(start, deploy, name)
+    captureResultsWithErrors(start, deploy, name, rand)
       .handleErrorWith(
         ex =>
           BugFoundError(s"Unexpected error while capturing results from Rholang: $ex")
@@ -520,26 +525,15 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   def captureResultsWithErrors(
       start: StateHash,
       deploy: Signed[DeployData],
-      name: Par
+      name: Par,
+      rand: Blake2b512Random
   )(implicit s: Sync[F]): F[Seq[Par]] =
     runtime.reset(start.toBlake2b256Hash) >>
-      evaluate(deploy)
+      evaluate(deploy, rand)
         .flatMap({ res =>
           if (res.errors.nonEmpty) Sync[F].raiseError[EvaluateResult](res.errors.head)
           else res.pure[F]
         }) >> getDataPar(name)
-
-  /* Evaluates Rholang source code */
-
-  def evaluate(deploy: Signed[DeployData]): F[EvaluateResult] = {
-    import coop.rchain.models.rholang.implicits._
-    runtime.evaluate(
-      deploy.data.term,
-      Cost(deploy.data.phloLimit),
-      NormalizerEnv(deploy).toEnv,
-      Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
-    )
-  }
 
   def evaluate(deploy: Signed[DeployData], rand: Blake2b512Random): F[EvaluateResult] = {
     import coop.rchain.models.rholang.implicits._

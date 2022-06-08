@@ -1,6 +1,7 @@
 package coop.rchain.casper.rholang
 
 import cats.effect.Resource
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.Resources._
@@ -8,6 +9,7 @@ import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParamet
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.casper.syntax._
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerId, Par}
@@ -38,7 +40,7 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
                    sec = sk
                  )
         emptyStateHash = RuntimeManager.emptyStateHashFixed
-        result         <- mgr.captureResults(emptyStateHash, deploy)
+        result         <- mgr.spawnRuntime >>= { _.captureResults(emptyStateHash, deploy) }
         _              = result.size should be(1)
         _              = result.head should be(GDeployerId(pk): Par)
       } yield ()
@@ -86,9 +88,11 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
         block           <- node.addBlock(contract)
         stateHash       = ProtoUtil.postStateHash(block)
         checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)
-        result          <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy)
-        _               = assert(result.size == 1)
-        _               = assert(result.head == (GBool(isAccessGranted): Par))
+        result <- node.runtimeManager.spawnRuntime >>= {
+                   _.captureResults(stateHash, checkAuthDeploy)
+                 }
+        _ = assert(result.size == 1)
+        _ = assert(result.head == (GBool(isAccessGranted): Par))
       } yield ()
     }
   }

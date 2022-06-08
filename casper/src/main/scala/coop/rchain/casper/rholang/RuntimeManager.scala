@@ -40,10 +40,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 trait RuntimeManager[F[_]] {
-  def captureResults(
-      startHash: StateHash,
-      deploy: Signed[DeployData]
-  ): F[Seq[Par]]
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
@@ -192,11 +188,6 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
             .as(stateHash.toByteString)
       }.value
     }
-
-  def captureResults(
-      start: StateHash,
-      deploy: Signed[DeployData]
-  ): F[Seq[Par]] = spawnRuntime.flatMap(_.captureResults(start, deploy))
 
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
     spawnRuntime.flatMap(_.getActiveValidators(startHash))

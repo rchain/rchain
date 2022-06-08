@@ -455,7 +455,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         deploy1 <- ConstructDeploy.sourceDeployNowF(
                     s"""new return in { for(nn <- @"nn"){ nn!("value", *return) } } """
                   )
-        result1 <- mgr.captureResults(hash, deploy1)
+        result1 <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy1) }
 
         _ = result1.size should be(1)
         _ = result1.head should be(ParBuilderUtil.mkTerm(purseValue).right.get)
@@ -476,7 +476,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
           mgr =>
             for {
               hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deploy)
+              res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy) }
             } yield res
         )
         .runSyncUnsafe(10.seconds)
@@ -486,7 +486,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
           mgr =>
             for {
               hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deployNoRes)
+              res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deployNoRes) }
             } yield res
         )
         .runSyncUnsafe(10.seconds)
@@ -508,7 +508,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
           mgr =>
             for {
               hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deploy)
+              res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy) }
             } yield res
         )
 

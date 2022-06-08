@@ -1,9 +1,11 @@
 package coop.rchain.casper.rholang
 
 import cats.effect.Resource
+import cats.syntax.all._
 import cats.implicits.catsSyntaxApplicativeId
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.rholang.Resources._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
@@ -53,7 +55,7 @@ class DeployIdTest extends AnyFlatSpec with Matchers {
           mgr =>
             for {
               hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, d)
+              res  <- mgr.spawnRuntime >>= { _.captureResults(hash, d) }
             } yield res
         )
         .runSyncUnsafe(10.seconds)
@@ -79,8 +81,9 @@ class DeployIdTest extends AnyFlatSpec with Matchers {
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         block <- node.addBlock(contract)
-        result <- node.runtimeManager
-                   .captureResults(ProtoUtil.postStateHash(block), contractCall)
+        result <- node.runtimeManager.spawnRuntime >>= {
+                   _.captureResults(ProtoUtil.postStateHash(block), contractCall)
+                 }
         _ = assert(result.size == 1)
         _ = assert(result.head == (GBool(false): Par))
       } yield ()
