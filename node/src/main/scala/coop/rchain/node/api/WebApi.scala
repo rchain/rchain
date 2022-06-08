@@ -317,31 +317,6 @@ object WebApi {
       ExprMap(fields.toMap).some
     } else none
 
-  private def parProtoFromExpr(exp: RhoExpr): Par = {
-    def exprToPar(exp: Expr): Par = Par(exprs = Seq(exp))
-
-    exp match {
-      // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
-      case ExprPar(data)   => exprToPar(Expr().withEListBody(EList(data.map(parProtoFromExpr))))
-      case ExprTuple(data) => exprToPar(Expr().withETupleBody(ETuple(data.map(parProtoFromExpr))))
-      case ExprList(data)  => exprToPar(Expr().withEListBody(EList(data.map(parProtoFromExpr))))
-      case ExprSet(data)   => exprToPar(Expr().withESetBody(ParSet(data.map(parProtoFromExpr))))
-      case ExprMap(data) =>
-        exprToPar(Expr().withEMapBody(ParMap(data.map {
-          case (k, v) => (parProtoFromExpr(ExprString(k)), parProtoFromExpr(v))
-        }.toList)))
-      // Terminal expressions (here is the data)
-      case ExprBool(data)   => exprToPar(Expr().withGBool(data))
-      case ExprInt(data)    => exprToPar(Expr().withGInt(data))
-      case ExprString(data) => exprToPar(Expr().withGString(data))
-      case ExprUri(data)    => exprToPar(Expr().withGUri(data))
-      // Binary data is encoded as base16 string
-      case ExprBytes(data) =>
-        exprToPar(Expr().withGByteArray(data.unsafeHexToByteString))
-      case ExprUnforg(data) => unforgToPar(data)
-    }
-  }
-
   private def unforgFromProto(un: GUnforgeable): Option[ExprUnforg] =
     if (un.unfInstance.isGPrivateBody)
       mkUnforgExpr(UnforgPrivate, un.unfInstance.gPrivateBody.get.id).some
@@ -358,6 +333,31 @@ object WebApi {
 
   // RhoExpr to protobuf
 
+  private def rhoExprToParProto(exp: RhoExpr): Par = {
+    def exprToPar(exp: Expr): Par = Par(exprs = Seq(exp))
+
+    exp match {
+      // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
+      case ExprPar(data)   => exprToPar(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
+      case ExprTuple(data) => exprToPar(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
+      case ExprList(data)  => exprToPar(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
+      case ExprSet(data)   => exprToPar(Expr().withESetBody(ParSet(data.map(rhoExprToParProto))))
+      case ExprMap(data) =>
+        exprToPar(Expr().withEMapBody(ParMap(data.map {
+          case (k, v) => (rhoExprToParProto(ExprString(k)), rhoExprToParProto(v))
+        }.toList)))
+      // Terminal expressions (here is the data)
+      case ExprBool(data)   => exprToPar(Expr().withGBool(data))
+      case ExprInt(data)    => exprToPar(Expr().withGInt(data))
+      case ExprString(data) => exprToPar(Expr().withGString(data))
+      case ExprUri(data)    => exprToPar(Expr().withGUri(data))
+      // Binary data is encoded as base16 string
+      case ExprBytes(data) =>
+        exprToPar(Expr().withGByteArray(data.unsafeHexToByteString))
+      case ExprUnforg(data) => unforgToPar(data)
+    }
+  }
+
   private def unforgToUnforgProto(unforg: RhoUnforg): GUnforgeable.UnfInstance = unforg match {
     case UnforgPrivate(name)  => GPrivateBody(GPrivate(name.unsafeHexToByteString))
     case UnforgDeploy(name)   => GDeployIdBody(GDeployId(name.unsafeHexToByteString))
@@ -371,7 +371,7 @@ object WebApi {
 
   private def toPar(req: DataAtNameRequest): Par = unforgToPar(req.name)
 
-  private def toPar(req: DataAtNameByBlockHashRequest): Par = parProtoFromExpr(req.name)
+  private def toPar(req: DataAtNameByBlockHashRequest): Par = rhoExprToParProto(req.name)
 
   private def toDataAtNameResponse(req: (Seq[DataWithBlockInfo], Int)): DataAtNameResponse = {
     val (dbs, length) = req
