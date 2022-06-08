@@ -12,6 +12,7 @@ import coop.rchain.models._
 import coop.rchain.models.syntax._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
+import coop.rchain.rholang.interpreter.RhoType.Expression
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -333,33 +334,24 @@ object WebApi {
 
   // RhoExpr to protobuf
 
-  private def rhoExprToParProto(exp: RhoExpr): Par = {
-    def exprProtoToParProto(exp: Expr): Par = Par(exprs = Seq(exp))
-
-    exp match {
-      // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
-      case ExprPar(data) =>
-        exprProtoToParProto(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
-      case ExprTuple(data) =>
-        exprProtoToParProto(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
-      case ExprList(data) =>
-        exprProtoToParProto(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
-      case ExprSet(data) =>
-        exprProtoToParProto(Expr().withESetBody(ParSet(data.map(rhoExprToParProto))))
-      case ExprMap(data) =>
-        exprProtoToParProto(Expr().withEMapBody(ParMap(data.map {
-          case (k, v) => (rhoExprToParProto(ExprString(k)), rhoExprToParProto(v))
-        }.toList)))
-      // Terminal expressions (here is the data)
-      case ExprBool(data)   => exprProtoToParProto(Expr().withGBool(data))
-      case ExprInt(data)    => exprProtoToParProto(Expr().withGInt(data))
-      case ExprString(data) => exprProtoToParProto(Expr().withGString(data))
-      case ExprUri(data)    => exprProtoToParProto(Expr().withGUri(data))
-      // Binary data is decoded from base16 string
-      case ExprBytes(data) =>
-        exprProtoToParProto(Expr().withGByteArray(data.unsafeHexToByteString))
-      case ExprUnforg(data) => unforgToParProto(data)
-    }
+  private def rhoExprToParProto(exp: RhoExpr): Par = exp match {
+    // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
+    case ExprPar(data)   => Expression(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
+    case ExprTuple(data) => Expression(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
+    case ExprList(data)  => Expression(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
+    case ExprSet(data)   => Expression(Expr().withESetBody(ParSet(data.map(rhoExprToParProto))))
+    case ExprMap(data) =>
+      Expression(Expr().withEMapBody(ParMap(data.map {
+        case (k, v) => (rhoExprToParProto(ExprString(k)), rhoExprToParProto(v))
+      }.toList)))
+    // Terminal expressions (here is the data)
+    case ExprBool(data)   => Expression(Expr().withGBool(data))
+    case ExprInt(data)    => Expression(Expr().withGInt(data))
+    case ExprString(data) => Expression(Expr().withGString(data))
+    case ExprUri(data)    => Expression(Expr().withGUri(data))
+    // Binary data is decoded from base16 string
+    case ExprBytes(data)  => Expression(Expr().withGByteArray(data.unsafeHexToByteString))
+    case ExprUnforg(data) => unforgToParProto(data)
   }
 
   private def unforgToUnforgProto(unforg: RhoUnforg): GUnforgeable.UnfInstance = unforg match {
