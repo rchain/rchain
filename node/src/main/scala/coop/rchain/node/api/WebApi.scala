@@ -4,7 +4,6 @@ import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockApi
-import coop.rchain.casper.api.BlockApiImpl.LatestBlockMessageError
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
@@ -13,7 +12,6 @@ import coop.rchain.models._
 import coop.rchain.models.syntax._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
-import coop.rchain.shared.Base16
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -260,11 +258,6 @@ object WebApi {
                   .liftToSigErr[F]("Invalid signature.")
     } yield sigData
 
-  // Binary converters - protobuf uses ByteString and in JSON is base16 string
-
-  private def toHex(bs: ByteString) = Base16.encode(bs.toByteArray)
-  private def fromHex(s: String)    = s.unsafeDecodeHex.toByteString
-
   // RhoExpr from protobuf
 
   private def exprFromParProto(par: Par): Option[RhoExpr] = {
@@ -290,7 +283,7 @@ object WebApi {
       ExprUri(exp.getGUri).some
     else if (exp.exprInstance.isGByteArray)
       // Binary data as base16 string
-      ExprBytes(toHex(exp.getGByteArray)).some
+      ExprBytes(exp.getGByteArray.toHexString).some
     // Tuple
     else if (exp.exprInstance.isETupleBody)
       ExprTuple(exp.getETupleBody.ps.flatMap(exprFromParProto).toList).some
@@ -343,7 +336,8 @@ object WebApi {
       case ExprString(data) => exprToPar(Expr().withGString(data))
       case ExprUri(data)    => exprToPar(Expr().withGUri(data))
       // Binary data is encoded as base16 string
-      case ExprBytes(data)  => exprToPar(Expr().withGByteArray(fromHex(data)))
+      case ExprBytes(data) =>
+        exprToPar(Expr().withGByteArray(data.unsafeHexToByteString))
       case ExprUnforg(data) => unforgToPar(data)
     }
   }
@@ -360,7 +354,7 @@ object WebApi {
   private def exprFromBundleProto(b: Bundle): Option[RhoExpr] = exprFromParProto(b.body)
 
   private def mkUnforgExpr(f: String => RhoUnforg, bs: ByteString): ExprUnforg =
-    ExprUnforg(f(toHex(bs)))
+    ExprUnforg(f(bs.toHexString))
 
   // RhoExpr to protobuf
 
