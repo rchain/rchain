@@ -355,7 +355,7 @@ object WebApi {
       case ExprInt(data)    => exprProtoToParProto(Expr().withGInt(data))
       case ExprString(data) => exprProtoToParProto(Expr().withGString(data))
       case ExprUri(data)    => exprProtoToParProto(Expr().withGUri(data))
-      // Binary data is encoded as base16 string
+      // Binary data is decoded from base16 string
       case ExprBytes(data) =>
         exprProtoToParProto(Expr().withGByteArray(data.unsafeHexToByteString))
       case ExprUnforg(data) => unforgToParProto(data)
