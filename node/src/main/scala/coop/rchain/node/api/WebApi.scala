@@ -354,7 +354,7 @@ object WebApi {
       // Binary data is encoded as base16 string
       case ExprBytes(data) =>
         exprToPar(Expr().withGByteArray(data.unsafeHexToByteString))
-      case ExprUnforg(data) => unforgToPar(data)
+      case ExprUnforg(data) => unforgToParProto(data)
     }
   }
 
@@ -364,12 +364,12 @@ object WebApi {
     case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(name.unsafeHexToByteString))
   }
 
-  private def unforgToPar(unforg: RhoUnforg): Par =
+  private def unforgToParProto(unforg: RhoUnforg): Par =
     Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(unforg))))
 
   // Data request/response protobuf wrappers
 
-  private def toPar(req: DataAtNameRequest): Par = unforgToPar(req.name)
+  private def toPar(req: DataAtNameRequest): Par = unforgToParProto(req.name)
 
   private def toPar(req: DataAtNameByBlockHashRequest): Par = rhoExprToParProto(req.name)
 
