@@ -108,7 +108,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       // Queue for processing the internal state (ST)
       processingStream <- LfsBlockRequester.stream(
                            approvedBlock,
-                           responseQueue,
+                           responseQueue.dequeue,
                            initialMinimumHeight = 0,
                            requestQueue.enqueue1,
                            requestTimeout,

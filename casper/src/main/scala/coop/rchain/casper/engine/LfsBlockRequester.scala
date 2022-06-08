@@ -140,7 +140,7 @@ object LfsBlockRequester {
     * Create a stream to receive blocks needed for Last Finalized State.
     *
     * @param approvedBlock Last finalized block
-    * @param responseQueue Handler of block messages
+    * @param incomingBlocks Stream of received block messages
     * @param initialMinimumHeight Required minimum block height before latest messages are downloaded
     * @param requestForBlock Send request for block
     * @param requestTimeout Time after request will be resent if not received
@@ -151,7 +151,7 @@ object LfsBlockRequester {
     */
   def stream[F[_]: Concurrent: Timer: Log](
       approvedBlock: ApprovedBlock,
-      responseQueue: Queue[F, BlockMessage],
+      incomingBlocks: Stream[F, BlockMessage],
       initialMinimumHeight: Long,
       requestForBlock: BlockHash => F[Unit],
       requestTimeout: FiniteDuration,
@@ -296,7 +296,7 @@ object LfsBlockRequester {
       /**
         * Response stream is handling incoming block messages. Responses can be processed in parallel.
         */
-      val responseStream1 = responseQueue.dequeue.parEvalMapProcBounded(processBlock)
+      val responseStream1 = incomingBlocks.parEvalMapProcBounded(processBlock)
 
       val responseStream2 = responseHashQueue.dequeue
         .parEvalMapProcBounded { hash =>

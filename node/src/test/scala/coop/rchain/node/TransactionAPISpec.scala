@@ -49,7 +49,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
           Par(unforgeables = Seq(Transaction.transferUnforgeable))
         )
         transferBlock <- validator.addBlock(deploy)
-        _             <- readonly.processBlock(transferBlock)
+        _             <- readonly.addBlock(transferBlock)
         transactions <- transactionAPI
                          .getTransaction(Blake2b256Hash.fromByteString(transferBlock.blockHash))
 

@@ -1,17 +1,16 @@
 package coop.rchain.node.runtime
 
-import cats.Parallel
+import cats.{Parallel, Show}
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
-import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
-import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
+import coop.rchain.casper.blocks.{BlockProcessor, BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, NodeRunning, PeerMessage}
 import coop.rchain.casper.genesis.Genesis
@@ -29,6 +28,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
+import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
@@ -39,11 +39,13 @@ import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.{ReportingRoutes, Transaction}
-import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime}
+import coop.rchain.rholang.interpreter.RhoRuntime
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
+import coop.rchain.shared.syntax._
+import fs2.Stream
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -68,10 +70,7 @@ object Setup {
         Option[Proposer[F]],
         Queue[F, (Boolean, Deferred[F, ProposerResult])],
         Option[Ref[F, ProposerState[F]]],
-        BlockProcessor[F],
-        Ref[F, Set[BlockHash]],
-        Queue[F, BlockMessage],
-        Option[ProposeFunction[F]]
+        Stream[F, Unit]
     )
   ] =
     for {
@@ -95,9 +94,6 @@ object Setup {
 
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
-
-      // Casper requesting blocks cache
-      casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
 
       synchronyConstraintChecker = {
         implicit val bs  = blockStore
@@ -173,16 +169,6 @@ object Setup {
         conf.casper.minPhloPrice
       )
 
-      blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
-      // block processing state - set of items currently in processing
-      blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
-      blockProcessor = {
-        implicit val (rm, sp)     = (runtimeManager, span)
-        implicit val (bs, bd)     = (blockStore, blockDagStorage)
-        implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
-        BlockProcessor[F](casperShardConf)
-      }
-
       // Load validator private key if specified
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
@@ -191,7 +177,6 @@ object Setup {
       // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
-        implicit val cbs          = casperBufferStorage
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
@@ -204,7 +189,6 @@ object Setup {
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
       proposerQueue <- Queue.unbounded[F, (Boolean, Deferred[F, ProposerResult])]
-
       triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
         Some(
           (isAsync: Boolean) =>
@@ -215,8 +199,45 @@ object Setup {
             } yield r
         )
       else none[ProposeFunction[F]]
-
       proposerStateRefOpt <- triggerProposeFOpt.traverse(_ => Ref.of(ProposerState[F]()))
+
+      // Queue of received blocks from gRPC API
+      incomingBlocksQueue <- Queue.unbounded[F, BlockMessage]
+      // Queue of validated blocks, result of block processor
+      validatedBlocksQueue <- Queue.unbounded[F, BlockMessage]
+      // Validated blocks stream with auto-propose trigger
+      validatedBlocksStream = validatedBlocksQueue.dequeue.evalTap { _ =>
+        // If auto-propose is enabled, trigger propose immediately after block finished validation
+        triggerProposeFOpt.traverse(_(true)) whenA conf.autopropose
+      }
+
+      // Block receiver, incoming blocks from peers
+      incomingBlockStream = incomingBlocksQueue.dequeue
+      blockReceiverState <- {
+        implicit val hashShow = Show.show[BlockHash](_.toHexString)
+        Ref.of(BlockReceiverState[BlockHash])
+      }
+      blockReceiverStream <- {
+        implicit val (bs, bd, br) = (blockStore, blockDagStorage, blockRetriever)
+        BlockReceiver[F](
+          blockReceiverState,
+          incomingBlockStream,
+          validatedBlocksStream,
+          casperShardConf.shardName
+        )
+      }
+
+      // Block processor (validation of blocks)
+      blockProcessorInputBlocksStream = blockReceiverStream.evalMap(blockStore.getUnsafe)
+      blockProcessorStream = {
+        implicit val (rm, sp)     = (runtimeManager, span)
+        implicit val (bs, bd, cu) = (blockStore, blockDagStorage, commUtil)
+        BlockProcessor[F](
+          blockProcessorInputBlocksStream,
+          validatedBlocksQueue,
+          MultiParentCasper.getSnapshot[F](casperShardConf)
+        )
+      }
 
       // Network packets handler (queue)
       routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
@@ -227,27 +248,25 @@ object Setup {
           case RoutingMessage(peer, packet) =>
             toCasperMessageProto(packet).toEither
               .flatMap(CasperMessage.from)
-              .fold(
-                err =>
-                  Log[F]
-                    .warn(s"Could not extract casper message from packet sent by $peer: $err")
-                    .as(none[PeerMessage]),
-                cm => PeerMessage(peer, cm).some.pure[F]
-              )
+              .map(cm => PeerMessage(peer, cm).some.pure[F])
+              .leftMap { err =>
+                val msg = s"Could not extract casper message from packet sent by $peer: $err"
+                Log[F].warn(msg).as(none[PeerMessage])
+              }
+              .merge
         }
         .collect { case Some(m) => m }
 
       nodeLaunch = {
         implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
-        implicit val (br, cb, ep) = (blockRetriever, casperBufferStorage, eventPublisher)
+        implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu)     = (runtimeManager, commUtil)
         implicit val (rsm, sp)    = (rspaceStateManager, span)
         NodeLaunch[F](
           peerMessageStream,
-          blockProcessorQueue,
-          blockProcessorStateRef,
+          incomingBlocksQueue,
           conf.casper,
           !conf.protocolClient.disableLfs,
           conf.protocolServer.disableStateExporter,
@@ -313,11 +332,8 @@ object Setup {
 
       // Infinite loop to trigger request missing dependencies
       casperLoop = {
-        implicit val br             = blockRetriever
-        implicit val (bs, bds, cbs) = (blockStore, blockDagStorage, casperBufferStorage)
+        implicit val br = blockRetriever
         for {
-          // Fetch dependencies from CasperBuffer
-          _ <- MultiParentCasper.fetchDependencies
           // Maintain RequestedBlocks for Casper
           _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)
@@ -349,9 +365,6 @@ object Setup {
       proposer,
       proposerQueue,
       proposerStateRefOpt,
-      blockProcessor,
-      blockProcessorStateRef,
-      blockProcessorQueue,
-      triggerProposeFOpt
+      blockProcessorStream.as(())
     )
 }
