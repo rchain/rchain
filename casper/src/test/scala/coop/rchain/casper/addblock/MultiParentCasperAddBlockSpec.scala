@@ -6,13 +6,11 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer.NoNewDeploys
-import coop.rchain.casper._
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.RegistrySigGen
+import coop.rchain.casper.rholang.Tools
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
-import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
@@ -94,12 +92,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         signedBlock2 <- node.addBlock(deploy2)
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
-                 Base16.encode(
-                   RegistrySigGen.generateUnforgeableNameId(
-                     deploy2.pk,
-                     deploy2.data.timestamp
-                   )
-                 )
+                 Base16.encode(Tools.unforgeableNameRng(deploy2.pk, deploy2.data.timestamp).next())
                )
       } yield {
         data shouldBe Seq("12")
