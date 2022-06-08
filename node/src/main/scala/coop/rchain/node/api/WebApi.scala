@@ -12,7 +12,7 @@ import coop.rchain.models._
 import coop.rchain.models.syntax._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
-import coop.rchain.rholang.interpreter.RhoType.Expression
+import coop.rchain.rholang.interpreter.RhoType.{Boolean, ByteArray, Expression, Number, String, Uri}
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -345,12 +345,12 @@ object WebApi {
         case (k, v) => (rhoExprToParProto(ExprString(k)), rhoExprToParProto(v))
       }.toList)))
     // Terminal expressions (here is the data)
-    case ExprBool(data)   => Expression(Expr().withGBool(data))
-    case ExprInt(data)    => Expression(Expr().withGInt(data))
-    case ExprString(data) => Expression(Expr().withGString(data))
-    case ExprUri(data)    => Expression(Expr().withGUri(data))
+    case ExprBool(data)   => Boolean(data)
+    case ExprInt(data)    => Number(data)
+    case ExprString(data) => String(data)
+    case ExprUri(data)    => Uri(data)
     // Binary data is decoded from base16 string
-    case ExprBytes(data)  => Expression(Expr().withGByteArray(data.unsafeHexToByteString))
+    case ExprBytes(data)  => ByteArray(data.unsafeHexToByteString.toByteArray)
     case ExprUnforg(data) => unforgToParProto(data)
   }
 

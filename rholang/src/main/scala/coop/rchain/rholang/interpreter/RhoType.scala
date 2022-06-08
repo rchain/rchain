@@ -41,7 +41,7 @@ object RhoType {
 
   type RhoBoolean = Boolean.type
   object Boolean {
-    def apply(b: Boolean) = Expr(GBool(b))
+    def apply(b: Boolean): Par = Expr(GBool(b))
 
     def unapply(p: Par): Option[Boolean] =
       p.singleExpr().collect {
