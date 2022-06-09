@@ -26,8 +26,10 @@ class BondedStatusAPITest
     with BlockGenerator
     with BlockDagStorageFixture
     with BlockApiFixture {
-  val validators        = randomValidatorKeyPairs.take(3).toList :+ ConstructDeploy.defaultKeyPair
-  val genesisParameters = buildGenesisParameters(validators)()
+  // 4 nodes with 3 validators bonded
+  val keys              = randomValidatorKeyPairs.take(3).toList :+ ConstructDeploy.defaultKeyPair
+  val bonds             = createBonds(keys.map(_._2).take(3))
+  val genesisParameters = buildGenesisParameters(keys)(bonds)
   val genesisContext    = buildGenesis(genesisParameters)
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
