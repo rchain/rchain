@@ -9,12 +9,11 @@ import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
 import coop.rchain.casper.blocks.proposer.{CheckProposeConstraintsResult, NotEnoughNewBlocks}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
-import coop.rchain.shared.syntax.sharedSyntaxKeyValueTypedStore
 
+// TODO: add comments how it works and adjust for multi-parent finalization
 final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: Log] {
   private def calculateSeenSendersSince(
       lastProposed: BlockMetadata,
@@ -99,9 +98,7 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: BlockDagStorage: 
                              else checkConstraint
         } yield allowedToPropose
       case None =>
-        Sync[F].raiseError[CheckProposeConstraintsResult](
-          new IllegalStateException("Validator does not have a latest message")
-        )
+        CheckProposeConstraintsResult.success.pure[F]
     }
   }
 }
