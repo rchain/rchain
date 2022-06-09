@@ -2,7 +2,7 @@ package coop.rchain.node.revvaultexport
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
-import coop.rchain.casper.util.GenesisBuilder.buildGenesis
+import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.node.revvaultexport.mainnet1.StateBalanceMain
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -10,8 +10,17 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 
 class VaultBalanceGetterTest extends AnyFlatSpec {
-  val genesis               = buildGenesis()
-  val genesisInitialBalance = 9000000
+  val genesisInitialBalance = 9000000L
+
+  // Genesis with initial balance on all vaults
+  private val genesisParams = buildGenesisParameters()() match {
+    case (validatorKeys, genesisVaults, genesisConf) =>
+      val newVaults      = genesisConf.vaults.map(_.copy(initialBalance = genesisInitialBalance))
+      val newGenesisConf = genesisConf.copy(vaults = newVaults)
+      (validatorKeys, genesisVaults, newGenesisConf)
+  }
+  private val genesis = buildGenesis(genesisParams)
+
   "Get balance from VaultPar" should "return balance" in {
     val t = TestNode.standaloneEff(genesis).use { node =>
       val genesisPostStateHash =
