@@ -130,11 +130,6 @@ class ValidateTest
     } yield result
   }
 
-  implicit class ChangeBlockNumber(b: BlockMessage) {
-    def withBlockNumber(n: Long): BlockMessage =
-      b.copy(blockNumber = n)
-  }
-
   "Block signature validation" should "return false on unknown algorithms" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
@@ -199,7 +194,7 @@ class ValidateTest
         block = chain(0)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate
-              .blockNumber[Task](block.withBlockNumber(1), mkCasperSnapshot(dag)) shouldBeF Left(
+              .blockNumber[Task](block.copy(blockNumber = 1), mkCasperSnapshot(dag)) shouldBeF Left(
               InvalidBlockNumber
             )
         _      <- Validate.blockNumber[Task](block, mkCasperSnapshot(dag)) shouldBeF Right(Valid)
@@ -215,7 +210,7 @@ class ValidateTest
         block = chain(1)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate
-              .blockNumber[Task](block.withBlockNumber(17), mkCasperSnapshot(dag)) shouldBeF Left(
+              .blockNumber[Task](block.copy(blockNumber = 17), mkCasperSnapshot(dag)) shouldBeF Left(
               InvalidBlockNumber
             )
         _ <- Validate.blockNumber[Task](block, mkCasperSnapshot(dag)) shouldBeF Right(Valid)
@@ -262,7 +257,7 @@ class ValidateTest
         dag     <- blockDagStorage.getRepresentation
         s1      <- Validate.blockNumber[Task](b3, mkCasperSnapshot(dag))
         _       = s1 shouldBe Right(Valid)
-        s2      <- Validate.blockNumber[Task](b3.withBlockNumber(4), mkCasperSnapshot(dag))
+        s2      <- Validate.blockNumber[Task](b3.copy(blockNumber = 4), mkCasperSnapshot(dag))
         _       = s2 shouldBe Left(InvalidBlockNumber)
       } yield ()
   }
@@ -402,14 +397,14 @@ class ValidateTest
         (sk, pk) = Secp256k1.newKeyPair
         sender   = ByteString.copyFrom(pk.bytes)
         signedBlock = ValidatorIdentity(sk).signBlock(
-          block.withBlockNumber(17).copy(seqNum = 1)
+          block.copy(blockNumber = 17).copy(seqNum = 1)
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
               mkCasperSnapshot(dag),
               "root",
               Int.MaxValue
-            ) shouldBeF Left(InvalidBlockNumber)
+            ) shouldBeF Left(InvalidSequenceNumber)
         result = log.warns.size should be(1)
       } yield result
   }
