@@ -39,7 +39,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
   def mkCasperSnapshot(dag: DagRepresentation) =
     CasperSnapshot(
       dag,
-      ByteString.EMPTY,
+      Seq(),
       ByteString.EMPTY,
       IndexedSeq.empty,
       Set.empty,

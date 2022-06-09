@@ -135,10 +135,10 @@ object MultiParentCasper {
                      }
         } yield result
       }
-      lfb <- dag.lastFinalizedBlockUnsafe
+      fringe = dag.lastFinalizedBlockHash.toSeq
     } yield CasperSnapshot(
       dag,
-      lfb,
+      fringe,
       lca,
       tips,
       justifications,

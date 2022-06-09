@@ -108,7 +108,7 @@ object Resources {
   def mkDummyCasperSnapshot[F[_]: Applicative]: F[CasperSnapshot] = {
     CasperSnapshot(
       DagRepresentation.empty,
-      ByteString.EMPTY,
+      Seq(),
       ByteString.EMPTY,
       IndexedSeq.empty,
       Set.empty,

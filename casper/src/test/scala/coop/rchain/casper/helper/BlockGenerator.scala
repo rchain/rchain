@@ -40,7 +40,7 @@ object BlockGenerator {
   def mkCasperSnapshot[F[_]](dag: DagRepresentation) =
     CasperSnapshot(
       dag,
-      ByteString.EMPTY,
+      Seq(),
       ByteString.EMPTY,
       IndexedSeq.empty,
       Set.empty,

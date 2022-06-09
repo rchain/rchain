@@ -54,7 +54,7 @@ class ValidateTest
   def mkCasperSnapshot[F[_]](dag: DagRepresentation) =
     CasperSnapshot(
       dag,
-      ByteString.EMPTY,
+      Seq(),
       ByteString.EMPTY,
       IndexedSeq.empty,
       Set.empty,
@@ -370,8 +370,8 @@ class ValidateTest
         block  = chain(0)
         block2 = chain(1)
         dag    <- blockDagStorage.getRepresentation
-        _      <- Validate.repeatDeploy[Task](block, mkCasperSnapshot(dag), 50) shouldBeF Right(Valid)
-        _      <- Validate.repeatDeploy[Task](block2, mkCasperSnapshot(dag), 50) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block, 50) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block2, 50) shouldBeF Right(Valid)
       } yield ()
   }
 
@@ -382,7 +382,7 @@ class ValidateTest
         genesis <- createGenesis[Task](deploys = Seq(deploy))
         block1  <- createBlock[Task](justifications = Seq(genesis.blockHash), deploys = Seq(deploy))
         dag     <- blockDagStorage.getRepresentation
-        _ <- Validate.repeatDeploy[Task](block1, mkCasperSnapshot(dag), 50) shouldBeF Left(
+        _ <- Validate.repeatDeploy[Task](block1, 50) shouldBeF Left(
               InvalidRepeatDeploy
             )
       } yield ()

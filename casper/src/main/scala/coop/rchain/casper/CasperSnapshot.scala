@@ -14,7 +14,7 @@ import coop.rchain.models.Validator.Validator
   */
 final case class CasperSnapshot(
     dag: DagRepresentation,
-    lastFinalizedBlock: BlockHash,
+    fringe: Seq[BlockHash],
     lca: BlockHash,
     tips: IndexedSeq[BlockHash],
     justifications: Set[BlockMetadata],

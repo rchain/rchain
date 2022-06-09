@@ -52,7 +52,7 @@ class InterpreterUtilTest
   def mkCasperSnapshot(dag: DagRepresentation) =
     CasperSnapshot(
       dag,
-      ByteString.EMPTY,
+      Seq(),
       ByteString.EMPTY,
       IndexedSeq.empty,
       Set.empty,
