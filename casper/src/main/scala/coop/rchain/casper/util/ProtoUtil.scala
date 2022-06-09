@@ -17,20 +17,16 @@ import coop.rchain.models.syntax._
 
 object ProtoUtil {
 
-  def getParentsMetadata[F[_]: Sync: BlockDagStorage](
-      b: BlockMetadata,
-      dag: DagRepresentation
-  ): F[List[BlockMetadata]] =
-    // TODO: filter invalid blocks
-    b.justifications.traverse(dag.lookupUnsafe(_))
+  def getParentsMetadata[F[_]: Sync: BlockDagStorage](b: BlockMetadata): F[List[BlockMetadata]] =
+    b.justifications
+      .traverse(BlockDagStorage[F].lookupUnsafe(_))
+      .map(_.filter(!_.invalid))
 
   def getParentMetadatasAboveBlockNumber[F[_]: Sync: BlockDagStorage](
       b: BlockMetadata,
-      blockNumber: Long,
-      dag: DagRepresentation
+      blockNumber: Long
   ): F[List[BlockMetadata]] =
-    getParentsMetadata(b, dag)
-      .map(parents => parents.filter(p => p.blockNum >= blockNumber))
+    getParentsMetadata(b).map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.state.deploys

@@ -110,7 +110,9 @@ object MultiParentCasper {
         } yield r.toSet
       }
 
-      parentMetas <- justifications.toList.traverse(j => dag.lookupUnsafe(j.blockHash))
+      parentMetas <- justifications.toList
+                      .traverse(j => dag.lookupUnsafe(j.blockHash))
+                      .map(_.filter(!_.invalid))
       maxBlockNum = ProtoUtil.maxBlockNumberMetadata(parentMetas)
       maxSeqNums  <- dag.latestMessages.map(m => m.map { case (k, v) => k -> v.seqNum })
       deploysInScope <- {
@@ -123,8 +125,7 @@ object MultiParentCasper {
                          ProtoUtil
                            .getParentMetadatasAboveBlockNumber(
                              b,
-                             earliestBlockNumber,
-                             dag
+                             earliestBlockNumber
                            )
                      )
                      .foldLeftF(Set.empty[Signed[DeployData]]) { (deploys, blockMetadata) =>

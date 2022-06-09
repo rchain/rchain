@@ -99,20 +99,24 @@ object Validate {
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
     (for {
-      _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
-      _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
-      _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
-      _ <- EitherT(Validate.repeatDeploy(block, s, expirationThreshold))
+      // First validate justifications because they are basis for all other validation
+      _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
+      _ <- EitherT(Validate.justificationRegressions(block))
+      // Validator sequence number validation
+      _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
+      _ <- EitherT(Validate.sequenceNumber(block))
+      // Block number validation
       _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
       _ <- EitherT(Validate.blockNumber(block, s))
+      // Deploys validation
+      _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
+      _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
       _ <- EitherT(Validate.futureTransaction(block))
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
-      _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
-      _ <- EitherT(Validate.sequenceNumber(block))
-      _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
-      s <- EitherT(Validate.justificationRegressions(block))
+      _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
+      s <- EitherT(Validate.repeatDeploy(block, expirationThreshold))
     } yield s).value
 
   /**
@@ -122,17 +126,14 @@ object Validate {
     */
   def repeatDeploy[F[_]: Sync: Log: BlockStore: BlockDagStorage: Span](
       block: BlockMessage,
-      s: CasperSnapshot,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
     val deployKeySet = block.state.deploys.map(_.deploy.sig).toSet
 
     for {
       _                   <- Span[F].mark("before-repeat-deploy-get-parents")
       blockMetadata       = BlockMetadata.fromBlock(block, invalid = false)
-      initParents         <- ProtoUtil.getParentsMetadata(blockMetadata, s.dag)
+      initParents         <- ProtoUtil.getParentsMetadata(blockMetadata)
       maxBlockNumber      = ProtoUtil.maxBlockNumberMetadata(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
       _                   <- Span[F].mark("before-repeat-deploy-duplicate-block")
@@ -142,8 +143,7 @@ object Validate {
                                            ProtoUtil
                                              .getParentMetadatasAboveBlockNumber(
                                                b,
-                                               earliestBlockNumber,
-                                               s.dag
+                                               earliestBlockNumber
                                              )
                                        )
                                        .findF { blockMetadata =>
@@ -190,15 +190,17 @@ object Validate {
       s: CasperSnapshot
   ): F[ValidBlockProcessing] =
     for {
-      justifications <- b.justifications.traverse(s.dag.lookupUnsafe(_))
-      maxBlockNumber = justifications.map(_.blockNum).maximumOption.getOrElse(-1L)
+      parents <- b.justifications
+                  .traverse(BlockDagStorage[F].lookupUnsafe(_))
+                  .map(_.filter(!_.invalid))
+      maxBlockNumber = parents.map(_.blockNum).maximumOption.getOrElse(-1L)
       number         = b.blockNumber
       result         = maxBlockNumber + 1 == number
       status <- if (result) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
                } else {
                  val logMessage =
-                   if (justifications.isEmpty)
+                   if (parents.isEmpty)
                      s"block number $number is not zero, but block has no parents."
                    else
                      s"block number $number is not one more than maximum parent number $maxBlockNumber."

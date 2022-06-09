@@ -15,7 +15,7 @@ import coop.rchain.casper.protocol.{
   ProcessedDeploy,
   ProcessedSystemDeploy
 }
-import coop.rchain.casper.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
 import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
@@ -29,6 +29,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.shared.syntax.sharedSyntaxKeyValueTypedStore
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
 import retry.{retryingOnFailures, RetryPolicies}
@@ -61,8 +62,11 @@ object InterpreterUtil {
     val incomingPreStateHash = block.preStateHash
     for {
       _ <- Span[F].mark("before-unsafe-get-parents")
-      // TODO: filter invalid justifications
-      parents             = block.justifications
+      parents <- block.justifications
+                  .traverse(BlockDagStorage[F].lookupUnsafe(_))
+                  .map(_.filter(!_.invalid))
+                  .map(_.map(_.blockHash))
+
       _                   <- Span[F].mark("before-compute-parents-post-state")
       computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager).attempt
       _                   <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
@@ -287,13 +291,15 @@ object InterpreterUtil {
             }
           }
           for {
-            lfbState <- BlockStore[F]
-                         .getUnsafe(s.lastFinalizedBlock)
-                         .map(_.postStateHash)
-                         .map(Blake2b256Hash.fromByteString)
+            fringePostStateHashOpt <- s.fringe.headOption
+                                       .flatTraverse(BlockStore[F].get1(_))
+                                       .map(
+                                         _.map(_.postStateHash)
+                                       )
+            lfbState = fringePostStateHashOpt.getOrElse(emptyStateHashFixed).toBlake2b256Hash
             r <- DagMerger.merge[F](
                   s.dag,
-                  s.lastFinalizedBlock,
+                  s.fringe,
                   lfbState,
                   blockIndexF(_).map(_.deployChains),
                   runtimeManager.getHistoryRepo,

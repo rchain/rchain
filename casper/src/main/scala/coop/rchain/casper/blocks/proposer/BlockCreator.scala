@@ -114,7 +114,11 @@ object BlockCreator {
         r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
               val blockData = BlockData(nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
               for {
-                computedParentsInfo <- computeParentsPostState(justifications, s, runtimeManager)
+                parents <- justifications
+                            .traverse(BlockDagStorage[F].lookupUnsafe(_))
+                            .map(_.filter(!_.invalid))
+                            .map(_.map(_.blockHash))
+                computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
                                    systemDeploys,
