@@ -26,16 +26,25 @@ import scala.collection.mutable
 
 object GenesisBuilder {
 
+  val fixedValidatorKeyPairs = List((defaultSec, defaultPub), (defaultSec2, defaultPub2))
+
+  val randomValidatorKeyPairs                  = LazyList.continually(Secp256k1.newKeyPair)
+  val (randomValidatorSks, randomValidatorPks) = randomValidatorKeyPairs.unzip
+
+  val defaultPosMultiSigPublicKeys = List(
+    "04db91a53a2b72fcdcb201031772da86edad1e4979eb6742928d27731b1771e0bc40c9e9c9fa6554bdec041a87cee423d6f2e09e9dfb408b78e85a4aa611aad20c",
+    "042a736b30fffcc7d5a58bb9416f7e46180818c82b15542d0a7819d1a437aa7f4b6940c50db73a67bfc5f5ec5b5fa555d24ef8339b03edaa09c096de4ded6eae14",
+    "047f0f0f5bbe1d6d1a8dac4d88a3957851940f39a57cd89d55fe25b536ab67e6d76fd3f365c83e5bfe11fe7117e549b1ae3dd39bfc867d1c725a4177692c4e7754"
+  )
+
+  val defaultPosVaultPubKey =
+    "0432946f7f91f8f767d7c3d43674faf83586dffbd1b8f9278a5c72820dc20308836299f47575ff27f4a736b72e63d91c3cd853641861f64e08ee5f9204fc708df6"
+
   def createBonds(validators: Iterable[PublicKey]): Iterable[(PublicKey, Long)] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }
 
   def createGenesis(): BlockMessage =
     buildGenesis().genesisBlock
-
-  val fixedValidatorKeyPairs = List((defaultSec, defaultPub), (defaultSec2, defaultPub2))
-
-  val randomValidatorKeyPairs                  = LazyList.continually(Secp256k1.newKeyPair)
-  val (randomValidatorSks, randomValidatorPks) = randomValidatorKeyPairs.unzip
 
   /*
    * buildGenesisParameters and buildGenesis functions have very strange combinations with TestNode
@@ -54,15 +63,6 @@ object GenesisBuilder {
     val bondsPair  = validators.map(_._2).zip(bonds)
     buildGenesisParameters(validators)(bondsPair)
   }
-
-  val defaultPosMultiSigPublicKeys = List(
-    "04db91a53a2b72fcdcb201031772da86edad1e4979eb6742928d27731b1771e0bc40c9e9c9fa6554bdec041a87cee423d6f2e09e9dfb408b78e85a4aa611aad20c",
-    "042a736b30fffcc7d5a58bb9416f7e46180818c82b15542d0a7819d1a437aa7f4b6940c50db73a67bfc5f5ec5b5fa555d24ef8339b03edaa09c096de4ded6eae14",
-    "047f0f0f5bbe1d6d1a8dac4d88a3957851940f39a57cd89d55fe25b536ab67e6d76fd3f365c83e5bfe11fe7117e549b1ae3dd39bfc867d1c725a4177692c4e7754"
-  )
-
-  val defaultPosVaultPubKey =
-    "0432946f7f91f8f767d7c3d43674faf83586dffbd1b8f9278a5c72820dc20308836299f47575ff27f4a736b72e63d91c3cd853641861f64e08ee5f9204fc708df6"
   val defaultSystemContractPubKey =
     "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf"
 
