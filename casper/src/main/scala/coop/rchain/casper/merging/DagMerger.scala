@@ -29,7 +29,7 @@ object DagMerger {
 
   def merge[F[_]: Concurrent: BlockDagStorage: Log](
       dag: DagRepresentation,
-      lfb: BlockHash,
+      fringe: Seq[BlockHash],
       lfbPostState: Blake2b256Hash,
       index: BlockHash => F[Vector[DeployChainIndex]],
       historyRepository: RhoHistoryRepository[F],
@@ -39,7 +39,8 @@ object DagMerger {
       // all not finalized blocks (conflict set)
       nonFinalisedBlocks <- dag.nonFinalizedBlocks
       // blocks that see last finalized state
-      actualBlocks = dag.descendants(lfb)
+      // TODO: return all blocks as descendants if fringe is empty
+      actualBlocks = if (fringe.nonEmpty) dag.descendants(fringe.head) else dag.dagSet
       // blocks that does not see last finalized state
       lateBlocks = nonFinalisedBlocks diff actualBlocks
 

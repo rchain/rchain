@@ -430,7 +430,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             dag <- dagStore.getRepresentation
             v <- DagMerger.merge[Task](
                   dag,
-                  baseBlock.blockHash,
+                  Seq(baseBlock.blockHash),
                   Blake2b256Hash.fromByteString(baseState),
                   indices(_).deployChains.pure,
                   runtimeManager.getHistoryRepo,

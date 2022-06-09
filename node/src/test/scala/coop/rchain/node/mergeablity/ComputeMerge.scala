@@ -168,7 +168,7 @@ trait ComputeMerge {
               implicit val bds = dagStore
               DagMerger.merge[F](
                 dag,
-                bBlock.blockHash,
+                Seq(bBlock.blockHash),
                 baseCheckpoint.root,
                 indices(_).deployChains.pure[F],
                 historyRepo,
