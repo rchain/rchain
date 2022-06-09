@@ -67,39 +67,20 @@ object GenesisBuilder {
     "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf"
 
   def buildGenesisParameters(
-      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
+      validatorKeyPairs: Seq[(PrivateKey, PublicKey)],
       genesisVaults: Seq[(PrivateKey, Long)],
       bonds: Map[PublicKey, Long]
-  ): GenesisParameters = {
-    val (_, firstValidatorPubKey) = validatorKeyPairs.head
-    (
-      validatorKeyPairs,
-      genesisVaults.map { case (k, _) => (k, Secp256k1.toPublic(k)) },
-      Genesis(
-        sender = firstValidatorPubKey,
-        shardId = "root",
-        proofOfStake = ProofOfStake(
-          minimumBond = 1L,
-          maximumBond = Long.MaxValue,
-          // Epoch length is set to large number to prevent trigger of epoch change
-          // in PoS close block method, which causes block merge conflicts
-          // - epoch change can be set as a parameter in Rholang tests (e.g. PosSpec)
-          epochLength = 1000,
-          quarantineLength = 50000,
-          numberOfActiveValidators = 100,
-          validators = bonds.map(Validator.tupled).toSeq,
-          posMultiSigPublicKeys = defaultPosMultiSigPublicKeys,
-          posMultiSigQuorum = defaultPosMultiSigPublicKeys.length - 1,
-          posVaultPubKey = defaultPosVaultPubKey
-        ),
-        registry = Registry(defaultSystemContractPubKey),
-        vaults = genesisVaults.toList.map {
+  ): GenesisParameters =
+    buildGenesisParameters(validatorKeyPairs.toList)(bonds) match {
+      case (validatorKeys, _, genesisConf) =>
+        // Use default build parameters function and modify vaults
+        val newVaults = genesisVaults.toList.map {
           case (p, s) => Vault(RevAddress.fromPublicKey(Secp256k1.toPublic(p)).get, s)
-        },
-        blockNumber = 0
-      )
-    )
-  }
+        }
+        val newGenesisVaults = genesisVaults.map { case (k, _) => (k, Secp256k1.toPublic(k)) }
+        val newGenesisConf   = genesisConf.copy(vaults = newVaults)
+        (validatorKeys, newGenesisVaults, newGenesisConf)
+    }
 
   def buildGenesisParameters(
       validatorKeyPairs: List[(PrivateKey, PublicKey)] = randomValidatorKeyPairs.take(4).toList
