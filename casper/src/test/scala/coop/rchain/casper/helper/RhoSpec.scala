@@ -155,7 +155,7 @@ class RhoSpec(
                 runtime,
                 otherLibs
               )
-          rand = Blake2b512Random(128)
+          rand = Blake2b512Random.defaultRandom
           _ <- TestUtil
                 .eval(testObject, runtime)(
                   implicitly,

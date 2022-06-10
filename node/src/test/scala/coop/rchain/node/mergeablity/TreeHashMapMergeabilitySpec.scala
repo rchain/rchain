@@ -492,7 +492,7 @@ class TreeHashMapMergeabilitySpec
       phloLimit = Cost.UNSAFE_MAX.value,
       sec = ConstructDeploy.defaultSec2
     )
-    val baseDeployRand = Blake2b512Random(10)
+    val baseDeployRand = Blake2b512Random.defaultRandom
     val registryRand   = baseDeployRand.splitByte(BlockRandomSeed.UserDeploySplitIndex)
     val storeTokenPar = {
       val target = LazyList.continually(registryRand.next()).drop(9).head

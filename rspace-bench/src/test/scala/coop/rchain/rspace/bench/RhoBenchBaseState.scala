@@ -48,7 +48,7 @@ abstract class RhoBenchBaseState {
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
   implicit val ms: Metrics.Source         = Metrics.BaseSource
-  def rand: Blake2b512Random              = Blake2b512Random(128)
+  def rand: Blake2b512Random              = Blake2b512Random.defaultRandom
 
   def createRuntime =
     for {

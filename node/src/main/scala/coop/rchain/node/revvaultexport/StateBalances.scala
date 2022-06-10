@@ -71,7 +71,7 @@ object StateBalances {
 
   // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
   def MainnetStoreTokenUnf: Par = {
-    val rand = Blake2b512Random(10)
+    val rand = Blake2b512Random.defaultRandom
     import coop.rchain.models.rholang.implicits._
     GPrivate(ByteString.copyFrom(rand.next()))
   }

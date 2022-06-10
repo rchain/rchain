@@ -113,7 +113,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
           (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
         ]](OutOfPhlogistonsError)
     }
-    implicit val rand        = Blake2b512Random(128)
+    implicit val rand        = Blake2b512Random.defaultRandom
     implicit val cost        = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
     val (_, chargingReducer) = createDispatcher(iSpace, Map.empty, Map.empty)
     val send                 = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))

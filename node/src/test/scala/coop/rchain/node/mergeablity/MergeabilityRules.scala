@@ -258,7 +258,7 @@ trait BasicMergeabilityRules extends ComputeMerge {
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val logger: Log[Task]         = Log.log[Task]
-    val baseDeployRand                     = Blake2b512Random(10)
+    val baseDeployRand                     = Blake2b512Random.defaultRandom
     computeMergeCase[Task](
       baseDeployRand,
       Seq(baseDeploy),

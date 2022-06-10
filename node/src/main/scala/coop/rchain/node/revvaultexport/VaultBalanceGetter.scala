@@ -34,7 +34,7 @@ object VaultBalanceGetter {
       _             <- runtime.cost.set(Cost.UNSAFE_MAX)
       ret           = VaultBalanceGetter.newReturnName
       getBalancePar = VaultBalanceGetter.getBalancePar(vaultPar, ret)
-      _             <- runtime.inj(getBalancePar)(Blake2b512Random(10))
+      _             <- runtime.inj(getBalancePar)(Blake2b512Random.defaultRandom)
       data          <- runtime.getData(ret)
       result = data.headOption.flatMap(
         d =>

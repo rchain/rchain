@@ -69,7 +69,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
         for {
           hash1 <- runtime.emptyStateHash
           _     <- runtime.reset(Blake2b256Hash.fromByteString(hash1))
-          rand  = Blake2b512Random(10)
+          rand  = Blake2b512Random.defaultRandom
           storeToken = {
             val r      = rand.copy()
             val target = LazyList.continually(r.next()).drop(9).head
@@ -88,7 +88,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
                                  1L,
                                  phloLimit = 50000000
                                ),
-                             Blake2b512Random(10)
+                             Blake2b512Random.defaultRandom
                            )
           (initialTrie, _) = initialTrieRes
           _                = assert(!initialTrie.isFailed)

@@ -323,7 +323,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   "TEMP encode multiple values" should "show stored binary size" in {
-    val rnd = Blake2b512Random(128)
+    val rnd = Blake2b512Random.defaultRandom
 
     val (res, _) = (1L to 10L).foldLeft((Vector[ByteVector](), rnd)) {
       case ((acc, r), n) =>

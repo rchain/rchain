@@ -42,7 +42,7 @@ import scala.concurrent.duration._
   * }}}
   */
 class Interactive private (runtime: RhoRuntime[Task])(implicit scheduler: Scheduler) {
-  implicit private val rand = Blake2b512Random(128)
+  implicit private val rand = Blake2b512Random.defaultRandom
 
   private val prettyPrinter = PrettyPrinter()
 

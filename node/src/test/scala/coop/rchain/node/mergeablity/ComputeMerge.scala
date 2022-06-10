@@ -74,7 +74,8 @@ trait ComputeMerge {
                   .whenA(baseDeploys.exists(_.isFailed))
             baseCheckpoint <- runtime.createCheckpoint
             leftDeploysRes <- leftDeploySources.toList.traverse(
-                               runtime.processDeployWithMergeableData(_, Blake2b512Random(10))
+                               runtime
+                                 .processDeployWithMergeableData(_, Blake2b512Random.defaultRandom)
                              )
             (leftDeploys, leftMergeChs, _) = leftDeploysRes
               .map(UserDeployRuntimeResult.unapply(_).get)
@@ -87,7 +88,8 @@ trait ComputeMerge {
             leftCheckpoint @ _ <- runtime.createCheckpoint
             _                  <- runtime.reset(baseCheckpoint.root)
             rightDeploysRes <- rightDeploySources.toList.traverse(
-                                runtime.processDeployWithMergeableData(_, Blake2b512Random(10))
+                                runtime
+                                  .processDeployWithMergeableData(_, Blake2b512Random.defaultRandom)
                               )
             (rightDeploys, rightMergeChs, _) = rightDeploysRes
               .map(UserDeployRuntimeResult.unapply(_).get)

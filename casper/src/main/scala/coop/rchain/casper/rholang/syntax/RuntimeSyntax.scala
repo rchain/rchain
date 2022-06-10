@@ -469,7 +469,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     )
 
     // Create return channel as first private name created in deploy term
-    val rand = Blake2b512Random.apply(10)
+    val rand = Blake2b512Random.defaultRandom
     import coop.rchain.models.rholang.implicits._
     val returnName: Par = GPrivate(ByteString.copyFrom(rand.copy().next()))
 
@@ -501,7 +501,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       deploy: Signed[DeployData]
   )(implicit s: Sync[F]): F[Seq[Par]] = {
     // Create return channel as first unforgeable name created in deploy term
-    val rand = Blake2b512Random.apply(10)
+    val rand = Blake2b512Random.defaultRandom
     import coop.rchain.models.rholang.implicits._
     val returnName: Par = GPrivate(ByteString.copyFrom(rand.copy().next()))
     captureResults(start, rand, deploy, returnName)
