@@ -209,8 +209,45 @@ object Setup {
         triggerProposeFOpt.traverse(_(true)) whenA conf.autopropose
       }
 
-      // Block receiver, incoming blocks from peers
+      // Network packets handler (queue)
+      routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
+      // Peer message stream
+      peerMessageStream = routingMessageQueue
+        .dequeueChunk(maxSize = 1)
+        .parEvalMapUnorderedProcBounded {
+          case RoutingMessage(peer, packet) =>
+            toCasperMessageProto(packet).toEither
+              .flatMap(CasperMessage.from)
+              .map(cm => PeerMessage(peer, cm).some.pure[F])
+              .leftMap { err =>
+                val msg = s"Could not extract casper message from packet sent by $peer: $err"
+                Log[F].warn(msg).as(none[PeerMessage])
+              }
+              .merge
+        }
+        .collect { case Some(m) => m }
+
+      // Node initialization process, sync LFS to running
       incomingBlockStream = incomingBlocksQueue.dequeue
+      nodeLaunch = {
+        implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
+        implicit val (br, ep)     = (blockRetriever, eventPublisher)
+        implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
+        implicit val (rm, cu)     = (runtimeManager, commUtil)
+        implicit val (rsm, sp)    = (rspaceStateManager, span)
+        NodeLaunch[F](
+          peerMessageStream,
+          incomingBlocksQueue,
+          conf.casper,
+          !conf.protocolClient.disableLfs,
+          conf.protocolServer.disableStateExporter,
+          validatorIdentityOpt,
+          casperShardConf,
+          conf.standalone
+        )
+      }
+
+      // Block receiver, process incoming blocks and order by validated dependencies
       blockReceiverState <- {
         implicit val hashShow = Show.show[BlockHash](_.toHexString)
         Ref.of(BlockReceiverState[BlockHash])
@@ -234,42 +271,6 @@ object Setup {
           blockProcessorInputBlocksStream,
           validatedBlocksQueue,
           MultiParentCasper.getSnapshot[F](casperShardConf)
-        )
-      }
-
-      // Network packets handler (queue)
-      routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
-      // Peer message stream
-      peerMessageStream = routingMessageQueue
-        .dequeueChunk(maxSize = 1)
-        .parEvalMapUnorderedProcBounded {
-          case RoutingMessage(peer, packet) =>
-            toCasperMessageProto(packet).toEither
-              .flatMap(CasperMessage.from)
-              .map(cm => PeerMessage(peer, cm).some.pure[F])
-              .leftMap { err =>
-                val msg = s"Could not extract casper message from packet sent by $peer: $err"
-                Log[F].warn(msg).as(none[PeerMessage])
-              }
-              .merge
-        }
-        .collect { case Some(m) => m }
-
-      nodeLaunch = {
-        implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
-        implicit val (br, ep)     = (blockRetriever, eventPublisher)
-        implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
-        implicit val (rm, cu)     = (runtimeManager, commUtil)
-        implicit val (rsm, sp)    = (rspaceStateManager, span)
-        NodeLaunch[F](
-          peerMessageStream,
-          incomingBlocksQueue,
-          conf.casper,
-          !conf.protocolClient.disableLfs,
-          conf.protocolServer.disableStateExporter,
-          validatorIdentityOpt,
-          casperShardConf,
-          conf.standalone
         )
       }
 

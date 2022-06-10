@@ -19,7 +19,6 @@ import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
@@ -89,7 +88,6 @@ object NodeLaunch {
         finished    <- Deferred[F, Unit]
         engine <- NodeSyncing[F](
                    finished,
-                   incomingBlocksQueue,
                    casperShardConf,
                    validatorId,
                    trimState

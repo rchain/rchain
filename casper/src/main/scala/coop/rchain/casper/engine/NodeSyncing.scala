@@ -33,20 +33,20 @@ object NodeSyncing {
   // format: off
   def apply[F[_]
   /* Execution */   : Concurrent: Time: Timer
-  /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+  /* Transport */   : TransportLayer: CommUtil: EventPublisher
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       finished: Deferred[F, Unit],
-      incomingBlocksQueue: Queue[F, BlockMessage],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
       trimState: Boolean = true
   ): F[NodeSyncing[F]] =
     for {
-      stateResponseQueue <- Queue.bounded[F, StoreItemsMessage](50)
+      incomingBlocksQueue <- Queue.bounded[F, BlockMessage](50)
+      stateResponseQueue  <- Queue.bounded[F, StoreItemsMessage](50)
       engine = new NodeSyncing(
         finished,
         incomingBlocksQueue,
@@ -65,7 +65,7 @@ object NodeSyncing {
 // format: off
 class NodeSyncing[F[_]
   /* Execution */   : Concurrent: Time: Timer
-  /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+  /* Transport */   : TransportLayer: CommUtil: EventPublisher
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
