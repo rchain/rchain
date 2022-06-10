@@ -76,7 +76,7 @@ object BlockGenerator {
       s: CasperSnapshot,
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
-    val deploys = ProtoUtil.deploys(b).map(_.deploy)
+    val deploys = b.state.deploys.map(_.deploy)
     for {
       computedParentsInfo <- computeParentsPostState(
                               b.justifications,

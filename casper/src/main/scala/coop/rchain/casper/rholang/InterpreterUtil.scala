@@ -108,7 +108,7 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F]
   )(implicit spanF: Span[F]): F[Either[ReplayFailure, StateHash]] =
     spanF.trace(ReplayBlockMetricsSource) {
-      val internalDeploys       = ProtoUtil.deploys(block)
+      val internalDeploys       = block.state.deploys
       val internalSystemDeploys = ProtoUtil.systemDeploys(block)
       for {
         _                  <- Span[F].mark("before-process-pre-state-hash")

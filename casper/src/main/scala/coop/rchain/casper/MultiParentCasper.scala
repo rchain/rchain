@@ -131,7 +131,7 @@ object MultiParentCasper {
                      .foldLeftF(Set.empty[Signed[DeployData]]) { (deploys, blockMetadata) =>
                        for {
                          block        <- BlockStore[F].getUnsafe(blockMetadata.blockHash)
-                         blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
+                         blockDeploys = block.state.deploys.map(_.deploy)
                        } yield deploys ++ blockDeploys
                      }
         } yield result

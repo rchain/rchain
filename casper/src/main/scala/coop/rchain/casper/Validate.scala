@@ -151,7 +151,7 @@ object Validate {
                                            block <- BlockStore[F].getUnsafe(
                                                      blockMetadata.blockHash
                                                    )
-                                           blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
+                                           blockDeploys = block.state.deploys.map(_.deploy)
                                          } yield blockDeploys.exists(
                                            d => deployKeySet.contains(d.sig)
                                          )
@@ -166,8 +166,7 @@ object Validate {
                                              )
                            currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
                            blockHashString        = PrettyPrinter.buildString(duplicatedBlock.blockHash)
-                           duplicatedDeploy = ProtoUtil
-                             .deploys(duplicatedBlock)
+                           duplicatedDeploy = duplicatedBlock.state.deploys
                              .map(_.deploy)
                              .find(d => deployKeySet.contains(d.sig))
                              .get
@@ -214,7 +213,7 @@ object Validate {
     import cats.instances.option._
 
     val blockNumber       = b.blockNumber
-    val deploys           = ProtoUtil.deploys(b).map(_.deploy)
+    val deploys           = b.state.deploys.map(_.deploy)
     val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber >= blockNumber)
     maybeFutureDeploy
       .traverse { futureDeploy =>
@@ -237,7 +236,7 @@ object Validate {
     import cats.instances.option._
 
     val earliestAcceptableValidAfterBlockNumber = b.blockNumber - expirationThreshold
-    val deploys                                 = ProtoUtil.deploys(b).map(_.deploy)
+    val deploys                                 = b.state.deploys.map(_.deploy)
     val maybeExpiredDeploy =
       deploys.find(_.data.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
     maybeExpiredDeploy

@@ -28,9 +28,6 @@ object ProtoUtil {
   ): F[List[BlockMetadata]] =
     getParentsMetadata(b).map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
-  def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
-    b.state.deploys
-
   def systemDeploys(b: BlockMessage): Seq[ProcessedSystemDeploy] =
     b.state.systemDeploys
 
