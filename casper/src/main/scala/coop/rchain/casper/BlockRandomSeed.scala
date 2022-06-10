@@ -7,7 +7,7 @@ import scodec.bits.ByteVector
 import scodec.codecs.{bytes, uint8, ulong, utf8, variableSizeBytes}
 import scodec.{Codec, TransformSyntax}
 
-final case class BlockRandomSeed(
+final case class BlockRandomSeed private (
     shardId: String,
     blockNumber: Long,
     sender: PublicKey,
@@ -15,6 +15,13 @@ final case class BlockRandomSeed(
 )
 
 object BlockRandomSeed {
+  def apply(
+      shardId: String,
+      blockNumber: Long,
+      sender: PublicKey,
+      preStateHash: Blake2b256Hash
+  ): BlockRandomSeed = new BlockRandomSeed(shardId, blockNumber, sender, preStateHash)
+
   private val codecPublicKey: Codec[PublicKey] = variableSizeBytes(uint8, bytes)
     .xmap[PublicKey](bv => PublicKey(bv.toArray), pk => ByteVector(pk.bytes))
 
