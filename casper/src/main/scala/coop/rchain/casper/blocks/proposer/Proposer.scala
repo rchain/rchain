@@ -8,7 +8,6 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
-import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.{BlockMessage, CommUtil}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
@@ -152,7 +151,7 @@ object Proposer {
     /* Casper */      : SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
     /* Storage */     : BlockStore: BlockDagStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
-    /* Comm */        : CommUtil: BlockRetriever: RuntimeManager
+    /* Comm */        : CommUtil: RuntimeManager
   ] // format: on
   (
       validatorIdentity: ValidatorIdentity,
@@ -190,8 +189,6 @@ object Proposer {
       BlockStore[F].put(b) >>
         // save changes to Casper
         MultiParentCasper.handleValidBlock(b) >>
-        // inform block retriever about block
-        BlockRetriever[F].ackInCasper(b.blockHash) >>
         // broadcast hash to peers
         CommUtil[F].sendBlockHash(b.blockHash, b.sender) >>
         // Publish event

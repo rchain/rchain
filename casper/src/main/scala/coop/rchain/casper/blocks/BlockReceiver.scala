@@ -251,6 +251,9 @@ object BlockReceiver {
                           }
               pendingRequests <- state.modify(_.endStored(block.blockHash, parents))
 
+              // Notify BlockRetriever of finished validation of block
+              _ <- BlockRetriever[F].ackReceived(block.blockHash)
+
               // Send request for missing dependencies
               _ <- requestMissingDependencies(pendingRequests)
 
@@ -277,9 +280,6 @@ object BlockReceiver {
         for {
           // Update state with finalized block and get next for validation
           next <- state.modify(_.finished(block.blockHash, parents))
-
-          // Notify BlockRetriever of finished validation of block
-          _ <- BlockRetriever[F].ackInCasper(block.blockHash)
 
           // Send dependency free blocks to validation
           _ <- next.toList.traverse_(receiverOutputQueue.enqueue1)

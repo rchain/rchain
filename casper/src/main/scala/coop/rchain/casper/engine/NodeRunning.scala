@@ -59,44 +59,6 @@ object NodeRunning {
   final case class IgnoreCasperMessageStatus(doIgnore: Boolean, status: CasperMessageStatus)
 
   /**
-    * As we introduced synchrony constraint - there might be situation when node is stuck.
-    * As an edge case with `sync = 0.99`, if node misses the block that is the last one to meet sync constraint,
-    * it has no way to request it after it was broadcasted. So it will never meet synchrony constraint.
-    * To mitigate this issue we can update fork choice tips if current fork-choice tip has old timestamp,
-    * which means node does not propose new blocks and no new blocks were received recently.
-    */
-  // TODO: functionality to request DAG tips should be reimplemented in NodeRunning
-  //  with internal timer to track when new blocks are received from the network
-  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: BlockDagStorage](
-      delayThreshold: FiniteDuration
-  ): F[Unit] =
-    for {
-      dag            <- BlockDagStorage[F].getRepresentation
-      latestMessages <- dag.latestMessageHashes.map(_.values.toSet)
-      now            <- Time[F].currentMillis
-      hasRecentLatestMessage = Stream
-        .fromIterator(latestMessages.iterator)
-        .evalMap(BlockStore[F].getUnsafe)
-        // filter only blocks that are recent
-//        .filter { b =>
-//          val blockTimestamp = b.header.timestamp
-//          (now - blockTimestamp) < delayThreshold.toMillis
-//        }
-        .head
-        .compile
-        .last
-        .map(_.isDefined)
-      stuck <- hasRecentLatestMessage.not
-      requestWithLog = Log[F].info(
-        "Requesting tips update as newest latest message " +
-          s"is more then ${delayThreshold.toString} old. " +
-          s"Might be network is faulty."
-      ) >> CommUtil[F].sendForkChoiceTipRequest
-
-      _ <- requestWithLog.whenA(stuck)
-    } yield ()
-
-  /**
     * Peer broadcasted block hash.
     */
   def handleBlockHashMessage[F[_]: Monad: BlockRetriever: Log](

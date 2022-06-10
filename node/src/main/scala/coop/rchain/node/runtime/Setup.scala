@@ -5,7 +5,6 @@ import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import cats.{Parallel, Show}
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
@@ -19,6 +18,7 @@ import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.syntax._
 import coop.rchain.comm.RoutingMessage
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.ConnectionsCell
@@ -175,7 +175,7 @@ object Setup {
       // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
-        implicit val (br, ep)     = (blockRetriever, eventPublisher)
+        implicit val ep           = eventPublisher
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
         val dummyDeployerKeyOpt   = conf.dev.deployerPrivateKey
@@ -261,9 +261,18 @@ object Setup {
           casperShardConf.shardName
         )
       }
+      // Blocks from receiver with fork-choice tips request on idle
+      // TODO: instead of idle timeout more precise trigger can be when peers connect
+      blockReceiverFCTStream = blockReceiverStream.evalOnIdle(
+        commUtil.sendForkChoiceTipRequest,
+        conf.casper.forkChoiceStaleThreshold
+      )
 
       // Block processor (validation of blocks)
-      blockProcessorInputBlocksStream = blockReceiverStream.evalMap(blockStore.getUnsafe)
+      blockProcessorInputBlocksStream = {
+        import coop.rchain.blockstorage.syntax._
+        blockReceiverFCTStream.evalMap(blockStore.getUnsafe)
+      }
       blockProcessorStream = {
         implicit val (rm, sp)     = (runtimeManager, span)
         implicit val (bs, bd, cu) = (blockStore, blockDagStorage, commUtil)

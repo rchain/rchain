@@ -44,10 +44,7 @@ trait BlockRetriever[F[_]] {
   def requestAll(ageThreshold: FiniteDuration): F[Unit]
 
   /** Acknowledge block receive */
-  def ackReceive(hash: BlockHash): F[Unit]
-
-  /** Acknowledge Casper added block */
-  def ackInCasper(hash: BlockHash): F[Unit]
+  def ackReceived(hash: BlockHash): F[Unit]
 }
 
 object BlockRetriever {
@@ -74,10 +71,6 @@ object BlockRetriever {
       timestamp: Long,
       // Peers that were queried for this block
       peers: Set[PeerNode] = Set.empty,
-      // If block has been received
-      received: Boolean = false,
-      // If block has been received
-      inCasperBuffer: Boolean = false,
       // Peers that reportedly have block and are yet to be queried
       waitingList: List[PeerNode] = List.empty
   )
@@ -120,16 +113,14 @@ object BlockRetriever {
           initState: Map[BlockHash, RequestState],
           hash: BlockHash,
           now: Long,
-          markAsReceived: Boolean = false,
-          sourcePeer: Option[PeerNode] = None
+          sourcePeer: Option[PeerNode]
       ): Map[BlockHash, RequestState] =
         if (initState.contains(hash)) initState
         else
           initState +
             (hash -> RequestState(
               timestamp = now,
-              waitingList = if (sourcePeer.isEmpty) None.toList else List(sourcePeer.get),
-              received = markAsReceived
+              waitingList = if (sourcePeer.isEmpty) None.toList else List(sourcePeer.get)
             ))
 
       /**
@@ -213,52 +204,16 @@ object BlockRetriever {
               else ().pure[F]
         } yield result
 
-      trait AckReceiveResult
-
-      final case object AddedAsReceived extends AckReceiveResult
-
-      final case object MarkedAsReceived extends AckReceiveResult
-
-      override def ackReceive(
-          bh: BlockHash
-      ): F[Unit] =
+      override def ackReceived(bh: BlockHash): F[Unit] =
         for {
-          now <- Time[F].currentMillis
-          result <- RequestedBlocks[F].modify[AckReceiveResult] { state =>
-                     state.get(bh) match {
-                       // There might be blocks that are not maintained by RequestedBlocks, e.g. fork-choice tips
-                       case None =>
-                         (addNewRequest(state, bh, now, markAsReceived = true), AddedAsReceived)
-                       case Some(requested) => {
-                         // Make Casper loop aware that the block has been received
-                         (state + (bh -> requested.copy(received = true)), MarkedAsReceived)
+          isReceived <- RequestedBlocks[F].modify { state =>
+                         val newState = state - bh
+                         (newState, newState != state)
                        }
-                     }
-                   }
-          _ <- result match {
-                case AddedAsReceived =>
-                  Log[F].info(
-                    s"Block ${PrettyPrinter.buildString(bh)} is not in RequestedBlocks. " +
-                      s"Adding and marking recieved."
-                  )
-                case MarkedAsReceived =>
-                  Log[F].info(
-                    s"Block ${PrettyPrinter.buildString(bh)} marked as received."
-                  )
-              }
+          _ <- Log[F]
+                .info(s"Block ${PrettyPrinter.buildString(bh)} marked as received.")
+                .whenA(isReceived)
         } yield ()
-
-      override def ackInCasper(hash: BlockHash): F[Unit] =
-        for {
-          r <- isReceived(hash)
-          _ <- ackReceive(hash).unlessA(r)
-          _ <- RequestedBlocks[F].update { state =>
-                state + (hash -> state(hash).copy(inCasperBuffer = true))
-              }
-        } yield ()
-
-      private def isReceived(hash: BlockHash): F[Boolean] =
-        RequestedBlocks.get(hash).map(x => x.nonEmpty && x.get.received)
 
       override def requestAll(
           ageThreshold: FiniteDuration
@@ -297,29 +252,24 @@ object BlockRetriever {
               } yield ()
           }
 
-        import cats.instances.list._
         for {
           state <- RequestedBlocks[F].get
-          _ <- Log[F].debug(
-                s"Running BlockRetriever maintenance (${state.keys.size} items unexpired)."
-              )
+          _ <- Log[F]
+                .debug(
+                  s"Running BlockRetriever maintenance (${state.keys.size} items unexpired)."
+                )
+                .whenA(state.keySet.nonEmpty)
           _ <- state.keySet.toList.traverse(hash => {
                 val requested = state(hash)
                 for {
                   expired <- Time[F].currentMillis
                               .map(_ - requested.timestamp > ageThreshold.toMillis)
-                  received = requested.received
                   _ <- Log[F]
                         .debug(
-                          s"Casper loop: checking if should re-request " +
-                            s"${PrettyPrinter.buildString(hash)}. Received: $received."
+                          s"Casper loop: checking if should re-request ${PrettyPrinter.buildString(hash)}."
                         )
-                        .unlessA(received)
-                  sentToCasper = requested.inCasperBuffer
-                  _            <- tryRerequest(hash, requested).unlessA(received || !expired)
-                  // expired added to sentToCasper to mitigate races, which can cause adding block to RequestedBlocks
-                  // after they were removed here.
-                  _ <- if (sentToCasper && expired) RequestedBlocks.remove(hash) else ().pure[F]
+                        .whenA(expired)
+                  _ <- tryRerequest(hash, requested).whenA(expired)
                 } yield ()
               })
         } yield ()

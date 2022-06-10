@@ -164,7 +164,6 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
           val waitingList = List.empty[PeerNode]
           val requested = RequestState(
             timestamp = timedOut,
-            inCasperBuffer = true,
             peers = Set(peerNode("peer")),
             waitingList = waitingList
           )

@@ -246,7 +246,7 @@ case class TestNode[F[_]: Sync: Timer](
           )
           .toList
       )
-    val allSynced = RequestedBlocks[F].get.map(b => { !b.exists(_._2.received == false) })
+    val allSynced = RequestedBlocks[F].get.map(_.isEmpty)
     val doNothing = concurrentF.unit
 
     def drainQueueOf(peerNode: PeerNode) =

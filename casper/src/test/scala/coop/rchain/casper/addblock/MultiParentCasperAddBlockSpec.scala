@@ -217,7 +217,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         signedBlock1Prime     <- nodes(0).publishBlock(deployData)(nodes: _*)
         _                     <- nodes(1).syncWith(nodes(0)) // should receive BlockMessage here
         maybeHash             <- nodes(1).blockStore.get1(signedBlock1Prime.blockHash)
-        noMoreRequestedBlocks <- nodes(1).requestedBlocks.get.map(!_.exists(_._2.received == false))
+        noMoreRequestedBlocks <- nodes(1).requestedBlocks.get.map(_.isEmpty)
       } yield {
         maybeHash shouldBe Some(signedBlock1Prime)
         noMoreRequestedBlocks shouldBe true
