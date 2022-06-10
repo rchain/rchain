@@ -1,6 +1,7 @@
 package coop.rchain.node.revvaultexport.mainnet1
 
 import cats.effect._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.crypto.PublicKey
 import coop.rchain.models.syntax._
 import coop.rchain.models.{GPrivate, Par}
@@ -47,11 +48,6 @@ final case class StateOptions(arguments: Seq[String]) extends ScallopConf(argume
     descr = "ShardId of the node",
     required = true
   )
-
-  val genesisSender = opt[String](
-    descr = "The sender of the genesis",
-    required = true
-  )
   val outputDir = opt[Path](
     descr = s"The output dir for generating the results. There are 3 files would be generated->" +
       s"tupleSpaceBalance.csv, transactionBalance.csv and PosBalance.csv.",
@@ -73,13 +69,11 @@ object StateBalanceMain {
   )
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
-    val options          = StateOptions(args)
-    val dataDir          = options.dataDir()
-    val blockHash        = options.blockHash()
-    val shardId          = options.shardId()
-    val genesisSenderHex = options.genesisSender()
-    val genesisSender    = PublicKey(genesisSenderHex.unsafeHexToByteString)
-    val outputDir        = options.outputDir()
+    val options   = StateOptions(args)
+    val dataDir   = options.dataDir()
+    val blockHash = options.blockHash()
+    val shardId   = options.shardId()
+    val outputDir = options.outputDir()
     if (!Files.exists(outputDir)) {
       Files.createDirectory(outputDir)
     }
@@ -90,7 +84,7 @@ object StateBalanceMain {
     val task: Task[Unit] = for {
       stateBalances <- StateBalances.read(
                         shardId,
-                        genesisSender,
+                        Genesis.genesisPubKey,
                         blockHash,
                         genesisVaultMapDepth,
                         dataDir

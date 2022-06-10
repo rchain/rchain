@@ -6,6 +6,7 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{Bond, DeployData, Event, ProcessedDeploy, SystemDeployData}
 import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
@@ -143,15 +144,14 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       log: Log[F]
   ): F[(StateHash, StateHash, Seq[UserDeployRuntimeResult])] =
     Span[F].traceI("compute-genesis") {
-      val pubkey    = PublicKey(Array[Byte]())
-      val blockData = BlockData(blockTime, blockNumber, pubkey, 0)
+      val blockData = BlockData(blockTime, blockNumber, Genesis.genesisPubKey, 0)
       for {
         _                   <- runtime.setBlockData(blockData)
         genesisPreStateHash <- emptyStateHash
         rand = BlockRandomSeed(
           shardId,
           blockNumber,
-          pubkey,
+          Genesis.genesisPubKey,
           Blake2b256Hash.fromByteString(genesisPreStateHash)
         ).generateRandomNumber
         playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData, rand)

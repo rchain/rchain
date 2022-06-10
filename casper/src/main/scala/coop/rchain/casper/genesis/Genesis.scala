@@ -25,6 +25,7 @@ final case class Genesis(
 )
 
 object Genesis {
+  val genesisPubKey = PublicKey(Array[Byte]())
 
   def NonNegativeMergeableTagName(shardId: String, validatorKey: PublicKey): Par = {
     val rand = BlockRandomSeed(
