@@ -18,13 +18,13 @@ import scodec.bits.ByteVector.fromHex
 class BlockRandomSeedSpec extends AnyFlatSpec with Checkers {
   "encoding coop.rchain.casper.BlockRandomSeed object and decoding it" should "give original object" in {
     val blockRandomSeedGen = for {
-      shardId                <- Gen.stringOfN(6, Gen.alphaChar)
-      blockNumber            <- Gen.choose(0L, 1000000L)
-      validatorPublicKeyList <- Gen.listOfN(120, Gen.hexChar)
-      validatorPublicKey     = PublicKey(validatorPublicKeyList.map(_.toByte).toArray)
-      hash                   <- Gen.listOfN(Blake2b256Hash.length, Gen.hexChar)
-      preStateHash           = Blake2b256Hash.fromByteArray(hash.map(_.toByte).toArray)
-    } yield BlockRandomSeed(shardId, blockNumber, validatorPublicKey, preStateHash)
+      shardId      <- Gen.stringOfN(6, Gen.alphaChar)
+      blockNumber  <- Gen.choose(0L, 1000000L)
+      senderList   <- Gen.listOfN(120, Gen.hexChar)
+      sender       = PublicKey(senderList.map(_.toByte).toArray)
+      hash         <- Gen.listOfN(Blake2b256Hash.length, Gen.hexChar)
+      preStateHash = Blake2b256Hash.fromByteArray(hash.map(_.toByte).toArray)
+    } yield BlockRandomSeed(shardId, blockNumber, sender, preStateHash)
 
     implicit lazy val blockRandomSeedArbitrary = Arbitrary(blockRandomSeedGen)
 
@@ -63,7 +63,7 @@ class BlockRandomSeedSpec extends AnyFlatSpec with Checkers {
     val constantBlockRandomSeed = BlockRandomSeed(
       shardId = "AD4516",
       blockNumber = 1,
-      validatorPublicKey = validatorPublicKey,
+      sender = validatorPublicKey,
       preStateHash = preStateHash
     )
 

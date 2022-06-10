@@ -10,7 +10,7 @@ import scodec.{Codec, TransformSyntax}
 final case class BlockRandomSeed(
     shardId: String,
     blockNumber: Long,
-    validatorPublicKey: PublicKey,
+    sender: PublicKey,
     preStateHash: Blake2b256Hash
 )
 
