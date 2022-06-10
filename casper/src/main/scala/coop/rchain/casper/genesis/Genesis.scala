@@ -8,6 +8,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
+import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.{BlockVersion, GPrivate, Par}
@@ -65,7 +66,10 @@ object Genesis {
       StandardDeploys.poSGenerator(posParams, shardId)
   }
 
-  def createGenesisBlock[F[_]: Concurrent: RuntimeManager](genesis: Genesis): F[BlockMessage] = {
+  def createGenesisBlock[F[_]: Concurrent: RuntimeManager](
+      validator: ValidatorIdentity,
+      genesis: Genesis
+  ): F[BlockMessage] = {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
 
@@ -73,7 +77,21 @@ object Genesis {
       .computeGenesis(blessedTerms, genesis.blockNumber, genesis.sender)
       .map {
         case (startHash, stateHash, processedDeploys) =>
-          createBlockWithProcessedDeploys(genesis, startHash, stateHash, processedDeploys)
+          val unsignedBlock =
+            createBlockWithProcessedDeploys(genesis, startHash, stateHash, processedDeploys)
+          // Sign a block (hash should not be changed)
+          val signedBlock = validator.signBlock(unsignedBlock)
+
+          // This check is temporary until signing function will re-hash the block
+          val unsignedHash = PrettyPrinter.buildString(unsignedBlock.blockHash)
+          val signedHash   = PrettyPrinter.buildString(signedBlock.blockHash)
+          assert(
+            unsignedBlock.blockHash == signedBlock.blockHash,
+            s"Signed block has different block hash unsigned: $unsignedHash, signed: $signedHash."
+          )
+
+          // Return signed genesis block
+          signedBlock
       }
   }
 
@@ -90,6 +108,7 @@ object Genesis {
     val version = BlockVersion.Current
     val seqNum  = 0L
 
+    // Return unsigned block with calculated hash
     unsignedBlockProto(
       version,
       genesis.shardId,

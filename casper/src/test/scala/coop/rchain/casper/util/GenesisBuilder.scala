@@ -2,6 +2,7 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
@@ -174,9 +175,11 @@ object GenesisBuilder {
       mStore         <- RuntimeManager.mergeableStore(kvsManager)
       t              = RuntimeManager.noOpExecutionTracker[Task]
       runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName, t)
+      // First bonded validator is the creator
+      creator = ValidatorIdentity(parameters._1.head._1)
       genesis <- {
         implicit val rm = runtimeManager
-        Genesis.createGenesisBlock[Task](genesisParameters)
+        Genesis.createGenesisBlock[Task](creator, genesisParameters)
       }
       blockStore      <- BlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)

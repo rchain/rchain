@@ -135,7 +135,8 @@ object BlockCreator {
                 newBonds      <- RuntimeManager[F].computeBonds(postStateHash)
                 _             <- Span[F].mark("before-packing-block")
                 casperVersion = s.onChainState.shardConf.blockVersion
-                // unsignedBlock got blockHash(hashed without signature)
+
+                // Create block and calculate block hash
                 unsignedBlock = packageBlock(
                   validatorIdentity.publicKey,
                   blockData,
@@ -150,10 +151,18 @@ object BlockCreator {
                   casperVersion
                 )
                 _ <- Span[F].mark("block-created")
-                // signedBlock add signature and replace hashed-without-signature
-                // blockHash to hashed-with-signature blockHash
+
+                // Sign a block (hash should not be changed)
                 signedBlock = validatorIdentity.signBlock(unsignedBlock)
                 _           <- Span[F].mark("block-signed")
+
+                // This check is temporary until signing function will re-hash the block
+                unsignedHash = PrettyPrinter.buildString(unsignedBlock.blockHash)
+                signedHash   = PrettyPrinter.buildString(signedBlock.blockHash)
+                _ = assert(
+                  unsignedBlock.blockHash == signedBlock.blockHash,
+                  s"Signed block has different block hash unsigned: $unsignedHash, signed: $signedHash."
+                )
               } yield BlockCreatorResult.created(signedBlock)
             } else
               BlockCreatorResult.noNewDeploys.pure[F]

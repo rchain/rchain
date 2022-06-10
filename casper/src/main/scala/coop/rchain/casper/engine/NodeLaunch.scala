@@ -68,7 +68,7 @@ object NodeLaunch {
 
         // Get creator public key
         validatorIdentity <- validatorIdentityOpt.liftTo(noValidatorIdentityError)
-        genesisBlock      <- createGenesisBlockFromConfig(validatorIdentity.publicKey, conf)
+        genesisBlock      <- createGenesisBlockFromConfig(validatorIdentity, conf)
         genBlockStr       = PrettyPrinter.buildString(genesisBlock)
         _                 <- Log[F].info(s"Sending ApprovedBlock $genBlockStr to peers...")
 
@@ -136,7 +136,7 @@ object NodeLaunch {
   }
 
   def createGenesisBlockFromConfig[F[_]: Concurrent: ContextShift: RuntimeManager: Log](
-      validator: PublicKey,
+      validator: ValidatorIdentity,
       conf: CasperConf
   ): F[BlockMessage] =
     createGenesisBlock[F](
@@ -158,7 +158,7 @@ object NodeLaunch {
     )
 
   def createGenesisBlock[F[_]: Concurrent: ContextShift: RuntimeManager: Log](
-      sender: PublicKey,
+      validator: ValidatorIdentity,
       shardId: String,
       blockNumber: Long,
       bondsPath: String,
@@ -184,8 +184,9 @@ object NodeLaunch {
 
       // Run genesis deploys and create block
       genesisBlock <- Genesis.createGenesisBlock(
+                       validator,
                        Genesis(
-                         sender = sender,
+                         sender = validator.publicKey,
                          shardId = shardId,
                          proofOfStake = ProofOfStake(
                            minimumBond = minimumBond,
