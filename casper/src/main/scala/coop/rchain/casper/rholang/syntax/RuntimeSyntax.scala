@@ -474,7 +474,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     val returnName: Par = GPrivate(ByteString.copyFrom(rand.copy().next()))
 
     // Execute deploy on top of specified block hash
-    captureResults(hash, deploy, returnName, rand)
+    captureResults(hash, rand, deploy, returnName)
   }
 
   /* Checkpoints */
@@ -504,18 +504,18 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     val rand = Blake2b512Random.apply(10)
     import coop.rchain.models.rholang.implicits._
     val returnName: Par = GPrivate(ByteString.copyFrom(rand.copy().next()))
-    captureResults(start, deploy, returnName, rand)
+    captureResults(start, rand, deploy, returnName)
   }
 
   def captureResults(
       start: StateHash,
+      rand: Blake2b512Random,
       deploy: Signed[DeployData],
-      name: Par,
-      rand: Blake2b512Random
+      name: Par
   )(
       implicit s: Sync[F]
   ): F[Seq[Par]] =
-    captureResultsWithErrors(start, deploy, name, rand)
+    captureResultsWithErrors(start, rand, deploy, name)
       .handleErrorWith(
         ex =>
           BugFoundError(s"Unexpected error while capturing results from Rholang: $ex")
@@ -524,9 +524,9 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
 
   def captureResultsWithErrors(
       start: StateHash,
+      rand: Blake2b512Random,
       deploy: Signed[DeployData],
-      name: Par,
-      rand: Blake2b512Random
+      name: Par
   )(implicit s: Sync[F]): F[Seq[Par]] =
     runtime.reset(start.toBlake2b256Hash) >>
       evaluate(deploy, rand)

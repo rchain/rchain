@@ -42,16 +42,16 @@ import scala.concurrent.duration.FiniteDuration
 trait RuntimeManager[F[_]] {
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
-      systemDeploys: Seq[ProcessedSystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
       withCostAccounting: Boolean,
-      rand: Blake2b512Random
+      systemDeploys: Seq[ProcessedSystemDeploy]
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[Signed[DeployData]],
-      systemDeploys: Seq[SystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
-      rand: Blake2b512Random
+      systemDeploys: Seq[SystemDeploy]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
@@ -108,9 +108,9 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
 
   def computeState(startHash: StateHash)(
       terms: Seq[Signed[DeployData]],
-      systemDeploys: Seq[SystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
-      rand: Blake2b512Random
+      systemDeploys: Seq[SystemDeploy]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     for {
       runtime  <- spawnRuntime
@@ -163,10 +163,10 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
-      systemDeploys: Seq[ProcessedSystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
       withCostAccounting: Boolean,
-      rand: Blake2b512Random
+      systemDeploys: Seq[ProcessedSystemDeploy]
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
       val replayOp = replayRuntime

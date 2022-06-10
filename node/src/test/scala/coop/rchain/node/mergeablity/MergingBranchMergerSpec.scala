@@ -98,7 +98,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
         Blake2b256Hash.fromByteString(baseState)
       ).generateRandomNumber
       systemDeploys = CloseBlockDeploy(rand.splitByte(userDeploys.length.toByte)) :: Nil
-      r             <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, blockData, rand)
+      r             <- runtimeManager.computeState(baseState)(userDeploys, rand, blockData, systemDeploys)
     } yield r
   }
 
