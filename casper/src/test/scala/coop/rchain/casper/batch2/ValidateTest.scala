@@ -20,6 +20,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockVersion
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.models.syntax._
@@ -32,6 +33,7 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import java.nio.file.Files
 import scala.collection.immutable.HashMap
@@ -41,7 +43,8 @@ class ValidateTest
     with Matchers
     with BeforeAndAfterEach
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with ScalaCheckPropertyChecks {
   import InvalidBlock._
   import ValidBlock._
 
@@ -526,40 +529,40 @@ class ValidateTest
       } yield ()
   }
 
-  "Block hash format validation" should "fail on invalid hash" in withStorage {
-    _ => implicit blockDagStorage =>
-      val context  = buildGenesis()
-      val (sk, pk) = context.validatorKeyPairs.head
-      val sender   = ByteString.copyFrom(pk.bytes)
-      for {
-        _                <- blockDagStorage.insert(genesis, false, approved = true)
-        dag              <- blockDagStorage.getRepresentation
-        latestMessageOpt <- dag.latestMessage(sender)
-        seqNum           = latestMessageOpt.fold(0L)(_.seqNum) + 1L
-        genesis = ValidatorIdentity(sk)
-          .signBlock(context.genesisBlock.copy(seqNum = seqNum))
-        _ <- Validate.blockHash[Task](genesis) shouldBeF true
-        result <- Validate.blockHash[Task](
-                   genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
-                 ) shouldBeF false
-      } yield result
+  "Block hash format validation" should "fail on invalid hash" in {
+    implicit val aBlock = arbBlockMessage
+
+    forAll { (block: BlockMessage) =>
+      val hash           = ProtoUtil.hashBlock(block)
+      val blockValidHash = block.copy(blockHash = hash)
+
+      // Test valid block hash
+      val hashValid = Validate.blockHash[Task](blockValidHash).runSyncUnsafe()
+
+      hashValid shouldBe true
+
+      val blockInValidHash = block.copy(blockHash = ByteString.copyFromUtf8("123"))
+
+      // Test invalid block hash
+      val hashInValid = Validate.blockHash[Task](blockInValidHash).runSyncUnsafe()
+
+      hashInValid shouldBe false
+    }
   }
 
-  "Block version validation" should "work" in withStorage { _ => implicit blockDagStorage =>
-    val context  = buildGenesis()
-    val (sk, pk) = context.validatorKeyPairs.head
-    val sender   = ByteString.copyFrom(pk.bytes)
-    for {
-      _                <- blockDagStorage.insert(genesis, false, approved = true)
-      dag              <- blockDagStorage.getRepresentation
-      latestMessageOpt <- dag.latestMessage(sender)
-      seqNum           = latestMessageOpt.fold(0L)(_.seqNum) + 1L
-      genesis = ValidatorIdentity(sk).signBlock(
-        context.genesisBlock.copy(seqNum = seqNum)
-      )
-      _      <- Validate.version[Task](genesis, -1) shouldBeF false
-      result <- Validate.version[Task](genesis, 1) shouldBeF true
-    } yield result
+  "Block version validation" should "allow supported versions" in {
+    implicit val aBlock = arbBlockMessage
+
+    forAll { (block: BlockMessage, version: Int) =>
+      val blockWithVersion = block.copy(version = version)
+
+      // Expected one of hard-coded block versions supported by this version of RNode software
+      val expectedValid = BlockVersion.Supported.contains(version)
+      // Actual validation
+      val actualValid = Validate.version[Task](blockWithVersion).runSyncUnsafe()
+
+      actualValid shouldBe expectedValid
+    }
   }
 
 }

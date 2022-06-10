@@ -8,10 +8,9 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
-import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.models.{GPrivate, Par}
+import coop.rchain.models.{BlockVersion, GPrivate, Par}
 
 final case class Genesis(
     sender: PublicKey,
@@ -74,21 +73,21 @@ object Genesis {
       .computeGenesis(blessedTerms, genesis.blockNumber, genesis.sender)
       .map {
         case (startHash, stateHash, processedDeploys) =>
-          createProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
+          createBlockWithProcessedDeploys(genesis, startHash, stateHash, processedDeploys)
       }
   }
 
-  private def createProcessedDeploy(
+  private def createBlockWithProcessedDeploys(
       genesis: Genesis,
-      startHash: StateHash,
-      stateHash: StateHash,
+      preStateHash: StateHash,
+      postStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
   ): BlockMessage = {
-    val blockDeploys = processedDeploys.filterNot(_.isFailed)
-    val sortedDeploys =
-      blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
-    val state   = RholangState(deploys = sortedDeploys.toList, systemDeploys = List.empty)
-    val version = 1 //FIXME make this part of Genesis, and pass it from upstream
+    // Ensure that all deploys are successfully executed
+    assert(processedDeploys.forall(!_.isFailed), s"Genesis block contains failed deploys.")
+
+    val state   = RholangState(deploys = processedDeploys.toList, systemDeploys = List.empty)
+    val version = BlockVersion.Current
     val seqNum  = 0L
 
     unsignedBlockProto(
@@ -97,8 +96,8 @@ object Genesis {
       genesis.blockNumber,
       genesis.sender,
       seqNum,
-      preStateHash = startHash,
-      postStateHash = stateHash,
+      preStateHash = preStateHash,
+      postStateHash = postStateHash,
       justifications = List.empty,
       bonds = buildBondsMap(genesis.proofOfStake),
       rejectedDeploys = List.empty,

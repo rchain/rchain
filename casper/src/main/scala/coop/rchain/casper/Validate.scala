@@ -15,7 +15,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockMetadata
+import coop.rchain.models.{BlockMetadata, BlockVersion}
 import coop.rchain.shared._
 
 import scala.util.{Success, Try}
@@ -76,19 +76,14 @@ object Validate {
       true.pure
     }
 
-  def version[F[_]: Monad: Log](b: BlockMessage, version: Long): F[Boolean] = {
+  def version[F[_]: Monad: Log](b: BlockMessage): F[Boolean] = {
     val blockVersion = b.version
-    if (blockVersion == version) {
+    if (BlockVersion.Supported.contains(blockVersion)) {
       true.pure
     } else {
-      Log[F]
-        .warn(
-          ignore(
-            b,
-            s"received block version $blockVersion is the expected version $version."
-          )
-        )
-        .as(false)
+      val versionsStr = BlockVersion.Supported.mkString(" or ")
+      val msg         = s"received block version $blockVersion is not the expected version $versionsStr."
+      Log[F].warn(ignore(b, msg)).as(false)
     }
   }
 
