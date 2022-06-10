@@ -9,14 +9,12 @@ import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
-import coop.rchain.casper.engine.NodeSyncing.logNoApprovedBlockAvailable
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
 import coop.rchain.comm.PeerNode
-import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.transport.{Blob, TransportLayer}
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
@@ -59,13 +57,6 @@ object NodeSyncing {
       )
     } yield engine
 
-  /**
-    * Peer says it has no ApprovedBlock
-    */
-  def logNoApprovedBlockAvailable[F[_]: Log](identifier: String): F[Unit] =
-    Log[F].info(
-      s"No approved block available on node $identifier. Will request again in 10 seconds."
-    )
 }
 
 /**
@@ -89,14 +80,7 @@ class NodeSyncing[F[_]
 ) {
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case ab: FinalizedFringe =>
-      onApprovedBlock(peer, ab)
-
-    case br: FinalizedFringeRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
-
-    case na: NoApprovedBlockAvailable =>
-      logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
-        Time[F].sleep(10.seconds) >>
-        CommUtil[F].requestApprovedBlock(trimState)
+      onFinalizedFringeMessage(peer, ab)
 
     case s: StoreItemsMessage =>
       Log[F].info(s"Received ${s.pretty} from $peer.") *> tupleSpaceQueue.enqueue1(s)
@@ -112,7 +96,7 @@ class NodeSyncing[F[_]
   // TEMP: flag for single call for process approved block
   val startRequester = Ref.unsafe(true)
 
-  private def onApprovedBlock(sender: PeerNode, fringe: FinalizedFringe): F[Unit] = {
+  private def onFinalizedFringeMessage(sender: PeerNode, fringe: FinalizedFringe): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
 
     def handleApprovedBlock =
@@ -232,17 +216,4 @@ class NodeSyncing[F[_]
     } yield ()
   }
 
-  def sendNoApprovedBlockAvailable(
-      peer: PeerNode,
-      identifier: String
-  ): F[Unit] =
-    for {
-      local <- RPConfAsk[F].reader(_.local)
-      //TODO remove NoApprovedBlockAvailable.nodeIdentifier, use `sender` provided by TransportLayer
-      msg = Blob(local, noApprovedBlockAvailable(local, identifier))
-      _   <- TransportLayer[F].stream1(peer, msg)
-    } yield ()
-
-  private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet =
-    ToPacket(NoApprovedBlockAvailable(identifier, peer.toString).toProto)
 }

@@ -35,12 +35,6 @@ message FinalizedFringeRequestProto {
   bool   trimState  = 2;
 }
 
-message NoApprovedBlockAvailableProto {
-  option (scalapb.message).extends = "CasperMessageProto";
-  string identifier    = 1;
-  string nodeIdentifer = 2;
-}
-
 // ------- End Approved block --------
 
 message ForkChoiceTipRequestProto {

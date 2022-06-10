@@ -23,6 +23,6 @@ object approvedStore {
   def bytesToFringe(bytes: Array[Byte]): FinalizedFringe =
     FinalizedFringe.from(FinalizedFringeProto.parseFrom(bytes))
 
-  def fringeToBytes(approvedBlock: FinalizedFringe): Array[Byte] =
-    approvedBlock.toProto.toByteArray
+  def fringeToBytes(finalizedFringe: FinalizedFringe): Array[Byte] =
+    finalizedFringe.toProto.toByteArray
 }

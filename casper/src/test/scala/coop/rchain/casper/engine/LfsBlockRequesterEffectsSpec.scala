@@ -31,7 +31,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     )
   }
 
-  def createApprovedBlock(block: BlockMessage): FinalizedFringe =
+  def createFinalizedFringe(block: BlockMessage): FinalizedFringe =
     FinalizedFringe(block.justifications, block.postStateHash)
 
   val hash9 = mkHash("9")
@@ -85,8 +85,8 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       requestTimeout: FiniteDuration
   )(test: Mock[F] => F[Unit]): F[Unit] = {
 
-    // Approved block has initial latest messages
-    val approvedBlock = createApprovedBlock(startBlock)
+    // Finalized fringe is initial latest messages
+    val finalizedFringe = createFinalizedFringe(startBlock)
 
     // Approved block is already saved in block storage
     val savedBlocks = Map(startBlock.blockHash -> startBlock)
@@ -105,7 +105,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
 
       // Queue for processing the internal state (ST)
       processingStream <- LfsBlockRequester.stream(
-                           approvedBlock,
+                           finalizedFringe,
                            responseQueue.dequeue,
                            blockHeightsBeforeFringe = 0,
                            requestQueue.enqueue1,

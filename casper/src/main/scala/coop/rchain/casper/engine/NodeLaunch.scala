@@ -70,7 +70,7 @@ object NodeLaunch {
         validatorIdentity <- validatorIdentityOpt.liftTo(noValidatorIdentityError)
         genesisBlock      <- createGenesisBlockFromConfig(validatorIdentity, conf)
         genBlockStr       = PrettyPrinter.buildString(genesisBlock)
-        _                 <- Log[F].info(s"Sending ApprovedBlock $genBlockStr to peers...")
+        _                 <- Log[F].info(s"Sending genesis $genBlockStr to peers...")
 
         // Store genesis block
         _  <- BlockStore[F].put(genesisBlock)
@@ -97,7 +97,7 @@ object NodeLaunch {
         handleMessages = packets.parEvalMapUnorderedProcBounded { pm =>
           engine.handle(pm.peer, pm.message)
         }
-        _ <- CommUtil[F].requestApprovedBlock(trimState)
+        _ <- CommUtil[F].requestFinalizedFringe(trimState)
         _ <- (Stream.eval(finished.get) concurrently handleMessages).compile.drain
       } yield ()
 

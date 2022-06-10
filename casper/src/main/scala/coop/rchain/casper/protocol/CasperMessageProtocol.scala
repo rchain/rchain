@@ -8,10 +8,6 @@ trait CasperMessageProtocol {
     protoImpl[PacketTypeTag.BlockMessage.type, BlockMessageProto]
   implicit final val blockHashMessageFromPacket =
     protoImpl[PacketTypeTag.BlockHashMessage.type, BlockHashMessageProto]
-  implicit final val approvedBlockFromPacket =
-    protoImpl[PacketTypeTag.ApprovedBlock.type, FinalizedFringeProto]
-  implicit final val approvedBlockRequestFromPacket =
-    protoImpl[PacketTypeTag.ApprovedBlockRequest.type, FinalizedFringeRequestProto]
   implicit final val blockRequestFromPacket =
     protoImpl[PacketTypeTag.BlockRequest.type, BlockRequestProto]
   implicit final val hasBlockRequestFromPacket =
@@ -19,8 +15,11 @@ trait CasperMessageProtocol {
   implicit final val hasBlockFromPacket = protoImpl[PacketTypeTag.HasBlock.type, HasBlockProto]
   implicit final val forkChoiceTipRequestFromPacket =
     protoImpl[PacketTypeTag.ForkChoiceTipRequest.type, ForkChoiceTipRequestProto]
-  implicit final val noApprovedBlockFromPacket =
-    protoImpl[PacketTypeTag.NoApprovedBlockAvailable.type, NoApprovedBlockAvailableProto]
+  // Finalized fringe
+  implicit final val finalizedFringeFromPacket =
+    protoImpl[PacketTypeTag.FinalizedFringe.type, FinalizedFringeProto]
+  implicit final val finalizedFringeRequestFromPacket =
+    protoImpl[PacketTypeTag.FinalizedFringeRequest.type, FinalizedFringeRequestProto]
   // Last finalized state messages
   implicit final val storeItemsMessageRequestFromPacket =
     protoImpl[PacketTypeTag.StoreItemsMessageRequest.type, StoreItemsMessageRequestProto]
@@ -32,10 +31,6 @@ trait CasperMessageProtocol {
     protoSerde[PacketTypeTag.BlockHashMessage.type, BlockHashMessageProto]
   implicit final val blockMessageToPacket =
     protoSerde[PacketTypeTag.BlockMessage.type, BlockMessageProto]
-  implicit final val approvedBlockToPacket =
-    protoSerde[PacketTypeTag.ApprovedBlock.type, FinalizedFringeProto]
-  implicit final val approvedBlockRequestToPacket =
-    protoSerde[PacketTypeTag.ApprovedBlockRequest.type, FinalizedFringeRequestProto]
   implicit final val blockRequestToPacket =
     protoSerde[PacketTypeTag.BlockRequest.type, BlockRequestProto]
   implicit final val hasBlockRequestToPacket =
@@ -43,8 +38,11 @@ trait CasperMessageProtocol {
   implicit final val hasBlockToPacket = protoSerde[PacketTypeTag.HasBlock.type, HasBlockProto]
   implicit final val forkChoiceTipRequestToPacket =
     protoSerde[PacketTypeTag.ForkChoiceTipRequest.type, ForkChoiceTipRequestProto]
-  implicit final val noApprovedBlockToPacket =
-    protoSerde[PacketTypeTag.NoApprovedBlockAvailable.type, NoApprovedBlockAvailableProto]
+  // Finalized fringe
+  implicit final val finalizedFringeToPacket =
+    protoSerde[PacketTypeTag.FinalizedFringe.type, FinalizedFringeProto]
+  implicit final val finalizedFringeRequestToPacket =
+    protoSerde[PacketTypeTag.FinalizedFringeRequest.type, FinalizedFringeRequestProto]
   // Last finalized state messages
   implicit final val storeItemsMessageRequestToPacket =
     protoSerde[PacketTypeTag.StoreItemsMessageRequest.type, StoreItemsMessageRequestProto]

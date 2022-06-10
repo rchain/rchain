@@ -28,10 +28,9 @@ object CasperMessage {
     case m: HasBlockRequestProto  => Right(HasBlockRequest.from(m))
     // Tips request
     case _: ForkChoiceTipRequestProto => Right(ForkChoiceTipRequest)
-    // Approved block
-    case m: FinalizedFringeProto          => Right(FinalizedFringe.from(m))
-    case m: FinalizedFringeRequestProto   => Right(FinalizedFringeRequest.from(m))
-    case m: NoApprovedBlockAvailableProto => Right(NoApprovedBlockAvailable.from(m))
+    // Finalized fringe
+    case m: FinalizedFringeProto        => Right(FinalizedFringe.from(m))
+    case m: FinalizedFringeRequestProto => Right(FinalizedFringeRequest.from(m))
     // Last finalized state messages
     case m: StoreItemsMessageRequestProto => Right(StoreItemsMessageRequest.from(m))
     case m: StoreItemsMessageProto        => Right(StoreItemsMessage.from(m))
@@ -58,19 +57,6 @@ final case class FinalizedFringeRequest(identifier: String, trimState: Boolean =
 object FinalizedFringeRequest {
   def from(abr: FinalizedFringeRequestProto): FinalizedFringeRequest =
     FinalizedFringeRequest(abr.identifier, abr.trimState)
-}
-
-final case class NoApprovedBlockAvailable(identifier: String, nodeIdentifer: String)
-    extends CasperMessage {
-  def toProto: NoApprovedBlockAvailableProto =
-    NoApprovedBlockAvailableProto()
-      .withIdentifier(identifier)
-      .withNodeIdentifer(nodeIdentifer)
-}
-
-object NoApprovedBlockAvailable {
-  def from(naba: NoApprovedBlockAvailableProto): NoApprovedBlockAvailable =
-    NoApprovedBlockAvailable(naba.identifier, naba.nodeIdentifer)
 }
 
 /* Tips message */

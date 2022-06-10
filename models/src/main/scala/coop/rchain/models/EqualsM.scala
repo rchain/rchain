@@ -136,7 +136,7 @@ object EqualM extends EqualMDerivation {
   implicit val WaitingContinuationInfoHash    = gen[WaitingContinuationInfo]
   implicit val BlockQueryByHeightHash         = gen[BlocksQueryByHeight]
 
-  implicit val ApprovedBlockHash         = gen[FinalizedFringeProto]
+  implicit val FinalizedFringeHash       = gen[FinalizedFringeProto]
   implicit val BlockMessageHash          = gen[BlockMessageProto]
   implicit val BlockMetadataInternalHash = gen[BlockMetadataProto]
   implicit val BodyHash                  = gen[RholangStateProto]

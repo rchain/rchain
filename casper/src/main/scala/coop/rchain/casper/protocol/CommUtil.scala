@@ -138,14 +138,14 @@ final class CommUtilOps[F[_]](
     sendToPeers(ForkChoiceTipRequest.toProto) >>
       Log[F].info(s"Requested fork tip from peers")
 
-  def requestApprovedBlock(
+  def requestFinalizedFringe(
       trimState: Boolean = true
   )(implicit m: Sync[F], r: RPConfAsk[F]): F[Unit] =
     for {
       maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
       bootstrap      <- maybeBootstrap.liftTo(StandaloneNodeSendToBootstrapError)
       msg            = FinalizedFringeRequest("", trimState).toProto
-      _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "ApprovedBlockRequest")
+      _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "FinalizedFringeRequest")
     } yield ()
 
   def sendStoreItemsRequest(

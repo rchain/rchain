@@ -3,7 +3,7 @@ package coop.rchain.casper.protocol
 import com.google.protobuf.ByteString
 import coop.rchain.comm.protocol.routing.Packet
 import enumeratum._
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
+import scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
 import scala.util.Try
 
@@ -18,10 +18,9 @@ object PacketTypeTag extends Enum[PacketTypeTag] {
   case object BlockRequest     extends PacketTypeTag
   // Tips messages
   case object ForkChoiceTipRequest extends PacketTypeTag
-  // Approved block
-  case object ApprovedBlock            extends PacketTypeTag
-  case object ApprovedBlockRequest     extends PacketTypeTag
-  case object NoApprovedBlockAvailable extends PacketTypeTag
+  // Finalized fringe
+  case object FinalizedFringeRequest extends PacketTypeTag
+  case object FinalizedFringe        extends PacketTypeTag
   // Last finalized state messages
   case object StoreItemsMessageRequest extends PacketTypeTag
   case object StoreItemsMessage        extends PacketTypeTag
@@ -37,21 +36,19 @@ object PacketTypeTag extends Enum[PacketTypeTag] {
     }
     def apply[A <: PacketTypeTag](implicit ev: ValueOf[A]) = ev
 
+    // Block messages
     implicit val valueOfBlockHashMessage: ValueOf[BlockHashMessage.type] = summon(BlockHashMessage)
     implicit val valueOfBlockMessage: ValueOf[BlockMessage.type]         = summon(BlockMessage)
     implicit val valueOfHasBlockRequest: ValueOf[HasBlockRequest.type]   = summon(HasBlockRequest)
     implicit val valueOfHasBlock: ValueOf[HasBlock.type]                 = summon(HasBlock)
     implicit val valueOfBlockRequest: ValueOf[BlockRequest.type]         = summon(BlockRequest)
-    implicit val valueOfApprovedBlock: ValueOf[ApprovedBlock.type]       = summon(ApprovedBlock)
-    implicit val valueOfForkChoiceTipRequest: ValueOf[ForkChoiceTipRequest.type] = summon(
-      ForkChoiceTipRequest
-    )
-    implicit val valueOfApprovedBlockRequest: ValueOf[ApprovedBlockRequest.type] = summon(
-      ApprovedBlockRequest
-    )
-    implicit val valueOfApprovedBlockAvailable: ValueOf[NoApprovedBlockAvailable.type] = summon(
-      NoApprovedBlockAvailable
-    )
+    // Tips
+    implicit val valueOfForkChoiceTipRequest: ValueOf[ForkChoiceTipRequest.type] =
+      summon(ForkChoiceTipRequest)
+    // Finalized fringe
+    implicit val valueOfFinalizedFringeRequest: ValueOf[FinalizedFringeRequest.type] =
+      summon(FinalizedFringeRequest)
+    implicit val valueOfFinalizedFringe: ValueOf[FinalizedFringe.type] = summon(FinalizedFringe)
     // Last finalized state messages
     implicit val valueOfStoreItemsMessageRequest: ValueOf[StoreItemsMessageRequest.type] =
       summon(StoreItemsMessageRequest)

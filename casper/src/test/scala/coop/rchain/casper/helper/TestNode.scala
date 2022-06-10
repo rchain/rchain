@@ -110,9 +110,9 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val rp: RPConfAsk[F]                               = rpConfAskEffect
   implicit val ep: EventPublisher[F]                          = eventPublisherEffect
 
-  val approvedBlock = FinalizedFringe(Seq(genesis.blockHash), genesis.postStateHash)
+  val finalizedFringe = FinalizedFringe(Seq(genesis.blockHash), genesis.postStateHash)
 
-  implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
+  implicit val labF        = LastApprovedBlock.unsafe[F](Some(finalizedFringe))
   val postGenesisStateHash = genesis.postStateHash
 
   implicit val rspaceMan = RSpaceStateManagerTestImpl()

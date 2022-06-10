@@ -209,17 +209,17 @@ object NodeRunning {
   }
 
   /**
-    * Peer asks for ApprovedBlock
+    * Peer asks for FinalizedFringe
     */
-  def handleApprovedBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: Log](
+  def handleFinalizedFringeRequest[F[_]: Monad: TransportLayer: RPConfAsk: Log](
       peer: PeerNode,
-      approvedBlock: FinalizedFringe
+      finalizedFringe: FinalizedFringe
   ): F[Unit] =
-    Log[F].info(s"Received ApprovedBlockRequest from ${peer}") >>
-      TransportLayer[F].streamToPeer(peer, approvedBlock.toProto) >>
-      Log[F].info(s"ApprovedBlock sent to ${peer}")
-  final case object LastFinalizedBlockNotFoundError
-      extends Exception("Last finalized block not found in the block storage.")
+    Log[F].info(s"Received FinalizedFringeRequest from ${peer}") >>
+      TransportLayer[F].streamToPeer(peer, finalizedFringe.toProto) >>
+      Log[F].info(s"FinalizedFringe sent to ${peer}")
+  final case object FinalizedFringeNotFoundError
+      extends Exception("Finalized fringe not found in the block storage.")
 
   private def handleStateItemsMessageRequest[F[_]: Sync: TransportLayer: RPConfAsk: RSpaceStateManager: Log](
       peer: PeerNode,
@@ -325,19 +325,17 @@ class NodeRunning[F[_]
         } yield lastApprovedBlock
 
         // TODO: fix finalized block depending if trim state requested
-        approvedBlock <- if (abr.trimState)
-                          // If Last Finalized State is requested return Last Finalized block as Approved block
-                          lastFinalizedBlock
-                        else
-                          // Respond with approved block that this node is started from.
-                          // The very first one is genesis, but this node still might start from later block,
-                          // so it will not necessary be genesis.
-                          lastFinalizedBlock
+        finalizedFringe <- if (abr.trimState)
+                            // If Last Finalized State is requested return Last Finalized block as Approved block
+                            lastFinalizedBlock
+                          else
+                            // Respond with approved block that this node is started from.
+                            // The very first one is genesis, but this node still might start from later block,
+                            // so it will not necessary be genesis.
+                            lastFinalizedBlock
 
-        _ <- handleApprovedBlockRequest(peer, approvedBlock)
+        _ <- handleFinalizedFringeRequest(peer, finalizedFringe)
       } yield ()
-
-    case na: NoApprovedBlockAvailable => NodeSyncing.logNoApprovedBlockAvailable(na.nodeIdentifer)
 
     // Approved state store records
     case StoreItemsMessageRequest(startPath, skip, take) =>
