@@ -19,6 +19,7 @@ import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax._
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
@@ -264,7 +265,8 @@ object BlockDagKeyValueStorage {
           childMap,
           heightMap,
           lastFinalizedBlock,
-          finalizedBlocksSet
+          finalizedBlocksSet,
+          DagMessageState(Set())
         )
       }
       stRef <- Ref.of[F, DagRepresentation](initST)

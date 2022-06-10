@@ -2,7 +2,6 @@ package coop.rchain.blockstorage.dag
 
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -18,8 +17,7 @@ final case class DagRepresentation(
     heightMap: SortedMap[Long, Set[BlockHash]],
     lastFinalizedBlockHash: Option[BlockHash],
     finalizedBlocksSet: Set[BlockHash],
-    dagMessageState: DagMessageState[BlockHash, Validator] =
-      DagMessageState(ByteString.EMPTY, Set(), Map()) // TEMP default
+    dagMessageState: DagMessageState[BlockHash, Validator]
 ) {
   def contains(blockHash: BlockHash): Boolean =
     blockHash.size == BlockHash.Length && dagSet.contains(blockHash)
@@ -68,7 +66,7 @@ object DagRepresentation {
       SortedMap.empty[Long, Set[BlockHash]],
       none[BlockHash],
       Set.empty[BlockHash],
-      DagMessageState[BlockHash, Validator](ByteString.EMPTY, Set(), Map())
+      DagMessageState(Set[Message[BlockHash, Validator]]())
     )
 
   def lastFinalizedBlockUnsafe[F[_]: Sync](dr: DagRepresentation): F[BlockHash] = {
