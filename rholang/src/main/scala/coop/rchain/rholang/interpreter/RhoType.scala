@@ -79,6 +79,36 @@ object RhoType {
     def apply(s: String): Par = GUri(s)
   }
 
+  type RhoList = List.type
+  object RhoList {
+    def unapply(p: Par): Option[List[Par]] =
+      p.singleExpr().collect {
+        case Expr(EListBody(EList(s, _, _, _))) => s.toList
+      }
+
+    def apply(s: List[Par]): Par = EListBody(EList(s))
+  }
+
+  type RhoSet = Set.type
+  object RhoSet {
+    def unapply(p: Par): Option[Set[Par]] =
+      p.singleExpr().collect {
+        case Expr(ESetBody(ParSet(s, _, _, _))) => s.toSet
+      }
+
+    def apply(s: Seq[Par]): Par = ESetBody(ParSet(s))
+  }
+
+  type RhoMap = Map.type
+  object RhoMap {
+    def unapply(p: Par): Option[Map[Par, Par]] =
+      p.singleExpr().collect {
+        case Expr(EMapBody(ParMap(s, _, _, _))) => s.toMap
+      }
+
+    def apply(s: Map[Par, Par]): Par = EMapBody(ParMap(s.toSeq))
+  }
+
   type RhoDeployerId = DeployerId.type
   object DeployerId {
     def unapply(p: Par): Option[Array[Byte]] =

@@ -12,7 +12,7 @@ import coop.rchain.models._
 import coop.rchain.models.syntax._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
-import coop.rchain.rholang.interpreter.RhoType.{Boolean, ByteArray, Expression, Number, String, Uri}
+import coop.rchain.rholang.interpreter.RhoType._
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -338,12 +338,9 @@ object WebApi {
     // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
     case ExprPar(data)   => Expression(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
     case ExprTuple(data) => Expression(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
-    case ExprList(data)  => Expression(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
-    case ExprSet(data)   => Expression(Expr().withESetBody(ParSet(data.map(rhoExprToParProto))))
-    case ExprMap(data) =>
-      Expression(Expr().withEMapBody(ParMap(data.map {
-        case (k, v) => (rhoExprToParProto(ExprString(k)), rhoExprToParProto(v))
-      }.toList)))
+    case ExprList(data)  => RhoList(data.map(rhoExprToParProto))
+    case ExprSet(data)   => RhoSet(data.map(rhoExprToParProto))
+    case ExprMap(data)   => RhoMap(data.map { case (k, v) => (String(k), rhoExprToParProto(v)) })
     // Terminal expressions (here is the data)
     case ExprBool(data)   => Boolean(data)
     case ExprInt(data)    => Number(data)
