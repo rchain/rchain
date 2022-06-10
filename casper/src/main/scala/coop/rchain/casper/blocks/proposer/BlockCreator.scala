@@ -1,7 +1,6 @@
 package coop.rchain.casper.blocks.proposer
 
 import cats.effect.Concurrent
-import cats.instances.list._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -14,8 +13,8 @@ import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
-import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -37,11 +36,11 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def create[F[_]: Concurrent: Log: Time: BlockStore: BlockDagStorage: Metrics: RuntimeManager: Span](
+  def create[F[_]: Concurrent: Time: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       s: CasperSnapshot,
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
-  )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
+  ): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
       val nextSeqNum     = s.maxSeqNums.get(selfId).map(_ + 1L).getOrElse(0L)
@@ -118,11 +117,11 @@ object BlockCreator {
                             .traverse(BlockDagStorage[F].lookupUnsafe(_))
                             .map(_.filter(!_.invalid))
                             .map(_.map(_.blockHash))
-                computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
+                computedParentsInfo <- computeParentsPostState(parents, s, RuntimeManager[F])
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
                                    systemDeploys,
-                                   runtimeManager,
+                                   RuntimeManager[F],
                                    blockData,
                                    computedParentsInfo
                                  )
@@ -133,7 +132,7 @@ object BlockCreator {
                   rejectedDeploys,
                   processedSystemDeploys
                 )             = checkpointData
-                newBonds      <- runtimeManager.computeBonds(postStateHash)
+                newBonds      <- RuntimeManager[F].computeBonds(postStateHash)
                 _             <- Span[F].mark("before-packing-block")
                 casperVersion = s.onChainState.shardConf.blockVersion
                 // unsignedBlock got blockHash(hashed without signature)
