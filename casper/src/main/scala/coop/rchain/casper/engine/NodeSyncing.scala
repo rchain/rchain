@@ -38,7 +38,7 @@ object NodeSyncing {
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
-  /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+  /* Casper */      : LastFinalizedHeightConstraintChecker
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
@@ -78,7 +78,7 @@ class NodeSyncing[F[_]
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
-  /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+  /* Casper */      : LastFinalizedHeightConstraintChecker
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (

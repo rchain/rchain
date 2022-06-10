@@ -1,10 +1,10 @@
 package coop.rchain.node.runtime
 
-import cats.{Parallel, Show}
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
+import cats.{Parallel, Show}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
@@ -12,7 +12,7 @@ import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.blocks.{BlockProcessor, BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, NodeRunning, PeerMessage}
+import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, PeerMessage}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
@@ -40,7 +40,6 @@ import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.{ReportingRoutes, Transaction}
 import coop.rchain.rholang.interpreter.RhoRuntime
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
@@ -260,7 +259,7 @@ object Setup {
         implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
-        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val lh           = lastFinalizedHeightConstraintChecker
         implicit val (rm, cu)     = (runtimeManager, commUtil)
         implicit val (rsm, sp)    = (rspaceStateManager, span)
         NodeLaunch[F](
