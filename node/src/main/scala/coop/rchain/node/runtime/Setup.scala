@@ -259,7 +259,6 @@ object Setup {
         implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
-        implicit val lh           = lastFinalizedHeightConstraintChecker
         implicit val (rm, cu)     = (runtimeManager, commUtil)
         implicit val (rsm, sp)    = (rspaceStateManager, span)
         NodeLaunch[F](
