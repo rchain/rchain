@@ -7,8 +7,8 @@ import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.api.BlockApi.ApiErr
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1.DeployExecStatus
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, Par}
 
 trait BlockApi[F[_]] {
@@ -90,6 +90,9 @@ object BlockApi {
   def getLightBlockInfo(block: BlockMessage): LightBlockInfo =
     getBlockInfo[LightBlockInfo](block, constructLightBlockInfo)
 
+  def bondToBondInfo(bond: (Validator, Long)): BondInfo =
+    BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond._1), stake = bond._2)
+
   private def constructBlockInfo(
       block: BlockMessage,
       faultTolerance: Float
@@ -114,7 +117,7 @@ object BlockApi {
       blockNumber = block.blockNumber,
       preStateHash = PrettyPrinter.buildStringNoLimit(block.preStateHash),
       postStateHash = PrettyPrinter.buildStringNoLimit(block.postStateHash),
-      bonds = block.bonds.map(ProtoUtil.bondToBondInfo).toList,
+      bonds = block.bonds.map(bondToBondInfo).toList,
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.state.deploys.length,
       faultTolerance = faultTolerance,

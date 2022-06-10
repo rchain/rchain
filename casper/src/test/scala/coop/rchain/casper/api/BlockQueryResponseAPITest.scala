@@ -100,7 +100,7 @@ class BlockQueryResponseAPITest
               b.postStateHash should be(
                 secondBlock.postStateHash.toHexString
               )
-              b.bonds should be(secondBlock.bonds.map(ProtoUtil.bondToBondInfo))
+              b.bonds should be(secondBlock.bonds.map(BlockApi.bondToBondInfo))
               b.blockSize should be(secondBlock.toProto.serializedSize.toString)
               b.deployCount should be(secondBlock.state.deploys.length)
               b.faultTolerance should be(faultTolerance)
@@ -186,7 +186,7 @@ class BlockQueryResponseAPITest
               blockInfo.postStateHash should be(
                 secondBlock.postStateHash.toHexString
               )
-              blockInfo.bonds should be(secondBlock.bonds.map(ProtoUtil.bondToBondInfo))
+              blockInfo.bonds should be(secondBlock.bonds.map(BlockApi.bondToBondInfo))
               blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
               blockInfo.deployCount should be(secondBlock.state.deploys.length)
               blockInfo.faultTolerance should be(faultTolerance)

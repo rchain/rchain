@@ -2,10 +2,9 @@ package coop.rchain.casper.util
 
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.{ByteString, Int64Value, StringValue}
-import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
@@ -27,9 +26,6 @@ object ProtoUtil {
       blockNumber: Long
   ): F[List[BlockMetadata]] =
     getParentsMetadata(b).map(parents => parents.filter(p => p.blockNum >= blockNumber))
-
-  def bondToBondInfo(bond: (Validator, Long)): BondInfo =
-    BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond._1), stake = bond._2)
 
   def maxBlockNumberMetadata(blocks: Seq[BlockMetadata]): Long = blocks.foldLeft(-1L) {
     case (acc, b) => math.max(acc, b.blockNum)
