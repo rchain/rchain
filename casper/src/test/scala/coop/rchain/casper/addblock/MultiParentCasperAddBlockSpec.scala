@@ -3,7 +3,6 @@ package coop.rchain.casper.addblock
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer.NoNewDeploys
 import coop.rchain.casper.helper.TestNode._
@@ -12,17 +11,17 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Tools
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.PCost
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable
@@ -200,21 +199,6 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
     }
   }
    */
-
-  it should "reject blocks not from bonded validators" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        basicDeployData <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
-        block           <- node.createBlockUnsafe(basicDeployData)
-        (sk, _)         = Secp256k1.newKeyPair
-        validatorId     = ValidatorIdentity(sk)
-        illSignedBlock  = validatorId.signBlock(block)
-        status          <- node.addBlock(illSignedBlock)
-      } yield status shouldBe Left(InvalidSender)
-    }
-  }
 
   it should "propose blocks it adds to peers" in effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
