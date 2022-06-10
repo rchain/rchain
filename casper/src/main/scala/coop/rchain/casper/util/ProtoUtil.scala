@@ -28,9 +28,6 @@ object ProtoUtil {
   ): F[List[BlockMetadata]] =
     getParentsMetadata(b).map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
-  def systemDeploys(b: BlockMessage): Seq[ProcessedSystemDeploy] =
-    b.state.systemDeploys
-
   def bondToBondInfo(bond: (Validator, Long)): BondInfo =
     BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond._1), stake = bond._2)
 
