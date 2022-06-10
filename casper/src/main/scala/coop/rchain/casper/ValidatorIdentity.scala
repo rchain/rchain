@@ -14,35 +14,27 @@ final case class ValidatorIdentity(
     privateKey: PrivateKey,
     sigAlgorithm: String
 ) {
-  def signature(data: Array[Byte]): Signature = {
-    val sig = SignaturesAlg(sigAlgorithm).map(_.sign(data, privateKey)).get
-    Signature(publicKey, sigAlgorithm, sig)
-  }
+  // TODO: handle Option.none result with descriptive exception
+  def signature(data: Array[Byte]): Array[Byte] =
+    SignaturesAlg(sigAlgorithm).map(_.sign(data, privateKey)).get
 
+  // TODO: remove hashing as part of signing
   def signBlock(block: BlockMessage): BlockMessage = {
     val blockHash = ProtoUtil.hashBlock(block)
 
-    val sig = signature(blockHash.toByteArray).signature.toByteString
+    val sig = signature(blockHash.toByteArray).toByteString
 
     block.copy(sig = sig, blockHash = blockHash)
   }
 }
 
-final case class Signature(pk: PublicKey, sigAlgorithm: String, signature: Array[Byte])
-
 object ValidatorIdentity {
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def apply(
-      privateKey: PrivateKey
-  ): ValidatorIdentity = {
+  def apply(privateKey: PrivateKey): ValidatorIdentity = {
     val publicKey = Secp256k1.toPublic(privateKey)
 
-    ValidatorIdentity(
-      publicKey,
-      privateKey,
-      Secp256k1.name
-    )
+    ValidatorIdentity(publicKey, privateKey, Secp256k1.name)
   }
 
   def fromHex(privKeyHex: String): Option[ValidatorIdentity] =
