@@ -5,7 +5,7 @@ import cats.syntax.all._
 import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.DagRepresentation
-import coop.rchain.casper.genesis.Genesis
+import coop.rchain.models.syntax._
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -28,9 +28,7 @@ object Resources {
   // some tests doesn't require mergeable function could use some random tag
   val dummyMergeableTag: Par = {
     val rand = Blake2b512Random.defaultRandom
-    import coop.rchain.models.rholang.implicits._
-    GPrivate(ByteString.copyFrom(rand.next()))
-
+    rand.next().toParUnforgeableName
   }
 
   def mkTestRNodeStoreManager[F[_]: Concurrent: Log](

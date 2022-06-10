@@ -6,9 +6,8 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.api.BlockReportApi
-import coop.rchain.casper.genesis.contracts.StandardDeploys
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
-import coop.rchain.models.{GPrivate, GUnforgeable}
+import coop.rchain.models.GPrivate
+import coop.rchain.models.syntax._
 import coop.rchain.casper.protocol.{
   CloseBlockSystemDeployDataProto,
   DeployInfoWithEventData,
@@ -18,7 +17,6 @@ import coop.rchain.casper.protocol.{
   SlashSystemDeployDataProto
 }
 import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
-import coop.rchain.casper.rholang.Tools
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
@@ -257,15 +255,13 @@ object Transaction {
       Blake2b256Hash.fromByteString(emptyStateHashFixed)
     ).generateRandomNumber.splitByte(6.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
     val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
-    import coop.rchain.models.rholang.implicits._
-    GPrivate(ByteString.copyFrom(unfogeableBytes))
+    unfogeableBytes.toParUnforgeableName
   }
 
   // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
   def MainnetTransferUnforgeable: Par = {
     val rand = Blake2b512Random.defaultRandom
-    import coop.rchain.models.rholang.implicits._
-    GPrivate(ByteString.copyFrom(rand.next()))
+    rand.next().toParUnforgeableName
   }
 
   def apply[F[_]: Concurrent](

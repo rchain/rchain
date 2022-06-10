@@ -3,11 +3,10 @@ package coop.rchain.rholang.interpreter
 import cats.Parallel
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -42,9 +41,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       urnMap: Map[String, Par]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
     val emptyMergeableRef = Ref.unsafe[M, Set[Par]](Set.empty)
-    val dummyMergeableTag = Par(
-      unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.EMPTY))))
-    )
+    val dummyMergeableTag = Array[Byte]().toParUnforgeableName
     RholangAndScalaDispatcher(
       tuplespace,
       dispatchTable,

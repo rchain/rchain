@@ -87,7 +87,7 @@ object RhoTrieTraverser {
       Blake2b256Hash.fromByteString(emptyStateHashFixed)
     ).generateRandomNumber.splitByte(0.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
     val target = LazyList.continually(rand.next()).drop(9).head
-    Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target))))))
+    target.toParUnforgeableName
   }
 
   private def TreeHashMapGetter[F[_]: Sync](

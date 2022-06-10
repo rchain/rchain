@@ -16,6 +16,7 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.HotStoreTrieAction
+import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger.{
@@ -93,8 +94,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   val unforgeableNameSeed: Par = {
-    import coop.rchain.models.rholang.implicits._
-    GPrivate(ByteString.copyFrom(baseRhoSeed.next()))
+    baseRhoSeed.next().toParUnforgeableName
   }
 
   def testCase[F[_]: Concurrent: ContextShift: Parallel: Span: Log](

@@ -10,7 +10,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{Bond, DeployData, Event, ProcessedDeploy, SystemDeployData}
 import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
-import coop.rchain.casper.rholang._
+import coop.rchain.models.syntax._
 import coop.rchain.casper.rholang.syntax.RuntimeSyntax._
 import coop.rchain.casper.rholang.sysdeploys.{
   CloseBlockDeploy,
@@ -469,9 +469,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     )
 
     // Create return channel as first private name created in deploy term
-    val rand = Blake2b512Random.defaultRandom
-    import coop.rchain.models.rholang.implicits._
-    val returnName: Par = GPrivate(ByteString.copyFrom(rand.copy().next()))
+    val rand       = Blake2b512Random.defaultRandom
+    val returnName = rand.copy().next().toParUnforgeableName
 
     // Execute deploy on top of specified block hash
     captureResults(hash, rand, deploy, returnName)
@@ -501,9 +500,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       deploy: Signed[DeployData]
   )(implicit s: Sync[F]): F[Seq[Par]] = {
     // Create return channel as first unforgeable name created in deploy term
-    val rand = Blake2b512Random.defaultRandom
-    import coop.rchain.models.rholang.implicits._
-    val returnName: Par = GPrivate(ByteString.copyFrom(rand.copy().next()))
+    val rand       = Blake2b512Random.defaultRandom
+    val returnName = rand.copy().next().toParUnforgeableName
     captureResults(start, rand, deploy, returnName)
   }
 

@@ -14,6 +14,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.{GPrivate, Par}
+import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 
 final case class Genesis(
@@ -34,16 +35,15 @@ object Genesis {
       validatorKey,
       Blake2b256Hash.fromByteString(emptyStateHashFixed)
     ).generateRandomNumber.splitByte(3.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
-    import coop.rchain.models.rholang.implicits._
     val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
-    GPrivate(ByteString.copyFrom(unforgeableByte))
+    unforgeableByte.toParUnforgeableName
   }
 
   // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
   def MainnetNonNegativeMergeableTagName: Par = {
     val rand = Blake2b512Random.defaultRandom
     import coop.rchain.models.rholang.implicits._
-    GPrivate(ByteString.copyFrom(rand.next()))
+    rand.next().toParUnforgeableName
   }
 
   def defaultBlessedTerms(

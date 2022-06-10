@@ -64,9 +64,9 @@ object StateBalanceMain {
   val genesisVaultMapDepth = 2
 
   // TODO support mainnet1 and mainnetx
-  val mainnet1VaultMapPar: Par = GPrivate(
-    "af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeHexToByteString
-  )
+  val mainnet1VaultMapPar: Par =
+    "af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeDecodeHex.toParUnforgeableName
+
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
     val options   = StateOptions(args)

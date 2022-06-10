@@ -14,6 +14,7 @@ import coop.rchain.models.{GPrivate, GUnforgeable, Par}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import monix.eval.Task
+import coop.rchain.models.syntax._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -73,10 +74,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
           storeToken = {
             val r      = rand.copy()
             val target = LazyList.continually(r.next()).drop(9).head
-            Par(
-              unforgeables =
-                Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target)))))
-            )
+            target.toParUnforgeableName
           }
           rd    <- runtime.processDeploy(StandardDeploys.registry(SHARD_ID), rand)
           check <- runtime.createCheckpoint

@@ -56,7 +56,7 @@ object StateBalances {
         Blake2b256Hash.fromByteString(emptyStateHashFixed)
       ).generateRandomNumber.splitByte(6.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
       val unfogeableBytes = rand.next()
-      Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(unfogeableBytes.toByteString)))))
+      unfogeableBytes.toParUnforgeableName
     }
 
     val extractStateString = Par(exprs = Seq(Expr(GString("extractState"))))
@@ -72,8 +72,7 @@ object StateBalances {
   // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
   def MainnetStoreTokenUnf: Par = {
     val rand = Blake2b512Random.defaultRandom
-    import coop.rchain.models.rholang.implicits._
-    GPrivate(ByteString.copyFrom(rand.next()))
+    rand.next().toParUnforgeableName
   }
 
   def read[F[_]: Concurrent: Parallel: ContextShift](

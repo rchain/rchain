@@ -61,10 +61,10 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
-  val genesisContext = GenesisBuilder.buildGenesis()
-  val genesis        = genesisContext.genesisBlock
+  val genesisContext  = GenesisBuilder.buildGenesis()
+  val genesis         = genesisContext.genesisBlock
   val genesisBlockNum = 0L
-  val genesisSeqNum = 0
+  val genesisSeqNum   = 0
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     Resources
@@ -562,9 +562,14 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                                                             # }
                                                             #""".stripMargin('#')
                  )
-        time          <- timeF.currentMillis
-        genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, genesisBlockNum, genesisContext.validatorPks.head, genesisSeqNum)
+        time         <- timeF.currentMillis
+        genPostState = genesis.body.state.postStateHash
+        blockData = BlockData(
+          time,
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genesisSeqNum
+        )
         invalidBlocks = Map.empty[BlockHash, Validator]
         rand = BlockRandomSeed(
           genesis.shardId,
@@ -608,9 +613,14 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         deploy1 <- ConstructDeploy.sourceDeployNowF(
                     """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """
                   )
-        time          <- timeF.currentMillis
-        genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, genesisBlockNum, genesisContext.validatorPks.head, genesisSeqNum)
+        time         <- timeF.currentMillis
+        genPostState = genesis.body.state.postStateHash
+        blockData = BlockData(
+          time,
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genesisSeqNum
+        )
         invalidBlocks = Map.empty[BlockHash, Validator]
         rand = BlockRandomSeed(
           genesis.shardId,
@@ -753,10 +763,15 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
     runtimeManagerResource.use { runtimeManager =>
       for {
-        deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
-        time          <- timeF.currentMillis
-        genPostState  = genesis.body.state.postStateHash
-        blockData     = BlockData(time, genesisBlockNum, genesisContext.validatorPks.head, genesisSeqNum)
+        deploy       <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
+        time         <- timeF.currentMillis
+        genPostState = genesis.body.state.postStateHash
+        blockData = BlockData(
+          time,
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genesisSeqNum
+        )
         invalidBlocks = Map.empty[BlockHash, Validator]
         rand = BlockRandomSeed(
           genesis.shardId,
