@@ -31,8 +31,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     latestMessagesIndex: KeyValueTypedStore[F, Validator, BlockHash],
     blockMetadataIndex: BlockMetadataStore[F],
     deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
-    deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]],
-    invalidBlocksIndex: KeyValueTypedStore[F, BlockHash, BlockMetadata]
+    deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagKeyValueStorage.getClass)
 
@@ -71,9 +70,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         deployHashes = block.state.deploys.map(_.deploy.sig)
         _            <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
 
-        // Update invalid index
-        _ <- invalidBlocksIndex.put(blockMetadata.blockHash, blockMetadata).whenA(invalid)
-
         // Resolve if block should be added as the latest message for the block sender
         isLatestFromSender <- shouldAddAsLatest
         newLatestToAdd = if (isLatestFromSender) Map((block.sender, block.blockHash))
@@ -100,7 +96,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
           dagSet             <- blockMetadataIndex.dagSet
           childMap           <- blockMetadataIndex.childMapData
           heightMap          <- blockMetadataIndex.heightMap
-          invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
           lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
           finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
           dag <- representationState.updateAndGet {
@@ -136,7 +131,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                       latestMessages,
                       childMap,
                       heightMap,
-                      invalidBlocks.map(_.blockHash),
                       lastFinalizedBlock,
                       finalizedBlocksSet,
                       newDagMsgState
@@ -207,7 +201,6 @@ object BlockDagKeyValueStorage {
       metadata: BlockMetadataStore[F],
       metadataDb: KeyValueTypedStore[F, BlockHash, BlockMetadata],
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
-      invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
       deploys: KeyValueTypedStore[F, DeployId, BlockHash],
       deployPool: KeyValueTypedStore[F, DeployId, Signed[DeployData]]
   )
@@ -228,12 +221,6 @@ object BlockDagKeyValueStorage {
                            codecValidator,
                            codecBlockHash
                          )
-      // Invalid blocks map
-      invalidBlocksDb <- KeyValueStoreManager[F].database[BlockHash, BlockMetadata](
-                          "invalid-blocks",
-                          codecBlockHash,
-                          codecBlockMetadata
-                        )
       // Deploy map
       deployIndexDb <- KeyValueStoreManager[F].database[DeployId, BlockHash](
                         "deploy-index",
@@ -250,7 +237,6 @@ object BlockDagKeyValueStorage {
       blockMetadataStore,
       blockMetadataDb,
       latestMessagesDb,
-      invalidBlocksDb,
       deployIndexDb,
       deployPoolDb
     )
@@ -270,7 +256,6 @@ object BlockDagKeyValueStorage {
           dagSet             <- metadata.dagSet
           childMap           <- metadata.childMapData
           heightMap          <- metadata.heightMap
-          invalidBlocks      <- invalidBlocks.toMap.map(_.toSeq.map(_._2).toSet)
           lastFinalizedBlock <- metadata.lastFinalizedBlock
           finalizedBlocksSet <- metadata.finalizedBlockSet
         } yield DagRepresentation(
@@ -278,7 +263,6 @@ object BlockDagKeyValueStorage {
           latestMessages,
           childMap,
           heightMap,
-          invalidBlocks.map(_.blockHash),
           lastFinalizedBlock,
           finalizedBlocksSet
         )
@@ -290,8 +274,7 @@ object BlockDagKeyValueStorage {
       stores.latestMessages,
       stores.metadata,
       stores.deploys,
-      stores.deployPool,
-      stores.invalidBlocks
+      stores.deployPool
     )
 
   def removeExpiredFromPool[F[_]: Monad](

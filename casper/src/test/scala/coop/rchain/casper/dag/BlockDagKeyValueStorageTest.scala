@@ -169,18 +169,6 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
     }
   }
 
-  it should "be able to restore invalid blocks on startup" in {
-    forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
-      withDagStorage { implicit storage =>
-        for {
-          _             <- blockElements.traverse_(storage.insert(_, true))
-          dag           <- storage.getRepresentation
-          invalidBlocks <- dag.invalidBlocks
-        } yield invalidBlocks shouldBe blockElements.map(BlockMetadata.fromBlock(_, true)).toSet
-      }
-    }
-  }
-
   it should "be able to restore deploy index on startup" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { storage =>

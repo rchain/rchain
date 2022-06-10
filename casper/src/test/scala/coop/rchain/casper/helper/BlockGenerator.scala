@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil.{
   computeDeploysCheckpoint,
@@ -14,7 +15,7 @@ import coop.rchain.casper.rholang.InterpreterUtil.{
 }
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.types.SystemDeploy
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -24,11 +25,8 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.syntax._
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
-
-import scala.collection.immutable.HashMap
 
 // TODO squash this with block generator in blockimplicits
 object BlockGenerator {
@@ -181,7 +179,6 @@ trait BlockGenerator {
                             dag.latestMessage(block.sender).map(_.fold(-1L)(_.seqNum) + 1L)
                           else block.seqNum.pure[F]
       nextId <- justifications.toList
-                 .filterNot(dag.invalidBlocksSet)
                  .traverse(
                    BlockStore[F].getUnsafe(_).map(_.blockNumber)
                  )

@@ -62,7 +62,8 @@ object BlockCreator {
 
       def prepareSlashingDeploys(seqNum: Long): F[Seq[SlashDeploy]] =
         for {
-          ilm <- s.dag.invalidLatestMessages
+          // TODO: fix invalid blocks from non-finalized scope
+          ilm <- Seq[(Validator, BlockHash)]().pure[F]
           // if the node is already not active as per main parent, the node won't slash once more
           ilmFromBonded = ilm.toList.filter {
             case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L

@@ -26,9 +26,6 @@ final class DagRepresentationOps[F[_]](
   def lastFinalizedBlockUnsafe(implicit s: Sync[F]): F[BlockHash] =
     DagRepresentation.lastFinalizedBlockUnsafe(dag)
 
-  def invalidBlocks(implicit s: Sync[F], bds: BlockDagStorage[F]): F[Set[BlockMetadata]] =
-    DagRepresentation.invalidBlocks(dag)
-
   def latestMessageHash(
       validator: Validator
   )(implicit s: Sync[F], bds: BlockDagStorage[F]): F[Option[BlockHash]] =
@@ -65,36 +62,6 @@ final class DagRepresentationOps[F[_]](
         .map(_.toMap)
       )
   }
-
-  def invalidLatestMessages(
-      implicit sync: Sync[F],
-      bds: BlockDagStorage[F]
-  ): F[Map[Validator, BlockHash]] =
-    latestMessages.flatMap(
-      lm =>
-        invalidLatestMessages(lm.map {
-          case (validator, block) => (validator, block.blockHash)
-        })
-    )
-
-  def invalidLatestMessages(latestMessagesHashes: Map[Validator, BlockHash])(
-      implicit sync: Sync[F],
-      bds: BlockDagStorage[F]
-  ): F[Map[Validator, BlockHash]] =
-    invalidBlocks.map { invalidBlocks =>
-      latestMessagesHashes.filter {
-        case (_, blockHash) => invalidBlocks.map(_.blockHash).contains(blockHash)
-      }
-    }
-
-  def invalidBlocksMap(
-      implicit sync: Sync[F],
-      bds: BlockDagStorage[F]
-  ): F[Map[BlockHash, Validator]] =
-    for {
-      ib <- invalidBlocks
-      r  = ib.map(block => (block.blockHash, block.sender)).toMap
-    } yield r
 
   def nonFinalizedBlocks(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[Set[BlockHash]] =
     Stream

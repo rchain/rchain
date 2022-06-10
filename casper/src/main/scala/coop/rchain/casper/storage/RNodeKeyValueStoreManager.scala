@@ -24,9 +24,8 @@ object RNodeKeyValueStoreManager {
   private val dagStorageEnvConfig   = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
   private val deployPoolEnvConfig   = LmdbEnvConfig(name = "deploypoolstorage", maxEnvSize = 1 * gb)
   // Temporary storage / cache
-  private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
-  private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
-  private val transactionEnvConfig  = LmdbEnvConfig(name = "transaction")
+  private val reportingEnvConfig   = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
+  private val transactionEnvConfig = LmdbEnvConfig(name = "transaction")
 
   // Database name to store instance name mapping (sub-folder for LMDB store)
   // - keys with the same instance will be in one LMDB file (environment)
@@ -37,9 +36,7 @@ object RNodeKeyValueStoreManager {
       // Block metadata storage
       (Db("finalized-store"), dagStorageEnvConfig),
       (Db("block-metadata"), dagStorageEnvConfig),
-      (Db("equivocation-tracker"), dagStorageEnvConfig),
       (Db("latest-messages"), dagStorageEnvConfig),
-      (Db("invalid-blocks"), dagStorageEnvConfig),
       (Db("deploy-index"), dagStorageEnvConfig),
       (Db("last-finalized-block"), dagStorageEnvConfig),
       // Runtime mergeable store (cache of mergeable channels for block-merge)
@@ -48,8 +45,6 @@ object RNodeKeyValueStoreManager {
       (Db("deploy-pool"), deployPoolEnvConfig),
       // Reporting (trace) cache
       (Db("reporting-cache"), reportingEnvConfig),
-      // CasperBuffer
-      (Db("parents-map"), casperBufferEnvConfig),
       // On-chain RSpace (Rholang state)
       // - history and roots maps are part of the same LMDB file (environment)
       (Db("rspace-history"), rspaceHistoryEnvConfig),

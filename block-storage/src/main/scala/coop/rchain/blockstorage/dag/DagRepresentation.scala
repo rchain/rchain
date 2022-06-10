@@ -1,4 +1,5 @@
 package coop.rchain.blockstorage.dag
+
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -15,7 +16,6 @@ final case class DagRepresentation(
     latestMessagesHashes: Map[Validator, BlockHash],
     childMap: Map[BlockHash, Set[BlockHash]],
     heightMap: SortedMap[Long, Set[BlockHash]],
-    invalidBlocksSet: Set[BlockHash],
     lastFinalizedBlockHash: Option[BlockHash],
     finalizedBlocksSet: Set[BlockHash],
     dagMessageState: DagMessageState[BlockHash, Validator] =
@@ -66,7 +66,6 @@ object DagRepresentation {
       Map.empty[Validator, BlockHash],
       Map.empty[BlockHash, Set[BlockHash]],
       SortedMap.empty[Long, Set[BlockHash]],
-      Set.empty[BlockHash],
       none[BlockHash],
       Set.empty[BlockHash],
       DagMessageState[BlockHash, Validator](ByteString.EMPTY, Set(), Map())
@@ -77,9 +76,6 @@ object DagRepresentation {
       "DagState does not contain lastFinalizedBlock. Are you calling this on empty BlockDagStorage? Otherwise there is a bug."
     dr.lastFinalizedBlockHash.liftTo[F](new Exception(errMsg))
   }
-
-  def invalidBlocks[F[_]: Sync: BlockDagStorage](dr: DagRepresentation): F[Set[BlockMetadata]] =
-    dr.invalidBlocksSet.toList.traverse(BlockDagStorage[F].lookupUnsafe).map(_.toSet)
 
   def latestMessageHash[F[_]: Sync: BlockDagStorage](
       dr: DagRepresentation,

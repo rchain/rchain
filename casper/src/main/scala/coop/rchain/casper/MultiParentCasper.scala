@@ -84,8 +84,7 @@ object MultiParentCasper {
       t <- dag.latestMessages.map(
             _.valuesIterator.toIndexedSeq.sortBy(_.blockNum).reverse
           )
-      (lca, tips)   = (ByteString.EMPTY, t.map(_.blockHash))
-      invalidBlocks <- dag.invalidBlocksMap
+      (lca, tips) = (ByteString.EMPTY, t.map(_.blockHash))
 
       // TODO: replaced when parents are removed from BlockMessage
       onChainState <- for {
