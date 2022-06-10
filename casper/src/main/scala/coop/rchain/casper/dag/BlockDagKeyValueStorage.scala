@@ -1,28 +1,25 @@
 package coop.rchain.casper.dag
 
 import cats.Monad
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
-import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.dag._
+import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
+import coop.rchain.casper.dag.BlockDagKeyValueStorage._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
+import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
 import coop.rchain.shared.syntax._
-import coop.rchain.casper.dag.BlockDagKeyValueStorage._
-import coop.rchain.models.syntax._
-import coop.rchain.rholang.interpreter.EvaluateResult
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
@@ -46,14 +43,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       invalid: Boolean,
       approved: Boolean
   ): F[DagRepresentation] = {
-    import cats.instances.list._
-    import cats.instances.option._
-
-    // Empty sender is valid for genesis
-    val senderIsEmpty          = block.sender == ByteString.EMPTY
-    val senderHasInvalidFormat = !senderIsEmpty && (block.sender.size() != Validator.Length)
-    val sendersNewLM           = (block.sender, block.blockHash)
-
     val logAlreadyStored =
       Log[F].warn(s"Block ${PrettyPrinter.buildString(block, short = true)} is already stored.")
 
@@ -73,20 +62,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         .map(lmSeqNumOpt => lmSeqNumOpt.isEmpty || lmSeqNumOpt.exists(block.seqNum >= _))
 
     def doInsert: F[Unit] = {
-      val blockMetadata      = BlockMetadata.fromBlock(block, invalid)
-      val blockHashIsInvalid = !(block.blockHash.size == BlockHash.Length)
-
+      val blockMetadata = BlockMetadata.fromBlock(block, invalid)
       for {
-        // TODO: remove these checks, block hash and sender should be checked when block is received
-        // Basic validation of input hash values
-        _ <- BlockSenderIsMalformed(block).raiseError[F, Unit].whenA(senderHasInvalidFormat)
-        _ <- new Exception(
-              s"Block hash (${PrettyPrinter.buildString(block.blockHash)}) is not correct length."
-            ).raiseError[F, Unit].whenA(blockHashIsInvalid)
-        _ <- new Exception(
-              s"Block ${PrettyPrinter.buildString(block, short = true)} sender is empty."
-            ).raiseError[F, Unit].whenA(senderIsEmpty)
-
         // Add block metadata
         _ <- blockMetadataIndex.add(blockMetadata)
 
@@ -99,14 +76,14 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
         // Resolve if block should be added as the latest message for the block sender
         isLatestFromSender <- shouldAddAsLatest
-        newLatestToAdd     = if (isLatestFromSender) Map(sendersNewLM) else Map[Validator, BlockHash]()
+        newLatestToAdd = if (isLatestFromSender) Map((block.sender, block.blockHash))
+        else Map[Validator, BlockHash]()
 
         // Add latest messages to DB
         _ <- latestMessagesIndex.put(newLatestToAdd.toList)
 
         // if block added as approved, record it as directly finalized.
         _ <- blockMetadataIndex.recordFinalized(blockMetadata.blockHash, Set.empty).whenA(approved)
-
       } yield ()
     }
 
