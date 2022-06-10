@@ -4,9 +4,9 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits.catsSyntaxApplicative
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.node.revvaultexport.RhoTrieTraverser
 import coop.rchain.rholang.interpreter.RhoRuntime
@@ -485,8 +485,9 @@ class TreeHashMapMergeabilitySpec
       phloLimit = Cost.UNSAFE_MAX.value,
       sec = ConstructDeploy.defaultSec2
     )
+    val registry = Registry(GenesisBuilder.defaultSystemContractPubKey)
     computeMergeCase[Task](
-      Seq(StandardDeploys.registry(SHARD_ID), baseDeploy),
+      Seq(StandardDeploys.registryGenerator(registry, SHARD_ID), baseDeploy),
       Seq(leftDeploy),
       Seq(rightDeploy),
       (runtime, _, mergedState) =>

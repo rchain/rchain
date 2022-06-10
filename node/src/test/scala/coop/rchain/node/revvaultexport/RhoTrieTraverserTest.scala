@@ -1,11 +1,11 @@
 package coop.rchain.node.revvaultexport
 
 import cats.effect.Concurrent
-import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
@@ -17,6 +17,7 @@ import scala.util.Random
 
 class RhoTrieTraverserTest extends AnyFlatSpec {
   private val SHARD_ID = "root-shard"
+  private val registry = Registry(GenesisBuilder.defaultSystemContractPubKey)
 
   "traverse the TreeHashMap" should "work" in {
     val total     = 100
@@ -64,7 +65,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
         for {
           hash1 <- runtime.emptyStateHash
           _     <- runtime.reset(Blake2b256Hash.fromByteString(hash1))
-          rd    <- runtime.processDeploy(StandardDeploys.registry(SHARD_ID))
+          rd    <- runtime.processDeploy(StandardDeploys.registryGenerator(registry, SHARD_ID))
           check <- runtime.createCheckpoint
           _     <- runtime.reset(check.root)
           initialTrieRes <- runtime.processDeploy(
