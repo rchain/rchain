@@ -18,7 +18,6 @@ import coop.rchain.casper.protocol.{
 import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
 import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -28,10 +27,8 @@ import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.syntax.sharedSyntaxKeyValueTypedStore
 import coop.rchain.shared.{Log, LogSource}
-import monix.eval.Coeval
 import retry.{retryingOnFailures, RetryPolicies}
 
 object InterpreterUtil {
@@ -47,10 +44,9 @@ object InterpreterUtil {
   private[this] val ReplayBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "replay-block")
 
-  def mkTerm[Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
+  def mkTerm[F[_]: Sync, Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
       implicit ev: ToEnvMap[Env]
-  ): Either[Throwable, Par] =
-    Compiler[Coeval].sourceToADT(rho, normalizerEnv.toEnv).runAttempt
+  ): F[Par] = Compiler[F].sourceToADT(rho, normalizerEnv.toEnv)
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
