@@ -1,7 +1,6 @@
 package coop.rchain.casper.dag
 
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagStorage, BlockDagStorageTest}
@@ -13,7 +12,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
-import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.shared
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -124,7 +122,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
   }
 
-  it should "be able to restore state on startup" in {
+  "BlockDagStorage" should "be able to restore state on startup" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { storage =>
         for {
@@ -194,76 +192,4 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
     }
   }
 
-  "recording of new directly finalized block" should "record finalized all non finalized ancestors of LFB" in
-    withDagStorage { implicit storage =>
-      for {
-        _ <- storage.insert(genesis, false, true)
-        b1 = getRandomBlock(
-          setJustifications = List(genesis.blockHash).some,
-          setBlockNumber = 1L.some
-        )
-        _   <- storage.insert(b1, false)
-        b2  = getRandomBlock(setJustifications = List(b1.blockHash).some, setBlockNumber = 2L.some)
-        _   <- storage.insert(b2, false)
-        b3  = getRandomBlock(setJustifications = List(b2.blockHash).some, setBlockNumber = 3L.some)
-        _   <- storage.insert(b3, false)
-        b4  = getRandomBlock(setJustifications = List(b3.blockHash).some, setBlockNumber = 4L.some)
-        dag <- storage.insert(b4, false)
-
-        // only genesis is finalized
-        _ <- dag.lookupUnsafe(genesis.blockHash).map(_.finalized shouldBe true)
-        _ = dag.isFinalized(genesis.blockHash) shouldBe true
-        _ = dag.isFinalized(b1.blockHash) shouldBe false
-        _ <- dag.lookupUnsafe(b1.blockHash).map(_.finalized shouldBe false)
-        _ = dag.isFinalized(b2.blockHash) shouldBe false
-        _ <- dag.lookupUnsafe(b2.blockHash).map(_.finalized shouldBe false)
-        _ = dag.isFinalized(b3.blockHash) shouldBe false
-        _ <- dag.lookupUnsafe(b3.blockHash).map(_.finalized shouldBe false)
-        _ = dag.isFinalized(b4.blockHash) shouldBe false
-        _ <- dag.lookupUnsafe(b4.blockHash).map(_.finalized shouldBe false)
-
-        // record directly finalized block
-        effectsRef <- Ref.of[Task, Set[BlockHash]](Set.empty)
-        _          <- storage.recordDirectlyFinalized(b3.blockHash, effectsRef.set)
-        dag        <- storage.getRepresentation
-
-        // in mem DAG state should be correct
-        lfb <- dag.lastFinalizedBlockUnsafe
-        _   = lfb.toHexString shouldBe b3.blockHash.toHexString
-        _   = dag.isFinalized(b1.blockHash) shouldBe true
-        _   = dag.isFinalized(b2.blockHash) shouldBe true
-        _   = dag.isFinalized(b3.blockHash) shouldBe true
-        _   = dag.isFinalized(b4.blockHash) shouldBe false
-
-        // persisted state should be correct
-        _ <- dag
-              .lookupUnsafe(b1.blockHash)
-              .map(v => {
-                v.finalized shouldBe true
-                v.directlyFinalized shouldBe false
-              })
-        _ <- dag
-              .lookupUnsafe(b2.blockHash)
-              .map(v => {
-                v.finalized shouldBe true
-                v.directlyFinalized shouldBe false
-              })
-        _ <- dag
-              .lookupUnsafe(b3.blockHash)
-              .map(v => {
-                v.finalized shouldBe true
-                v.directlyFinalized shouldBe true
-              })
-        _ <- dag
-              .lookupUnsafe(b4.blockHash)
-              .map(v => {
-                v.finalized shouldBe false
-                v.directlyFinalized shouldBe false
-              })
-
-        // all finalized should be in set supplied for finalization effect
-        effects <- effectsRef.get
-        _       = effects shouldBe Set(b1, b2, b3).map(_.blockHash)
-      } yield ()
-    }
 }

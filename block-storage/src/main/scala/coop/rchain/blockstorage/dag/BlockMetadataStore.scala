@@ -51,7 +51,6 @@ object BlockMetadataStore {
       blockMeta.parents.toSet ++ blockMeta.justifications,
       blockMeta.blockNum,
       blockMeta.invalid,
-      blockMeta.directlyFinalized,
       blockMeta.finalized
     )
 
@@ -86,7 +85,7 @@ object BlockMetadataStore {
         curMetaForDF  <- store.getUnsafe(directly)
         curMetasForIF <- store.getUnsafeBatch(indirectly.toList)
         // new values to persist
-        newMetaForDF  = (directly, curMetaForDF.copy(finalized = true, directlyFinalized = true))
+        newMetaForDF  = (directly, curMetaForDF.copy(finalized = true))
         newMetasForIF = curMetasForIF.map(v => (v.blockHash, v.copy(finalized = true)))
         // update in memory state
         _ <- dagState.update { st =>
@@ -159,7 +158,7 @@ object BlockMetadataStore {
     } else state.heightMap
 
     val newLastFinalizedBlock =
-      if (block.isDirectlyFinalized &&
+      if (block.isFinalized &&
           !state.lastFinalizedBlock.exists { case (_, height) => height > block.blockNum })
         (block.hash, block.blockNum).some
       else state.lastFinalizedBlock
@@ -190,7 +189,6 @@ object BlockMetadataStore {
       parents: Set[BlockHash],
       blockNum: Long,
       isInvalid: Boolean,
-      isDirectlyFinalized: Boolean,
       isFinalized: Boolean
   )
 

@@ -12,7 +12,6 @@ final case class BlockMetadata(
     justifications: List[BlockHash],
     weightMap: Map[Validator, Long],
     invalid: Boolean,
-    directlyFinalized: Boolean,
     finalized: Boolean,
     parents: List[BlockHash]
 )
@@ -26,7 +25,6 @@ object BlockMetadata {
     b.justifications,
     b.bonds.map(b => b.validator -> b.stake).toMap,
     b.invalid,
-    b.directlyFinalized,
     b.finalized,
     b.parents
   )
@@ -39,7 +37,6 @@ object BlockMetadata {
     b.justifications,
     b.weightMap.map { case (validator, stake) => BondProto(validator, stake) }.toList,
     b.invalid,
-    b.directlyFinalized,
     b.finalized,
     b.parents
   )
@@ -52,7 +49,6 @@ object BlockMetadata {
   def fromBlock(
       b: BlockMessage,
       invalid: Boolean,
-      directlyFinalized: Boolean = false,
       finalized: Boolean = false
   ): BlockMetadata =
     BlockMetadata(
@@ -63,7 +59,6 @@ object BlockMetadata {
       b.justifications,
       b.bonds,
       invalid,
-      directlyFinalized,
       finalized,
       List()
     )
