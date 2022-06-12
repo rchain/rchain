@@ -121,6 +121,7 @@ jobs:
           - "'casper/test:testOnly coop.rchain.casper.api.*'"
           - "'casper/test:testOnly coop.rchain.casper.batch1.*'"
           - "'casper/test:testOnly coop.rchain.casper.batch2.*'"
+          - "'casper/test:testOnly coop.rchain.casper.dag.*'"
           - "'casper/test:testOnly coop.rchain.casper.engine.*'"
           - "'casper/test:testOnly coop.rchain.casper.genesis.*'"
           - "'casper/test:testOnly coop.rchain.casper.merging.*'"
