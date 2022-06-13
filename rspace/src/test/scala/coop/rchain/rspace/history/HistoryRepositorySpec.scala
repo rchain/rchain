@@ -5,7 +5,7 @@ import cats.syntax.all._
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash.codecBlake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
@@ -238,7 +238,7 @@ trait InMemoryHistoryRepositoryTestBase {
 
   def inMemColdStore: ColdKeyValueStore[Task] = {
     val store = InMemoryKeyValueStore[Task]
-    store.toTypedStore(codecPureBlake2b256Hash, codecPersistedData)
+    store.toTypedStore(codecBlake2b256Hash, codecPersistedData)
   }
 
   def emptyExporter[F[_]: Sync]: RSpaceExporter[F] = new RSpaceExporter[F] {
