@@ -197,10 +197,10 @@ class ValidateTest
         block = chain(0)
         dag   <- blockDagStorage.getRepresentation
         _ <- Validate
-              .blockNumber[Task](block.copy(blockNumber = 1), mkCasperSnapshot(dag)) shouldBeF Left(
+              .blockNumber[Task](block.copy(blockNumber = 1)) shouldBeF Left(
               InvalidBlockNumber
             )
-        _      <- Validate.blockNumber[Task](block, mkCasperSnapshot(dag)) shouldBeF Right(Valid)
+        _      <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result
@@ -211,12 +211,11 @@ class ValidateTest
       for {
         chain <- createChain[Task](2)
         block = chain(1)
-        dag   <- blockDagStorage.getRepresentation
         _ <- Validate
-              .blockNumber[Task](block.copy(blockNumber = 17), mkCasperSnapshot(dag)) shouldBeF Left(
+              .blockNumber[Task](block.copy(blockNumber = 17)) shouldBeF Left(
               InvalidBlockNumber
             )
-        _ <- Validate.blockNumber[Task](block, mkCasperSnapshot(dag)) shouldBeF Right(Valid)
+        _ <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
         _ = log.warns.size should be(1)
         result = log.warns.head.contains("is not one more than maximum parent number") should be(
           true
@@ -229,10 +228,8 @@ class ValidateTest
       val n = 6
       for {
         chain <- createChain[Task](n)
-        dag   <- blockDagStorage.getRepresentation
-        snap  = mkCasperSnapshot(dag)
         _ <- chain.forallM[Task] { b =>
-              Validate.blockNumber[Task](b, snap).map(_ == Right(Valid))
+              Validate.blockNumber[Task](b).map(_ == Right(Valid))
             } shouldBeF true
         result = log.warns should be(Nil)
       } yield result
@@ -258,9 +255,9 @@ class ValidateTest
         b2      <- createBlockWithNumber(v2)
         b3      <- createBlockWithNumber(v2, Seq(b1, b2))
         dag     <- blockDagStorage.getRepresentation
-        s1      <- Validate.blockNumber[Task](b3, mkCasperSnapshot(dag))
+        s1      <- Validate.blockNumber[Task](b3)
         _       = s1 shouldBe Right(Valid)
-        s2      <- Validate.blockNumber[Task](b3.copy(blockNumber = 4), mkCasperSnapshot(dag))
+        s2      <- Validate.blockNumber[Task](b3.copy(blockNumber = 4))
         _       = s2 shouldBe Left(InvalidBlockNumber)
       } yield ()
   }
@@ -395,16 +392,13 @@ class ValidateTest
       for {
         chain <- createChain[Task](2)
         block = chain(1)
-        dag   <- blockDagStorage.getRepresentation
 
         (sk, pk) = Secp256k1.newKeyPair
-        sender   = ByteString.copyFrom(pk.bytes)
         signedBlock = ValidatorIdentity(sk).signBlock(
           block.copy(blockNumber = 17).copy(seqNum = 1)
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              mkCasperSnapshot(dag),
               "root",
               Int.MaxValue
             ) shouldBeF Left(InvalidSequenceNumber)

@@ -20,6 +20,7 @@ import coop.rchain.shared._
 
 import scala.util.{Success, Try}
 
+// TODO: refactor all validation functions to separate logging from actual validation logic
 object Validate {
   type PublicKey = Array[Byte]
   type Data      = Array[Byte]
@@ -89,7 +90,6 @@ object Validate {
 
   def blockSummary[F[_]: Sync: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
-      s: CasperSnapshot,
       shardId: String,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
@@ -102,7 +102,7 @@ object Validate {
       _ <- EitherT(Validate.sequenceNumber(block))
       // Block number validation
       _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
-      _ <- EitherT(Validate.blockNumber(block, s))
+      _ <- EitherT(Validate.blockNumber(block))
       // Deploys validation
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
       _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
@@ -116,8 +116,6 @@ object Validate {
 
   /**
     * Validate no deploy with the same sig has been produced in the chain
-    *
-    * Agnostic of non-parent justifications
     */
   def repeatDeploy[F[_]: Sync: Log: BlockStore: BlockDagStorage: Span](
       block: BlockMessage,
@@ -143,9 +141,7 @@ object Validate {
                                        )
                                        .findF { blockMetadata =>
                                          for {
-                                           block <- BlockStore[F].getUnsafe(
-                                                     blockMetadata.blockHash
-                                                   )
+                                           block        <- BlockStore[F].getUnsafe(blockMetadata.blockHash)
                                            blockDeploys = block.state.deploys.map(_.deploy)
                                          } yield blockDeploys.exists(
                                            d => deployKeySet.contains(d.sig)
@@ -178,11 +174,7 @@ object Validate {
     } yield maybeError.toLeft(BlockStatus.valid)
   }
 
-  // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Sync: BlockDagStorage: Log](
-      b: BlockMessage,
-      s: CasperSnapshot
-  ): F[ValidBlockProcessing] =
+  def blockNumber[F[_]: Sync: BlockDagStorage: Log](b: BlockMessage): F[ValidBlockProcessing] =
     for {
       parents <- b.justifications
                   .traverse(BlockDagStorage[F].lookupUnsafe(_))
@@ -205,8 +197,6 @@ object Validate {
     } yield status
 
   def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
     val blockNumber       = b.blockNumber
     val deploys           = b.state.deploys.map(_.deploy)
     val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber >= blockNumber)
@@ -228,8 +218,6 @@ object Validate {
       b: BlockMessage,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
     val earliestAcceptableValidAfterBlockNumber = b.blockNumber - expirationThreshold
     val deploys                                 = b.state.deploys.map(_.deploy)
     val maybeExpiredDeploy =
@@ -347,12 +335,12 @@ object Validate {
     * If block contains an invalid justification block B and the creator of B is still bonded,
     * return a RejectableBlock. Otherwise return an IncludeableBlock.
     */
-  def neglectedInvalidBlock[F[_]: Applicative: BlockDagStorage](
-      block: BlockMessage,
-      s: CasperSnapshot
+  def neglectedInvalidBlock[F[_]: Monad: BlockDagStorage](
+      block: BlockMessage
   ): F[ValidBlockProcessing] =
     for {
-      justifications    <- block.justifications.flatTraverse(s.dag.lookup(_).map(_.toList))
+      dag               <- BlockDagStorage[F].getRepresentation
+      justifications    <- block.justifications.flatTraverse(dag.lookup(_).map(_.toList))
       invalidValidators = justifications.filter(_.invalid).map(b => b.sender)
       neglectedInvalidJustification = invalidValidators.exists { invalidValidator =>
         val slashedValidatorBond = block.bonds.get(invalidValidator)

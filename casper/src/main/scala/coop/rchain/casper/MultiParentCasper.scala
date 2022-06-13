@@ -155,10 +155,7 @@ object MultiParentCasper {
   ): F[Either[BlockError, ValidBlock]] = {
     val validationProcess: EitherT[F, BlockError, ValidBlock] =
       for {
-        _ <- EitherT(
-              Validate
-                .blockSummary(b, s, s.onChainState.shardConf.shardName, deployLifespan)
-            )
+        _ <- EitherT(Validate.blockSummary(b, s.onChainState.shardConf.shardName, deployLifespan))
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
@@ -172,7 +169,7 @@ object MultiParentCasper {
         _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
         _ <- EitherT(Validate.bondsCache(b))
         _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
-        _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
+        _ <- EitherT(Validate.neglectedInvalidBlock(b))
         _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
 
         // This validation is only to punish validator which accepted lower price deploys.
