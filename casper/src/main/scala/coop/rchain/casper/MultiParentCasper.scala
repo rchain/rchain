@@ -149,7 +149,7 @@ object MultiParentCasper {
     )
   }
 
-  def validate[F[_]: Concurrent: Timer: Time: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def validate[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       b: BlockMessage,
       s: CasperSnapshot
   ): F[Either[BlockError, ValidBlock]] = {
@@ -162,7 +162,7 @@ object MultiParentCasper {
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
-                .validateBlockCheckpoint(b, s, RuntimeManager[F])
+                .validateBlockCheckpoint(b, s)
                 .map {
                   case Left(ex)       => Left(ex)
                   case Right(Some(_)) => Right(BlockStatus.valid)
@@ -170,7 +170,7 @@ object MultiParentCasper {
                 }
             )
         _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
-        _ <- EitherT(Validate.bondsCache(b, RuntimeManager[F]))
+        _ <- EitherT(Validate.bondsCache(b))
         _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
         _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
         _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))

@@ -87,7 +87,7 @@ object Validate {
     }
   }
 
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: BlockDagStorage: Metrics: Span](
+  def blockSummary[F[_]: Sync: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
       s: CasperSnapshot,
       shardId: String,
@@ -368,14 +368,13 @@ object Validate {
       }
     } yield result
 
-  def bondsCache[F[_]: Log: Concurrent](
-      b: BlockMessage,
-      runtimeManager: RuntimeManager[F]
+  def bondsCache[F[_]: Concurrent: RuntimeManager: Log](
+      b: BlockMessage
   ): F[ValidBlockProcessing] = {
     val bonds          = b.bonds
     val tuplespaceHash = b.postStateHash
 
-    runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {
+    RuntimeManager[F].computeBonds(tuplespaceHash).attempt.flatMap {
       case Right(computedBonds) =>
         if (bonds.toSet == computedBonds.toSet) {
           BlockStatus.valid.asRight[BlockError].pure

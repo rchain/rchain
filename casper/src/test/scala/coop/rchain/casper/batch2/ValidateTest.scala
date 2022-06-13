@@ -494,15 +494,17 @@ class ValidateTest
                            Genesis.NonNegativeMergeableTagName,
                            RuntimeManager.noOpExecutionTracker[Task]
                          )
-        dag <- blockDagStorage.getRepresentation
-        _ <- InterpreterUtil
-              .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)
-        _               <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
-        modifiedBonds   = Map.empty[Validator, Long]
-        modifiedGenesis = genesis.copy(bonds = modifiedBonds)
-        result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
-                   InvalidBondsCache
-                 )
+        result <- {
+          implicit val rm = runtimeManager
+          for {
+            dag             <- blockDagStorage.getRepresentation
+            _               <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag))
+            _               <- Validate.bondsCache[Task](genesis) shouldBeF Right(Valid)
+            modifiedBonds   = Map.empty[Validator, Long]
+            modifiedGenesis = genesis.copy(bonds = modifiedBonds)
+            result          <- Validate.bondsCache[Task](modifiedGenesis) shouldBeF Left(InvalidBondsCache)
+          } yield result
+        }
       } yield result
   }
 

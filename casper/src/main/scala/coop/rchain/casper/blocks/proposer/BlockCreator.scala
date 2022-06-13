@@ -118,11 +118,10 @@ object BlockCreator {
                             .traverse(BlockDagStorage[F].lookupUnsafe(_))
                             .map(_.filter(!_.invalid))
                             .map(_.map(_.blockHash))
-                computedParentsInfo <- computeParentsPostState(parents, s, RuntimeManager[F])
+                computedParentsInfo <- computeParentsPostState(parents, s)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
                                    systemDeploys,
-                                   RuntimeManager[F],
                                    blockData,
                                    computedParentsInfo
                                  )

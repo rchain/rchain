@@ -51,40 +51,27 @@ object BlockGenerator {
         Seq.empty
       )
     )
-  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Log: Span: Concurrent](
-      runtimeManager: RuntimeManager[F]
-  )(block: BlockMessage, genesis: BlockMessage): F[Unit] =
+  def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+      block: BlockMessage,
+      genesis: BlockMessage
+  ): F[Unit] =
     for {
-      dag <- BlockDagStorage[F].getRepresentation
-      computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                       block,
-                                       mkCasperSnapshot(dag),
-                                       runtimeManager
-                                     )
+      dag                                       <- BlockDagStorage[F].getRepresentation
+      computeBlockCheckpointResult              <- computeBlockCheckpoint(block, mkCasperSnapshot(dag))
       (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-      result <- injectPostStateHash[F](
-                 block,
-                 postB1StateHash,
-                 postB1ProcessedDeploys
-               )
+      result                                    <- injectPostStateHash[F](block, postB1StateHash, postB1ProcessedDeploys)
     } yield result
 
-  private def computeBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: Metrics: Span](
+  private def computeBlockCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       b: BlockMessage,
-      s: CasperSnapshot,
-      runtimeManager: RuntimeManager[F]
+      s: CasperSnapshot
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
     val deploys = b.state.deploys.map(_.deploy)
     for {
-      computedParentsInfo <- computeParentsPostState(
-                              b.justifications,
-                              s,
-                              runtimeManager
-                            )
+      computedParentsInfo <- computeParentsPostState(b.justifications, s)
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],
-                 runtimeManager,
                  BlockData.fromBlock(b),
                  computedParentsInfo
                ).attempt

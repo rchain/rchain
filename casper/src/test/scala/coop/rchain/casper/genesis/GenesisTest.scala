@@ -17,10 +17,9 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.syntax._
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.Time
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -191,6 +190,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
             genesisPath: Path,
             log: LogStub[Task]
         ) =>
+          implicit val rm     = runtimeManager
           implicit val logEff = log
           for {
             genesis <- fromInputFiles()(
@@ -205,8 +205,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
-                                            mkCasperSnapshot(dag),
-                                            runtimeManager
+                                            mkCasperSnapshot(dag)
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }

@@ -50,10 +50,9 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: Span: Metrics: Timer](
+  def validateBlockCheckpoint[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
-      s: CasperSnapshot,
-      runtimeManager: RuntimeManager[F]
+      s: CasperSnapshot
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = block.preStateHash
     for {
@@ -64,7 +63,7 @@ object InterpreterUtil {
                   .map(_.map(_.blockHash))
 
       _                   <- Span[F].mark("before-compute-parents-post-state")
-      computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager).attempt
+      computedParentsInfo <- computeParentsPostState(parents, s).attempt
       _                   <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
       result <- computedParentsInfo match {
                  case Left(ex) =>
@@ -90,7 +89,7 @@ object InterpreterUtil {
                        .as(InvalidRejectedDeploy.asLeft)
                    } else {
                      for {
-                       replayResult <- replayBlock(incomingPreStateHash, block, runtimeManager)
+                       replayResult <- replayBlock(incomingPreStateHash, block)
                        result       <- handleErrors(block.postStateHash, replayResult)
                      } yield result
                    }
@@ -98,19 +97,18 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def replayBlock[F[_]: Sync: Log: BlockStore: BlockDagStorage: Timer](
+  private def replayBlock[F[_]: Sync: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
       initialStateHash: StateHash,
-      block: BlockMessage,
-      runtimeManager: RuntimeManager[F]
-  )(implicit spanF: Span[F]): F[Either[ReplayFailure, StateHash]] =
-    spanF.trace(ReplayBlockMetricsSource) {
+      block: BlockMessage
+  ): F[Either[ReplayFailure, StateHash]] =
+    Span[F].trace(ReplayBlockMetricsSource) {
       val internalDeploys       = block.state.deploys
       val internalSystemDeploys = block.state.systemDeploys
       for {
         _                  <- Span[F].mark("before-process-pre-state-hash")
         blockData          = BlockData.fromBlock(block)
         withCostAccounting = block.justifications.nonEmpty
-        replayResultF = runtimeManager
+        replayResultF = RuntimeManager[F]
           .replayComputeState(initialStateHash)(
             internalDeploys,
             internalSystemDeploys,
@@ -211,25 +209,17 @@ object InterpreterUtil {
     Log[F].info(s"Deploy ($deployInfo) errors: ${errors.mkString(", ")}")
   }
 
-  def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
+  def computeDeploysCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       computedParentsInfo: (StateHash, Seq[ByteString])
-  )(
-      implicit spanF: Span[F]
-  ): F[
-    (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])
-  ] =
-    spanF.trace(ComputeDeploysCheckpointMetricsSource) {
+  ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])] =
+    Span[F].trace(ComputeDeploysCheckpointMetricsSource) {
       val (preStateHash, rejectedDeploys) = computedParentsInfo
       for {
-        result <- runtimeManager.computeState(preStateHash)(
-                   deploys,
-                   systemDeploys,
-                   blockData
-                 )
+        result <- RuntimeManager[F].computeState(preStateHash)(deploys, systemDeploys, blockData)
+
         (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (
         preStateHash,
@@ -240,12 +230,11 @@ object InterpreterUtil {
       )
     }
 
-  def computeParentsPostState[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
+  def computeParentsPostState[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       parents: Seq[BlockHash],
-      s: CasperSnapshot,
-      runtimeManager: RuntimeManager[F]
-  )(implicit spanF: Span[F]): F[(StateHash, Seq[ByteString])] =
-    spanF.trace(ComputeParentPostStateMetricsSource) {
+      s: CasperSnapshot
+  ): F[(StateHash, Seq[ByteString])] =
+    Span[F].trace(ComputeParentPostStateMetricsSource) {
       parents match {
         // For genesis, use empty trie's root hash
         case Seq() =>
@@ -261,7 +250,7 @@ object InterpreterUtil {
         // we might want to take some data from the parent with the most stake,
         // e.g. bonds map, slashing deploys, bonding deploys.
         // such system deploys are not mergeable, so take them from one of the parents.
-        case _ => {
+        case _ =>
           val blockIndexF = (v: BlockHash) => {
             val cached = BlockIndex.cache.get(v).map(_.pure)
             cached.getOrElse {
@@ -272,7 +261,7 @@ object InterpreterUtil {
                 sender    = b.sender.toByteArray
                 seqNum    = b.seqNum
 
-                mergeableChs <- runtimeManager.loadMergeableChannels(postState, sender, seqNum)
+                mergeableChs <- RuntimeManager[F].loadMergeableChannels(postState, sender, seqNum)
 
                 blockIndex <- BlockIndex(
                                b.blockHash,
@@ -280,7 +269,7 @@ object InterpreterUtil {
                                b.state.systemDeploys,
                                preState.toBlake2b256Hash,
                                postState.toBlake2b256Hash,
-                               runtimeManager.getHistoryRepo,
+                               RuntimeManager[F].getHistoryRepo,
                                mergeableChs
                              )
               } yield blockIndex
@@ -298,13 +287,11 @@ object InterpreterUtil {
                   s.fringe,
                   lfbState,
                   blockIndexF(_).map(_.deployChains),
-                  runtimeManager.getHistoryRepo,
+                  RuntimeManager[F].getHistoryRepo,
                   DagMerger.costOptimalRejectionAlg
                 )
             (state, rejected) = r
           } yield (ByteString.copyFrom(state.bytes.toArray), rejected)
-
-        }
       }
     }
 }
