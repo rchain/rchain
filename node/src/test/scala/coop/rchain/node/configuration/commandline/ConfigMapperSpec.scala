@@ -131,7 +131,6 @@ class ConfigMapperSpec extends AnyFunSuite with Matchers {
       protocolServer = ProtocolServer(
         networkId = "testnet",
         host = Some("localhost"),
-        allowPrivateAddresses = true,
         useRandomPorts = true,
         dynamicIp = true,
         noUpnp = true,

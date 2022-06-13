@@ -35,7 +35,6 @@ final case class NodeConf(
 final case class ProtocolServer(
     networkId: String,
     host: Option[String],
-    allowPrivateAddresses: Boolean,
     useRandomPorts: Boolean,
     dynamicIp: Boolean,
     noUpnp: Boolean,

@@ -39,10 +39,8 @@ package object effects {
 
   def kademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
       networkId: String,
-      timeout: FiniteDuration,
-      allowPrivateAddresses: Boolean
-  )(implicit scheduler: Scheduler): KademliaRPC[F] =
-    new GrpcKademliaRPC(networkId, timeout, allowPrivateAddresses)
+      timeout: FiniteDuration
+  )(implicit scheduler: Scheduler): KademliaRPC[F] = new GrpcKademliaRPC(networkId, timeout)
 
   def transportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
       networkId: String,

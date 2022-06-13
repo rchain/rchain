@@ -47,7 +47,6 @@ class HoconConfigurationSpec extends AnyFunSuite with Matchers {
       protocolServer = ProtocolServer(
         networkId = "testnet",
         host = None,
-        allowPrivateAddresses = false,
         useRandomPorts = false,
         dynamicIp = false,
         noUpnp = false,

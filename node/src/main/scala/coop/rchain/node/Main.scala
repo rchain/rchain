@@ -86,11 +86,16 @@ object Main {
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
     for {
-      _               <- checkHost[F](nodeConf)
       confWithPorts   <- checkPorts[F](nodeConf)
       confWithDecrypt <- loadPrivateKeyFromFile[F](confWithPorts)
       _               <- Log[F].info(VersionInfo.get)
       _               <- logConfiguration[F](confWithDecrypt, profile, configFile)
+      // TODO: This check may be removed in the future after updating clients like a VSCode extension
+      _ <- Log[F]
+            .warn(
+              "allow-private-addresses option is deprecated and will be removed in future releases."
+            )
+            .whenA(options.run.allowPrivateAddresses.isSupplied)
 
       // Create node runtime
       _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
@@ -307,25 +312,6 @@ object Main {
         } yield conf.copy(casper = conf.casper.copy(validatorPrivateKey = Some(privateKeyBase16)))
       case _ => conf.pure[F]
     }
-
-  private def checkHost[F[_]: Sync: Log](conf: NodeConf): F[Unit] = {
-    import coop.rchain.comm._
-    conf.protocolServer.host.fold(().pure[F]) { h =>
-      Sync[F]
-        .delay(conf.protocolServer.allowPrivateAddresses)
-        .ifM(isValidInetAddress[F](h), isValidPublicInetAddress[F](h))
-        .ifM(
-          ().pure[F],
-          for {
-            _ <- Log[F].error(
-                  s"Kademlia hostname '$h' is not valid or it does not resolve to a public IP address"
-                )
-            _ <- Log[F].error("Hint: Run me with --allow-private-addresses in private networks")
-            _ <- Sync[F].raiseError[Unit](new Exception("Invalid Kademlia hostname"))
-          } yield ()
-        )
-    }
-  }
 
   private def checkPorts[F[_]: Sync: Log](conf: NodeConf): F[NodeConf] = {
     def getFreePort: F[Int] =
