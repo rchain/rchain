@@ -242,8 +242,8 @@ class InterpreterUtilTest
              justifications = Seq(b1.blockHash, b2.blockHash),
              deploys = b3DeploysWithCost
            )
-      _         <- step[Task](b1, genesis)
-      _         <- step[Task](b2, genesis)
+      _         <- step[Task](b1)
+      _         <- step[Task](b2)
       dag       <- blockDagStorage.getRepresentation
       postState <- validateBlockCheckpoint[Task](b3, mkCasperSnapshot(dag))
       result    = postState shouldBe Right(None)
@@ -286,10 +286,10 @@ class InterpreterUtilTest
              justifications = Seq(b2.blockHash, b4.blockHash),
              deploys = b5DeploysWithCost
            )
-      _ <- step[Task](b1, genesis)
-      _ <- step[Task](b2, genesis)
-      _ <- step[Task](b3, genesis)
-      _ <- step[Task](b4, genesis)
+      _ <- step[Task](b1)
+      _ <- step[Task](b2)
+      _ <- step[Task](b3)
+      _ <- step[Task](b4)
 
       dag       <- blockDagStorage.getRepresentation
       postState <- validateBlockCheckpoint[Task](b5, mkCasperSnapshot(dag))

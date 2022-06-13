@@ -52,8 +52,7 @@ object BlockGenerator {
       )
     )
   def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
-      block: BlockMessage,
-      genesis: BlockMessage
+      block: BlockMessage
   ): F[Unit] =
     for {
       dag                                       <- BlockDagStorage[F].getRepresentation
