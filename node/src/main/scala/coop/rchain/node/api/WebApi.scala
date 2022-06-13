@@ -336,7 +336,7 @@ object WebApi {
 
   private def rhoExprToParProto(exp: RhoExpr): Par = exp match {
     // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
-    case ExprPar(data)   => Expression(Expr().withEListBody(EList(data.map(rhoExprToParProto))))
+    case data: ExprPar   => exprParToParProto(data)
     case ExprTuple(data) => Expression(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
     case ExprList(data)  => RhoList(data.map(rhoExprToParProto))
     case ExprSet(data)   => RhoSet(data.map(rhoExprToParProto))
@@ -349,6 +349,27 @@ object WebApi {
     // Binary data is decoded from base16 string
     case ExprBytes(data)  => ByteArray(data.unsafeHexToByteString.toByteArray)
     case ExprUnforg(data) => unforgToParProto(data)
+  }
+
+  private def exprParToParProto(expr: ExprPar): Par = {
+    val exprs = expr.data.map(rhoExprToParProto)
+
+    def merge[A](f: Par => Seq[A]): Seq[A] = exprs.foldLeft(Seq.empty[A]) {
+      case (acc, p) => acc ++ f(p)
+    }
+
+    Par(
+      merge(_.sends),
+      merge(_.receives),
+      merge(_.news),
+      merge(_.exprs),
+      merge(_.matches),
+      merge(_.unforgeables),
+      merge(_.bundles),
+      merge(_.connectives),
+      exprs.headOption.getOrElse(Par()).locallyFree,
+      exprs.headOption.getOrElse(Par()).connectiveUsed
+    )
   }
 
   private def unforgToUnforgProto(unforg: RhoUnforg): GUnforgeable.UnfInstance = unforg match {
