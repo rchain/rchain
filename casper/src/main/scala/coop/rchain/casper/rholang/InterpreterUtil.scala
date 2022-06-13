@@ -48,6 +48,8 @@ object InterpreterUtil {
       implicit ev: ToEnvMap[Env]
   ): F[Par] = Compiler[F].sourceToADT(rho, normalizerEnv.toEnv)
 
+  // TODO: this is legacy code, it should be refactored with separation of errors that are
+  //  handled (with included data e.g. hash not equal) and fatal errors which should NOT be handled
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
@@ -63,37 +65,35 @@ object InterpreterUtil {
                   .map(_.map(_.blockHash))
 
       _                   <- Span[F].mark("before-compute-parents-post-state")
-      computedParentsInfo <- computeParentsPostState(parents, s).attempt
+      computedParentsInfo <- computeParentsPostState(parents, s)
       _                   <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
-      result <- computedParentsInfo match {
-                 case Left(ex) =>
-                   BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
-                 case Right((computedPreStateHash, rejectedDeploys @ _)) =>
-                   val rejectedDeployIds = rejectedDeploys.toSet
-                   if (incomingPreStateHash != computedPreStateHash) {
-                     //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
-                     Log[F]
-                       .warn(
-                         s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
-                           .buildString(incomingPreStateHash)}"
-                       )
-                       .as(none[StateHash].asRight[BlockError])
-                   } else if (rejectedDeployIds != block.rejectedDeploys.toSet) {
-                     Log[F]
-                       .warn(
-                         s"Computed rejected deploys " +
-                           s"${rejectedDeployIds.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
-                           s"block's rejected deploy " +
-                           s"${block.rejectedDeploys.map(PrettyPrinter.buildString).mkString(",")}"
-                       )
-                       .as(InvalidRejectedDeploy.asLeft)
-                   } else {
-                     for {
-                       replayResult <- replayBlock(incomingPreStateHash, block)
-                       result       <- handleErrors(block.postStateHash, replayResult)
-                     } yield result
-                   }
-               }
+      result <- {
+        val (computedPreStateHash, rejectedDeploys @ _) = computedParentsInfo
+        val rejectedDeployIds                           = rejectedDeploys.toSet
+        if (incomingPreStateHash != computedPreStateHash) {
+          //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
+          Log[F]
+            .warn(
+              s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
+                .buildString(incomingPreStateHash)}"
+            )
+            .as(none[StateHash].asRight[BlockError])
+        } else if (rejectedDeployIds != block.rejectedDeploys.toSet) {
+          Log[F]
+            .warn(
+              s"Computed rejected deploys " +
+                s"${rejectedDeployIds.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
+                s"block's rejected deploy " +
+                s"${block.rejectedDeploys.map(PrettyPrinter.buildString).mkString(",")}"
+            )
+            .as(InvalidRejectedDeploy.asLeft)
+        } else {
+          for {
+            replayResult <- replayBlock(incomingPreStateHash, block)
+            result       <- handleErrors(block.postStateHash, replayResult)
+          } yield result
+        }
+      }
     } yield result
   }
 
@@ -146,15 +146,11 @@ object InterpreterUtil {
     result.pure.flatMap {
       case Left(status) =>
         status match {
-          case InternalError(throwable) =>
-            BlockStatus
-              .exception(
-                new Exception(
-                  s"Internal errors encountered while processing deploy: ${throwable.getMessage}"
-                )
-              )
-              .asLeft[Option[StateHash]]
-              .pure
+          case InternalError(cause) =>
+            new Exception(
+              s"Internal errors encountered while processing deploy: ${cause.getMessage}",
+              cause
+            ).raiseError
           case ReplayStatusMismatch(replayFailed, initialFailed) =>
             Log[F]
               .warn(

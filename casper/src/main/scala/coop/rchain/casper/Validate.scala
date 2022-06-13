@@ -362,21 +362,14 @@ object Validate {
     val bonds          = b.bonds
     val tuplespaceHash = b.postStateHash
 
-    RuntimeManager[F].computeBonds(tuplespaceHash).attempt.flatMap {
-      case Right(computedBonds) =>
-        if (bonds.toSet == computedBonds.toSet) {
-          BlockStatus.valid.asRight[BlockError].pure
-        } else {
-          for {
-            _ <- Log[F].warn(
-                  "Bonds in proof of stake contract do not match block's bond cache."
-                )
-          } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
-        }
-      case Left(ex: Throwable) =>
+    RuntimeManager[F].computeBonds(tuplespaceHash).flatMap { computedBonds =>
+      if (bonds.toSet == computedBonds.toSet) {
+        BlockStatus.valid.asRight[BlockError].pure
+      } else {
         for {
-          _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
-        } yield BlockError.BlockException(ex).asLeft[ValidBlock]
+          _ <- Log[F].warn("Bonds in proof of stake contract do not match block's bond cache.")
+        } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
+      }
     }
   }
 
@@ -390,6 +383,6 @@ object Validate {
     if (b.state.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
       BlockStatus.valid.asRight[BlockError].pure
     } else {
-      BlockStatus.lowDeployCost.asLeft[ValidBlock].pure
+      BlockStatus.containsLowCostDeploy.asLeft[ValidBlock].pure
     }
 }

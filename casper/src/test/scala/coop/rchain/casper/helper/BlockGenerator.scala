@@ -28,13 +28,13 @@ import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 
-// TODO squash this with block generator in blockimplicits
 object BlockGenerator {
-  implicit val timeEff = new LogicalTime[Task]
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
+  implicit val timeEff              = new LogicalTime[Task]
   implicit val logSource: LogSource = LogSource(this.getClass)
+
   def mkCasperSnapshot[F[_]](dag: DagRepresentation) =
     CasperSnapshot(
       dag,
@@ -51,6 +51,7 @@ object BlockGenerator {
         Seq.empty
       )
     )
+
   def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[Unit] =
@@ -73,8 +74,8 @@ object BlockGenerator {
                  List.empty[SystemDeploy],
                  BlockData.fromBlock(b),
                  computedParentsInfo
-               ).attempt
-      Right((preStateHash, postStateHash, processedDeploys, rejectedDeploys, _)) = result
+               )
+      (preStateHash, postStateHash, processedDeploys, rejectedDeploys, _) = result
     } yield (postStateHash, processedDeploys)
   }
 

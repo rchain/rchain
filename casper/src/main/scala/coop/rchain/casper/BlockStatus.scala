@@ -3,19 +3,18 @@ package coop.rchain.casper
 sealed trait BlockStatus
 
 object BlockStatus {
-  def valid: ValidBlock                    = ValidBlock.Valid
-  def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
-  def invalidBlockNumber: BlockError       = InvalidBlock.InvalidBlockNumber
-  def invalidRepeatDeploy: BlockError      = InvalidBlock.InvalidRepeatDeploy
-  def invalidSequenceNumber: BlockError    = InvalidBlock.InvalidSequenceNumber
-  def invalidDeployShardId: BlockError     = InvalidBlock.InvalidDeployShardId
-  def justificationRegression: BlockError  = InvalidBlock.JustificationRegression
-  def neglectedInvalidBlock: BlockError    = InvalidBlock.NeglectedInvalidBlock
-  def invalidTransaction: BlockError       = InvalidBlock.InvalidTransaction
-  def invalidBondsCache: BlockError        = InvalidBlock.InvalidBondsCache
-  def containsExpiredDeploy: BlockError    = InvalidBlock.ContainsExpiredDeploy
-  def containsFutureDeploy: BlockError     = InvalidBlock.ContainsFutureDeploy
-  def lowDeployCost: BlockError            = InvalidBlock.LowDeployCost
+  def valid: ValidBlock                   = ValidBlock.Valid
+  def invalidBlockNumber: BlockError      = InvalidBlock.InvalidBlockNumber
+  def invalidRepeatDeploy: BlockError     = InvalidBlock.InvalidRepeatDeploy
+  def invalidSequenceNumber: BlockError   = InvalidBlock.InvalidSequenceNumber
+  def invalidDeployShardId: BlockError    = InvalidBlock.InvalidDeployShardId
+  def justificationRegression: BlockError = InvalidBlock.JustificationRegression
+  def neglectedInvalidBlock: BlockError   = InvalidBlock.NeglectedInvalidBlock
+  def invalidTransaction: BlockError      = InvalidBlock.InvalidTransaction
+  def invalidBondsCache: BlockError       = InvalidBlock.InvalidBondsCache
+  def containsExpiredDeploy: BlockError   = InvalidBlock.ContainsExpiredDeploy
+  def containsFutureDeploy: BlockError    = InvalidBlock.ContainsFutureDeploy
+  def containsLowCostDeploy: BlockError   = InvalidBlock.ContainsLowCostDeploy
 }
 
 sealed trait ValidBlock extends BlockStatus
@@ -23,12 +22,11 @@ object ValidBlock {
   case object Valid extends ValidBlock
 }
 
-sealed trait BlockError extends BlockStatus
-object BlockError {
-  final case class BlockException(ex: Throwable) extends BlockError
-}
-
+// TODO: legacy code, unify to one trait for blocks which failed validation
+//  - leaving this for now to minimize merge conflicts because changes are required in many files
+sealed trait BlockError   extends BlockStatus
 sealed trait InvalidBlock extends BlockError
+
 object InvalidBlock {
   case object InvalidBlockNumber      extends InvalidBlock
   case object InvalidRepeatDeploy     extends InvalidBlock
@@ -41,7 +39,7 @@ object InvalidBlock {
   case object InvalidRejectedDeploy   extends InvalidBlock
   case object ContainsExpiredDeploy   extends InvalidBlock
   case object ContainsFutureDeploy    extends InvalidBlock
-  case object LowDeployCost           extends InvalidBlock
+  case object ContainsLowCostDeploy   extends InvalidBlock
 
   val slashableOffenses: Set[InvalidBlock] =
     Set(
@@ -54,7 +52,8 @@ object InvalidBlock {
       InvalidTransaction,
       InvalidBondsCache,
       ContainsExpiredDeploy,
-      ContainsFutureDeploy
+      ContainsFutureDeploy,
+      ContainsLowCostDeploy
     )
 
   def isSlashable(invalidBlock: InvalidBlock): Boolean =
