@@ -79,27 +79,10 @@ object Blake2b256Hash {
   def fromByteString(byteString: ByteString): Blake2b256Hash =
     fromByteVector(ByteVector(byteString.toByteArray))
 
-  val codecPureBlake2b256Hash: Codec[Blake2b256Hash] = new Codec[Blake2b256Hash] {
-    val bitLength = (length * 8).toLong
-    override def decode(bits: BitVector): Attempt[DecodeResult[Blake2b256Hash]] =
-      if (bits.sizeGreaterThanOrEqual(bitLength)) {
-        Attempt.successful(
-          DecodeResult(Blake2b256Hash.create(bits.toByteVector), bits.drop(bitLength))
-        )
-      } else {
-        Attempt.failure(Err.insufficientBits(bitLength, bits.size))
-      }
-    override def encode(value: Blake2b256Hash): Attempt[BitVector] = {
-      val encoded = value.bytes.toBitVector
-      if (encoded.size != bitLength)
-        Attempt.failure(
-          Err(s"[$value] requires ${encoded.size} bits but field is fixed size of $bitLength bits")
-        )
-      else
-        Attempt.successful(encoded)
-    }
-    override def sizeBound: SizeBound = SizeBound.exact(bitLength)
-  }
+  val codecBlake2b256Hash: Codec[Blake2b256Hash] = scodec.codecs
+    .bytes(size = Blake2b256Hash.length)
+    .xmap[Blake2b256Hash](Blake2b256Hash.fromByteVector, _.bytes)
+    .as[Blake2b256Hash]
 
   implicit val codecWithBytesStringBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]

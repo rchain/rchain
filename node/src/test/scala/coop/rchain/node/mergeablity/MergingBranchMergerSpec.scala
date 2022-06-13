@@ -91,12 +91,14 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
       txDeploy    <- ConstructDeploy.sourceDeployNowF(txRho(payerAddr, payeeAddr), sec = payerKey)
       userDeploys = txDeploy :: Nil
       blockData   = BlockData(txDeploy.data.timestamp, blockNum, validator, seqNum)
-      rand = BlockRandomSeed(
-        genesis.shardId,
-        blockNum,
-        validator,
-        Blake2b256Hash.fromByteString(baseState)
-      ).generateRandomNumber
+      rand = BlockRandomSeed.generateRandomNumber(
+        BlockRandomSeed(
+          genesis.shardId,
+          blockNum,
+          validator,
+          Blake2b256Hash.fromByteString(baseState)
+        )
+      )
       systemDeploys = CloseBlockDeploy(rand.splitByte(userDeploys.length.toByte)) :: Nil
       r             <- runtimeManager.computeState(baseState)(userDeploys, rand, blockData, systemDeploys)
     } yield r

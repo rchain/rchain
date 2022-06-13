@@ -83,12 +83,14 @@ class InterpreterUtilTest
             runtimeManager
           ).flatMap(
               preState => {
-                val rand = BlockRandomSeed(
-                  genesis.shardId,
-                  blockNumber,
-                  genesisContext.validatorPks.head,
-                  Blake2b256Hash.fromByteString(preState._1)
-                ).generateRandomNumber
+                val rand = BlockRandomSeed.generateRandomNumber(
+                  BlockRandomSeed(
+                    genesis.shardId,
+                    blockNumber,
+                    genesisContext.validatorPks.head,
+                    Blake2b256Hash.fromByteString(preState._1)
+                  )
+                )
                 InterpreterUtil
                   .computeDeploysCheckpoint[F](
                     deploys,

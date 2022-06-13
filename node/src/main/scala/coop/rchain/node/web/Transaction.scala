@@ -248,12 +248,17 @@ object Transaction {
   //
   // This is not needed when onChain transfer history is implemented and deployed to new network in the future.
   def transferUnforgeable(shardId: String, validatorKey: PublicKey): Par = {
-    val rand = BlockRandomSeed(
-      shardId,
-      0,
-      validatorKey,
-      Blake2b256Hash.fromByteString(emptyStateHashFixed)
-    ).generateRandomNumber.splitByte(6.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
+    val rand = BlockRandomSeed
+      .generateRandomNumber(
+        BlockRandomSeed(
+          shardId,
+          0,
+          validatorKey,
+          Blake2b256Hash.fromByteString(emptyStateHashFixed)
+        )
+      )
+      .splitByte(6.toByte)
+      .splitByte(BlockRandomSeed.UserDeploySplitIndex)
     val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
     unfogeableBytes.toParUnforgeableName
   }

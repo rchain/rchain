@@ -124,12 +124,14 @@ object BlockCreator {
                   nextSeqNum
                 )
                 computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
-                rand = BlockRandomSeed(
-                  shardId,
-                  nextBlockNum,
-                  validatorIdentity.publicKey,
-                  Blake2b256Hash.fromByteString(computedParentsInfo._1)
-                ).generateRandomNumber
+                rand = BlockRandomSeed.generateRandomNumber(
+                  BlockRandomSeed(
+                    shardId,
+                    nextBlockNum,
+                    validatorIdentity.publicKey,
+                    Blake2b256Hash.fromByteString(computedParentsInfo._1)
+                  )
+                )
                 slashingDeploys <- slashingStatus.prepareSlashingDeploys(rand, deploys.size)
                 // make sure closeBlock is the last system Deploy
                 systemDeploys = slashingDeploys :+ CloseBlockDeploy(

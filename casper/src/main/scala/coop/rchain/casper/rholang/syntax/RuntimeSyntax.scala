@@ -148,12 +148,14 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       for {
         _                   <- runtime.setBlockData(blockData)
         genesisPreStateHash <- emptyStateHash
-        rand = BlockRandomSeed(
-          shardId,
-          blockNumber,
-          Genesis.genesisPubKey,
-          Blake2b256Hash.fromByteString(genesisPreStateHash)
-        ).generateRandomNumber
+        rand = BlockRandomSeed.generateRandomNumber(
+          BlockRandomSeed(
+            shardId,
+            blockNumber,
+            Genesis.genesisPubKey,
+            Blake2b256Hash.fromByteString(genesisPreStateHash)
+          )
+        )
         playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData, rand)
         (stateHash, processedDeploys) = playResult
       } yield (genesisPreStateHash, stateHash, processedDeploys)

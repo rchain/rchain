@@ -9,6 +9,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.ListParWithRandom
 import coop.rchain.rholang.interpreter.RhoType.Number
 import coop.rchain.rholang.interpreter.storage
+import coop.rchain.rspace.hashing.Blake2b256Hash.codecBlake2b256Hash
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.merger.ChannelChange
@@ -188,12 +189,6 @@ object RholangMergingLogic {
   final case class DeployMergeableData(channels: Seq[NumberChannel])
 
   final case class NumberChannel(hash: Blake2b256Hash, diff: Long)
-
-  val codecBlake2b256Hash: Codec[Blake2b256Hash] =
-    scodec.codecs
-      .bytes(size = Blake2b256Hash.length)
-      .xmap[Blake2b256Hash](Blake2b256Hash.fromByteVector, _.bytes)
-      .as[Blake2b256Hash]
 
   val numberChannelCodec: Codec[NumberChannel] =
     (codecBlake2b256Hash :: int64).as[NumberChannel]

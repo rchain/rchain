@@ -49,12 +49,17 @@ object StateBalances {
       runtime: RhoRuntime[F]
   ): F[Par] = {
     val revVault = {
-      val rand = BlockRandomSeed(
-        shardId,
-        0,
-        validatorKey,
-        Blake2b256Hash.fromByteString(emptyStateHashFixed)
-      ).generateRandomNumber.splitByte(6.toByte).splitByte(BlockRandomSeed.UserDeploySplitIndex)
+      val rand = BlockRandomSeed
+        .generateRandomNumber(
+          BlockRandomSeed(
+            shardId,
+            0,
+            validatorKey,
+            Blake2b256Hash.fromByteString(emptyStateHashFixed)
+          )
+        )
+        .splitByte(6.toByte)
+        .splitByte(BlockRandomSeed.UserDeploySplitIndex)
       val unfogeableBytes = rand.next()
       unfogeableBytes.toParUnforgeableName
     }

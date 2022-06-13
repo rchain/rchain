@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.effect.Sync
-import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash.codecBlake2b256Hash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Serialize._
 import coop.rchain.shared.syntax._
@@ -14,7 +14,7 @@ object ColdStoreInstances {
   type ColdKeyValueStore[F[_]] = KeyValueTypedStore[F, Blake2b256Hash, PersistedData]
 
   def coldStore[F[_]: Sync](store: KeyValueStore[F]): ColdKeyValueStore[F] =
-    store.toTypedStore(codecPureBlake2b256Hash, codecPersistedData)
+    store.toTypedStore(codecBlake2b256Hash, codecPersistedData)
 
   val codecPersistedData: Codec[PersistedData] =
     discriminated[PersistedData]
