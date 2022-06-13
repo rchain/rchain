@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Applicative
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
@@ -54,7 +55,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   def assertF(predicate: Boolean, errorMsg: => String): F[Unit] =
     Sync[F].raiseError(new IllegalStateException(errorMsg)).unlessA(predicate)
 
-  protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Seq.empty)
+  protected[this] val eventLog: Ref[F, EventLog] = Ref.unsafe(Seq.empty)
   protected[this] val produceCounter: SyncVar[Map[Produce, Int]] =
     create[Map[Produce, Int]](Map.empty.withDefaultValue(0))
 
@@ -320,8 +321,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     for {
       nextHistory   <- historyRepositoryAtom.get().reset(root)
       _             = historyRepositoryAtom.set(nextHistory)
-      _             = eventLog.take()
-      _             = eventLog.put(Seq.empty)
+      _             <- eventLog.set(Seq.empty)
       _             = produceCounter.take()
       _             = produceCounter.put(Map.empty.withDefaultValue(0))
       historyReader <- nextHistory.getHistoryReader(root)
@@ -347,8 +347,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     /*spanF.trace(createSoftCheckpointSpanLabel) */
     for {
       cache    <- storeAtom.get().snapshot
-      log      = eventLog.take()
-      _        = eventLog.put(Seq.empty)
+      log      <- eventLog.getAndSet(Seq.empty)
       pCounter = produceCounter.take()
       _        = produceCounter.put(Map.empty.withDefaultValue(0))
     } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
@@ -360,8 +359,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
         historyReader <- history.getHistoryReader(history.root)
         hotStore      <- HotStore(checkpoint.cacheSnapshot, historyReader.base)
         _             = storeAtom.set(hotStore)
-        _             = eventLog.take()
-        _             = eventLog.put(checkpoint.log)
+        _             <- eventLog.set(checkpoint.log)
         _             = produceCounter.take()
         _             = produceCounter.put(checkpoint.produceCounter)
       } yield ()
