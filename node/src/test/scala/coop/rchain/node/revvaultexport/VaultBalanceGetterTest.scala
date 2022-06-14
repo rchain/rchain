@@ -58,6 +58,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
                        )
         storeToken = RhoTrieTraverser.storeTokenUnforgeable(
           genesis.genesisBlock.shardId,
+          genesis.genesisBlock.body.state.blockNumber,
           PublicKey(genesis.genesisBlock.sender)
         )
         balances <- VaultBalanceGetter.getAllVaultBalance(

@@ -79,13 +79,13 @@ object RhoTrieTraverser {
   private def nodeMapStore(mapWithNyb: Par, storeTokenPar: Par) =
     Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenPar))))))
 
-  def storeTokenUnforgeable(shardId: String, validatorKey: PublicKey): Par = {
+  def storeTokenUnforgeable(shardId: String, blockNumber: Long, validatorKey: PublicKey): Par = {
     val TreeHashMapContractDeployIndex: Byte = 0
     val rand = BlockRandomSeed
       .generateRandomNumber(
         BlockRandomSeed(
           shardId,
-          0,
+          blockNumber,
           validatorKey,
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
         )
