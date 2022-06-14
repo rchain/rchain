@@ -82,41 +82,6 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
     } yield assert(r == ProposeResult.notBonded && b.isEmpty)
   }
 
-  it should "reject to propose if synchrony constraint is not met" in effectTest {
-    val p = new Proposer[Task](
-      // other params are permissive
-      getCasperSnapshot = getCasperSnapshotF[Task],
-      checkActiveValidator = alwaysActiveF[Task],
-      createBlock = createBlockF[Task],
-      validateBlock = alwaysSuccesfullValidation[Task],
-      proposeEffect = proposeEffect[Task](0),
-      validator = dummyValidatorIdentity
-    )
-
-    for {
-      d      <- Deferred[Task, ProposerResult]
-      pr     <- p.propose(false, d)
-      (r, b) = pr
-    } yield assert(r == ProposeResult.notEnoughBlocks && b.isEmpty)
-  }
-
-  it should "reject to propose if last finalized height constraint is not met" in effectTest {
-    val p = new Proposer[Task](
-      // other params are permissive
-      checkActiveValidator = alwaysActiveF[Task],
-      getCasperSnapshot = getCasperSnapshotF[Task],
-      createBlock = createBlockF[Task],
-      validateBlock = alwaysSuccesfullValidation[Task],
-      proposeEffect = proposeEffect[Task](0),
-      validator = dummyValidatorIdentity
-    )
-    for {
-      d      <- Deferred[Task, ProposerResult]
-      pr     <- p.propose(false, d)
-      (r, b) = pr
-    } yield assert(r == ProposeResult.tooFarAheadOfLastFinalized && b.isEmpty)
-  }
-
   it should "shut down the node if block created is not successfully replayed" in {
     an[Throwable] should be thrownBy {
       val p = new Proposer[Task](
