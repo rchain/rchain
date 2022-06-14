@@ -587,11 +587,12 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             Blake2b256Hash.fromByteString(genPostState)
           )
         )
+        deploys = deploy :: Nil
         computeStateResult <- runtimeManager.computeState(genPostState)(
                                rand,
-                               deploy :: Nil,
+                               deploys,
                                CloseBlockDeploy(
-                                 rand.splitByte(1.toByte)
+                                 rand.splitByte(deploys.length.toByte)
                                ) :: Nil,
                                blockData
                              )
@@ -640,11 +641,12 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             Blake2b256Hash.fromByteString(genPostState)
           )
         )
+        deploys = deploy0 :: Nil
         firstDeploy <- mgr
                         .computeState(genPostState)(
                           rand,
-                          deploy0 :: Nil,
-                          CloseBlockDeploy(rand.splitByte(1.toByte)) :: Nil,
+                          deploys,
+                          CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
                           blockData
                         )
                         .map(_._2)
@@ -652,7 +654,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                          .computeState(genPostState)(
                            rand,
                            deploy1 :: Nil,
-                           CloseBlockDeploy(rand.splitByte(1.toByte)) :: Nil,
+                           CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
                            blockData
                          )
                          .map(_._2)
@@ -660,7 +662,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                            .computeState(genPostState)(
                              rand,
                              deploy0 :: deploy1 :: Nil,
-                             CloseBlockDeploy(rand.splitByte(1.toByte)) :: Nil,
+                             CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
                              blockData
                            )
                            .map(_._2)
@@ -793,12 +795,13 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             Blake2b256Hash.fromByteString(genPostState)
           )
         )
+        deploys = Seq(deploy)
         newState <- runtimeManager
                      .computeState(genPostState)(
                        rand,
                        Seq(deploy),
                        Seq(
-                         CloseBlockDeploy(rand.splitByte(1.toByte))
+                         CloseBlockDeploy(rand.splitByte(deploys.length.toByte))
                        ),
                        blockData
                      )

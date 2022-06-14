@@ -92,11 +92,11 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         signedBlock2 <- node.addBlock(deploy2)
         blockData    = BlockData.fromBlock(signedBlock2)
         rand         = BlockRandomSeed.fromBlock(signedBlock2)
-
+        deployIndex  = 0
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
                  rand
-                   .splitByte(0.toByte)
+                   .splitByte(deployIndex.toByte)
                    .splitByte(BlockRandomSeed.UserDeploySplitIndex)
                    .next()
                    .toHexString

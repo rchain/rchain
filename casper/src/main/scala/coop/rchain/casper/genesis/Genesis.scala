@@ -29,6 +29,7 @@ object Genesis {
   val genesisPubKey = PublicKey(Array[Byte]())
 
   def NonNegativeMergeableTagName(shardId: String, validatorKey: PublicKey): Par = {
+    val nonNegativeContractIndex: Byte = 3
     val rand = BlockRandomSeed
       .generateRandomNumber(
         BlockRandomSeed(
@@ -38,7 +39,7 @@ object Genesis {
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
         )
       )
-      .splitByte(3.toByte)
+      .splitByte(nonNegativeContractIndex)
       .splitByte(BlockRandomSeed.UserDeploySplitIndex)
     val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
     unforgeableByte.toParUnforgeableName

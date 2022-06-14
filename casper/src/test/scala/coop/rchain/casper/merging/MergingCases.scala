@@ -64,7 +64,8 @@ class MergingCases extends AnyFlatSpec with Matchers {
             seqNum
           )
           rand                                 = BlockRandomSeed.fromBlock(genesis)
-          systemDeploys                        = CloseBlockDeploy(rand.splitByte(3.toByte)) :: Nil
+          clodeBlockDeployIndex                = 3
+          systemDeploys                        = CloseBlockDeploy(rand.splitByte(clodeBlockDeployIndex.toByte)) :: Nil
           r                                    <- runtimeManager.computeState(baseState)(rand, userDeploys, systemDeploys, blockData)
           (postStateHash, processedDeploys, _) = r
           _                                    = processedDeploys.size shouldBe 2
