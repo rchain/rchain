@@ -33,6 +33,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockVersion
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
@@ -414,22 +415,11 @@ object TestNode {
                        )
 
       shardConf = CasperShardConf(
-        faultToleranceThreshold = 0,
         shardName = genesis.shardId,
-        finalizationRate = 1,
         maxNumberOfParents = maxNumberOfParents,
-        maxParentDepth = maxParentDepth.getOrElse(Int.MaxValue),
-        synchronyConstraintThreshold = synchronyConstraintThreshold.toFloat,
-        heightConstraintThreshold = Long.MaxValue,
         // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
         // Required to enable protection from re-submitting duplicate deploys
         deployLifespan = 50,
-        blockVersion = 1,
-        configVersion = 1,
-        bondMinimum = 0,
-        bondMaximum = Long.MaxValue,
-        epochLength = 10000,
-        quarantineLength = 20000,
         minPhloPrice = 1
       )
 

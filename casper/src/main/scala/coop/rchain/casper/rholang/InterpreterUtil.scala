@@ -79,6 +79,8 @@ object InterpreterUtil {
             )
             .as(none[StateHash].asRight[BlockError])
         } else if (rejectedDeployIds != block.rejectedDeploys.toSet) {
+          // TODO: if rejected deploys are different that almost certain
+          //  hashes doesn't match also so this branch is unreachable
           Log[F]
             .warn(
               s"Computed rejected deploys " +

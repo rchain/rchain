@@ -10,8 +10,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.{CasperShardConf, PrettyPrinter, Validate}
+import coop.rchain.casper.{PrettyPrinter, Validate}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._

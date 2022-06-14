@@ -40,7 +40,6 @@ object NodeSyncing {
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       finished: Deferred[F, Unit],
-      casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
       trimState: Boolean = true
   ): F[NodeSyncing[F]] =
@@ -50,7 +49,6 @@ object NodeSyncing {
       engine = new NodeSyncing(
         finished,
         incomingBlocksQueue,
-        casperShardConf,
         validatorId,
         stateResponseQueue,
         trimState
@@ -73,7 +71,6 @@ class NodeSyncing[F[_]
 (
     finished: Deferred[F, Unit],
     incomingBlocksQueue: Queue[F, BlockMessage],
-    casperShardConf: CasperShardConf,
     validatorId: Option[ValidatorIdentity],
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
     trimState: Boolean = true

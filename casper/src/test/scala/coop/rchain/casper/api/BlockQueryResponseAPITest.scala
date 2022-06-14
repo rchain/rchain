@@ -65,8 +65,6 @@ class BlockQueryResponseAPITest
       setBonds = Map(bondsValidator).some
     )
 
-  val faultTolerance = -1f
-
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 
   // TODO: Test tsCheckpoint:
@@ -103,7 +101,6 @@ class BlockQueryResponseAPITest
               b.bonds should be(secondBlock.bonds.map(BlockApi.bondToBondInfo))
               b.blockSize should be(secondBlock.toProto.serializedSize.toString)
               b.deployCount should be(secondBlock.state.deploys.length)
-              b.faultTolerance should be(faultTolerance)
               b.justifications should be(secondBlock.justifications.map(_.toHexString))
           }
         } yield ()
@@ -189,7 +186,6 @@ class BlockQueryResponseAPITest
               blockInfo.bonds should be(secondBlock.bonds.map(BlockApi.bondToBondInfo))
               blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
               blockInfo.deployCount should be(secondBlock.state.deploys.length)
-              blockInfo.faultTolerance should be(faultTolerance)
               blockInfo.justifications should be(secondBlock.justifications.map(_.toHexString))
           }
         } yield ()

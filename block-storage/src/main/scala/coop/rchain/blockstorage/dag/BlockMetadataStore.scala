@@ -47,8 +47,7 @@ object BlockMetadataStore {
   def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
     BlockInfo(
       blockMeta.blockHash,
-      // TODO: tempo fix to support removal of parents from BlockMessage
-      blockMeta.parents.toSet ++ blockMeta.justifications,
+      blockMeta.justifications.toSet,
       blockMeta.blockNum,
       blockMeta.invalid,
       blockMeta.finalized

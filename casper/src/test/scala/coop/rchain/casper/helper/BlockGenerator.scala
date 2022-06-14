@@ -38,14 +38,12 @@ object BlockGenerator {
   // Dummy empty Casper snapshot
   val mkCasperSnapshot = CasperSnapshot(
     fringe = Seq(),
-    lca = ByteString.EMPTY,
-    tips = IndexedSeq.empty,
     justifications = Set.empty,
     deploysInScope = Set.empty,
     maxBlockNum = 0,
     maxSeqNums = Map.empty,
     OnChainCasperState(
-      CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+      CasperShardConf("", 0, 0, 0L),
       bondsMap = Map.empty,
       activeValidators = Seq.empty
     )

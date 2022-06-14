@@ -27,7 +27,7 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Par
+import coop.rchain.models.{BlockVersion, Par}
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
@@ -139,20 +139,9 @@ object Setup {
       (rnodeStateManager, rspaceStateManager) = stateManagers
 
       casperShardConf = CasperShardConf(
-        conf.casper.faultToleranceThreshold,
         conf.casper.shardName,
-        conf.casper.finalizationRate,
         conf.casper.maxNumberOfParents,
-        conf.casper.maxParentDepth.getOrElse(Int.MaxValue),
-        conf.casper.synchronyConstraintThreshold.toFloat,
-        conf.casper.heightConstraintThreshold,
-        50,
-        1,
-        1,
-        conf.casper.genesisBlockData.bondMinimum,
-        conf.casper.genesisBlockData.bondMaximum,
-        conf.casper.genesisBlockData.epochLength,
-        conf.casper.genesisBlockData.quarantineLength,
+        deployLifespan = MultiParentCasper.deployLifespan,
         conf.casper.minPhloPrice
       )
 
@@ -230,7 +219,6 @@ object Setup {
           !conf.protocolClient.disableLfs,
           conf.protocolServer.disableStateExporter,
           validatorIdentityOpt,
-          casperShardConf,
           conf.standalone
         )
       }

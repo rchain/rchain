@@ -80,13 +80,13 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
       case (lm, b) =>
         // Ignore empty sender for genesis block
         if (b.sender != ByteString.EMPTY)
-          lm.updated(b.sender, BlockMetadata.fromBlock(b, false))
+          lm.updated(b.sender, BlockMetadata.fromBlock(b))
         else
           lm
     }
     list.zip(blockElements).foreach {
       case ((blockMetadata, latestMessageHash, latestMessage, children, contains), b) =>
-        blockMetadata shouldBe Some(BlockMetadata.fromBlock(b, false))
+        blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
         latestMessageHash shouldBe realLatestMessages.get(b.sender).map(_.blockHash)
         latestMessage shouldBe realLatestMessages.get(b.sender)
         children shouldBe

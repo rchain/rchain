@@ -68,7 +68,7 @@ final class DagRepresentationOps[F[_]](
       .unfoldLoopEval(dag.latestMessagesHashes.valuesIterator.toList) { lvl =>
         for {
           out  <- lvl.filterNot(dag.isFinalized).pure
-          next <- out.traverse(bds.lookup(_).map(_.map(_.parents))).map(_.flatten.flatten)
+          next <- out.traverse(bds.lookup(_).map(_.map(_.justifications))).map(_.flatten.flatten)
         } yield (out, next.nonEmpty.guard[Option].as(next))
       }
       .flatMap(Stream.emits)
@@ -94,7 +94,7 @@ final class DagRepresentationOps[F[_]](
       .unfoldEval(List(blockHash)) { lvl =>
         val parents = lvl
           .traverse(bds.lookupUnsafe)
-          .flatMap(_.flatMap(_.parents).distinct.filterA(filterF))
+          .flatMap(_.flatMap(_.justifications).distinct.filterA(filterF))
         parents.map(p => p.nonEmpty.guard[Option].as(p, p))
       }
       .flatMap(Stream.emits)

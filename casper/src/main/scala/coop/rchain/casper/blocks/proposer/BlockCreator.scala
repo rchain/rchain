@@ -17,6 +17,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockVersion
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, Stopwatch, Time}
@@ -131,10 +132,9 @@ object BlockCreator {
                   processedDeploys,
                   rejectedDeploys,
                   processedSystemDeploys
-                )             = checkpointData
-                newBonds      <- RuntimeManager[F].computeBonds(postStateHash)
-                _             <- Span[F].mark("before-packing-block")
-                casperVersion = s.onChainState.shardConf.blockVersion
+                )        = checkpointData
+                newBonds <- RuntimeManager[F].computeBonds(postStateHash)
+                _        <- Span[F].mark("before-packing-block")
 
                 // Create block and calculate block hash
                 unsignedBlock = packageBlock(
@@ -148,7 +148,7 @@ object BlockCreator {
                   processedSystemDeploys,
                   newBonds,
                   shardId,
-                  casperVersion
+                  BlockVersion.Current
                 )
                 _ <- Span[F].mark("block-created")
 

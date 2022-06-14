@@ -1,19 +1,18 @@
 package coop.rchain.casper.engine
 
-import cats.{Applicative, Monad}
+import cats.Monad
 import cats.effect.concurrent.Ref
-import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
-import coop.rchain.casper.syntax._
-import coop.rchain.comm.PeerNode
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.{Log, Time}
 import cats.syntax.all._
 import cats.tagless.autoFunctorK
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.CommUtil
+import coop.rchain.casper.syntax._
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.Metrics
-import coop.rchain.metrics.Metrics.Source
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.{Log, Time}
 
 import scala.concurrent.duration.FiniteDuration
 

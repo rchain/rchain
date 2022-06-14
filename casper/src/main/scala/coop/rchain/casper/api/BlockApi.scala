@@ -79,33 +79,22 @@ object BlockApi {
   type Error     = String
   type ApiErr[A] = Either[Error, A]
 
-  private def getBlockInfo[A](
-      block: BlockMessage,
-      constructor: (BlockMessage, Float) => A
-  ): A = constructor(block, -1f)
-
   def getFullBlockInfo(block: BlockMessage): BlockInfo =
-    getBlockInfo[BlockInfo](block, constructBlockInfo)
+    constructBlockInfo(block)
 
   def getLightBlockInfo(block: BlockMessage): LightBlockInfo =
-    getBlockInfo[LightBlockInfo](block, constructLightBlockInfo)
+    constructLightBlockInfo(block)
 
   def bondToBondInfo(bond: (Validator, Long)): BondInfo =
     BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond._1), stake = bond._2)
 
-  private def constructBlockInfo(
-      block: BlockMessage,
-      faultTolerance: Float
-  ): BlockInfo = {
-    val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
+  private def constructBlockInfo(block: BlockMessage): BlockInfo = {
+    val lightBlockInfo = constructLightBlockInfo(block)
     val deploys        = block.state.deploys.map(_.toDeployInfo)
     BlockInfo(blockInfo = lightBlockInfo, deploys = deploys)
   }
 
-  private def constructLightBlockInfo(
-      block: BlockMessage,
-      faultTolerance: Float
-  ): LightBlockInfo =
+  private def constructLightBlockInfo(block: BlockMessage): LightBlockInfo =
     LightBlockInfo(
       shardId = block.shardId,
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
@@ -120,7 +109,6 @@ object BlockApi {
       bonds = block.bonds.map(bondToBondInfo).toList,
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.state.deploys.length,
-      faultTolerance = faultTolerance,
       justifications = block.justifications.map(PrettyPrinter.buildStringNoLimit),
       rejectedDeploys = block.rejectedDeploys.map(PrettyPrinter.buildStringNoLimit)
     )

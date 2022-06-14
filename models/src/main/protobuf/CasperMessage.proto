@@ -212,10 +212,11 @@ message BlockMetadataProto {
   int64 seqNum                  = 4;
   repeated bytes justifications = 5 [(scalapb.field).collection_type="List"];
   repeated BondProto bonds      = 6 [(scalapb.field).collection_type="List"];
-  bool invalid                  = 7; // whether the block was marked as invalid
-
+  bool validated                = 7; // whether the block is validated (processed)
+  bool invalid                  = 8; // whether the block was marked as invalid
   bool finalized                = 21; // whether the block is finalized
-  repeated bytes parents        = 22 [(scalapb.field).collection_type="List"];
+  repeated bytes fringe         = 23 [(scalapb.field).collection_type="List"];
+  bytes fringeStateHash         = 24;
 }
 
 // --------- End Internal types ---------

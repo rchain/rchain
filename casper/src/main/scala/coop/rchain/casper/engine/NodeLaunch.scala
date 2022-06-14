@@ -45,7 +45,6 @@ object NodeLaunch {
       trimState: Boolean,
       disableStateExporter: Boolean,
       validatorIdentityOpt: Option[ValidatorIdentity],
-      casperShardConf: CasperShardConf,
       standalone: Boolean
   ): F[Unit] = {
 
@@ -86,12 +85,7 @@ object NodeLaunch {
       for {
         validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
         finished    <- Deferred[F, Unit]
-        engine <- NodeSyncing[F](
-                   finished,
-                   casperShardConf,
-                   validatorId,
-                   trimState
-                 )
+        engine      <- NodeSyncing[F](finished, validatorId, trimState)
         handleMessages = packets.parEvalMapUnorderedProcBounded { pm =>
           engine.handle(pm.peer, pm.message)
         }
@@ -101,11 +95,7 @@ object NodeLaunch {
 
     def startRunningMode: F[Unit] =
       for {
-        engine <- NodeRunning[F](
-                   incomingBlocksQueue,
-                   validatorIdentityOpt,
-                   disableStateExporter
-                 )
+        engine <- NodeRunning[F](incomingBlocksQueue, validatorIdentityOpt, disableStateExporter)
         handleMessages = packets.parEvalMapUnorderedProcBounded { pm =>
           engine.handle(pm.peer, pm.message)
         }

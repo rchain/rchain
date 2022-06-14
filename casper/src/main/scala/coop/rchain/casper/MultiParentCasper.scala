@@ -3,7 +3,6 @@ package coop.rchain.casper
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
@@ -80,11 +79,6 @@ object MultiParentCasper {
 
     for {
       dag <- BlockDagStorage[F].getRepresentation
-      // TODO LCA and TIPs does not make sense with multiparent finalizer
-      t <- dag.latestMessages.map(
-            _.valuesIterator.toIndexedSeq.sortBy(_.blockNum).reverse
-          )
-      (lca, tips) = (ByteString.EMPTY, t.map(_.blockHash))
 
       // TODO: replaced when parents are removed from BlockMessage
       onChainState <- for {
@@ -138,8 +132,6 @@ object MultiParentCasper {
       fringe = dag.lastFinalizedBlockHash.toSeq
     } yield CasperSnapshot(
       fringe,
-      lca,
-      tips,
       justifications,
       deploysInScope,
       maxBlockNum,

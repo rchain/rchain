@@ -13,8 +13,6 @@ import coop.rchain.models.Validator.Validator
   */
 final case class CasperSnapshot(
     fringe: Seq[BlockHash],
-    lca: BlockHash,
-    tips: IndexedSeq[BlockHash],
     justifications: Set[BlockMetadata],
     deploysInScope: Set[Signed[DeployData]],
     maxBlockNum: Long,
@@ -29,21 +27,10 @@ final case class OnChainCasperState(
 )
 
 final case class CasperShardConf(
-    faultToleranceThreshold: Float,
     shardName: String,
-    finalizationRate: Int,
     maxNumberOfParents: Int,
-    maxParentDepth: Int,
-    synchronyConstraintThreshold: Float,
-    heightConstraintThreshold: Long,
     // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
     // Required to enable protection from re-submitting duplicate deploys
     deployLifespan: Int,
-    blockVersion: Int,
-    configVersion: Long,
-    bondMinimum: Long,
-    bondMaximum: Long,
-    epochLength: Int,
-    quarantineLength: Int,
     minPhloPrice: Long
 )

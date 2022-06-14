@@ -125,7 +125,7 @@ object Validate {
 
     for {
       _                   <- Span[F].mark("before-repeat-deploy-get-parents")
-      blockMetadata       = BlockMetadata.fromBlock(block, invalid = false)
+      blockMetadata       = BlockMetadata.fromBlock(block)
       initParents         <- ProtoUtil.getParentsMetadata(blockMetadata)
       maxBlockNumber      = ProtoUtil.maxBlockNumberMetadata(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold

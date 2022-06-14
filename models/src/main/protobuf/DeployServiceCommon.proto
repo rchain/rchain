@@ -130,7 +130,6 @@ message LightBlockInfo {
   // extra
   string blockSize      = 13;
   int32  deployCount    = 14;
-  float  faultTolerance = 15;
 
   // Rejected data
   repeated string rejectedDeploys = 16;

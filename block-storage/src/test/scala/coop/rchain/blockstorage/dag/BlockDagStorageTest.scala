@@ -47,9 +47,9 @@ trait BlockDagStorageTest
           latestMessages      <- dag.latestMessages
           _ = blockElementLookups.zip(blockElements).foreach {
             case ((blockMetadata, latestMessageHash, latestMessage), b) =>
-              blockMetadata shouldBe Some(BlockMetadata.fromBlock(b, false))
+              blockMetadata shouldBe Some(BlockMetadata.fromBlock(b))
               latestMessageHash shouldBe Some(b.blockHash)
-              latestMessage shouldBe Some(BlockMetadata.fromBlock(b, false))
+              latestMessage shouldBe Some(BlockMetadata.fromBlock(b))
           }
           _      = latestMessageHashes.size shouldBe blockElements.size + 1
           result = latestMessages.size shouldBe blockElements.size + 1

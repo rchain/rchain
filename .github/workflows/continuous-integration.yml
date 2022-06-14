@@ -284,7 +284,7 @@ jobs:
         # To learn about REMAINDER, see github/print-integration-test-selection.
         tests:
           - test_backward_compatible
-          - test_dag_correctness
+#          - test_dag_correctness
 #          - test_finalization
           - test_genesis_ceremony
           - test_propose

@@ -51,6 +51,7 @@ object InvalidBlock {
       NeglectedInvalidBlock,
       InvalidTransaction,
       InvalidBondsCache,
+      InvalidRejectedDeploy,
       ContainsExpiredDeploy,
       ContainsFutureDeploy,
       ContainsLowCostDeploy

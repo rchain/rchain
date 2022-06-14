@@ -62,7 +62,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         .map(lmSeqNumOpt => lmSeqNumOpt.isEmpty || lmSeqNumOpt.exists(block.seqNum >= _))
 
     def doInsert: F[Unit] = {
-      val blockMetadata = BlockMetadata.fromBlock(block, invalid)
+      val blockMetadata = BlockMetadata.fromBlock(block).copy(invalid = invalid)
       for {
         // Add block metadata
         _ <- blockMetadataIndex.add(blockMetadata)
