@@ -51,16 +51,16 @@ object StateBalances {
     val RevVaultContractDeployIndex: Byte = 6
     val revVault = {
       val rand = BlockRandomSeed
-        .generateRandomNumber(
+        .generateSplitRandomNumber(
           BlockRandomSeed(
             shardId,
             0,
             validatorKey,
             Blake2b256Hash.fromByteString(emptyStateHashFixed)
-          )
+          ),
+          RevVaultContractDeployIndex,
+          BlockRandomSeed.UserDeploySplitIndex
         )
-        .splitByte(RevVaultContractDeployIndex)
-        .splitByte(BlockRandomSeed.UserDeploySplitIndex)
       val unfogeableBytes = rand.next()
       unfogeableBytes.toParUnforgeableName
     }

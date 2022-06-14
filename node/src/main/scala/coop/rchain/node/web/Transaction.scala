@@ -250,16 +250,16 @@ object Transaction {
   def transferUnforgeable(shardId: String, validatorKey: PublicKey): Par = {
     val RevVaultContractDeployIndex: Byte = 6
     val rand = BlockRandomSeed
-      .generateRandomNumber(
+      .generateSplitRandomNumber(
         BlockRandomSeed(
           shardId,
           0,
           validatorKey,
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
-        )
+        ),
+        RevVaultContractDeployIndex,
+        BlockRandomSeed.UserDeploySplitIndex
       )
-      .splitByte(RevVaultContractDeployIndex)
-      .splitByte(BlockRandomSeed.UserDeploySplitIndex)
     val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
     unfogeableBytes.toParUnforgeableName
   }

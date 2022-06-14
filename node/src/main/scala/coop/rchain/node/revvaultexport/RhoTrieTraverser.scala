@@ -82,16 +82,16 @@ object RhoTrieTraverser {
   def storeTokenUnforgeable(shardId: String, blockNumber: Long, validatorKey: PublicKey): Par = {
     val TreeHashMapContractDeployIndex: Byte = 0
     val rand = BlockRandomSeed
-      .generateRandomNumber(
+      .generateSplitRandomNumber(
         BlockRandomSeed(
           shardId,
           blockNumber,
           validatorKey,
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
-        )
+        ),
+        TreeHashMapContractDeployIndex,
+        BlockRandomSeed.UserDeploySplitIndex
       )
-      .splitByte(TreeHashMapContractDeployIndex)
-      .splitByte(BlockRandomSeed.UserDeploySplitIndex)
     val target = LazyList.continually(rand.next()).drop(9).head
     target.toParUnforgeableName
   }
