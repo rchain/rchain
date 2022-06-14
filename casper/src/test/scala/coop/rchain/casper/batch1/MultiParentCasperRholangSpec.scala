@@ -70,7 +70,7 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
            |}
          """.stripMargin
 
-      def calculateUnforgeableName(block: BlockMessage): String = {
+      def calculateDeployUnforgeableName(block: BlockMessage): String = {
         val rand = BlockRandomSeed.fromBlock(block)
         rand
           .splitByte(0.toByte)
@@ -85,7 +85,7 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
         block0 <- node.addBlock(registerDeploy)
         registryId <- getDataAtPrivateChannel[Effect](
                        block0,
-                       calculateUnforgeableName(block0)
+                       calculateDeployUnforgeableName(block0)
                      )
         callDeploy <- ConstructDeploy.sourceDeployNowF(
                        callSource(registryId.head),
@@ -94,7 +94,7 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
         block1 <- node.addBlock(callDeploy)
         data <- getDataAtPrivateChannel[Effect](
                  block1,
-                 calculateUnforgeableName(block1)
+                 calculateDeployUnforgeableName(block1)
                )
         _ = data shouldBe Seq("\"Hello, World!\"")
       } yield ()
