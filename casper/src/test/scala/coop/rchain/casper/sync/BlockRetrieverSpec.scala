@@ -5,11 +5,10 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.engine
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.engine.BlockRetriever.RequestState
-import coop.rchain.casper.engine.Setup.peerNode
 import coop.rchain.casper.protocol._
-import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper._
+import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{createRPConfAsk, LogStub, TransportLayerStub}
@@ -23,6 +22,10 @@ import org.scalatest.matchers.should.Matchers
 class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
+  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
+
+  private def peerNode(name: String, port: Int): PeerNode =
+    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   val hash                 = ByteString.copyFrom("newHash", "utf-8")
   val local: PeerNode      = peerNode("src", 40400)
