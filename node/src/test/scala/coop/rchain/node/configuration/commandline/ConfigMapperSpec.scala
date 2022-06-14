@@ -29,7 +29,6 @@ class ConfigMapperSpec extends AnyFunSuite with Matchers {
         "--dynamic-ip",
         "--autogen-shard-size 111111",
         "--use-random-ports",
-        "--allow-private-addresses",
         "--network-timeout 111111seconds",
         "--discovery-port 111111",
         "--discovery-lookup-interval 111111seconds",
