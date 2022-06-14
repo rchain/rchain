@@ -100,7 +100,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
         )
       )
       systemDeploys = CloseBlockDeploy(rand.splitByte(userDeploys.length.toByte)) :: Nil
-      r             <- runtimeManager.computeState(baseState)(userDeploys, rand, blockData, systemDeploys)
+      r             <- runtimeManager.computeState(baseState)(rand, userDeploys, systemDeploys, blockData)
     } yield r
   }
 

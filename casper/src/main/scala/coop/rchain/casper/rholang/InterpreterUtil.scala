@@ -113,11 +113,11 @@ object InterpreterUtil {
         rand               = BlockRandomSeed.fromBlock(block)
         replayResultF = runtimeManager
           .replayComputeState(initialStateHash)(
-            internalDeploys,
             rand,
+            internalDeploys,
+            internalSystemDeploys,
             blockData,
-            withCostAccounting,
-            internalSystemDeploys
+            withCostAccounting
           )
         replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
                          RetryPolicies.limitRetries(3), {
@@ -228,7 +228,7 @@ object InterpreterUtil {
     spanF.trace(ComputeDeploysCheckpointMetricsSource) {
       val (preStateHash, rejectedDeploys) = computedParentsInfo
       for {
-        result                                                    <- runtimeManager.computeState(preStateHash)(deploys, rand, blockData, systemDeploys)
+        result                                                    <- runtimeManager.computeState(preStateHash)(rand, deploys, systemDeploys, blockData)
         (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (
         preStateHash,

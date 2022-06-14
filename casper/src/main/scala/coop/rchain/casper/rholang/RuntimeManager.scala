@@ -41,17 +41,17 @@ import scala.concurrent.duration.FiniteDuration
 
 trait RuntimeManager[F[_]] {
   def replayComputeState(startHash: StateHash)(
-      terms: Seq[ProcessedDeploy],
       rand: Blake2b512Random,
+      terms: Seq[ProcessedDeploy],
+      systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      withCostAccounting: Boolean,
-      systemDeploys: Seq[ProcessedSystemDeploy]
+      withCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
-      terms: Seq[Signed[DeployData]],
       rand: Blake2b512Random,
-      blockData: BlockData,
-      systemDeploys: Seq[SystemDeploy]
+      terms: Seq[Signed[DeployData]],
+      systemDeploys: Seq[SystemDeploy],
+      blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
@@ -107,10 +107,10 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     } yield runtime
 
   def computeState(startHash: StateHash)(
-      terms: Seq[Signed[DeployData]],
       rand: Blake2b512Random,
-      blockData: BlockData,
-      systemDeploys: Seq[SystemDeploy]
+      terms: Seq[Signed[DeployData]],
+      systemDeploys: Seq[SystemDeploy],
+      blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     for {
       runtime  <- spawnRuntime
@@ -162,20 +162,20 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       }
 
   def replayComputeState(startHash: StateHash)(
-      terms: Seq[ProcessedDeploy],
       rand: Blake2b512Random,
+      terms: Seq[ProcessedDeploy],
+      systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      withCostAccounting: Boolean,
-      systemDeploys: Seq[ProcessedSystemDeploy]
+      withCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
       val replayOp = replayRuntime
         .replayComputeState(startHash)(
+          rand,
           terms,
           systemDeploys,
           blockData,
-          withCostAccounting,
-          rand
+          withCostAccounting
         )
       EitherT(replayOp).semiflatMap {
         case (stateHash, mergeableChs) =>

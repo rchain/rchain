@@ -61,11 +61,11 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
     * Evaluates (and validates) deploys and System deploys with checkpoint to valiate final state hash
     */
   def replayComputeState(startHash: StateHash)(
+      rand: Blake2b512Random,
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
-      withCostAccounting: Boolean,
-      rand: Blake2b512Random
+      withCostAccounting: Boolean
   )(
       implicit sync: Sync[F],
       span: Span[F],
