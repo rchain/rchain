@@ -1,7 +1,7 @@
 package coop.rchain.casper.blocks.proposer
 
 import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -16,7 +16,6 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
-import fs2.Stream
 
 sealed abstract class ProposerResult
 object ProposerEmpty                                                         extends ProposerResult
@@ -37,16 +36,8 @@ class Proposer[F[_]: Concurrent: Log: Span](
     // base state on top of which block will be created
     getCasperSnapshot: F[CasperSnapshot],
     // propose constraint checkers
-    checkActiveValidator: (
-        CasperSnapshot,
-        ValidatorIdentity
-    ) => CheckProposeConstraintsResult,
-    checkEnoughBaseStake: CasperSnapshot => F[CheckProposeConstraintsResult],
-    checkFinalizedHeight: CasperSnapshot => F[CheckProposeConstraintsResult],
-    createBlock: (
-        CasperSnapshot,
-        ValidatorIdentity
-    ) => F[BlockCreatorResult],
+    checkActiveValidator: (CasperSnapshot, ValidatorIdentity) => F[Boolean],
+    createBlock: (CasperSnapshot, ValidatorIdentity) => F[BlockCreatorResult],
     validateBlock: (CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
     proposeEffect: BlockMessage => F[Unit],
     validator: ValidatorIdentity
@@ -56,55 +47,29 @@ class Proposer[F[_]: Concurrent: Log: Span](
   // This is the whole logic of propose
   private def doPropose(s: CasperSnapshot): F[(ProposeResult, Option[BlockMessage])] =
     Span[F].traceI("do-propose") {
-      for {
-        // check if node is allowed to propose a block
-        chk <- checkProposeConstraints(s)
-        r <- chk match {
-              case v: CheckProposeConstraintsFailure =>
-                (ProposeResult.failure(v), none[BlockMessage]).pure[F]
-              case CheckProposeConstraintsSuccess =>
-                for {
-                  b <- createBlock(s, validator)
-                  r <- b match {
-                        case NoNewDeploys =>
-                          (ProposeResult.failure(NoNewDeploys), none[BlockMessage]).pure[F]
-                        case Created(b) =>
-                          validateBlock(s, b).flatMap {
-                            case Right(v) =>
-                              proposeEffect(b) >>
-                                (ProposeResult.success(v), b.some).pure[F]
-                            case Left(v) =>
-                              Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
-                                new Throwable(
-                                  s"Validation of self created block failed with reason: $v, cancelling propose."
-                                )
-                              )
-                          }
-                      }
-                } yield r
-            }
-      } yield r
-    }
-
-  // Check if proposer can issue a block
-  private def checkProposeConstraints(
-      s: CasperSnapshot
-  ): F[CheckProposeConstraintsResult] =
-    checkActiveValidator(s, validator) match {
-      case NotBonded => CheckProposeConstraintsResult.notBonded.pure[F]
-      case _ =>
-        val work = Stream(
-          Stream.eval[F, CheckProposeConstraintsResult](checkEnoughBaseStake(s)),
-          Stream.eval[F, CheckProposeConstraintsResult](checkFinalizedHeight(s))
-        )
-        work
-          .parJoin(2)
-          .compile
-          .toList
-          // pick some result that is not Success, or return Success
-          .map(
-            _.find(_ != CheckProposeConstraintsSuccess).getOrElse(CheckProposeConstraintsSuccess)
-          )
+      // check if node is allowed to propose a block
+      checkActiveValidator(s, validator).ifM(
+        for {
+          b <- createBlock(s, validator)
+          r <- b match {
+                case NoNewDeploys =>
+                  (ProposeResult.failure(NoNewDeploys), none[BlockMessage]).pure[F]
+                case Created(b) =>
+                  validateBlock(s, b).flatMap {
+                    case Right(v) =>
+                      proposeEffect(b) >>
+                        (ProposeResult.success(v), b.some).pure[F]
+                    case Left(v) =>
+                      Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
+                        new Exception(
+                          s"Validation of self created block failed with reason: $v, cancelling propose."
+                        )
+                      )
+                  }
+              }
+        } yield r,
+        (ProposeResult.failure(NotBonded), none[BlockMessage]).pure[F]
+      )
     }
 
   def propose(
@@ -148,7 +113,6 @@ object Proposer {
   // format: off
   def apply[F[_]
     /* Execution */   : Concurrent: Timer: Time
-    /* Casper */      : SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
     /* Storage */     : BlockStore: BlockDagStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
     /* Comm */        : CommUtil: RuntimeManager
@@ -166,22 +130,8 @@ object Proposer {
     val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasper.validate(b, s)
 
     val checkValidatorIsActive = (s: CasperSnapshot, validator: ValidatorIdentity) =>
-      if (s.onChainState.activeValidators.contains(ByteString.copyFrom(validator.publicKey.bytes)))
-        CheckProposeConstraintsSuccess
-      else
-        NotBonded
-
-    val checkEnoughBaseStake = (s: CasperSnapshot) =>
-      SynchronyConstraintChecker[F].check(
-        s,
-        RuntimeManager[F],
-        validatorIdentity
-      )
-
-    val checkLastFinalizedHeightConstraint = (s: CasperSnapshot) =>
-      LastFinalizedHeightConstraintChecker[F].check(
-        s,
-        validatorIdentity
+      Sync[F].delay(
+        s.onChainState.activeValidators.contains(ByteString.copyFrom(validator.publicKey.bytes))
       )
 
     val proposeEffect = (b: BlockMessage) =>
@@ -197,8 +147,6 @@ object Proposer {
     new Proposer(
       getCasperSnapshotSnapshot,
       checkValidatorIsActive,
-      checkEnoughBaseStake,
-      checkLastFinalizedHeightConstraint,
       createBlock,
       validateBlock,
       proposeEffect,

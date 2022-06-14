@@ -25,13 +25,11 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
   def getCasperSnapshotF[F[_]: Applicative]: F[CasperSnapshot] =
     Resources.mkDummyCasperSnapshot
 
-  def alwaysNotActiveF[F[_]: Applicative]
-      : (CasperSnapshot, ValidatorIdentity) => CheckProposeConstraintsResult =
-    (_: CasperSnapshot, _: ValidatorIdentity) => CheckProposeConstraintsResult.notBonded
+  def alwaysNotActiveF[F[_]: Applicative]: (CasperSnapshot, ValidatorIdentity) => F[Boolean] =
+    (_: CasperSnapshot, _: ValidatorIdentity) => false.pure[F]
 
-  def alwaysActiveF[F[_]: Applicative]
-      : (CasperSnapshot, ValidatorIdentity) => CheckProposeConstraintsResult =
-    (_: CasperSnapshot, _: ValidatorIdentity) => CheckProposeConstraintsResult.success
+  def alwaysActiveF[F[_]: Applicative]: (CasperSnapshot, ValidatorIdentity) => F[Boolean] =
+    (_: CasperSnapshot, _: ValidatorIdentity) => true.pure[F]
 
   def alwaysNotEnoughBlocksF[F[_]: Applicative]
       : CasperSnapshot => F[CheckProposeConstraintsResult] =
@@ -71,9 +69,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
     val p = new Proposer[Task](
       checkActiveValidator = alwaysNotActiveF[Task],
       // other params are permissive
-      checkEnoughBaseStake = okProposeConstraint[Task],
       getCasperSnapshot = getCasperSnapshotF[Task],
-      checkFinalizedHeight = okProposeConstraint[Task],
       createBlock = createBlockF[Task],
       validateBlock = alwaysSuccesfullValidation[Task],
       proposeEffect = proposeEffect[Task](0),
@@ -89,11 +85,9 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
 
   it should "reject to propose if synchrony constraint is not met" in effectTest {
     val p = new Proposer[Task](
-      checkEnoughBaseStake = alwaysNotEnoughBlocksF[Task], // synchrony constraint is not met
       // other params are permissive
       getCasperSnapshot = getCasperSnapshotF[Task],
       checkActiveValidator = alwaysActiveF[Task],
-      checkFinalizedHeight = okProposeConstraint[Task],
       createBlock = createBlockF[Task],
       validateBlock = alwaysSuccesfullValidation[Task],
       proposeEffect = proposeEffect[Task](0),
@@ -109,10 +103,8 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
 
   it should "reject to propose if last finalized height constraint is not met" in effectTest {
     val p = new Proposer[Task](
-      checkFinalizedHeight = alwaysTooFarAheadF[Task],
       // other params are permissive
       checkActiveValidator = alwaysActiveF[Task],
-      checkEnoughBaseStake = okProposeConstraint[Task],
       getCasperSnapshot = getCasperSnapshotF[Task],
       createBlock = createBlockF[Task],
       validateBlock = alwaysSuccesfullValidation[Task],
@@ -131,9 +123,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
       val p = new Proposer[Task](
         validateBlock = alwaysUnsuccesfullValidation[Task],
         // other params are permissive
-        checkFinalizedHeight = okProposeConstraint[Task],
         checkActiveValidator = alwaysActiveF[Task],
-        checkEnoughBaseStake = okProposeConstraint[Task],
         getCasperSnapshot = getCasperSnapshotF[Task],
         createBlock = createBlockF[Task],
         proposeEffect = proposeEffect[Task](0),
@@ -150,9 +140,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
   it should "execute propose effects if block created successfully replayed" in effectTest {
     val p = new Proposer[Task](
       validateBlock = alwaysSuccesfullValidation[Task],
-      checkFinalizedHeight = okProposeConstraint[Task],
       checkActiveValidator = alwaysActiveF[Task],
-      checkEnoughBaseStake = okProposeConstraint[Task],
       getCasperSnapshot = getCasperSnapshotF[Task],
       createBlock = createBlockF[Task],
       proposeEffect = proposeEffect[Task](10),

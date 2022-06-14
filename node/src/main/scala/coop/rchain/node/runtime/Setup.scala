@@ -93,17 +93,6 @@ object Setup {
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
-      synchronyConstraintChecker = {
-        implicit val bs  = blockStore
-        implicit val bds = blockDagStorage
-        SynchronyConstraintChecker[F]
-      }
-      lastFinalizedHeightConstraintChecker = {
-        implicit val bs  = blockStore
-        implicit val bds = blockDagStorage
-        LastFinalizedHeightConstraintChecker[F]
-      }
-
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
@@ -176,7 +165,6 @@ object Setup {
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
         implicit val ep           = eventPublisher
-        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
         val dummyDeployerKeyOpt   = conf.dev.deployerPrivateKey
         val dummyDeployerKey      = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))

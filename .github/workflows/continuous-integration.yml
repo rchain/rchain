@@ -294,7 +294,6 @@ jobs:
 #          - test_slash_justification_not_correct
           - test_slash_GHOST_disobeyed
           - test_storage
-          - test_synchrony_constraint
           - test_wallets
 #          - REMAINDER # Do not modify/remove!
     env:

@@ -9,7 +9,6 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
@@ -21,7 +20,6 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.ski._
@@ -73,8 +71,6 @@ case class TestNode[F[_]: Sync: Timer](
     rhoHistoryRepositoryEffect: RhoHistoryRepository[F],
     logEffect: LogStub[F],
     requestedBlocksEffect: RequestedBlocks[F],
-    syncConstraintCheckerEffect: SynchronyConstraintChecker[F],
-    lastFinalizedHeightCheckerEffect: LastFinalizedHeightConstraintChecker[F],
     timeEffect: Time[F],
     transportLayerEffect: TransportLayerTestImpl[F],
     connectionsCellEffect: Ref[F, Connections],
@@ -91,24 +87,22 @@ case class TestNode[F[_]: Sync: Timer](
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
   val apiMaxBlocksLimit              = 50
 
-  implicit val requestedBlocks: RequestedBlocks[F]            = requestedBlocksEffect
-  implicit val logEff: LogStub[F]                             = logEffect
-  implicit val blockStore: BlockStore[F]                      = blockStoreEffect
-  implicit val approvedStore: ApprovedStore[F]                = approvedStoreEffect
-  implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
-  implicit val cu: CommUtil[F]                                = commUtilEffect
-  implicit val br: BlockRetriever[F]                          = blockRetrieverEffect
-  implicit val me: Metrics[F]                                 = metricEffect
-  implicit val sp: Span[F]                                    = spanEffect
-  implicit val runtimeManager: RuntimeManager[F]              = runtimeManagerEffect
-  implicit val rhoHistoryRepository: RhoHistoryRepository[F]  = rhoHistoryRepositoryEffect
-  implicit val scch: SynchronyConstraintChecker[F]            = syncConstraintCheckerEffect
-  implicit val lfhch: LastFinalizedHeightConstraintChecker[F] = lastFinalizedHeightCheckerEffect
-  implicit val t: Time[F]                                     = timeEffect
-  implicit val transportLayerEff: TransportLayerTestImpl[F]   = transportLayerEffect
-  implicit val connectionsCell: Ref[F, Connections]           = connectionsCellEffect
-  implicit val rp: RPConfAsk[F]                               = rpConfAskEffect
-  implicit val ep: EventPublisher[F]                          = eventPublisherEffect
+  implicit val requestedBlocks: RequestedBlocks[F]           = requestedBlocksEffect
+  implicit val logEff: LogStub[F]                            = logEffect
+  implicit val blockStore: BlockStore[F]                     = blockStoreEffect
+  implicit val approvedStore: ApprovedStore[F]               = approvedStoreEffect
+  implicit val blockDagStorage: BlockDagStorage[F]           = blockDagStorageEffect
+  implicit val cu: CommUtil[F]                               = commUtilEffect
+  implicit val br: BlockRetriever[F]                         = blockRetrieverEffect
+  implicit val me: Metrics[F]                                = metricEffect
+  implicit val sp: Span[F]                                   = spanEffect
+  implicit val runtimeManager: RuntimeManager[F]             = runtimeManagerEffect
+  implicit val rhoHistoryRepository: RhoHistoryRepository[F] = rhoHistoryRepositoryEffect
+  implicit val t: Time[F]                                    = timeEffect
+  implicit val transportLayerEff: TransportLayerTestImpl[F]  = transportLayerEffect
+  implicit val connectionsCell: Ref[F, Connections]          = connectionsCellEffect
+  implicit val rp: RPConfAsk[F]                              = rpConfAskEffect
+  implicit val ep: EventPublisher[F]                         = eventPublisherEffect
 
   val finalizedFringe = FinalizedFringe(Seq(genesis.blockHash), genesis.postStateHash)
 
@@ -440,18 +434,15 @@ object TestNode {
       )
 
       node <- Resource.eval({
-               implicit val bs                         = blockStore
-               implicit val as                         = approvedStore
-               implicit val bds                        = blockDagStorage
-               implicit val rm                         = runtimeManager
-               implicit val rhr                        = runtimeManager.getHistoryRepo
-               implicit val logEff                     = new LogStub[F](Log.log[F])
-               implicit val timeEff                    = logicalTime
-               implicit val connectionsCell            = Ref.unsafe[F, Connections](Connect.Connections.empty)
-               implicit val transportLayerEff          = tle
-               implicit val synchronyConstraintChecker = SynchronyConstraintChecker[F]
-               implicit val lastFinalizedHeightConstraintChecker =
-                 LastFinalizedHeightConstraintChecker[F]
+               implicit val bs                    = blockStore
+               implicit val as                    = approvedStore
+               implicit val bds                   = blockDagStorage
+               implicit val rm                    = runtimeManager
+               implicit val rhr                   = runtimeManager.getHistoryRepo
+               implicit val logEff                = new LogStub[F](Log.log[F])
+               implicit val timeEff               = logicalTime
+               implicit val connectionsCell       = Ref.unsafe[F, Connections](Connect.Connections.empty)
+               implicit val transportLayerEff     = tle
                implicit val rpConfAsk             = createRPConfAsk[F](currentPeerNode)
                implicit val eventBus              = EventPublisher.noop[F]
                implicit val commUtil: CommUtil[F] = CommUtil.of[F]
@@ -523,8 +514,6 @@ object TestNode {
                    timeEffect = timeEff,
                    connectionsCellEffect = connectionsCell,
                    transportLayerEffect = transportLayerEff,
-                   syncConstraintCheckerEffect = synchronyConstraintChecker,
-                   lastFinalizedHeightCheckerEffect = lastFinalizedHeightConstraintChecker,
                    rpConfAskEffect = rpConfAsk,
                    eventPublisherEffect = eventBus,
                    commUtilEffect = commUtil,

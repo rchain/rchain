@@ -112,9 +112,7 @@ object Setup {
     implicit val blockDagStorage = BlockDagKeyValueStorage
       .create(kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
-    implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
-    implicit val blockRetriever                 = BlockRetriever.of[Task]
+    implicit val blockRetriever = BlockRetriever.of[Task]
 
     implicit val blockProcessingQueue = Queue
       .unbounded[Task, BlockMessage]
