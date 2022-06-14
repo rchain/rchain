@@ -1,6 +1,5 @@
 package coop.rchain.casper
 
-import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
@@ -13,7 +12,6 @@ import coop.rchain.models.Validator.Validator
   * as well as for validating blocks.
   */
 final case class CasperSnapshot(
-    dag: DagRepresentation,
     fringe: Seq[BlockHash],
     lca: BlockHash,
     tips: IndexedSeq[BlockHash],

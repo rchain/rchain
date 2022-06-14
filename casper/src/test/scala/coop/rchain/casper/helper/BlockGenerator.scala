@@ -35,29 +35,27 @@ object BlockGenerator {
   implicit val timeEff              = new LogicalTime[Task]
   implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def mkCasperSnapshot[F[_]](dag: DagRepresentation) =
-    CasperSnapshot(
-      dag,
-      Seq(),
-      ByteString.EMPTY,
-      IndexedSeq.empty,
-      Set.empty,
-      Set.empty,
-      0,
-      Map.empty,
-      OnChainCasperState(
-        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        Map.empty,
-        Seq.empty
-      )
+  // Dummy empty Casper snapshot
+  val mkCasperSnapshot = CasperSnapshot(
+    fringe = Seq(),
+    lca = ByteString.EMPTY,
+    tips = IndexedSeq.empty,
+    justifications = Set.empty,
+    deploysInScope = Set.empty,
+    maxBlockNum = 0,
+    maxSeqNums = Map.empty,
+    OnChainCasperState(
+      CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+      bondsMap = Map.empty,
+      activeValidators = Seq.empty
     )
+  )
 
   def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[Unit] =
     for {
-      dag                                       <- BlockDagStorage[F].getRepresentation
-      computeBlockCheckpointResult              <- computeBlockCheckpoint(block, mkCasperSnapshot(dag))
+      computeBlockCheckpointResult              <- computeBlockCheckpoint(block, mkCasperSnapshot)
       (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
       result                                    <- injectPostStateHash[F](block, postB1StateHash, postB1ProcessedDeploys)
     } yield result

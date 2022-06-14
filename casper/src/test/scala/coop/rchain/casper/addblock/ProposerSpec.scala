@@ -7,7 +7,6 @@ import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.rholang.Resources
 import coop.rchain.casper.util.GenesisBuilder.randomValidatorSks
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{NoopSpan, Span}
@@ -23,7 +22,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
 
   /** declarations of input functions for proposer */
   def getCasperSnapshotF[F[_]: Applicative]: F[CasperSnapshot] =
-    Resources.mkDummyCasperSnapshot
+    mkCasperSnapshot.pure[F]
 
   def alwaysNotActiveF[F[_]: Applicative]: (CasperSnapshot, ValidatorIdentity) => F[Boolean] =
     (_: CasperSnapshot, _: ValidatorIdentity) => false.pure[F]

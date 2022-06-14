@@ -137,7 +137,6 @@ object MultiParentCasper {
       }
       fringe = dag.lastFinalizedBlockHash.toSeq
     } yield CasperSnapshot(
-      dag,
       fringe,
       lca,
       tips,

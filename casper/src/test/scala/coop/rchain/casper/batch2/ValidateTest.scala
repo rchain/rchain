@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
@@ -53,23 +53,6 @@ class ValidateTest
   implicit val span: Span[Task]       = NoopSpan[Task]()
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]()
   implicit val s                      = Sync[Task]
-
-  def mkCasperSnapshot[F[_]](dag: DagRepresentation) =
-    CasperSnapshot(
-      dag,
-      Seq(),
-      ByteString.EMPTY,
-      IndexedSeq.empty,
-      Set.empty,
-      Set.empty,
-      0,
-      Map.empty,
-      OnChainCasperState(
-        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        Map.empty,
-        Seq.empty
-      )
-    )
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -195,7 +178,6 @@ class ValidateTest
       for {
         chain <- createChain[Task](1)
         block = chain(0)
-        dag   <- blockDagStorage.getRepresentation
         _ <- Validate
               .blockNumber[Task](block.copy(blockNumber = 1)) shouldBeF Left(
               InvalidBlockNumber
@@ -254,7 +236,6 @@ class ValidateTest
         b1      <- createBlockWithNumber(v1)
         b2      <- createBlockWithNumber(v2)
         b3      <- createBlockWithNumber(v2, Seq(b1, b2))
-        dag     <- blockDagStorage.getRepresentation
         s1      <- Validate.blockNumber[Task](b3)
         _       = s1 shouldBe Right(Valid)
         s2      <- Validate.blockNumber[Task](b3.copy(blockNumber = 4))
@@ -364,7 +345,6 @@ class ValidateTest
         chain  <- createChain[Task](2)
         block  = chain(0)
         block2 = chain(1)
-        dag    <- blockDagStorage.getRepresentation
         _      <- Validate.repeatDeploy[Task](block, 50) shouldBeF Right(Valid)
         _      <- Validate.repeatDeploy[Task](block2, 50) shouldBeF Right(Valid)
       } yield ()
@@ -376,7 +356,6 @@ class ValidateTest
         deploy  <- ConstructDeploy.basicProcessedDeploy[Task](0)
         genesis <- createGenesis[Task](deploys = Seq(deploy))
         block1  <- createBlock[Task](justifications = Seq(genesis.blockHash), deploys = Seq(deploy))
-        dag     <- blockDagStorage.getRepresentation
         _ <- Validate.repeatDeploy[Task](block1, 50) shouldBeF Left(
               InvalidRepeatDeploy
             )
@@ -491,8 +470,7 @@ class ValidateTest
         result <- {
           implicit val rm = runtimeManager
           for {
-            dag             <- blockDagStorage.getRepresentation
-            _               <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag))
+            _               <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, mkCasperSnapshot)
             _               <- Validate.bondsCache[Task](genesis) shouldBeF Right(Valid)
             modifiedBonds   = Map.empty[Validator, Long]
             modifiedGenesis = genesis.copy(bonds = modifiedBonds)

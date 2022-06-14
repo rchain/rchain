@@ -3,16 +3,14 @@ package coop.rchain.casper.genesis
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.DagRepresentation
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.{InterpreterUtil, Resources, RuntimeManager}
 import coop.rchain.casper.util.{BondsParser, GenesisBuilder, VaultParser}
-import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState, ValidatorIdentity}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -35,23 +33,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
 
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = NoopSpan[Task]()
-
-  def mkCasperSnapshot(dag: DagRepresentation) =
-    CasperSnapshot(
-      dag,
-      Seq(),
-      ByteString.EMPTY,
-      IndexedSeq.empty,
-      Set.empty,
-      Set.empty,
-      0,
-      Map.empty,
-      OnChainCasperState(
-        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        Map.empty,
-        Seq.empty
-      )
-    )
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -199,14 +180,10 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                         implicitly[Concurrent[Task]],
                         log
                       )
-            _   <- blockDagStorage.insert(genesis, false, approved = true)
-            _   <- BlockStore[Task].put(genesis.blockHash, genesis)
-            dag <- blockDagStorage.getRepresentation
+            _ <- blockDagStorage.insert(genesis, false, approved = true)
+            _ <- BlockStore[Task].put(genesis.blockHash, genesis)
             maybePostGenesisStateHash <- InterpreterUtil
-                                          .validateBlockCheckpoint[Task](
-                                            genesis,
-                                            mkCasperSnapshot(dag)
-                                          )
+                                          .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot)
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }
   }

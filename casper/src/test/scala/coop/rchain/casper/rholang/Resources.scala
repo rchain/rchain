@@ -1,13 +1,10 @@
 package coop.rchain.casper.rholang
 
+import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
-import cats.{Applicative, Parallel}
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
-import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.Par
@@ -104,23 +101,5 @@ object Resources {
       .walk(src)
       .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
   }
-
-  def mkDummyCasperSnapshot[F[_]: Applicative]: F[CasperSnapshot] = {
-    CasperSnapshot(
-      DagRepresentation.empty,
-      Seq(),
-      ByteString.EMPTY,
-      IndexedSeq.empty,
-      Set.empty,
-      Set.empty,
-      0,
-      Map.empty,
-      OnChainCasperState(
-        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        Map.empty,
-        Seq.empty
-      )
-    )
-  }.pure[F]
 
 }

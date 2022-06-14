@@ -278,8 +278,9 @@ object InterpreterUtil {
                                          _.map(_.postStateHash)
                                        )
             lfbState = fringePostStateHashOpt.getOrElse(emptyStateHashFixed).toBlake2b256Hash
+            dag      <- BlockDagStorage[F].getRepresentation
             r <- DagMerger.merge[F](
-                  s.dag,
+                  dag,
                   s.fringe,
                   lfbState,
                   blockIndexF(_).map(_.deployChains),
