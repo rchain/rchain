@@ -393,31 +393,40 @@ in {
                   } |
                   // Public method allowing users to bond and become validators.
                   contract PoS(@"bond", @deployerId, @amount, returnCh) = {
-                    new userCh, depositCh,
-                        processCh
+                    new userCh, depositCh, processCh, 
+                        deployerPubKeyBytesCh, DeployerIdOps(`rho:rchain:deployerId:ops`)
                     in {
                       runMVar!(*stateCh, *processCh, *returnCh) |
                       getUser!(deployerId, *userCh) |
-                      for (@state, resultCh <- processCh &
-                          @userPk          <- userCh) {
-                        if (state.get("allBonds").contains(userPk)) {
-                          resultCh!(state, (false, "Public key is already bonded."))
-                        } else if (amount < $$minimumBond$$) {
-                          resultCh!(state, (false, "Bond is less than minimum!"))
-                        } else if (amount > $$maximumBond$$) {
-                          resultCh!(state, (false, "Bond is greater than maximum!"))
-                        } else {
-                          // Transfers user's bond amount to the PoS vault.
-                          deposit!(deployerId, amount, posVaultAddr, *depositCh) |
-                          for (@depositResult <- depositCh) {
-                            match depositResult {
-                              // If deposit is successful, the user becomes a bonded validator.
-                              (true, _) => {
-                                resultCh!(state.set("allBonds", state.get("allBonds").set(userPk, amount)), depositResult)
-                              }
-                              // If deposit is unsuccessful, the user is not bonded.
-                              (false, errorMsg) => {
-                                resultCh!(state, (false, "Bond deposit failed: " ++ errorMsg))
+                      DeployerIdOps!("pubKeyBytes", deployerId, *deployerPubKeyBytesCh) |
+                      for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
+                        for (@state, resultCh <- processCh &
+                            @userPk          <- userCh) {
+                          for (@bondingWhiteList <<- bondingWhiteListCh){
+                            if (state.get("allBonds").contains(userPk)) {
+                              resultCh!(state, (false, "Public key is already bonded."))
+                            } else if (amount < $$minimumBond$$) {
+                              resultCh!(state, (false, "Bond is less than minimum!"))
+                            } else if (amount > $$maximumBond$$) {
+                              resultCh!(state, (false, "Bond is greater than maximum!"))
+                            } else if (not bondingWhiteList.contains(deployerPubKeyBytes.bytesToHex())) {
+                              resultCh!(state, (false, "The deployer is not in bonding white list!"))
+                            } else if (bondingWhiteList.getOrElse(deployerPubKeyBytes.bytesToHex(), Nil) != amount){
+                              resultCh!(state, (false, "The bonding amount is not equal the number in bonding white list!"))
+                            } else {
+                              // Transfers user's bond amount to the PoS vault.
+                              deposit!(deployerId, amount, posVaultAddr, *depositCh) |
+                              for (@depositResult <- depositCh) {
+                                match depositResult {
+                                  // If deposit is successful, the user becomes a bonded validator.
+                                  (true, _) => {
+                                    resultCh!(state.set("allBonds", state.get("allBonds").set(userPk, amount)), depositResult)
+                                  }
+                                  // If deposit is unsuccessful, the user is not bonded.
+                                  (false, errorMsg) => {
+                                    resultCh!(state, (false, "Bond deposit failed: " ++ errorMsg))
+                                  }
+                                }
                               }
                             }
                           }
