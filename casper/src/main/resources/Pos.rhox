@@ -95,8 +95,9 @@ new
   systemContractManagerCh,
   dispatcherCh,
   configPublicKeyCheckCh,
-  epochBlockNumberCh,
-  checkAuth
+  epochBlockNumberCh, // epochBlockNumberCh is a channel store epoch block Number. Coop could set this value.
+  checkAuth,
+  bondingWhiteListCh
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -192,6 +193,8 @@ in {
                 new stateCh, rewardsInfo, calTotalActiveBonds,
                     accumulateSndNum, accumulateFstOfSndArg, accumulateItemInState in {
                   epochBlockNumberCh!(Nil)|
+                  // bondingWhiteListCh store Map[PublicKey, Int]
+                  bondingWhiteListCh!({}) |
                   // Initializes PoS state structure.
                   stateCh!({
                     // Map[PublicKey, Int] - each validator stake
@@ -323,13 +326,48 @@ in {
                   contract PoS(@"setEpochBLockNumber", @deployerId, @blockNumber, ret) = {
                     new authRet in {
                       checkAuth!(*posVaultPubKey, deployerId, *authRet)|
-                      for (@res <- authRet){
-                        if (res){
+                      for (@isValid <- authRet){
+                        if (isValid){
                           for (@oldValue <- epochBlockNumberCh){
-                            epochBlockNumberCh!(blockNumber)
+                            epochBlockNumberCh!(blockNumber) |
+                            ret!((true, Nil))
                           }
                         } else {
                           ret!((false, "You have no permissions to set epoch blockNumber"))
+                        }
+                      }
+                    }
+                  } |
+                  contract PoS(@"addBondingRequest", @deployerId, @publicKey, @stake, ret) = {
+                    new authRet in {
+                      checkAuth!(*posVaultPubKey, deployerId, *authRet)|
+                      for (@isValid <- authRet){
+                        if (isValid){
+                          for (@bondingWhiteList <- bondingWhiteListCh){
+                            bondingWhiteListCh!(bondingWhiteList.set(publicKey, stake))|
+                            ret!((true, Nil))
+                          }
+                        } else {
+                          ret!((false, "You have no permissions to set Bonding white list"))
+                        }
+                      }
+                    }
+                  } |
+                  contract PoS(@"removeBondingRequest", @deployerId, @publicKey, ret) = {
+                    new authRet in {
+                      checkAuth!(*posVaultPubKey, deployerId, *authRet)|
+                      for (@isValid <- authRet){
+                        if (isValid){
+                          for (@bondingWhiteList <- bondingWhiteListCh){
+                            if (bondingWhiteList.contains(publicKey)){
+                              bondingWhiteListCh!(bondingWhiteList.delete(publicKey))|
+                              ret!((true, Nil))
+                            } else {
+                              ret!((false, "The public key you provide is not in bonding white list"))
+                            }
+                          }
+                        } else {
+                          ret!((false, "You have no permissions to remove Bonding white list"))
                         }
                       }
                     }
