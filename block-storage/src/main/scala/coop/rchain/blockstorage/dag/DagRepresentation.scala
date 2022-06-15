@@ -58,17 +58,6 @@ final case class DagRepresentation(
 }
 
 object DagRepresentation {
-  def empty: DagRepresentation =
-    DagRepresentation(
-      Set.empty[BlockHash],
-      Map.empty[Validator, BlockHash],
-      Map.empty[BlockHash, Set[BlockHash]],
-      SortedMap.empty[Long, Set[BlockHash]],
-      none[BlockHash],
-      Set.empty[BlockHash],
-      DagMessageState(Set[Message[BlockHash, Validator]]())
-    )
-
   def lastFinalizedBlockUnsafe[F[_]: Sync](dr: DagRepresentation): F[BlockHash] = {
     val errMsg =
       "DagState does not contain lastFinalizedBlock. Are you calling this on empty BlockDagStorage? Otherwise there is a bug."
