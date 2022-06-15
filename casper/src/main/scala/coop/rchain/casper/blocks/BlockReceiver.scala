@@ -42,7 +42,7 @@ object BlockReceiverState {
   * It consist of three events. Two to store blocks (begin and end) to prevent race when
   * storing blocks and finished when block is validated and added to the DAG (end of processing).
   */
-final case class BlockReceiverState[MId: Show](
+final case class BlockReceiverState[MId: Show] private (
     /**
       * Blocks received and stored in BlockStore (not validated) with parent relations
       */
