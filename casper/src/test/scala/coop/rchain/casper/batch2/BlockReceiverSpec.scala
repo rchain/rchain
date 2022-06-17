@@ -47,10 +47,13 @@ class BlockReceiverSpec
     } yield res
   }
 
+  private def makeDeploy =
+    ConstructDeploy.sourceDeployNowF("new x in { x!(0) }", shardId = genesis.genesisBlock.shardId)
+
   private def makeBlock(node: TestNode[Task]): Task[BlockMessage] =
-    ConstructDeploy
-      .sourceDeployNowF("new x in { x!(0) }", shardId = genesis.genesisBlock.shardId) >>= (node
-      .createBlockUnsafe(_))
+    makeDeploy >>= (node.createBlockUnsafe(_))
+
+  private def addBlock(node: TestNode[Task]): Task[BlockMessage] = makeDeploy >>= (node.addBlock(_))
 
   it should "pass correct block to output stream" in {
     withBlockReceiverEnv("root") {
@@ -90,6 +93,16 @@ class BlockReceiverSpec
       case (incomingQueue, outStream, node) =>
         for {
           block <- makeBlock(node).map(_.copy(sig = "abc".unsafeHexToByteString))
+          _     <- incomingQueue.enqueue1(block)
+        } yield outStream should notEmit
+    }
+  }
+
+  it should "discard known block" in {
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, outStream, node) =>
+        for {
+          block <- addBlock(node)
           _     <- incomingQueue.enqueue1(block)
         } yield outStream should notEmit
     }
