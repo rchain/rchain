@@ -82,6 +82,7 @@ object ConfigMapper {
       add("casper.genesis-block-data.quarantine-length", run.quarantineLength)
       add("casper.genesis-block-data.number-of-active-validators", run.numberOfActiveValidators)
       add("casper.genesis-block-data.pos-vault-pub-key", run.posVaultPubKey)
+      add("casper.genesis-block-data.system-contract-pub-key", run.systemContractPubKey)
       add("casper.genesis-block-data.genesis-block-number", run.genesisBlockNumber)
 
       add("casper.autogen-shard-size", run.autogenShardSize)

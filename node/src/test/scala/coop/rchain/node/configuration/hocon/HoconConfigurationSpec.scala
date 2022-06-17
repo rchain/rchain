@@ -131,7 +131,8 @@ class HoconConfigurationSpec extends AnyFunSuite with Matchers {
           genesisBlockNumber = 0,
           posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
           posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1,
-          posVaultPubKey = ""
+          posVaultPubKey = "",
+          systemContractPubKey = ""
         ),
         minPhloPrice = 1,
         autogenShardSize = 5

@@ -8,7 +8,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.DagRepresentation
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.rholang.{InterpreterUtil, Resources, RuntimeManager}
@@ -304,6 +304,7 @@ object GenesisTest {
                            posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1,
                            posVaultPubKey = GenesisBuilder.defaultPosVaultPubKey
                          ),
+                         registry = Registry(GenesisBuilder.defaultSystemContractPubKey),
                          vaults = vaults,
                          blockNumber = blockNumber,
                          blockTimestamp = blockTimestamp
