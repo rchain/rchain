@@ -28,6 +28,11 @@ object KeySegment {
   def apply(sb: Seq[Byte]): KeySegment   = KeySegment(ByteVector(sb))
   val empty: KeySegment                  = KeySegment(ByteVector.empty)
 
+  /**
+    * Find the common part of a and b.
+    *
+    * @return (Common part, rest of a, rest of b).
+    */
   def commonPrefix(a: KeySegment, b: KeySegment): (KeySegment, KeySegment, KeySegment) = {
     @tailrec
     def go(common: KeySegment, l: KeySegment, r: KeySegment): (KeySegment, KeySegment, KeySegment) =
