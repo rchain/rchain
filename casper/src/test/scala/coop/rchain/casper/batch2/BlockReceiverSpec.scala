@@ -8,6 +8,7 @@ import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
+import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -19,9 +20,11 @@ import org.scalatest.Assertion
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.duration.DurationInt
-
-class BlockReceiverSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
+class BlockReceiverSpec
+    extends AsyncFlatSpec
+    with MonixTaskTest
+    with Matchers
+    with Fs2StreamMatchers {
   implicit val logEff: Log[Task]            = Log.log[Task]
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
   private val genesis                       = buildGenesis()
@@ -66,10 +69,9 @@ class BlockReceiverSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
     withBlockReceiverEnv("test") {
       case (incomingQueue, outStream, node) =>
         for {
-          block   <- makeBlock(node)
-          _       <- incomingQueue.enqueue1(block)
-          outList <- outStream.take(1).interruptAfter(1.second).compile.toList
-        } yield outList shouldBe empty
+          block <- makeBlock(node)
+          _     <- incomingQueue.enqueue1(block)
+        } yield outStream should notEmit
     }
   }
 
@@ -77,10 +79,9 @@ class BlockReceiverSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
     withBlockReceiverEnv("root") {
       case (incomingQueue, outStream, node) =>
         for {
-          block   <- makeBlock(node).map(_.copy(blockHash = "abc".unsafeHexToByteString))
-          _       <- incomingQueue.enqueue1(block)
-          outList <- outStream.take(1).interruptAfter(1.second).compile.toList
-        } yield outList shouldBe empty
+          block <- makeBlock(node).map(_.copy(blockHash = "abc".unsafeHexToByteString))
+          _     <- incomingQueue.enqueue1(block)
+        } yield outStream should notEmit
     }
   }
 
@@ -88,10 +89,9 @@ class BlockReceiverSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
     withBlockReceiverEnv("root") {
       case (incomingQueue, outStream, node) =>
         for {
-          block   <- makeBlock(node).map(_.copy(sig = "abc".unsafeHexToByteString))
-          _       <- incomingQueue.enqueue1(block)
-          outList <- outStream.take(1).interruptAfter(1.second).compile.toList
-        } yield outList shouldBe empty
+          block <- makeBlock(node).map(_.copy(sig = "abc".unsafeHexToByteString))
+          _     <- incomingQueue.enqueue1(block)
+        } yield outStream should notEmit
     }
   }
 }
