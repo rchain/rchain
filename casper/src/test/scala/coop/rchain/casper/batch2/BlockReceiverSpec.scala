@@ -12,6 +12,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Log
+import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.testing.scalatest.MonixTaskTest
 import org.scalatest.Assertion
@@ -28,18 +29,18 @@ class BlockReceiverSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
   import fs2._
 
   private def withBlockReceiverEnv(shardId: String)(
-      f: Stream[Task, BlockHash] => Task[Assertion]
+      f: (Queue[Task, BlockMessage], Stream[Task, BlockHash], TestNode[Task]) => Task[Assertion]
   ): Task[Assertion] = TestNode.standaloneEff(genesis).use { node =>
     implicit val (bds, br, bs) =
       (node.blockDagStorage, node.blockRetrieverEffect, node.blockStore)
 
     for {
       state                 <- Ref[Task].of(BlockReceiverState[BlockHash])
-      block                 <- makeBlock(node)
-      incomingBlockStream   = Stream[Task, BlockMessage](block)
+      incomingBlockQueue    <- Queue.unbounded[Task, BlockMessage]
+      incomingBlockStream   = incomingBlockQueue.dequeue
       validatedBlocksStream = Stream[Task, BlockMessage]()
       br                    <- BlockReceiver(state, incomingBlockStream, validatedBlocksStream, shardId)
-      res                   <- f(br)
+      res                   <- f(incomingBlockQueue, br, node)
     } yield res
   }
 
@@ -49,21 +50,48 @@ class BlockReceiverSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
       .createBlockUnsafe(_))
 
   it should "pass correct block to output stream" in {
-    withBlockReceiverEnv("root") { outStream =>
-      outStream.take(1).compile.toList.map(outList => outList.length shouldBe 1)
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, outStream, node) =>
+        for {
+          block   <- makeBlock(node)
+          _       <- incomingQueue.enqueue1(block)
+          outList <- outStream.take(1).compile.toList
+        } yield outList.length shouldBe 1
     }
   }
 
   it should "discard block with invalid shard name" in {
     // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
     // So block should be rejected and output stream should never take block
-    withBlockReceiverEnv("test") { outStream =>
-      outStream
-        .take(1)
-        .interruptAfter(1.second)
-        .compile
-        .toList
-        .map(outList => outList shouldBe empty)
+    withBlockReceiverEnv("test") {
+      case (incomingQueue, outStream, node) =>
+        for {
+          block   <- makeBlock(node)
+          _       <- incomingQueue.enqueue1(block)
+          outList <- outStream.take(1).interruptAfter(1.second).compile.toList
+        } yield outList shouldBe empty
+    }
+  }
+
+  it should "discard block with invalid block hash" in {
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, outStream, node) =>
+        for {
+          block   <- makeBlock(node).map(_.copy(blockHash = "abc".unsafeHexToByteString))
+          _       <- incomingQueue.enqueue1(block)
+          outList <- outStream.take(1).interruptAfter(1.second).compile.toList
+        } yield outList shouldBe empty
+    }
+  }
+
+  it should "discard block with invalid signature" in {
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, outStream, node) =>
+        for {
+          block   <- makeBlock(node).map(_.copy(sig = "abc".unsafeHexToByteString))
+          _       <- incomingQueue.enqueue1(block)
+          outList <- outStream.take(1).interruptAfter(1.second).compile.toList
+        } yield outList shouldBe empty
     }
   }
 }
