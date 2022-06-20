@@ -14,6 +14,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.RhoType.Number
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.convertToReadNumber
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -229,23 +230,43 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
           rm.getHistoryRepo.reset(baseCp.root).flatMap(_.doCheckpoint(actions).map(_.root))
 
-        r <- ConflictSetMerger.merge[F, DeployChainIndex](
-              actualSet = leftDeployChains.toSet ++ rightDeployChains.toSet,
-              lateSet = Set(),
-              depends = (target, source) =>
-                EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
-              conflicts = branchesAreConflicting,
-              cost = DagMerger.costOptimalRejectionAlg,
-              stateChanges = r => r.stateChanges.pure,
-              mergeableChannels = _.eventLogIndex.numberChannelsData,
-              computeTrieActions = computeTrieActions,
-              applyTrieActions = applyTrieActions,
-              getData = baseReader.getData
-            )
+        actualSet = leftDeployChains.toSet ++ rightDeployChains.toSet
+        baseMergeableChRes <- actualSet
+                               .map(_.eventLogIndex.numberChannelsData)
+                               .flatMap(_.keys)
+                               .toList
+                               .traverse(
+                                 channelHash =>
+                                   convertToReadNumber(baseGetData)
+                                     .apply(channelHash)
+                                     .map(res => (channelHash, res.getOrElse(0L)))
+                               )
+                               .map(_.toMap)
 
-        (finalHash, rejected) = r
-        rejectedSigs          = rejected.flatMap(_.deploysWithCost.map(_.id))
-        _                     = rejectedSigs shouldBe expectedRejected
+        (toMerge, rejected, _) = ConflictSetMerger.merge[DeployChainIndex](
+          actualSet = actualSet,
+          lateSet = Set(),
+          depends = (target, source) =>
+            EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
+          conflicts = branchesAreConflicting,
+          cost = DagMerger.costOptimalRejectionAlg,
+          mergeableChannels = _.eventLogIndex.numberChannelsData,
+          baseMergeableChRes
+        )
+
+        allChanges = toMerge.toList.map(_.stateChanges).combineAll
+
+        // All number channels merged
+        // TODO: Negative or overflow should be rejected before!
+        allMergeableChannels = toMerge.toList
+          .map(_.eventLogIndex.numberChannelsData)
+          .combineAll
+
+        trieActions  <- computeTrieActions(allChanges, allMergeableChannels)
+        finalHash    <- applyTrieActions(trieActions)
+        rejectedSigs = rejected.flatMap(_.deploysWithCost.map(_.id))
+
+        _ = rejectedSigs shouldBe expectedRejected
 
         // Read merged value
 
