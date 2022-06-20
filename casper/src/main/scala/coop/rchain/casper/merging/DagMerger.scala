@@ -8,6 +8,7 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.convertToReadNumber
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
@@ -74,6 +75,17 @@ object DagMerger {
       applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
         historyRepository.reset(lfbPostState).flatMap(_.doCheckpoint(actions).map(_.root))
 
+      baseMergeableChRes <- actualSet
+                             .map(_.eventLogIndex.numberChannelsData)
+                             .flatMap(_.keys)
+                             .toList
+                             .traverse(
+                               channelHash =>
+                                 convertToReadNumber(historyReader.getData)
+                                   .apply(channelHash)
+                                   .map(res => (channelHash, res.getOrElse(0L)))
+                             )
+                             .map(_.toMap)
       r <- ConflictSetMerger.merge[F, DeployChainIndex](
             actualSet = actualSet,
             lateSet = lateSet,
@@ -85,7 +97,7 @@ object DagMerger {
             mergeableChannels = _.eventLogIndex.numberChannelsData,
             computeTrieActions = computeTrieActions,
             applyTrieActions = applyTrieActions,
-            getData = historyReader.getData
+            baseMergeableChRes
           )
 
       (newState, rejected) = r

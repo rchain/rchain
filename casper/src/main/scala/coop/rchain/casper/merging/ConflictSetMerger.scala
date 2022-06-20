@@ -27,7 +27,7 @@ object ConflictSetMerger {
       mergeableChannels: R => NumberChannelsDiff,
       computeTrieActions: (StateChange, NumberChannelsDiff) => F[Vector[HotStoreTrieAction]],
       applyTrieActions: Seq[HotStoreTrieAction] => F[Blake2b256Hash],
-      getData: Blake2b256Hash => F[Seq[Datum[ListParWithRandom]]]
+      baseMergeableChRes: Map[Blake2b256Hash, Long]
   ): F[(Blake2b256Hash, Set[R])] = {
 
     type Branch = Set[R]
@@ -124,27 +124,16 @@ object ConflictSetMerger {
     /** target function for rejection is minimising cost of deploys rejected */
     val rejectionTargetF = (dc: Branch) => dc.map(cost).sum
 
+    val rejectionOptionsWithOverflow = getMergedResultRejection(
+      branches,
+      rejectionOptions,
+      baseMergeableChRes
+    )
+    val optimalRejection = getOptimalRejection(rejectionOptionsWithOverflow, rejectionTargetF)
+    val rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
+    val toMerge          = branches diff optimalRejection
     for {
-      baseMergeableChRes <- branches.flatten
-                             .map(mergeableChannels)
-                             .flatMap(_.keys)
-                             .toList
-                             .traverse(
-                               channelHash =>
-                                 convertToReadNumber(getData)
-                                   .apply(channelHash)
-                                   .map(res => (channelHash, res.getOrElse(0L)))
-                             )
-                             .map(_.toMap)
-      rejectionOptionsWithOverflow = getMergedResultRejection(
-        branches,
-        rejectionOptions,
-        baseMergeableChRes
-      )
-      optimalRejection = getOptimalRejection(rejectionOptionsWithOverflow, rejectionTargetF)
-      rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
-      toMerge          = branches diff optimalRejection
-      r                <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
+      r <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
 
       (allChanges, combineAllChanges) = r
 
