@@ -416,7 +416,8 @@ object Main {
     Log[F].info(s"Starting with profile ${profile.name}") *>
       (if (configFile.isEmpty) Log[F].warn("No configuration file found, using defaults")
        else Log[F].info(s"Using configuration file: ${configFile.get.getAbsolutePath}")) *>
-      Log[F].info(s"Running on network: ${conf.protocolServer.networkId}")
+      Log[F].info(s"Running on network: ${conf.protocolServer.networkId}") *>
+      Log[F].info(s"Running on shard name (id): ${conf.casper.shardName}")
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   private def consoleIO[F[_]: Sync]: ConsoleIO[F] = {
