@@ -19,7 +19,7 @@ import coop.rchain.rspace.merger.{
   StateChangeMerger
 }
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Stopwatch}
 import scodec.bits.ByteVector
 
 object DagMerger {
@@ -81,26 +81,46 @@ object DagMerger {
                              .toList
                              .traverse(
                                channelHash =>
-                                 convertToReadNumber(historyReader.getData)
+                                 convertToReadNumber(baseGetData)
                                    .apply(channelHash)
                                    .map(res => (channelHash, res.getOrElse(0L)))
                              )
                              .map(_.toMap)
-      r <- ConflictSetMerger.merge[F, DeployChainIndex](
-            actualSet = actualSet,
-            lateSet = lateSet,
-            depends = (target, source) =>
-              EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
-            conflicts = branchesAreConflicting,
-            cost = rejectionCostF,
-            stateChanges = _.stateChanges.pure,
-            mergeableChannels = _.eventLogIndex.numberChannelsData,
-            computeTrieActions = computeTrieActions,
-            applyTrieActions = applyTrieActions,
-            baseMergeableChRes
-          )
+      (toMerge, rejected, logStr1) = ConflictSetMerger
+        .merge[DeployChainIndex](
+          actualSet = actualSet,
+          lateSet = lateSet,
+          depends = (target, source) =>
+            EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
+          conflicts = branchesAreConflicting,
+          cost = rejectionCostF,
+          mergeableChannels = _.eventLogIndex.numberChannelsData,
+          baseMergeableChRes
+        )
+      r = Stopwatch.profile(toMerge.toList.map(_.stateChanges).combineAll)
 
-      (newState, rejected) = r
-      rejectedDeploys      = rejected.flatMap(_.deploysWithCost.map(_.id))
+      (allChanges, combineAllChanges) = r
+
+      // All number channels merged
+      // TODO: Negative or overflow should be rejected before!
+      allMergeableChannels = toMerge.toList
+        .map(_.eventLogIndex.numberChannelsData)
+        .combineAll
+
+      r                                 <- Stopwatch.duration(computeTrieActions(allChanges, allMergeableChannels))
+      (trieActions, computeActionsTime) = r
+      r                                 <- Stopwatch.duration(applyTrieActions(trieActions))
+      (newState, applyActionsTime)      = r
+      overallChanges                    = s"${allChanges.datumsChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.consumeChannelsToJoinSerializedMap.size} J"
+      logStr = s"Merging done: " +
+        s"late set size ${lateSet.size}; " +
+        s"actual set size ${actualSet.size}; " +
+        logStr1 +
+        s"changes combined (${overallChanges}) in ${combineAllChanges}; " +
+        s"trie actions (${trieActions.size}) in ${computeActionsTime}; " +
+        s"actions applied in ${applyActionsTime}"
+      _ <- Log[F].debug(logStr)
+
+      rejectedDeploys = rejected.flatMap(_.deploysWithCost.map(_.id))
     } yield (newState, rejectedDeploys.toList)
 }
