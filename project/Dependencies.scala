@@ -68,6 +68,7 @@ object Dependencies {
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "6.6"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.17.0"
+  val mockito             = "org.mockito"                %% "mockito-scala-cats"        % "1.16.42" % "test"
   val monix               = "io.monix"                   %% "monix"                     % monixVersion
   val monixTesting        = "io.monix"                   %% "monix-testing-scalatest"   % "0.3.0"
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
@@ -140,7 +141,7 @@ object Dependencies {
     "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
   )
 
-  private val testing = Seq(scalactic, scalatest, scalacheck, scalatestPlus, monixTesting)
+  private val testing = Seq(scalactic, scalatest, scalacheck, scalatestPlus, monixTesting, mockito)
 
   private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
 
