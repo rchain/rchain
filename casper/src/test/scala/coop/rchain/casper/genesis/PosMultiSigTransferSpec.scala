@@ -1,7 +1,7 @@
 package coop.rchain.casper.genesis
 
 import cats.syntax.all._
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator, Vault}
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator, Vault}
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.ConstructDeploy
@@ -41,6 +41,9 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
   val genesisPubKey = Secp256k1.toPublic(pk1)
   val bonds         = Map(pub1 -> 1000000L, pub2 -> 1000000L, pub3 -> 1000000L)
 
+  val configRegistryPubKey =
+    "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf"
+
   val genesisParam: GenesisParameters =
     (
       validatorKeys,
@@ -59,6 +62,7 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
           posVaultPubKey = genesisPubKey.bytes.toHexString,
           posMultiSigQuorum = 2
         ),
+        registry = Registry(configRegistryPubKey),
         vaults = List((pub1, 100000000000L), (pub2, 100000000000L), (pub3, 100000000000L)).map {
           case (pk, amount) =>
             RevAddress.fromPublicKey(pk).map(Vault(_, amount))

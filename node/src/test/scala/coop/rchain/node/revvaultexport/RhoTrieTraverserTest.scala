@@ -2,12 +2,12 @@ package coop.rchain.node.revvaultexport
 
 import cats.effect.Concurrent
 import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models.{GPrivate, GUnforgeable, Par}
@@ -23,6 +23,7 @@ import scala.util.Random
 
 class RhoTrieTraverserTest extends AnyFlatSpec {
   private val SHARD_ID = "root-shard"
+  private val registry = Registry(GenesisBuilder.defaultSystemContractPubKey)
 
   "traverse the TreeHashMap" should "work" in {
     val total     = 100
@@ -76,7 +77,10 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
             val target = LazyList.continually(r.next()).drop(9).head
             target.toParUnforgeableName
           }
-          rd    <- runtime.processDeploy(StandardDeploys.registry(SHARD_ID), rand)
+          rd <- runtime.processDeploy(
+                 StandardDeploys.registryGenerator(registry, SHARD_ID),
+                 Blake2b512Random.defaultRandom
+               )
           check <- runtime.createCheckpoint
           _     <- runtime.reset(check.root)
           initialTrieRes <- runtime.processDeploy(

@@ -11,7 +11,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
@@ -57,6 +57,11 @@ object NodeLaunch {
                 "Public key for PoS vault is not set, manual transfer from PoS vault will be disabled (config 'pos-vault-pub-key')"
               )
               .whenA(conf.genesisBlockData.posVaultPubKey.isEmpty)
+        _ <- Log[F]
+              .warn(
+                "Public key for system - contract is not set (config 'system-contract-pub-key')"
+              )
+              .whenA(conf.genesisBlockData.systemContractPubKey.isEmpty)
         genesisBlock <- createGenesisBlockFromConfig(conf)
         genBlockStr  = PrettyPrinter.buildString(genesisBlock)
         _            <- Log[F].info(s"Sending ApprovedBlock $genBlockStr to peers...")
@@ -140,7 +145,8 @@ object NodeLaunch {
       conf.genesisBlockData.numberOfActiveValidators,
       conf.genesisBlockData.posMultiSigPublicKeys,
       conf.genesisBlockData.posMultiSigQuorum,
-      conf.genesisBlockData.posVaultPubKey
+      conf.genesisBlockData.posVaultPubKey,
+      conf.genesisBlockData.systemContractPubKey
     )
 
   def createGenesisBlock[F[_]: Concurrent: ContextShift: Time: RuntimeManager: Log](
@@ -156,7 +162,8 @@ object NodeLaunch {
       numberOfActiveValidators: Int,
       posMultiSigPublicKeys: List[String],
       posMultiSigQuorum: Int,
-      posVaultPubKey: String
+      posVaultPubKey: String,
+      systemContractPubkey: String
   ): F[BlockMessage] =
     for {
       blockTimestamp <- Time[F].currentMillis
@@ -184,6 +191,7 @@ object NodeLaunch {
                            posMultiSigQuorum = posMultiSigQuorum,
                            posVaultPubKey = posVaultPubKey
                          ),
+                         registry = Registry(systemContractPubkey),
                          vaults = vaults,
                          blockNumber = blockNumber
                        )

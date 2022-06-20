@@ -1,13 +1,13 @@
 package coop.rchain.node.mergeablity
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import cats.implicits.catsSyntaxApplicative
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockRandomSeed
-import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
@@ -492,6 +492,7 @@ class TreeHashMapMergeabilitySpec
       phloLimit = Cost.UNSAFE_MAX.value,
       sec = ConstructDeploy.defaultSec2
     )
+    val registry       = Registry(GenesisBuilder.defaultSystemContractPubKey)
     val baseDeployRand = Blake2b512Random.defaultRandom
     val registryRand   = baseDeployRand.splitByte(BlockRandomSeed.UserDeploySplitIndex)
     val storeTokenPar = {
@@ -503,7 +504,7 @@ class TreeHashMapMergeabilitySpec
     }
     computeMergeCase[Task](
       baseDeployRand,
-      Seq(StandardDeploys.registry(SHARD_ID), baseDeploy),
+      Seq(StandardDeploys.registryGenerator(registry, SHARD_ID), baseDeploy),
       Seq(leftDeploy),
       Seq(rightDeploy),
       (runtime, _, mergedState) =>

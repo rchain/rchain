@@ -68,12 +68,13 @@ object StandardDeploys {
     revGeneratorPubKey
   )
 
-  def registry(shardId: String): Signed[DeployData] = toDeploy(
-    CompiledRholangSource("Registry.rho"),
-    registryPk,
-    registryTimestamp,
-    shardId
-  )
+  def registryGenerator(registry: Registry, shardId: String): Signed[DeployData] =
+    toDeploy(
+      registry,
+      registryPk,
+      registryTimestamp,
+      shardId
+    )
 
   def listOps(shardId: String): Signed[DeployData] = toDeploy(
     CompiledRholangSource("ListOps.rho"),

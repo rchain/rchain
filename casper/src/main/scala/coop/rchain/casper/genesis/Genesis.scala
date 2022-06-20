@@ -22,6 +22,7 @@ final case class Genesis(
     blockTimestamp: Long,
     blockNumber: Long,
     proofOfStake: ProofOfStake,
+    registry: Registry,
     vaults: Seq[Vault]
 )
 
@@ -54,6 +55,7 @@ object Genesis {
 
   def defaultBlessedTerms(
       posParams: ProofOfStake,
+      registry: Registry,
       vaults: Seq[Vault],
       shardId: String
   ): Seq[Signed[DeployData]] = {
@@ -71,7 +73,7 @@ object Genesis {
 
     // Order of deploys is important for Registry to work correctly
     // - dependencies must be defined first in the list
-    StandardDeploys.registry(shardId) +:
+    StandardDeploys.registryGenerator(registry, shardId) +:
       StandardDeploys.listOps(shardId) +:
       StandardDeploys.either(shardId) +:
       StandardDeploys.nonNegativeNumber(shardId) +:
@@ -86,7 +88,7 @@ object Genesis {
   def createGenesisBlock[F[_]: Concurrent: RuntimeManager](genesis: Genesis): F[BlockMessage] = {
     import genesis._
 
-    val blessedTerms = defaultBlessedTerms(proofOfStake, vaults, genesis.shardId)
+    val blessedTerms = defaultBlessedTerms(proofOfStake, registry, vaults, genesis.shardId)
 
     RuntimeManager[F]
       .computeGenesis(blessedTerms, blockTimestamp, genesis.blockNumber, genesis.shardId)
