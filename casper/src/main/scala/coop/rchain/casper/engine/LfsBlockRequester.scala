@@ -30,7 +30,7 @@ object LfsBlockRequester {
   /**
     * State to control processing of requests
     */
-  final case class ST[Key](
+  case class ST[Key](
       d: Map[Key, ReqStatus],
       latest: Set[Key],
       lowerBound: Long,
@@ -159,7 +159,7 @@ object LfsBlockRequester {
       getBlockFromStore: BlockHash => F[BlockMessage],
       putBlockToStore: (BlockHash, BlockMessage) => F[Unit],
       validateBlock: BlockMessage => F[Boolean]
-  ): F[Stream[F, ST[BlockHash]]] = {
+  ): F[(Stream[F, ST[BlockHash]], Ref[F, ST[BlockHash]])] = {
 
     val block = approvedBlock.block
 
@@ -347,7 +347,7 @@ object LfsBlockRequester {
       _ <- requestQueue.enqueue1(false)
 
       // Create block receiver stream
-    } yield createStream(st, requestQueue, responseHashQueue)
+    } yield (createStream(st, requestQueue, responseHashQueue), st)
   }
 
 }
