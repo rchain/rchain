@@ -29,13 +29,17 @@ final case class Genesis(
 object Genesis {
   val genesisPubKey = PublicKey(Array[Byte]())
 
-  def NonNegativeMergeableTagName(shardId: String, validatorKey: PublicKey): Par = {
+  def NonNegativeMergeableTagName(
+      shardId: String,
+      validatorKey: PublicKey,
+      blockNumber: Long
+  ): Par = {
     val nonNegativeContractIndex: Byte = 3
     val rand = BlockRandomSeed
       .generateSplitRandomNumber(
         BlockRandomSeed(
           shardId,
-          0,
+          blockNumber,
           validatorKey,
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
         ),

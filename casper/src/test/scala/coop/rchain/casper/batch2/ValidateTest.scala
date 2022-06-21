@@ -566,7 +566,8 @@ class ValidateTest
                            mStore,
                            Genesis.NonNegativeMergeableTagName(
                              genesis.shardId,
-                             PublicKey(genesis.sender)
+                             PublicKey(genesis.sender),
+                             genesis.body.state.blockNumber
                            ),
                            RuntimeManager.noOpExecutionTracker[Task]
                          )

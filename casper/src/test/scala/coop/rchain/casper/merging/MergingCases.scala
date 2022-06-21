@@ -32,10 +32,14 @@ class MergingCases extends AnyFlatSpec with Matchers {
   implicit val timeF: Time[Task] = new LogicalTime[Task]
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
-    dir          <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    kvm          <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
-    mergeableTag = Genesis.NonNegativeMergeableTagName(genesis.shardId, PublicKey(genesis.sender))
-    rm           <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
+    dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
+    kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
+    mergeableTag = Genesis.NonNegativeMergeableTagName(
+      genesis.shardId,
+      PublicKey(genesis.sender),
+      genesis.body.state.blockNumber
+    )
+    rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
   } yield rm
 
   /**
