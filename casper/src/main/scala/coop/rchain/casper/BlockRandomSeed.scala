@@ -56,7 +56,9 @@ object BlockRandomSeed {
       )
     )
 
-  val PreChargeSplitIndex: Byte  = 1.toByte
-  val UserDeploySplitIndex: Byte = 2.toByte
-  val RefundSplitIndex: Byte     = 3.toByte
+  // When deploying the user deploy , the chain would execute prechargeDeploy, userDeploy and RefundDeploy in
+  // sequence. The split index for the random seed is based on the index of the executions.
+  val PreChargeSplitIndex: Byte  = 0.toByte
+  val UserDeploySplitIndex: Byte = 1.toByte
+  val RefundSplitIndex: Byte     = 2.toByte
 }
