@@ -48,7 +48,8 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
           blockReportAPI,
           Transaction.transferUnforgeable(
             this.genesis.genesisBlock.shardId,
-            PublicKey(this.genesis.genesisBlock.sender)
+            PublicKey(this.genesis.genesisBlock.sender),
+            this.genesis.genesisBlock.body.state.blockNumber
           )
         )
         transferBlock <- validator.addBlock(deploy)

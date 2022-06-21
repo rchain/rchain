@@ -34,6 +34,7 @@ object Genesis {
       validatorKey: PublicKey,
       blockNumber: Long
   ): Par = {
+    // NonNegative contract is the 4th contract deployed in the genesis, start from 0. Index should be 3
     val nonNegativeContractIndex: Byte = 3
     val rand = BlockRandomSeed
       .generateSplitRandomNumber(

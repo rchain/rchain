@@ -53,6 +53,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
         vaultTreeHashMapDepth = StateBalanceMain.genesisVaultMapDepth
         vaultChannel <- StateBalances.getGenesisVaultMapPar(
                          genesis.genesisBlock.shardId,
+                         genesis.genesisBlock.body.state.blockNumber,
                          PublicKey(genesis.genesisBlock.sender),
                          runtime
                        )

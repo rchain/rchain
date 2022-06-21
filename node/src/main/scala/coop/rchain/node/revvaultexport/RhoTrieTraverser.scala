@@ -80,6 +80,7 @@ object RhoTrieTraverser {
     Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenPar))))))
 
   def storeTokenUnforgeable(shardId: String, blockNumber: Long, validatorKey: PublicKey): Par = {
+    // TreeHashMap contract is the 1st contract deployed in the genesis, start from 0. Index should be 0
     val TreeHashMapContractDeployIndex: Byte = 0
     val rand = BlockRandomSeed
       .generateSplitRandomNumber(

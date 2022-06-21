@@ -4,30 +4,17 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.casper.rholang.Tools
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GString}
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
-import coop.rchain.models.{
-  BindPattern,
-  Bundle,
-  ETuple,
-  Expr,
-  GPrivate,
-  GUnforgeable,
-  ListParWithRandom,
-  Par,
-  TaggedContinuation
-}
+import coop.rchain.models.{ETuple, Expr}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax._
@@ -45,16 +32,18 @@ object StateBalances {
   // But we could try to get it from the extractState we added.
   def getGenesisVaultMapPar[F[_]: Sync](
       shardId: String,
+      blockNumber: Long,
       validatorKey: PublicKey,
       runtime: RhoRuntime[F]
   ): F[Par] = {
+    // RevVault contract is the 7th contract deployed in the genesis, start from 0. Index should be 6
     val RevVaultContractDeployIndex: Byte = 6
     val revVault = {
       val rand = BlockRandomSeed
         .generateSplitRandomNumber(
           BlockRandomSeed(
             shardId,
-            0,
+            blockNumber,
             validatorKey,
             Blake2b256Hash.fromByteString(emptyStateHashFixed)
           ),
@@ -84,6 +73,7 @@ object StateBalances {
   def read[F[_]: Concurrent: Parallel: ContextShift](
       shardId: String,
       validatorKey: PublicKey,
+      blockNumber: Long,
       blockHash: String,
       vaultTreeHashMapDepth: Int,
       dataDir: Path
@@ -106,7 +96,7 @@ object StateBalances {
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
-      vaultChannel               <- getGenesisVaultMapPar(shardId, validatorKey, rhoRuntime)
+      vaultChannel               <- getGenesisVaultMapPar(shardId, blockNumber, validatorKey, rhoRuntime)
       _ <- rhoRuntime.reset(
             Blake2b256Hash.fromByteString(block.body.state.postStateHash)
           )

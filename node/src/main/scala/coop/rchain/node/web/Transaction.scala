@@ -236,24 +236,16 @@ object Transaction {
       .as[TransactionResponse]
   }
 
-  // This is the hard-coded unforgeable name for
+  // This is the unforgeable name for
   // https://github.com/rchain/rchain/blob/43257ddb7b2b53cffb59a5fe1d4c8296c18b8292/casper/src/main/resources/RevVault.rho#L25
-  // This hard-coded value is only useful with current(above link version) `RevVault.rho` implementation but it is
-  // useful for all the networks(testnet, custom network and mainnet) starting with this `RevVault.rho`.
-  //
-  // This hard-coded value needs to be changed when
-  // 1. `RevVault.rho` is changed
-  // 2. [[coop.rchain.casper.genesis.contracts.StandardDeploys.revVault]] is changed
-  // 3. The random seed algorithm for unforgeable name of the deploy is changed
-  //
-  // This is not needed when onChain transfer history is implemented and deployed to new network in the future.
-  def transferUnforgeable(shardId: String, validatorKey: PublicKey): Par = {
+  def transferUnforgeable(shardId: String, validatorKey: PublicKey, blockNumber: Long): Par = {
+    // RevVault contract is the 7th contract deployed in the genesis, start from 0. Index should be 6
     val RevVaultContractDeployIndex: Byte = 6
     val rand = BlockRandomSeed
       .generateSplitRandomNumber(
         BlockRandomSeed(
           shardId,
-          0,
+          blockNumber,
           validatorKey,
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
         ),
@@ -264,7 +256,8 @@ object Transaction {
     unfogeableBytes.toParUnforgeableName
   }
 
-  // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
+  // TODO config this with different name with different chain(shard)
+  // https://github.com/rchain/rchain/issues/3685
   def MainnetTransferUnforgeable: Par = {
     val rand = Blake2b512Random.defaultRandom
     rand.next().toParUnforgeableName
