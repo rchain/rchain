@@ -50,7 +50,8 @@ object Genesis {
     unforgeableByte.toParUnforgeableName
   }
 
-  // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
+  // TODO config this with different name with different chain(shard)
+  // https://github.com/rchain/rchain/issues/3685
   def MainnetNonNegativeMergeableTagName: Par = {
     val rand = Blake2b512Random.defaultRandom
     import coop.rchain.models.rholang.implicits._
