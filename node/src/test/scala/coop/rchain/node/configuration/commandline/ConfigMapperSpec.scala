@@ -81,7 +81,7 @@ class ConfigMapperSpec extends AnyFunSuite with Matchers {
         "--quarantine-length 111111",
         "--genesis-block-number 222",
         "--number-of-active-validators 111111",
-        "--pos-vault-pub-key 0432946f7f91f8f767d7c3d43674faf83586dffbd1b8f9278a5c72820dc20308836299f47575ff27f4a736b72e63d91c3cd853641861f64e08ee5f9204fc708df6",
+        "--pos-vault-pub-key 04a7808009ad157bec658c8d35055f21f34dc866566d2f4b874600bb8782c20af9ae2cf90420e6f0a9c683358aea1b659d344737481fc0957de4e63485d044ee80",
         "--system-contract-pub-key 04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf",
         "--disable-lfs",
         "--prometheus",
@@ -208,7 +208,7 @@ class ConfigMapperSpec extends AnyFunSuite with Matchers {
           genesisBlockNumber = 222,
           posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
           posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1,
-          posVaultPubKey = GenesisBuilder.defaultPosVaultPubKey,
+          posVaultPubKey = GenesisBuilder.defaultPosVaultPubKeyHex,
           systemContractPubKey = GenesisBuilder.defaultSystemContractPubKey
         ),
         autogenShardSize = 111111,

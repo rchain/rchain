@@ -2,21 +2,22 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.ValidatorIdentity
+import coop.rchain.casper.{BlockRandomSeed, ValidatorIdentity}
+import coop.rchain.models.syntax._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ConstructDeploy._
+import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.syntax._
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import monix.eval.Task
@@ -26,9 +27,6 @@ import scala.collection.compat.immutable.LazyList
 import scala.collection.mutable
 
 object GenesisBuilder {
-
-  val fixedValidatorKeyPairs = List((defaultSec, defaultPub), (defaultSec2, defaultPub2))
-
   val randomValidatorKeyPairs                  = LazyList.continually(Secp256k1.newKeyPair)
   val (randomValidatorSks, randomValidatorPks) = randomValidatorKeyPairs.unzip
 
@@ -38,8 +36,17 @@ object GenesisBuilder {
     "047f0f0f5bbe1d6d1a8dac4d88a3957851940f39a57cd89d55fe25b536ab67e6d76fd3f365c83e5bfe11fe7117e549b1ae3dd39bfc867d1c725a4177692c4e7754"
   )
 
-  val defaultPosVaultPubKey =
-    "0432946f7f91f8f767d7c3d43674faf83586dffbd1b8f9278a5c72820dc20308836299f47575ff27f4a736b72e63d91c3cd853641861f64e08ee5f9204fc708df6"
+  val defaultPosVaultPrivateKeyHex =
+    "4f711af1780360788c65706ede04600f279e5c239a64690e0118afbef572857d"
+  val defaultPosVaultPrivateKey = PrivateKey(defaultPosVaultPrivateKeyHex.unsafeDecodeHex)
+  val defaultPosVaultPubKey     = Secp256k1.toPublic(defaultPosVaultPrivateKey)
+  val defaultPosVaultPubKeyHex  = defaultPosVaultPubKey.bytes.toHexString // "04a7808009ad157bec658c8d35055f21f34dc866566d2f4b874600bb8782c20af9ae2cf90420e6f0a9c683358aea1b659d344737481fc0957de4e63485d044ee80"
+
+  val fixedValidatorKeyPairs = List(
+    (defaultSec, defaultPub),
+    (defaultSec2, defaultPub2),
+    (defaultPosVaultPrivateKey, defaultPosVaultPubKey)
+  )
 
   def createBonds(validators: Iterable[PublicKey]): Iterable[(PublicKey, Long)] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }
@@ -109,7 +116,7 @@ object GenesisBuilder {
           validators = bonds.map(Validator.tupled).toSeq,
           posMultiSigPublicKeys = defaultPosMultiSigPublicKeys,
           posMultiSigQuorum = defaultPosMultiSigPublicKeys.length - 1,
-          posVaultPubKey = defaultPosVaultPubKey
+          posVaultPubKey = defaultPosVaultPubKeyHex
         ),
         registry = Registry(defaultSystemContractPubKey),
         vaults = genesisVaults.toList.map(pair => predefinedVault(pair._2)) ++
@@ -189,10 +196,8 @@ object GenesisBuilder {
       blockStore      <- BlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
-      // Add genesis block to DAG
-      _ <- blockDagStorage.insertGenesis(genesis)
-    } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory))
-      .runSyncUnsafe()
+      _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)
+    } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory)).unsafeRunSync
   }
 
   case class GenesisContext(

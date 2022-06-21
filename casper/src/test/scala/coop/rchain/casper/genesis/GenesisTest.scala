@@ -267,7 +267,7 @@ object GenesisTest {
                            validators = validators,
                            posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
                            posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1,
-                           posVaultPubKey = GenesisBuilder.defaultPosVaultPubKey
+                           posVaultPubKey = GenesisBuilder.defaultPosVaultPubKeyHex
                          ),
                          registry = Registry(GenesisBuilder.defaultSystemContractPubKey),
                          vaults = vaults,
