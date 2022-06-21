@@ -79,7 +79,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
           }
           rd <- runtime.processDeploy(
                  StandardDeploys.registryGenerator(registry, SHARD_ID),
-                 Blake2b512Random.defaultRandom
+                 rand
                )
           check <- runtime.createCheckpoint
           _     <- runtime.reset(check.root)
