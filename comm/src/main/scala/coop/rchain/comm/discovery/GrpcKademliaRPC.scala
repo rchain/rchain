@@ -20,8 +20,7 @@ import scala.concurrent.duration._
 
 class GrpcKademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
     networkId: String,
-    timeout: FiniteDuration,
-    allowPrivateAddresses: Boolean
+    timeout: FiniteDuration
 )(implicit scheduler: Scheduler)
     extends KademliaRPC[F] {
 
@@ -47,17 +46,13 @@ class GrpcKademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
         .withSender(toNode(local))
         .withNetworkId(networkId)
       responseErr <- withClient(peer, timeout)(_.sendLookup(lookup).fromTask.timer("lookup-time")).attempt
-      peers <- responseErr match {
-                case Right(r) if r.networkId == networkId =>
-                  r.nodes.map(toPeerNode).toList.filterA(isValidPeer)
-                case _ => Seq.empty[PeerNode].pure[F]
-              }
+      peers = responseErr match {
+        case Right(r) if r.networkId == networkId =>
+          r.nodes.map(toPeerNode)
+        case _ => Seq.empty[PeerNode]
+      }
     } yield peers
   }
-
-  private def isValidPeer(peer: PeerNode): F[Boolean] =
-    if (allowPrivateAddresses) isValidInetAddress[F](peer.endpoint.host)
-    else isValidPublicInetAddress[F](peer.endpoint.host)
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean = false)(
       f: KademliaRPCServiceStub => F[A]

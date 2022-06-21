@@ -26,7 +26,6 @@ object ConfigMapper {
       add("protocol-server.host", run.host)
       add("protocol-server.port", run.protocolPort)
       add("protocol-server.use-random-ports", run.useRandomPorts)
-      add("protocol-server.allow-private-addresses", run.allowPrivateAddresses)
       add(
         "protocol-server.disable-state-exporter",
         run.disableStateExporter

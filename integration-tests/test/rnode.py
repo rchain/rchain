@@ -525,8 +525,7 @@ def make_bootstrap_node(
         *rnode_default_launcher_args,
         "--standalone",
         "--prometheus",
-        "--no-upnp",
-        "--allow-private-addresses"
+        "--no-upnp"
     ])
 
     container_command_options = {
@@ -615,8 +614,7 @@ def make_peer(
 
     container_command_flags = set([
         "--prometheus",
-        "--no-upnp",
-        "--allow-private-addresses"
+        "--no-upnp"
     ])
 
     if cli_flags is not None:

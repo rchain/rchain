@@ -124,8 +124,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         implicit val p = peerNodeAsk
         effects.kademliaRPC(
           nodeConf.protocolServer.networkId,
-          nodeConf.protocolClient.networkTimeout,
-          nodeConf.protocolServer.allowPrivateAddresses
+          nodeConf.protocolClient.networkTimeout
         )
       }
 
