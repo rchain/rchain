@@ -110,7 +110,7 @@ def test_transfer_from_pos_vault(command_line_options: CommandLineOptions, docke
         # Check that money transfer from PoS vault with other private key fails
         with pytest.raises(TransderFundsError) as e:
             transfer_from_pos_vault(context, bootstrap, bob_rev_address, transfer_amount, ALICE_KEY, 1000000, 1)
-        assert e.value.reason == "You have not permission to transfer"
+        assert e.value.reason == "You have no permissions to transfer"
 
 def test_alice_pay_bob(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
     genesis_vault = {
