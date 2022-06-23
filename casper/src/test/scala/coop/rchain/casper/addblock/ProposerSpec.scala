@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.GenesisBuilder.randomValidatorSks
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{NoopSpan, Span}
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
@@ -20,32 +21,19 @@ import org.scalatest.matchers.should.Matchers
 
 class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture {
 
-  /** declarations of input functions for proposer */
-  def getCasperSnapshotF[F[_]: Applicative]: F[CasperSnapshot] =
-    mkCasperSnapshot.pure[F]
+  def getLatestSeqNumber[F[_]: Applicative](sender: Validator): F[Long] = (-1L).pure[F]
 
-  def alwaysNotActiveF[F[_]: Applicative]: (CasperSnapshot, ValidatorIdentity) => F[Boolean] =
-    (_: CasperSnapshot, _: ValidatorIdentity) => false.pure[F]
+  def alwaysNotActiveF[F[_]: Applicative]: ValidatorIdentity => F[Boolean] =
+    (_: ValidatorIdentity) => false.pure[F]
 
-  def alwaysActiveF[F[_]: Applicative]: (CasperSnapshot, ValidatorIdentity) => F[Boolean] =
-    (_: CasperSnapshot, _: ValidatorIdentity) => true.pure[F]
-
-  def alwaysNotEnoughBlocksF[F[_]: Applicative]
-      : CasperSnapshot => F[CheckProposeConstraintsResult] =
-    (_: CasperSnapshot) => CheckProposeConstraintsResult.notEnoughNewBlock.pure[F]
-
-  def alwaysTooFarAheadF[F[_]: Applicative]: CasperSnapshot => F[CheckProposeConstraintsResult] =
-    (_: CasperSnapshot) => CheckProposeConstraintsResult.tooFarAheadOfLastFinalized.pure[F]
-
-  def okProposeConstraint[F[_]: Applicative]: CasperSnapshot => F[CheckProposeConstraintsResult] =
-    (_: CasperSnapshot) => CheckProposeConstraintsResult.success.pure[F]
+  def alwaysActiveF[F[_]: Applicative]: ValidatorIdentity => F[Boolean] =
+    (_: ValidatorIdentity) => true.pure[F]
 
   def alwaysSuccesfullValidation[F[_]: Applicative] =
-    (_: CasperSnapshot, _: BlockMessage) => BlockStatus.valid.asRight[BlockError].pure[F]
+    (_: BlockMessage) => BlockStatus.valid.asRight[BlockError].pure[F]
 
   def alwaysUnsuccesfullValidation[F[_]: Applicative] =
-    (_: CasperSnapshot, _: BlockMessage) =>
-      BlockStatus.invalidSequenceNumber.asLeft[ValidBlock].pure[F]
+    (_: BlockMessage) => BlockStatus.invalidSequenceNumber.asLeft[ValidBlock].pure[F]
 
   // var to estimate result of executing of propose effect
   var proposeEffectVar: Int = 0
@@ -54,8 +42,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
     (_: BlockMessage) => (proposeEffectVar = v).pure[F]
 
   def createBlockF[F[_]: Applicative] =
-    (_: CasperSnapshot, _: ValidatorIdentity) =>
-      BlockCreatorResult.created(getRandomBlock()).pure[F]
+    (_: ValidatorIdentity) => BlockCreatorResult.created(getRandomBlock()).pure[F]
 
   val dummyValidatorIdentity = ValidatorIdentity(randomValidatorSks(1))
 
@@ -68,7 +55,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
     val p = new Proposer[Task](
       checkActiveValidator = alwaysNotActiveF[Task],
       // other params are permissive
-      getCasperSnapshot = getCasperSnapshotF[Task],
+      getLatestSeqNumber = getLatestSeqNumber[Task],
       createBlock = createBlockF[Task],
       validateBlock = alwaysSuccesfullValidation[Task],
       proposeEffect = proposeEffect[Task](0),
@@ -88,7 +75,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
         validateBlock = alwaysUnsuccesfullValidation[Task],
         // other params are permissive
         checkActiveValidator = alwaysActiveF[Task],
-        getCasperSnapshot = getCasperSnapshotF[Task],
+        getLatestSeqNumber = getLatestSeqNumber[Task],
         createBlock = createBlockF[Task],
         proposeEffect = proposeEffect[Task](0),
         validator = dummyValidatorIdentity
@@ -105,7 +92,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
     val p = new Proposer[Task](
       validateBlock = alwaysSuccesfullValidation[Task],
       checkActiveValidator = alwaysActiveF[Task],
-      getCasperSnapshot = getCasperSnapshotF[Task],
+      getLatestSeqNumber = getLatestSeqNumber[Task],
       createBlock = createBlockF[Task],
       proposeEffect = proposeEffect[Task](10),
       validator = dummyValidatorIdentity

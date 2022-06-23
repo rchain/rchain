@@ -77,8 +77,9 @@ case class TestNode[F[_]: Sync: Timer](
     connectionsCellEffect: Ref[F, Connections],
     rpConfAskEffect: RPConfAsk[F],
     eventPublisherEffect: EventPublisher[F],
-    casperShardConf: CasperShardConf,
-    routingMessageQueue: Queue[F, RoutingMessage]
+    routingMessageQueue: Queue[F, RoutingMessage],
+    shardName: String,
+    minPhloPrice: Long
 )(implicit concurrentF: Concurrent[F]) {
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...
@@ -177,16 +178,24 @@ case class TestNode[F[_]: Sync: Timer](
                 _   = assert(res.isRight, s"Deploy error ${deploy} with\n ${res.left}")
               } yield ()
           )
-      cs                <- MultiParentCasper.getSnapshot[F](casperShardConf)
-      createBlockResult <- BlockCreator.create(cs, validatorIdOpt.get)
+      preState <- MultiParentCasper.getPreStateForNewBlock[F]
+      createBlockResult <- BlockCreator.create(
+                            preState,
+                            validatorIdOpt.get,
+                            shardName
+                          )
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
   def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
-      _                 <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])
-      cs                <- MultiParentCasper.getSnapshot[F](casperShardConf)
-      createBlockResult <- BlockCreator.create(cs, validatorIdOpt.get)
+      _        <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])
+      preState <- MultiParentCasper.getPreStateForNewBlock[F]
+      createBlockResult <- BlockCreator.create(
+                            preState,
+                            validatorIdOpt.get,
+                            shardName
+                          )
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case err =>
@@ -414,14 +423,9 @@ object TestNode {
                          )
                        )
 
-      shardConf = CasperShardConf(
-        shardName = genesis.shardId,
-        maxNumberOfParents = maxNumberOfParents,
-        // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
-        // Required to enable protection from re-submitting duplicate deploys
-        deployLifespan = 50,
-        minPhloPrice = 1
-      )
+      // Shard configuration
+      shardName    = genesis.shardId
+      minPhloPrice = 1L
 
       node <- Resource.eval({
                implicit val bs                    = blockStore
@@ -450,8 +454,9 @@ object TestNode {
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
                  proposer = validatorId match {
-                   case Some(vi) => Proposer[F](vi, shardConf).some
-                   case None     => None
+                   case Some(vi) =>
+                     Proposer[F](vi, shardName, minPhloPrice).some
+                   case None => None
                  }
                  // propose function in casper tests is always synchronous
                  triggerProposeFOpt = proposer.map(
@@ -469,10 +474,9 @@ object TestNode {
                  saveAndValidateBlock = (block: BlockMessage) => {
                    import coop.rchain.blockstorage.syntax._
 
-                   val getCasperSnapshot = MultiParentCasper.getSnapshot[F](shardConf)
                    for {
                      _      <- BlockStore[F].put(block)
-                     result <- BlockProcessor.validateAndAddToDag(block, getCasperSnapshot)
+                     result <- BlockProcessor.validateAndAddToDag(block, shardName, minPhloPrice)
                    } yield result
                  }
 
@@ -510,8 +514,9 @@ object TestNode {
                    requestedBlocksEffect = requestedBlocks,
                    blockRetrieverEffect = blockRetriever,
                    metricEffect = metricEff,
-                   casperShardConf = shardConf,
-                   routingMessageQueue = routingMessageQueue
+                   routingMessageQueue = routingMessageQueue,
+                   shardName = shardName,
+                   minPhloPrice = minPhloPrice
                  )
                } yield node
              })

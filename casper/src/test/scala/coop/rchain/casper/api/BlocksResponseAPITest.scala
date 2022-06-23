@@ -48,8 +48,6 @@ class BlocksResponseAPITest
   ) =
     for {
       genesis <- createGenesis[Task](bonds = bonds)
-      _       <- dagstore.insert(genesis, invalid = false, approved = true)
-      _       <- blockstore.put(genesis)
       b2 <- createBlock[Task](
              v2,
              bonds,

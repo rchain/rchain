@@ -374,7 +374,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
   //    getRejectedBlocksAtTheTop(template)
   //  }
 
-  "merging with leader" should "work" in effectTest {
+  "merging with leader" should "work" ignore effectTest {
     runtimeManagerResource.use { runtimeManager =>
       {
         implicit val rm: RuntimeManager[Task] = runtimeManager
@@ -445,7 +445,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             r             <- mkHeadBlock(mergedState, seqNum, nexBaseBlockNum)
             nextBaseBlock = r.copy(justifications = mergingBlocks.map(_.blockHash))
             _             <- dagStore.insert(nextBaseBlock, false)
-            _             <- dagStore.recordDirectlyFinalized(nextBaseBlock.blockHash, _ => ().pure[Task])
+//            _             <- dagStore.recordDirectlyFinalized(nextBaseBlock.blockHash, _ => ().pure[Task])
           } yield nextBaseBlock
         }
 

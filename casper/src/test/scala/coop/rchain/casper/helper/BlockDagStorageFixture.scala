@@ -23,7 +23,7 @@ import java.nio.file.{Files, Path}
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   val scheduler = Scheduler.fixedPool("block-dag-storage-fixture-scheduler", 4)
 
-  val mkCasperSnapshot = BlockGenerator.mkCasperSnapshot
+  val dummyParentsPreState = BlockGenerator.dummyParentsPreState
 
   def withGenesis[R](
       context: GenesisContext

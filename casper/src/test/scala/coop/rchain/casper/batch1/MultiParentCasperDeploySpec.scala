@@ -61,7 +61,7 @@ class MultiParentCasperDeploySpec
 
   it should "reject deploy with phloPrice lower than minPhloPrice" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      val minPhloPrice = node.casperShardConf.minPhloPrice
+      val minPhloPrice = node.minPhloPrice
       val phloPrice    = minPhloPrice - 1L
       for {
         deployData <- ConstructDeploy

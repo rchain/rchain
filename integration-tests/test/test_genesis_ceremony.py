@@ -1,4 +1,5 @@
 from random import Random
+import re
 
 from rchain.crypto import PrivateKey
 from docker.client import DockerClient
@@ -16,6 +17,7 @@ from .rnode import (
 from .wait import (
     wait_for_approved_block_received_handler_state,
     wait_for_sent_approved_block,
+    wait_for_log_match
 )
 
 
@@ -53,6 +55,11 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
             wait_for_approved_block_received_handler_state(context, validator_a)
             wait_for_approved_block_received_handler_state(context, validator_b)
 
+            added_to_dag_pattern = re.compile("Block #0 [a-fA-F0-9.()]+ added to DAG.")
+
+            wait_for_log_match(context, validator_a, added_to_dag_pattern)
+            wait_for_log_match(context, validator_b, added_to_dag_pattern)
+
             assert ceremony_master.get_blocks_count(2) == 1
             assert validator_a.get_blocks_count(2) == 1
             assert validator_b.get_blocks_count(2) == 1
@@ -74,5 +81,5 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
             assert validator_b_genesis_block.blockHash == ceremony_master_genesis_block.blockHash
             assert len(validator_b_genesis_block.justifications) == 0
 
-            wait_for_approved_block_received_handler_state(context, readonly_a)
+            wait_for_log_match(context, readonly_a, added_to_dag_pattern)
 

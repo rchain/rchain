@@ -16,12 +16,13 @@ import coop.rchain.casper.rholang.InterpreterUtil.{
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, CasperSnapshot, OnChainCasperState}
+import coop.rchain.casper.{CasperMetricsSource, ParentsPreState}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash._
 import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.syntax._
@@ -36,39 +37,36 @@ object BlockGenerator {
   implicit val logSource: LogSource = LogSource(this.getClass)
 
   // Dummy empty Casper snapshot
-  val mkCasperSnapshot = CasperSnapshot(
-    fringe = Seq(),
+  val dummyParentsPreState = ParentsPreState(
     justifications = Set.empty,
-    deploysInScope = Set.empty,
-    maxBlockNum = 0,
-    maxSeqNums = Map.empty,
-    OnChainCasperState(
-      CasperShardConf("", 0, 0, 0L),
-      bondsMap = Map.empty,
-      activeValidators = Seq.empty
-    )
+    fringe = Set(),
+    fringeState = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
+    bondsMap = Map.empty,
+    rejectedDeploys = Set(),
+    maxBlockNum = 0L,
+    maxSeqNums = Map.empty
   )
 
   def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[Unit] =
     for {
-      computeBlockCheckpointResult              <- computeBlockCheckpoint(block, mkCasperSnapshot)
+      computeBlockCheckpointResult              <- computeBlockCheckpoint(block, dummyParentsPreState)
       (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
       result                                    <- injectPostStateHash[F](block, postB1StateHash, postB1ProcessedDeploys)
     } yield result
 
   private def computeBlockCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
-      b: BlockMessage,
-      s: CasperSnapshot
+      block: BlockMessage,
+      preState: ParentsPreState
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
-    val deploys = b.state.deploys.map(_.deploy)
+    val deploys = block.state.deploys.map(_.deploy)
     for {
-      computedParentsInfo <- computeParentsPostState(b.justifications, s)
+      computedParentsInfo <- computeParentsPostState(block.justifications, preState)
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],
-                 BlockData.fromBlock(b),
+                 BlockData.fromBlock(block),
                  computedParentsInfo
                )
       (preStateHash, postStateHash, processedDeploys, rejectedDeploys, _) = result

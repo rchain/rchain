@@ -470,7 +470,7 @@ class ValidateTest
         result <- {
           implicit val rm = runtimeManager
           for {
-            _               <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, mkCasperSnapshot)
+            _               <- InterpreterUtil.validateBlockCheckpoint[Task](genesis)
             _               <- Validate.bondsCache[Task](genesis) shouldBeF Right(Valid)
             modifiedBonds   = Map.empty[Validator, Long]
             modifiedGenesis = genesis.copy(bonds = modifiedBonds)
