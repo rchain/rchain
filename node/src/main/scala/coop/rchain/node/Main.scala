@@ -3,6 +3,7 @@ package coop.rchain.node
 import cats.Parallel
 import cats.effect._
 import cats.syntax.all._
+import com.google.common.base.CharMatcher
 import coop.rchain.casper.protocol.client.{DeployRuntime, GrpcDeployService, GrpcProposeService}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
@@ -96,6 +97,9 @@ object Main {
               "allow-private-addresses option is deprecated and will be removed in future releases."
             )
             .whenA(options.run.allowPrivateAddresses.isSupplied)
+
+      _ <- checkShardNameOnlyAscii(nodeConf.casper.shardName)
+            .whenA(options.run.shardName.isSupplied)
 
       // Create node runtime
       _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
@@ -393,6 +397,11 @@ object Main {
       kademliaPortConf <- checkKademliaPort(rpPortConf)
     } yield kademliaPortConf
   }
+
+  private def checkShardNameOnlyAscii[F[_]: Sync: Log](shardName: String): F[Unit] =
+    (Log[F].error("Shard name should contain only ASCII characters") >>
+      Sync[F].raiseError(new RuntimeException("Invalid shard name")))
+      .whenA(!CharMatcher.ascii().matchesAllOf(shardName))
 
   private def logConfiguration[F[_]: Sync: Log](
       conf: NodeConf,
