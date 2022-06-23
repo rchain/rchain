@@ -1,9 +1,9 @@
 package coop.rchain.blockstorage.dag
 
+import cats.Monad
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import cats.{Monad, Show}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
@@ -36,11 +36,6 @@ object BlockMetadataStore {
       dagSet: Set[BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       heightMap: SortedMap[Long, Set[BlockHash]],
-      // In general - at least genesis should be LFB.
-      // But dagstate can be empty, as it is initialized before genesis is inserted.
-      // Also lots of tests do not have genesis properly initialised, so fixing all this is pain.
-      // So this is Option.
-      lastFinalizedBlock: Option[(BlockHash, Long)],
       finalizedBlockSet: Set[BlockHash]
   )
 
@@ -70,40 +65,6 @@ object BlockMetadataStore {
         _ <- store.put(block.blockHash, block)
       } yield ()
 
-    /** Record new last finalized lock. Directly finalized is the output of finalizer,
-      * indirectly finalized are new LFB ancestors. */
-    def recordFinalized(directly: BlockHash, indirectly: Set[BlockHash])(
-        implicit sync: Sync[F]
-    ): F[Unit] = {
-      implicit val s = new Show[BlockHash] {
-        override def show(t: BlockHash): String = PrettyPrinter.buildString(t)
-      }
-
-      for {
-        // read current values
-        curMetaForDF  <- store.getUnsafe(directly)
-        curMetasForIF <- store.getUnsafeBatch(indirectly.toList)
-        // new values to persist
-        newMetaForDF  = (directly, curMetaForDF.copy(finalized = true))
-        newMetasForIF = curMetasForIF.map(v => (v.blockHash, v.copy(finalized = true)))
-        // update in memory state
-        _ <- dagState.update { st =>
-              val newFinalizedSet = st.finalizedBlockSet ++ indirectly + directly
-
-              // update lastFinalizedBlock only when current one is lower
-              if (st.lastFinalizedBlock.exists { case (_, h) => h > curMetaForDF.blockNum })
-                st.copy(finalizedBlockSet = newFinalizedSet)
-              else
-                st.copy(
-                  finalizedBlockSet = newFinalizedSet,
-                  lastFinalizedBlock = (directly, curMetaForDF.blockNum).some
-                )
-            }
-        // persist new values all at once
-        _ <- store.put(newMetaForDF +: newMetasForIF)
-      } yield ()
-    }
-
     def get(hash: BlockHash): F[Option[BlockMetadata]] = store.get1(hash)
 
     def getUnsafe(hash: BlockHash)(
@@ -130,11 +91,6 @@ object BlockMetadataStore {
     def heightMap: F[SortedMap[Long, Set[BlockHash]]] =
       dagState.get.map(_.heightMap)
 
-    // This is Option because method is called on BlockDagStorage initialization which is before
-    // the first finalized block (genesis) is inserted.
-    def lastFinalizedBlock(implicit sync: Sync[F]): F[Option[BlockHash]] =
-      dagState.get.map(_.lastFinalizedBlock.map(_._1))
-
     def finalizedBlockSet: F[Set[BlockHash]] = dagState.get.map(_.finalizedBlockSet)
   }
 
@@ -156,12 +112,6 @@ object BlockMetadataStore {
       state.heightMap.updated(block.blockNum, currSet + block.hash)
     } else state.heightMap
 
-    val newLastFinalizedBlock =
-      if (block.isFinalized &&
-          !state.lastFinalizedBlock.exists { case (_, height) => height > block.blockNum })
-        (block.hash, block.blockNum).some
-      else state.lastFinalizedBlock
-
     val newFinalisedBlockSet =
       if (block.isFinalized) state.finalizedBlockSet + block.hash else state.finalizedBlockSet
 
@@ -169,7 +119,6 @@ object BlockMetadataStore {
       dagSet = newDagSet,
       childMap = newChildMap,
       heightMap = newHeightMap,
-      lastFinalizedBlock = newLastFinalizedBlock,
       finalizedBlockSet = newFinalisedBlockSet
     )
   }
@@ -199,7 +148,6 @@ object BlockMetadataStore {
         dagSet = Set(),
         childMap = Map(),
         heightMap = SortedMap(),
-        lastFinalizedBlock = none[(BlockHash, Long)],
         finalizedBlockSet = Set()
       )
 

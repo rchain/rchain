@@ -166,13 +166,7 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
       } yield fringe
 
     // Latest fringe seen from justifications
-    // - can be empty which means first layer is first message from each sender
-    val parentFringe =
-      justifications.toList
-        .maximumByOption(_.fringe.map(msgMap).toList.map(_.height).maximumOption.getOrElse(-1L))
-        .map(_.fringe)
-        .getOrElse(Set())
-        .map(msgMap)
+    val parentFringe = latestFringe(justifications)
 
     // Find top most fringe
     // - multiple fringes can be finalized at once
@@ -180,4 +174,16 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
 
     (parentFringe, newFringeOpt)
   }
+
+  /**
+    * Latest fringe seen from justifications
+    * - can be empty which means first layer is the first message from each sender
+    */
+  // TODO: should fringes read bonds map from each round if multiple are finalized???
+  def latestFringe(justifications: Set[Message[M, S]]): Set[Message[M, S]] =
+    justifications.toList
+      .maximumByOption(_.fringe.map(msgMap).toList.map(_.height).maximumOption.getOrElse(-1L))
+      .map(_.fringe)
+      .getOrElse(Set())
+      .map(msgMap)
 }

@@ -12,21 +12,27 @@ import scala.collection.immutable.SortedMap
 
 final case class DagRepresentation(
     dagSet: Set[BlockHash],
-    latestMessagesHashes: Map[Validator, BlockHash],
     childMap: Map[BlockHash, Set[BlockHash]],
     heightMap: SortedMap[Long, Set[BlockHash]],
-    lastFinalizedBlockHash: Option[BlockHash],
-    finalizedBlocksSet: Set[BlockHash],
     dagMessageState: DagMessageState[BlockHash, Validator]
 ) {
+  // TODO: pick highest block from fringe until LFB is replaced with fringe completely
+  lazy val lastFinalizedBlockHash: Option[BlockHash] =
+    dagMessageState.latestFringe.toList.sortBy(_.height).lastOption.map(_.id)
+
+  lazy val finalizedBlocksSet: Set[BlockHash] = {
+    val latestFringe = dagMessageState.latestFringe
+    latestFringe.flatMap(_.seen)
+  }
+
+  lazy val latestBlockNumber: Long = heightMap.lastOption.map { case (h, _) => h + 1 }.getOrElse(0L)
+
   def contains(blockHash: BlockHash): Boolean =
     blockHash.size == BlockHash.Length && dagSet.contains(blockHash)
 
   def children(blockHash: BlockHash): Option[Set[BlockHash]] = childMap.get(blockHash)
 
   def isFinalized(blockHash: BlockHash): Boolean = finalizedBlocksSet.contains(blockHash)
-
-  def latestBlockNumber: Long = heightMap.lastOption.map { case (h, _) => h + 1 }.getOrElse(0L)
 
   def topoSort(
       startBlockNumber: Long,
@@ -68,17 +74,10 @@ object DagRepresentation {
       dr: DagRepresentation,
       validator: Validator
   ): F[Option[BlockHash]] =
-    dr.latestMessagesHashes.get(validator).pure
+    dr.dagMessageState.latestMsgs.filter(_.sender == validator).map(_.id).headOption.pure
 
   def latestMessageHashes[F[_]: Sync: BlockDagStorage](
       dr: DagRepresentation
   ): F[Map[Validator, BlockHash]] =
-    dr.latestMessagesHashes.pure
-
-  def latestMessages[F[_]: Sync: BlockDagStorage](
-      dr: DagRepresentation
-  ): F[Map[Validator, BlockMetadata]] =
-    dr.latestMessagesHashes.toList
-      .traverse { case (s, h) => BlockDagStorage[F].lookupUnsafe(h).map((s, _)) }
-      .map(_.toMap)
+    dr.dagMessageState.latestMsgs.map(m => (m.sender, m.id)).toMap.pure
 }

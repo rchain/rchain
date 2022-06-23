@@ -37,13 +37,6 @@ final class DagRepresentationOps[F[_]](
   ): F[Map[Validator, BlockHash]] =
     DagRepresentation.latestMessageHashes(dag)
 
-  def latestMessageHashUnsafe(
-      v: Validator
-  )(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[BlockHash] = {
-    def errMsg = s"No latest message for validator ${PrettyPrinter.buildString(v)}"
-    latestMessageHash(v) >>= (_.liftTo(NoLatestMessage(errMsg)))
-  }
-
   def latestMessage(
       validator: Validator
   )(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[Option[BlockMetadata]] =
@@ -52,20 +45,14 @@ final class DagRepresentationOps[F[_]](
   def latestMessages(
       implicit sync: Sync[F],
       bds: BlockDagStorage[F]
-  ): F[Map[Validator, BlockMetadata]] = {
-    import cats.instances.vector._
-    latestMessageHashes >>= (
-      _.toVector
-        .traverse {
-          case (validator, hash) => bds.lookupUnsafe(hash).map(validator -> _)
-        }
-        .map(_.toMap)
-      )
-  }
+  ): F[Map[Validator, BlockMetadata]] =
+    latestMessageHashes >>= (_.toVector
+      .traverse { case (validator, hash) => bds.lookupUnsafe(hash).map(validator -> _) }
+      .map(_.toMap))
 
   def nonFinalizedBlocks(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[Set[BlockHash]] =
     Stream
-      .unfoldLoopEval(dag.latestMessagesHashes.valuesIterator.toList) { lvl =>
+      .unfoldLoopEval(dag.dagMessageState.latestMsgs.map(_.id).toList) { lvl =>
         for {
           out  <- lvl.filterNot(dag.isFinalized).pure
           next <- out.traverse(bds.lookup(_).map(_.map(_.justifications))).map(_.flatten.flatten)
@@ -86,12 +73,12 @@ final class DagRepresentationOps[F[_]](
       .compile
       .to(Set)
 
-  def ancestors(blockHash: BlockHash, filterF: BlockHash => F[Boolean])(
+  def ancestors(blockHashes: List[BlockHash], filterF: BlockHash => F[Boolean])(
       implicit sync: Sync[F],
       bds: BlockDagStorage[F]
   ): F[Set[BlockHash]] =
     Stream
-      .unfoldEval(List(blockHash)) { lvl =>
+      .unfoldEval(blockHashes) { lvl =>
         val parents = lvl
           .traverse(bds.lookupUnsafe)
           .flatMap(_.flatMap(_.justifications).distinct.filterA(filterF))

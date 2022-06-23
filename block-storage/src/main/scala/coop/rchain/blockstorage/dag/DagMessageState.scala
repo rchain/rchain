@@ -3,9 +3,8 @@ package coop.rchain.blockstorage.dag
 import cats.syntax.all._
 
 object DagMessageState {
-  def apply[M: Ordering, S: Ordering](
-      latestMsgs: Set[Message[M, S]]
-  ): DagMessageState[M, S] = new DagMessageState(latestMsgs, Map())
+  def apply[M: Ordering, S: Ordering](): DagMessageState[M, S] =
+    new DagMessageState[M, S](Set(), Map())
 }
 
 // DagMessageState represents state of one validator in the network
@@ -119,6 +118,14 @@ final case class DagMessageState[M: Ordering, S: Ordering](
 
     // Insert message to self state
     (insertMsg(newMsg), newMsg)
+  }
+
+  /**
+    * Convenient method to get latest fringe
+    */
+  def latestFringe: Set[Message[M, S]] = {
+    val finalizer = Finalizer(msgMap)
+    finalizer.latestFringe(latestMsgs)
   }
 
   /**

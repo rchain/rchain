@@ -29,7 +29,6 @@ import scala.collection.concurrent.TrieMap
 final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     representationState: Ref[F, DagRepresentation],
     lock: Semaphore[F],
-    latestMessagesIndex: KeyValueTypedStore[F, Validator, BlockHash],
     blockMetadataIndex: BlockMetadataStore[F],
     deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
     deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]]
@@ -201,7 +200,6 @@ object BlockDagKeyValueStorage {
   private final case class DagStores[F[_]](
       metadata: BlockMetadataStore[F],
       metadataDb: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       deploys: KeyValueTypedStore[F, DeployId, BlockHash],
       deployPool: KeyValueTypedStore[F, DeployId, Signed[DeployData]]
   )
@@ -216,12 +214,7 @@ object BlockDagKeyValueStorage {
                           codecBlockMetadata
                         )
       blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb)
-      // Latest messages map
-      latestMessagesDb <- KeyValueStoreManager[F].database[Validator, BlockHash](
-                           "latest-messages",
-                           codecValidator,
-                           codecBlockHash
-                         )
+
       // Deploy map
       deployIndexDb <- KeyValueStoreManager[F].database[DeployId, BlockHash](
                         "deploy-index",
@@ -237,7 +230,6 @@ object BlockDagKeyValueStorage {
     } yield DagStores(
       blockMetadataStore,
       blockMetadataDb,
-      latestMessagesDb,
       deployIndexDb,
       deployPoolDb
     )
