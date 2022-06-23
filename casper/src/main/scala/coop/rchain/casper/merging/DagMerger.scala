@@ -27,6 +27,105 @@ object DagMerger {
   def costOptimalRejectionAlg: DeployChainIndex => Long =
     (r: DeployChainIndex) => r.deploysWithCost.map(_.cost).sum
 
+  /**
+    * Merges blocks finalized with the fringe
+    *
+    * @param fringeDiffBlocks all blocks included from previous fringe to new fringe
+    * @param previousFringeState base state for merging, previous fringe state hash
+    * @param index getter for block index
+    * @param historyRepository history repository instance
+    * @param rejectionCostF rejection cost calculation function
+    * @return a tuple (new fringe state hash, rejected deploys - signatures)
+    */
+  def mergeFringe[F[_]: Concurrent: Log](
+      fringeDiffBlocks: Set[BlockHash],
+      previousFringeState: Blake2b256Hash,
+      index: BlockHash => F[Vector[DeployChainIndex]],
+      historyRepository: RhoHistoryRepository[F],
+      rejectionCostF: DeployChainIndex => Long
+  ): F[(Blake2b256Hash, Set[ByteString])] =
+    for {
+      actualSet <- fringeDiffBlocks.toList.traverse(index).map(_.flatten.toSet)
+      // TODO: support for late blocks (with justifications below previousFringeState)
+      lateSet = Set[DeployChainIndex]()
+
+      branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
+        (as.flatMap(_.deploysWithCost.map(_.id)) intersect bs.flatMap(_.deploysWithCost.map(_.id))).nonEmpty ||
+          EventLogMergingLogic.areConflicting(
+            as.map(_.eventLogIndex).toList.combineAll,
+            bs.map(_.eventLogIndex).toList.combineAll
+          )
+      historyReader <- historyRepository.getHistoryReader(previousFringeState)
+      baseReader    = historyReader.readerBinary
+      baseGetData   = historyReader.getData _
+      overrideTrieAction = (
+          hash: Blake2b256Hash,
+          changes: ChannelChange[ByteVector],
+          numberChs: NumberChannelsDiff
+      ) =>
+        numberChs.get(hash).traverse {
+          RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
+        }
+      computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) =>
+        StateChangeMerger.computeTrieActions(
+          changes,
+          baseReader,
+          mergeableChs,
+          overrideTrieAction
+        )
+
+      applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
+        historyRepository.reset(previousFringeState).flatMap(_.doCheckpoint(actions).map(_.root))
+
+      baseMergeableChRes <- actualSet
+                             .map(_.eventLogIndex.numberChannelsData)
+                             .flatMap(_.keys)
+                             .toList
+                             .traverse(
+                               channelHash =>
+                                 convertToReadNumber(baseGetData)
+                                   .apply(channelHash)
+                                   .map(res => (channelHash, res.getOrElse(0L)))
+                             )
+                             .map(_.toMap)
+      (toMerge, rejected, logStr1) = ConflictSetMerger
+        .merge[DeployChainIndex](
+          actualSet = actualSet,
+          lateSet = lateSet,
+          depends = (target, source) =>
+            EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
+          conflicts = branchesAreConflicting,
+          cost = rejectionCostF,
+          mergeableChannels = _.eventLogIndex.numberChannelsData,
+          baseMergeableChRes
+        )
+      r = Stopwatch.profile(toMerge.toList.map(_.stateChanges).combineAll)
+
+      (allChanges, combineAllChanges) = r
+
+      // All number channels merged
+      // TODO: Negative or overflow should be rejected before!
+      allMergeableChannels = toMerge.toList
+        .map(_.eventLogIndex.numberChannelsData)
+        .combineAll
+
+      r                                 <- Stopwatch.duration(computeTrieActions(allChanges, allMergeableChannels))
+      (trieActions, computeActionsTime) = r
+      r                                 <- Stopwatch.duration(applyTrieActions(trieActions))
+      (newState, applyActionsTime)      = r
+      overallChanges                    = s"${allChanges.datumsChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.consumeChannelsToJoinSerializedMap.size} J"
+      logStr = s"Merging done: " +
+        s"late set size ${lateSet.size}; " +
+        s"actual set size ${actualSet.size}; " +
+        logStr1 +
+        s"changes combined (${overallChanges}) in ${combineAllChanges}; " +
+        s"trie actions (${trieActions.size}) in ${computeActionsTime}; " +
+        s"actions applied in ${applyActionsTime}"
+      _ <- Log[F].debug(logStr)
+
+      rejectedDeploys = rejected.flatMap(_.deploysWithCost.map(_.id))
+    } yield (newState, rejectedDeploys)
+
   def merge[F[_]: Concurrent: BlockDagStorage: Log](
       dag: DagRepresentation,
       fringe: Seq[BlockHash],
