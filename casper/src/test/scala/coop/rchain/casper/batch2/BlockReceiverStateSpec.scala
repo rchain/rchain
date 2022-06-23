@@ -1,4 +1,4 @@
-package coop.rchain.casper.blocks.proposer
+package coop.rchain.casper.batch2
 
 import coop.rchain.casper.blocks._
 import org.scalatest.flatspec.AnyFlatSpec
