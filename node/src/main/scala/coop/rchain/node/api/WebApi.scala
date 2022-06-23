@@ -9,6 +9,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
+import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.syntax._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
@@ -353,22 +354,15 @@ object WebApi {
 
   private def exprParToParProto(expr: ExprPar): Par = {
     val exprs = expr.data.map(rhoExprToParProto)
-
-    def merge[A](f: Par => Seq[A]): Seq[A] = exprs.foldLeft(Seq.empty[A]) {
-      case (acc, p) => acc ++ f(p)
-    }
-
-    Par(
-      merge(_.sends),
-      merge(_.receives),
-      merge(_.news),
-      merge(_.exprs),
-      merge(_.matches),
-      merge(_.unforgeables),
-      merge(_.bundles),
-      merge(_.connectives),
-      exprs.headOption.getOrElse(Par()).locallyFree,
-      exprs.headOption.getOrElse(Par()).connectiveUsed
+    VectorPar().copy(
+      exprs.flatMap(_.sends),
+      exprs.flatMap(_.receives),
+      exprs.flatMap(_.news),
+      exprs.flatMap(_.exprs),
+      exprs.flatMap(_.matches),
+      exprs.flatMap(_.unforgeables),
+      exprs.flatMap(_.bundles),
+      exprs.flatMap(_.connectives)
     )
   }
 
