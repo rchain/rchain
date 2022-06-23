@@ -153,7 +153,7 @@ object Proposer {
         // TODO: take bonds map from merged state of fringe
         //  - it should also include consensus bonds map
         bondsMap <- if (latestFringe.nonEmpty) latestFringe.head.bondsMap.pure[F]
-                   else dag.lookupUnsafe(dag.heightMap.head._2.head).map(_.bondsMap)
+                   else BlockDagStorage[F].lookupUnsafe(dag.heightMap.head._2.head).map(_.bondsMap)
         sender = ByteString.copyFrom(validator.publicKey.bytes)
       } yield bondsMap.contains(sender)
 

@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.syntax._
@@ -156,8 +156,8 @@ object NodeRunning {
       Log[F].info(
         s"Sending tips ${PrettyPrinter.buildString(tips)} to ${peer.endpoint.host}"
       )
-    val getTips = BlockDagStorage[F].getRepresentation
-      .flatMap(_.latestMessageHashes.map(_.values.toList.distinct))
+    val getTips =
+      BlockDagStorage[F].getRepresentation.map(_.dagMessageState.latestMsgs.map(_.id).toList)
     // TODO respond with all tips in a single message
     def respondToPeer(tip: BlockHash) = TransportLayer[F].sendToPeer(peer, HasBlockProto(tip))
 

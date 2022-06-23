@@ -1,6 +1,5 @@
 package coop.rchain.blockstorage.dag
 
-import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.models.BlockHash
@@ -11,6 +10,17 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 
 import scala.collection.immutable.SortedMap
 
+/**
+  * Represents the state of the DAG. An index of BlockMetadata store.
+  *
+  * @param dagSet all blocks storead in DAG
+  * @param childMap children relations map
+  * @param heightMap block number map
+  * @param dagMessageState nested state for [[Message]] objects
+  * @param fringeStates map of fringes with (fringes state and rejected deploys)
+  */
+// TODO: unify state from DagMessageState and DagRepresentation
+//  - this state can now become DagView
 final case class DagRepresentation(
     dagSet: Set[BlockHash],
     childMap: Map[BlockHash, Set[BlockHash]],
@@ -22,6 +32,8 @@ final case class DagRepresentation(
   // TODO: pick highest block from fringe until LFB is replaced with fringe completely
   lazy val lastFinalizedBlockHash: Option[BlockHash] =
     dagMessageState.latestFringe.toList.sortBy(_.height).lastOption.map(_.id)
+
+  lazy val latestFringe: Set[BlockHash] = dagMessageState.latestFringe.map(_.id)
 
   lazy val finalizedBlocksSet: Set[BlockHash] = {
     val latestFringe = dagMessageState.latestFringe
@@ -64,23 +76,4 @@ final case class DagRepresentation(
       val truncatedByteString = truncatedHash.dropRight(1).unsafeHexToByteString
       dagSet.filter(_.startsWith(truncatedByteString)).find(_.toHexString.startsWith(truncatedHash))
     }
-}
-
-object DagRepresentation {
-  def lastFinalizedBlockUnsafe[F[_]: Sync](dr: DagRepresentation): F[BlockHash] = {
-    val errMsg =
-      "DagState does not contain lastFinalizedBlock. Are you calling this on empty BlockDagStorage? Otherwise there is a bug."
-    dr.lastFinalizedBlockHash.liftTo[F](new Exception(errMsg))
-  }
-
-  def latestMessageHash[F[_]: Sync: BlockDagStorage](
-      dr: DagRepresentation,
-      validator: Validator
-  ): F[Option[BlockHash]] =
-    dr.dagMessageState.latestMsgs.filter(_.sender == validator).map(_.id).headOption.pure
-
-  def latestMessageHashes[F[_]: Sync: BlockDagStorage](
-      dr: DagRepresentation
-  ): F[Map[Validator, BlockHash]] =
-    dr.dagMessageState.latestMsgs.map(m => (m.sender, m.id)).toMap.pure
 }

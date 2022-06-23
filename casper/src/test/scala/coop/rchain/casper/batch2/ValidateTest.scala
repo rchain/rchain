@@ -5,7 +5,6 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.BlockGenerator._
@@ -108,11 +107,10 @@ class ValidateTest
     val pk    = Secp256k1.toPublic(sk)
     val block = chain(i)
     for {
-      dag              <- blockDagStorage.getRepresentation
-      sender           = ByteString.copyFrom(pk.bytes)
-      latestMessageOpt <- dag.latestMessage(sender)
-      seqNum           = latestMessageOpt.fold(0L)(_.seqNum) + 1L
-      result           = ValidatorIdentity(sk).signBlock(block.copy(seqNum = seqNum))
+      dag    <- blockDagStorage.getRepresentation
+      sender = ByteString.copyFrom(pk.bytes)
+      seqNum = getLatestSeqNum(sender, dag) + 1L
+      result = ValidatorIdentity(sk).signBlock(block.copy(seqNum = seqNum))
     } yield result
   }
 
@@ -485,11 +483,10 @@ class ValidateTest
       val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
-        _                <- blockDagStorage.insert(genesis, false, approved = true)
-        dag              <- blockDagStorage.getRepresentation
-        sender           = ByteString.copyFrom(pk.bytes)
-        latestMessageOpt <- dag.latestMessage(sender)
-        seqNum           = latestMessageOpt.fold(0L)(_.seqNum) + 1L
+        _      <- blockDagStorage.insert(genesis, false, approved = true)
+        dag    <- blockDagStorage.getRepresentation
+        sender = ByteString.copyFrom(pk.bytes)
+        seqNum = getLatestSeqNum(sender, dag) + 1L
         genesis = ValidatorIdentity(sk)
           .signBlock(context.genesisBlock.copy(seqNum = seqNum))
         _ <- Validate.formatOfFields[Task](genesis) shouldBeF true

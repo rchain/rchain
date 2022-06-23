@@ -156,13 +156,11 @@ trait BlockGenerator {
                 seqNum
               )
       dag <- BlockDagStorage[F].getRepresentation
-      nextCreatorSeqNum <- if (block.seqNum == 0L)
-                            dag.latestMessage(block.sender).map(_.fold(-1L)(_.seqNum) + 1L)
-                          else block.seqNum.pure[F]
+      // TODO: format of if..then expressions in for comprehensions is awful
+      nextCreatorSeqNum = if (block.seqNum == 0L) getLatestSeqNum(block.sender, dag) + 1L
+      else block.seqNum
       nextId <- justifications.toList
-                 .traverse(
-                   BlockStore[F].getUnsafe(_).map(_.blockNumber)
-                 )
+                 .traverse(BlockStore[F].getUnsafe(_).map(_.blockNumber))
                  .map(_.maximumOption.getOrElse(0L) + 1L)
       modifiedBlock = block
         .copy(
@@ -172,6 +170,11 @@ trait BlockGenerator {
       _ <- BlockDagStorage[F].insert(modifiedBlock, invalid, false)
       _ <- BlockStore[F].put(block.blockHash, modifiedBlock)
     } yield modifiedBlock
+
+  def getLatestSeqNum(sender: Validator, dag: DagRepresentation): Long = {
+    val sendersLatest = dag.dagMessageState.latestMsgs.filter(_.sender == sender)
+    sendersLatest.map(_.senderSeq).toList.maximumOption.getOrElse(-1L)
+  }
 
   def createValidatorBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       justifications: Seq[BlockMessage],

@@ -282,7 +282,7 @@ object TransactionBalances {
           implicit val bds = blockDagStorage
           for {
             blockHash    <- findTransaction(t)
-            blockMetaOpt <- dagRepresantation.lookup(blockHash)
+            blockMetaOpt <- bds.lookup(blockHash)
             blockMeta <- blockMetaOpt.liftTo(
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )

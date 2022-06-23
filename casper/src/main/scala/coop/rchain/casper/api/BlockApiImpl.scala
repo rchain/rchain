@@ -32,6 +32,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
@@ -654,10 +655,17 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
   override def getLatestMessage: F[ApiErr[BlockMetadata]] =
     for {
-      validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
-      dag              <- BlockDagStorage[F].getRepresentation
-      latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
-      latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
+      dag            <- BlockDagStorage[F].getRepresentation
+      validator      <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
+      validatorBytes = ByteString.copyFrom(validator.publicKey.bytes)
+      // TODO: return list of latest messages for a validator
+      //  - this is possible with invalid blocks
+      latestMessageOpt <- dag.dagMessageState.latestMsgs
+                           .filter(_.sender == validatorBytes)
+                           .map(_.id)
+                           .headOption
+                           .traverse(BlockDagStorage[F].lookupUnsafe(_))
+      latestMessage <- latestMessageOpt.liftTo[F](NoBlockMessageError)
     } yield latestMessage.asRight[Error]
 
   override def getDataAtPar(

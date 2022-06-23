@@ -244,12 +244,11 @@ object Validate {
     */
   def sequenceNumber[F[_]: Sync: BlockDagStorage: Log](b: BlockMessage): F[ValidBlockProcessing] =
     for {
-      dag                           <- BlockDagStorage[F].getRepresentation
-      justifications                <- b.justifications.traverse(dag.lookupUnsafe(_))
-      creatorJustificationOpt       = justifications.find(_.sender == b.sender)
-      creatorJustificationSeqNumber = creatorJustificationOpt.map(_.seqNum).getOrElse(-1L)
-      number                        = b.seqNum
-      result                        = creatorJustificationSeqNumber + 1L == number
+      justifications         <- b.justifications.traverse(BlockDagStorage[F].lookupUnsafe(_))
+      creatorJustifications  = justifications.filter(_.sender == b.sender)
+      creatorLatestSeqNumber = creatorJustifications.map(_.seqNum).maximumOption.getOrElse(-1L)
+      number                 = b.seqNum
+      result                 = creatorLatestSeqNumber + 1L == number
       status <- if (result) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
                } else {
@@ -257,7 +256,7 @@ object Validate {
                    _ <- Log[F].warn(
                          ignore(
                            b,
-                           s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+                           s"seq number $number is not one more than creator justification number $creatorLatestSeqNumber."
                          )
                        )
                  } yield BlockStatus.invalidSequenceNumber.asLeft[ValidBlock]
@@ -339,8 +338,9 @@ object Validate {
       block: BlockMessage
   ): F[ValidBlockProcessing] =
     for {
-      dag               <- BlockDagStorage[F].getRepresentation
-      justifications    <- block.justifications.flatTraverse(dag.lookup(_).map(_.toList))
+      justifications <- block.justifications.flatTraverse(
+                         BlockDagStorage[F].lookup(_).map(_.toList)
+                       )
       invalidValidators = justifications.filter(_.invalid).map(b => b.sender)
       neglectedInvalidJustification = invalidValidators.exists { invalidValidator =>
         val slashedValidatorBond = block.bonds.get(invalidValidator)

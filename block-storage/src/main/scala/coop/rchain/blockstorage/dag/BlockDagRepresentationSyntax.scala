@@ -4,10 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.blockstorage.TopoSortFragmentParameterError
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockMetadata
-import coop.rchain.models.Validator.Validator
 import fs2.Stream
 
 trait DagRepresentationSyntax {
@@ -16,39 +13,14 @@ trait DagRepresentationSyntax {
   ): DagRepresentationOps[F] = new DagRepresentationOps[F](dag)
 }
 
-final case class NoLatestMessage(message: String) extends Exception(message)
-
 final class DagRepresentationOps[F[_]](
     // DagRepresentation extensions / syntax
     private val dag: DagRepresentation
 ) extends AnyVal {
 
+  // TODO: refactor callers to work with multiple finalized blocks (fringe)
   def lastFinalizedBlockUnsafe(implicit s: Sync[F]): F[BlockHash] =
-    DagRepresentation.lastFinalizedBlockUnsafe(dag)
-
-  def latestMessageHash(
-      validator: Validator
-  )(implicit s: Sync[F], bds: BlockDagStorage[F]): F[Option[BlockHash]] =
-    DagRepresentation.latestMessageHash(dag, validator)
-
-  def latestMessageHashes(
-      implicit s: Sync[F],
-      bds: BlockDagStorage[F]
-  ): F[Map[Validator, BlockHash]] =
-    DagRepresentation.latestMessageHashes(dag)
-
-  def latestMessage(
-      validator: Validator
-  )(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[Option[BlockMetadata]] =
-    latestMessageHash(validator) >>= (_.traverse(bds.lookupUnsafe))
-
-  def latestMessages(
-      implicit sync: Sync[F],
-      bds: BlockDagStorage[F]
-  ): F[Map[Validator, BlockMetadata]] =
-    latestMessageHashes >>= (_.toVector
-      .traverse { case (validator, hash) => bds.lookupUnsafe(hash).map(validator -> _) }
-      .map(_.toMap))
+    dag.lastFinalizedBlockHash.liftTo(new Exception("Finalized fringe is not available."))
 
   def nonFinalizedBlocks(implicit sync: Sync[F], bds: BlockDagStorage[F]): F[Set[BlockHash]] =
     Stream
@@ -95,9 +67,4 @@ final class DagRepresentationOps[F[_]](
     dag
       .topoSort(startBlockNumber, maybeEndBlockNumber)
       .liftTo(TopoSortFragmentParameterError(startBlockNumber, Long.MaxValue))
-
-  // TODO replace all calls with direct calls for BlockDagStorage
-  def lookup(blockHash: BlockHash)(implicit bds: BlockDagStorage[F]) = bds.lookup(blockHash)
-  def lookupUnsafe(blockHash: BlockHash)(implicit s: Sync[F], bds: BlockDagStorage[F]) =
-    bds.lookupUnsafe(blockHash)
 }
