@@ -11,7 +11,7 @@ import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.{MultiParentCasper, ParentsPreState, PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.{MultiParentCasper, ParentsMergedState, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
@@ -38,7 +38,7 @@ object BlockCreator {
    *  4. Create a new block that contains the deploys from the previous step.
    */
   def create[F[_]: Concurrent: Time: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
-      preState: ParentsPreState,
+      preState: ParentsMergedState,
       validatorIdentity: ValidatorIdentity,
       shardId: String,
       dummyDeployOpt: Option[(PrivateKey, String)] = None

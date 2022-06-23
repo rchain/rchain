@@ -65,7 +65,7 @@ object MultiParentCasper {
   }
 
   def getPreStateForNewBlock[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log]
-      : F[ParentsPreState] =
+      : F[ParentsMergedState] =
     for {
       dag <- BlockDagStorage[F].getRepresentation
 
@@ -79,7 +79,7 @@ object MultiParentCasper {
 
   def getPreStateForParents[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log](
       parentHashes: Set[BlockHash]
-  ): F[ParentsPreState] =
+  ): F[ParentsMergedState] =
     for {
       dag <- BlockDagStorage[F].getRepresentation
 
@@ -153,7 +153,7 @@ object MultiParentCasper {
       maxHeight  = justifications.map(_.blockNum).maximumOption.getOrElse(-1L)
       maxSeqNums = justifications.map(m => (m.sender, m.seqNum)).toMap
       newFringe  = newFringeHashes.getOrElse(prevFringeHashes)
-    } yield ParentsPreState(
+    } yield ParentsMergedState(
       justifications = justifications.toSet,
       fringe = newFringe,
       fringeState = fringeState,

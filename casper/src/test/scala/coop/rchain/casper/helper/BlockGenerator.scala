@@ -16,7 +16,7 @@ import coop.rchain.casper.rholang.InterpreterUtil.{
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.{CasperMetricsSource, ParentsPreState}
+import coop.rchain.casper.{CasperMetricsSource, ParentsMergedState}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -37,7 +37,7 @@ object BlockGenerator {
   implicit val logSource: LogSource = LogSource(this.getClass)
 
   // Dummy empty Casper snapshot
-  val dummyParentsPreState = ParentsPreState(
+  val dummyParentsPreState = ParentsMergedState(
     justifications = Set.empty,
     fringe = Set(),
     fringeState = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
@@ -58,7 +58,7 @@ object BlockGenerator {
 
   private def computeBlockCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
-      preState: ParentsPreState
+      preState: ParentsMergedState
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
     val deploys = block.state.deploys.map(_.deploy)
     for {

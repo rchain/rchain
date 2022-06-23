@@ -70,7 +70,7 @@ object InterpreterUtil {
                    MultiParentCasper.getPreStateForParents(parents.toSet)
                  else {
                    // Genesis block
-                   ParentsPreState(
+                   ParentsMergedState(
                      justifications = Set[BlockMetadata](),
                      fringe = Set[BlockHash](),
                      fringeState = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
@@ -150,7 +150,7 @@ object InterpreterUtil {
                    MultiParentCasper.getPreStateForParents(parents.toSet)
                  else {
                    // Genesis block
-                   ParentsPreState(
+                   ParentsMergedState(
                      justifications = Set[BlockMetadata](),
                      fringe = Set[BlockHash](),
                      fringeState = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
@@ -329,7 +329,7 @@ object InterpreterUtil {
 
   def computeParentsPostState[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       parents: Seq[BlockHash],
-      preState: ParentsPreState
+      preState: ParentsMergedState
   ): F[(StateHash, Seq[ByteString])] =
     Span[F].trace(ComputeParentPostStateMetricsSource) {
       parents match {

@@ -7,7 +7,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.rspace.hashing.Blake2b256Hash
 
 /**
-  * [[ParentsPreState]] represents required data to create or validate a block from the view of
+  * [[ParentsMergedState]] represents required data to create or validate a block from the view of
   * parent relations (justifications) or for the new block, latest messages which will be used as justifications.
   *
   * @param justifications block justifications (latest blocks for the new block)
@@ -18,7 +18,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
   * @param maxBlockNum maximum block height from parent blocks
   * @param maxSeqNums latest sequence numbers for bonded validators
   */
-final case class ParentsPreState(
+final case class ParentsMergedState(
     justifications: Set[BlockMetadata],
     fringe: Set[BlockHash],
     fringeState: Blake2b256Hash,
