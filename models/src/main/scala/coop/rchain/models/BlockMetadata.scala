@@ -18,7 +18,11 @@ final case class BlockMetadata(
     finalized: Boolean,
     fringe: List[BlockHash],
     fringeStateHash: StateHash
-)
+) {
+  // BlockMetadata is uniquely identified with BlockHash
+  // - overridden hashCode is to be more performant when used in Set or Map
+  override def hashCode(): Int = blockHash.hashCode()
+}
 
 object BlockMetadata {
   def from(b: BlockMetadataProto) = BlockMetadata(

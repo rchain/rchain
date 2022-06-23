@@ -72,7 +72,7 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
         )
       currentRequests.set(requestStateBefore).runSyncUnsafe()
       // when
-      NodeRunning.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[Task](sender, hb.hash)(alwaysDoNotIgnoreF).runSyncUnsafe()
       // then
       transportLayer.requests shouldBe empty
 
@@ -93,7 +93,7 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
         )
       currentRequests.set(requestStateBefore).runSyncUnsafe()
       // when
-      NodeRunning.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[Task](sender, hb.hash)(alwaysDoNotIgnoreF).runSyncUnsafe()
       // then
       val (recipient, msg) = transportLayer.getRequest(0)
       // assert RequestState
@@ -116,7 +116,7 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
       val requestStateBefore = Map.empty[BlockHash, RequestState]
       currentRequests.set(requestStateBefore).runSyncUnsafe()
       // when
-      NodeRunning.handleHasBlockMessage[Task](sender, hb)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[Task](sender, hb.hash)(alwaysDoNotIgnoreF).runSyncUnsafe()
       // then
       val (recipient, msg) = transportLayer.getRequest(0)
       // assert RequestState
@@ -138,7 +138,7 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
           val sender                                     = peerNode("somePeer", 40400)
           val casperContains: BlockHash => Task[Boolean] = _ => true.pure[Task]
           // when
-          NodeRunning.handleHasBlockMessage[Task](sender, hb)(casperContains).runSyncUnsafe()
+          NodeRunning.handleHasBlockMessage[Task](sender, hb.hash)(casperContains).runSyncUnsafe()
           // then
           transportLayer.requests shouldBe empty
         }
@@ -152,7 +152,7 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
         // given
         val casperContains: BlockHash => Task[Boolean] = _ => true.pure[Task]
         // when
-        NodeRunning.handleHasBlockMessage[Task](null, hb)(casperContains).runSyncUnsafe()
+        NodeRunning.handleHasBlockMessage[Task](null, hb.hash)(casperContains).runSyncUnsafe()
         // then
         transportLayer.requests shouldBe empty
       }

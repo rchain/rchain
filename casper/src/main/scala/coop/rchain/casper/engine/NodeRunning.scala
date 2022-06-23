@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
 import coop.rchain.casper._
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.syntax._
@@ -19,10 +19,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{EventLog, EventPublisher, Log, Time}
-import fs2.Stream
 import fs2.concurrent.Queue
-
-import scala.concurrent.duration._
 
 object NodeRunning {
 
@@ -89,21 +86,20 @@ object NodeRunning {
     */
   def handleHasBlockMessage[F[_]: Monad: BlockRetriever: Log](
       peer: PeerNode,
-      hb: HasBlock
+      blockHash: BlockHash
   )(
       ignoreMessageF: BlockHash => F[Boolean]
   ): F[Unit] = {
-    val h = hb.hash
     def logIgnore = Log[F].debug(
-      s"Ignoring ${PrettyPrinter.buildString(h)} HasBlockMessage"
+      s"Ignoring ${PrettyPrinter.buildString(blockHash)} HasBlockMessage"
     )
     val logProcess = Log[F].debug(
-      s"Incoming HasBlockMessage ${PrettyPrinter.buildString(h)} from ${peer.endpoint.host}"
+      s"Incoming HasBlockMessage ${PrettyPrinter.buildString(blockHash)} from ${peer.endpoint.host}"
     )
     val processHash =
-      BlockRetriever[F].admitHash(h, peer.some, BlockRetriever.HasBlockMessageReceived)
+      BlockRetriever[F].admitHash(blockHash, peer.some, BlockRetriever.HasBlockMessageReceived)
 
-    ignoreMessageF(h).ifM(
+    ignoreMessageF(blockHash).ifM(
       logIgnore,
       logProcess >> processHash.void
     )
@@ -180,8 +176,6 @@ object NodeRunning {
     Log[F].info(s"Received FinalizedFringeRequest from ${peer}") >>
       TransportLayer[F].streamToPeer(peer, finalizedFringe.toProto) >>
       Log[F].info(s"FinalizedFringe sent to ${peer}")
-  final case object FinalizedFringeNotFoundError
-      extends Exception("Finalized fringe not found in the block storage.")
 
   private def handleStateItemsMessageRequest[F[_]: Sync: TransportLayer: RPConfAsk: RSpaceStateManager: Log](
       peer: PeerNode,
@@ -272,31 +266,28 @@ class NodeRunning[F[_]
         dag <- BlockDagStorage[F].getRepresentation
         res <- handleHasBlockRequest(peer, hbr)(dag.contains(_).pure[F])
       } yield res
-    case hb: HasBlock => handleHasBlockMessage(peer, hb)(checkBlockReceived)
+    case HasBlock(blockHash) => handleHasBlockMessage(peer, blockHash)(checkBlockReceived)
 
-    case _: ForkChoiceTipRequest.type => handleForkChoiceTipRequest(peer)
+    case ForkChoiceTipRequest => handleForkChoiceTipRequest(peer)
 
-    case abr: FinalizedFringeRequest =>
+    case FinalizedFringeRequest(_, _) =>
       for {
-        lfBlockHash <- BlockDagStorage[F].getRepresentation.flatMap(_.lastFinalizedBlockUnsafe)
+        dag <- BlockDagStorage[F].getRepresentation
 
-        // Create approved block from last finalized block
-        lastFinalizedBlock = for {
-          lfBlock           <- BlockStore[F].getUnsafe(lfBlockHash)
-          lastApprovedBlock = FinalizedFringe(List(lfBlock.blockHash), lfBlock.postStateHash)
-        } yield lastApprovedBlock
+        // Respond with latest finalized fringe
+        // TODO: optimize response to read from cache
+        latestFringeHashes         = dag.dagMessageState.latestFringe.map(_.id)
+        (latestFringeStateHash, _) = dag.fringeStates(latestFringeHashes)
+        fringeResponse = FinalizedFringe(
+          latestFringeHashes.toList,
+          latestFringeStateHash.toByteString
+        )
 
-        // TODO: fix finalized block depending if trim state requested
-        finalizedFringe <- if (abr.trimState)
-                            // If Last Finalized State is requested return Last Finalized block as Approved block
-                            lastFinalizedBlock
-                          else
-                            // Respond with approved block that this node is started from.
-                            // The very first one is genesis, but this node still might start from later block,
-                            // so it will not necessary be genesis.
-                            lastFinalizedBlock
+        _ <- handleFinalizedFringeRequest(peer, fringeResponse)
 
-        _ <- handleFinalizedFringeRequest(peer, finalizedFringe)
+        fringeStr      = PrettyPrinter.buildString(fringeResponse.hashes)
+        fringeStateStr = PrettyPrinter.buildString(latestFringeStateHash.toByteString)
+        _              <- Log[F].info(s"Sent fringe response ($fringeStateStr) $fringeStr.")
       } yield ()
 
     // Approved state store records

@@ -199,7 +199,7 @@ object Validate {
   def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
     val blockNumber       = b.blockNumber
     val deploys           = b.state.deploys.map(_.deploy)
-    val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber >= blockNumber)
+    val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber > blockNumber)
     maybeFutureDeploy
       .traverse { futureDeploy =>
         Log[F]

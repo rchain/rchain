@@ -22,14 +22,11 @@ object PrettyPrinter {
       s"#${b.blockNumber} (${buildString(b.blockHash)})"
     } else {
       s"Block #${b.blockNumber} (${buildString(b.blockHash)}) " +
-        s"-- Sender ID ${buildString(b.sender)} " +
-        s"-- Contents ${buildString(b.postStateHash)}" +
-        s"-- Shard ID ${limit(b.shardId, maxLength = 10)}" +
-        s"-- Justifications ${buildJustifications(b.justifications)} "
+        s"sender: ${buildString(b.sender)}, " +
+        s"state: ${buildString(b.postStateHash)}, " +
+        s"shard: ${limit(b.shardId, maxLength = 10)}, " +
+        s"justifications: ${buildString(b.justifications)}"
     }
-
-  private def buildJustifications(hashes: List[BlockHash]): String =
-    hashes.map(h => Base16.encode(h.toByteArray)).map(limit(_, maxLength = 5)).mkString(" ")
 
   def buildString(bh: BlockHashMessage): String =
     s"Block hash: ${buildString(bh.blockHash)}"

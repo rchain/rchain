@@ -219,7 +219,7 @@ object BlockReceiver {
     def checkIfKnown(b: BlockMessage): F[Boolean] = {
       val isStored = BlockStore[F].contains(b.blockHash)
       val isTooOld = BlockDagStorage[F].getRepresentation.map { dag =>
-        dag.heightMap.headOption.map(_._1).forall(b.blockNumber < _)
+        dag.heightMap.headOption.map(_._1).getOrElse(-1L) > b.blockNumber
       }
       isStored ||^ isTooOld
     }
