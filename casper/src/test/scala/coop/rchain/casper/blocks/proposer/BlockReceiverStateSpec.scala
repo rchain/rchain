@@ -72,6 +72,18 @@ class BlockReceiverStateSpec extends AnyFlatSpec with Matchers {
     assertThrows[AssertionError](st.finished("A1", Set.empty))
   }
 
+  "finished" should "return empty state if all blocks are processed" in {
+    val (st1, _) = BlockReceiverState[MId].beginStored("A1")
+    val (st2, _) = st1.endStored("A1", List.empty)
+
+    // A1 has no dependencies and when it finishes it is removed from the state
+    val (st3, _) = st2.finished("A1", Set.empty)
+
+    st3.blocksSt shouldBe empty
+    st3.receiveSt shouldBe empty
+    st3.childRelations shouldBe empty
+  }
+
   "finished" should "remove resolved deps and return set of blocks with resolved deps" in {
     // Started storing of A2
     val (st1, _) = BlockReceiverState[MId].beginStored("A2")
