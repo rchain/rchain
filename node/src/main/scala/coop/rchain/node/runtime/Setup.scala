@@ -72,14 +72,6 @@ object Setup {
     )
   ] =
     for {
-      // In memory state for last approved block
-      lab <- LastApprovedBlock.of[F]
-
-      span = if (conf.metrics.zipkin)
-        diagnostics.effects
-          .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
-      else Span.noop[F]
-
       // RNode key-value store manager / manages LMDB databases
       rnodeStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
 
@@ -92,6 +84,12 @@ object Setup {
 
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
+
+      // Create metrics if enabled
+      span = if (conf.metrics.zipkin)
+        diagnostics.effects
+          .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
+      else Span.noop[F]
 
       // Runtime for `rnode eval`
       evalRuntime <- {
@@ -207,7 +205,7 @@ object Setup {
       nodeLaunch = {
         implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
-        implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
+        implicit val (ra, rc)     = (rpConfAsk, rpConnections)
         implicit val (rm, cu)     = (runtimeManager, commUtil)
         implicit val (rsm, sp)    = (rspaceStateManager, span)
         NodeLaunch[F](

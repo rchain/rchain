@@ -108,7 +108,6 @@ case class TestNode[F[_]: Sync: Timer](
 
   val finalizedFringe = FinalizedFringe(Seq(genesis.blockHash), genesis.postStateHash)
 
-  implicit val labF        = LastApprovedBlock.unsafe[F](Some(finalizedFringe))
   val postGenesisStateHash = genesis.postStateHash
 
   implicit val rspaceMan = RSpaceStateManagerTestImpl()

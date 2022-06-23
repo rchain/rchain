@@ -8,7 +8,6 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
@@ -35,7 +34,7 @@ object NodeLaunch {
   def apply[F[_]
     /* Execution */   : Concurrent: Parallel: ContextShift: Time: Timer
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
-    /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
+    /* State */       : RPConfAsk: ConnectionsCell
     /* Rholang */     : RuntimeManager
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
@@ -80,7 +79,6 @@ object NodeLaunch {
         _             <- BlockStore[F].put(genesisBlock)
         genesisFringe = FinalizedFringe(bmd.fringe, bmd.fringeStateHash)
         _             <- ApprovedStore[F].putApprovedBlock(genesisFringe)
-        _             <- LastApprovedBlock[F].set(genesisFringe)
         // Add genesis block to DAG
         _ <- BlockDagStorage[F].insertNew(bmd, genesisBlock)
 

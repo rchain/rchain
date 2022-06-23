@@ -7,7 +7,6 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.rholang.RuntimeManager
@@ -35,7 +34,7 @@ object NodeSyncing {
   def apply[F[_]
   /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : TransportLayer: CommUtil: EventPublisher
-  /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
+  /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
@@ -65,7 +64,7 @@ object NodeSyncing {
 class NodeSyncing[F[_]
   /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : TransportLayer: CommUtil: EventPublisher
-  /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
+  /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
@@ -111,7 +110,6 @@ class NodeSyncing[F[_]
         // Approved block is saved after the whole state is received,
         //  to restart requesting if interrupted with incomplete state.
         _ <- ApprovedStore[F].putApprovedBlock(fringe)
-        _ <- LastApprovedBlock[F].set(fringe)
 
         // TODO: adjust for fringe event or remove completely until proper event solution is built
 //        _ <- EventLog[F].publish(
