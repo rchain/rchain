@@ -30,6 +30,9 @@ let @posPubKey, @posVaultPubKey <-
       test_dont_reward_inactive_validators,
       test_bonding_failure,
       test_slashing_vaults_and_state,
+      test_bonding_fails_if_not_in_whitelist,
+      test_bonding_fails_if_removed_from_whitelist,
+      test_bonding_fails_if_stake_is_not_the_same_as_whitelist,
       getPosBalance, getCoopBalance,
       closeBlock,
       makeDeployerId(`rho:test:deployerId:make`),
@@ -67,6 +70,9 @@ let @posPubKey, @posVaultPubKey <-
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails if bond is too small", *test_bonding_fails_if_bond_too_small),
               ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
+              ("bonding fails if the requester not in the white list", *test_bonding_fails_if_not_in_whitelist),
+              ("bonding fails if the requester is removed in the white list", *test_bonding_fails_if_removed_from_whitelist),
+              ("bonding fails if the bonding request is not euqal to the stake in white list", *test_bonding_fails_if_stake_is_not_the_same_as_whitelist),
               // TODO we should reimplement the random test in the future when it is available
               ("commited random matches its image", *test_commit_random),
               ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
@@ -778,6 +784,79 @@ let @posPubKey, @posVaultPubKey <-
             }
           } |
 
+          contract test_bonding_fails_if_not_in_whitelist(rhoSpec, _, ackCh) = {
+            new setupCh, bondRetCh in {
+              prepareUser!("1212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212", *setupCh) |
+              for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
+                @PoS!("bond", validatorDeployerId, 100, *bondRetCh) |
+                for (@bondRes <- bondRetCh) {
+                  rhoSpec!("assertMany",
+                    [
+                      ((bondRes.nth(0), "==", false), "add bonding request should be false because the pubkey is not in whitelist")
+                    ],
+                    *ackCh
+                  )
+                } 
+              }
+            }
+          } | 
+
+          contract test_bonding_fails_if_removed_from_whitelist(rhoSpec, _, ackCh) = {
+            new setupCh, addBondReqCh, removeBondReqCh, bondRetCh in {
+              prepareUser!("1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", *setupCh) |
+              for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
+                @PoS!("addBondingRequest", 
+                  *posVaultDeploerId, 
+                  "1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", 
+                  100, 
+                  *addBondReqCh) |
+                for (@addBondRes <- addBondReqCh){
+                  @PoS!("removeBondingRequest", 
+                    *posVaultDeploerId, 
+                    "1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", 
+                    *removeBondReqCh)|
+                  for (@removeRes <- removeBondReqCh){
+                    @PoS!("bond", validatorDeployerId, 100, *bondRetCh) |
+                    for (@bondRes <- bondRetCh) {
+                      rhoSpec!("assertMany",
+                        [
+                          ((addBondRes.nth(0), "==", true), "add bonding request should be true"),
+                          ((removeRes.nth(0), "==", true), "remove bonding request should be true after adding into whitelist"),
+                          ((bondRes.nth(0), "==", false), "bonding should fail because the pubkey is removed in whitelist"),
+                        ],
+                        *ackCh
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          } |
+
+          contract test_bonding_fails_if_stake_is_not_the_same_as_whitelist(rhoSpec, _, ackCh) = {
+            new setupCh, addBondReqCh, bondRetCh in {
+              prepareUser!("1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414", *setupCh) |
+              for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
+                @PoS!("addBondingRequest", 
+                  *posVaultDeploerId, 
+                  "1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414", 
+                  100, 
+                  *addBondReqCh) |
+                for (@addBondRes <- addBondReqCh){
+                  @PoS!("bond", validatorDeployerId, 200, *bondRetCh) |
+                  for (@bondRes <- bondRetCh) {
+                    rhoSpec!("assertMany",
+                      [
+                        ((addBondRes.nth(0), "==", true), "add bonding request should be true"),
+                        ((bondRes.nth(0), "==", false), "bonding should fail because stake is not equal to whitelist stake  "),
+                      ],
+                      *ackCh
+                    )
+                  }
+                }
+              }
+            }
+          } | 
           contract getPosBalance(retCh) = {
               @posVault!("balance", *retCh)
           } |
