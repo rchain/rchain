@@ -373,7 +373,7 @@ object WebApi {
   }
 
   private def unforgToParProto(unforg: RhoUnforg): Par =
-    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(unforg))))
+    Unforgeable(GUnforgeable(unforgToUnforgProto(unforg)))
 
   // Data request/response protobuf wrappers
 
