@@ -138,13 +138,6 @@ object Setup {
       }
       (rnodeStateManager, rspaceStateManager) = stateManagers
 
-      casperShardConf = CasperShardConf(
-        conf.casper.shardName,
-        conf.casper.maxNumberOfParents,
-        deployLifespan = MultiParentCasper.deployLifespan,
-        conf.casper.minPhloPrice
-      )
-
       // Load validator private key if specified
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
@@ -159,7 +152,12 @@ object Setup {
         val dummyDeployerKey      = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
-        Proposer[F](validatorIdentity, casperShardConf, dummyDeployerKey.map((_, "Nil")))
+        Proposer[F](
+          validatorIdentity,
+          conf.casper.shardName,
+          conf.casper.minPhloPrice,
+          dummyDeployerKey.map((_, "Nil"))
+        )
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
@@ -234,7 +232,7 @@ object Setup {
           blockReceiverState,
           incomingBlockStream,
           validatedBlocksStream,
-          casperShardConf.shardName
+          conf.casper.shardName
         )
       }
       // Blocks from receiver with fork-choice tips request on idle
@@ -255,7 +253,8 @@ object Setup {
         BlockProcessor[F](
           blockProcessorInputBlocksStream,
           validatedBlocksQueue,
-          MultiParentCasper.getSnapshot[F](casperShardConf)
+          conf.casper.shardName,
+          conf.casper.minPhloPrice
         )
       }
 

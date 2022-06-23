@@ -20,6 +20,7 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockMetadata
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
@@ -70,15 +71,21 @@ object NodeLaunch {
         genBlockStr       = PrettyPrinter.buildString(genesisBlock)
         _                 <- Log[F].info(s"Sending genesis $genBlockStr to peers...")
 
+        bmd = BlockMetadata
+          .fromBlock(genesisBlock)
+          // Genesis pre-state is used as finalized state hash
+          .copy(fringeStateHash = genesisBlock.preStateHash)
+
         // Store genesis block
-        _  <- BlockStore[F].put(genesisBlock)
-        ab = FinalizedFringe(List(genesisBlock.blockHash), genesisBlock.postStateHash)
-        _  <- ApprovedStore[F].putApprovedBlock(ab)
-        _  <- LastApprovedBlock[F].set(ab)
-        _  <- BlockDagStorage[F].insert(genesisBlock, invalid = false, approved = true)
+        _             <- BlockStore[F].put(genesisBlock)
+        genesisFringe = FinalizedFringe(bmd.fringe, bmd.fringeStateHash)
+        _             <- ApprovedStore[F].putApprovedBlock(genesisFringe)
+        _             <- LastApprovedBlock[F].set(genesisFringe)
+        // Add genesis block to DAG
+        _ <- BlockDagStorage[F].insertNew(bmd, genesisBlock)
 
         // Send approved block to peers
-        _ <- CommUtil[F].streamToPeers(ab.toProto)
+        _ <- CommUtil[F].streamToPeers(genesisFringe.toProto)
       } yield ()
 
     def startSyncingMode: F[Unit] =

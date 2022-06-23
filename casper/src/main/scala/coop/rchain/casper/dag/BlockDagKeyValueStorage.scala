@@ -4,14 +4,15 @@ import cats.Monad
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag._
 import coop.rchain.blockstorage.dag.codecs._
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
@@ -20,9 +21,11 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
+import fs2.Stream
 
 import scala.collection.concurrent.TrieMap
 
@@ -37,105 +40,57 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   def getRepresentation: F[DagRepresentation] = representationState.get
 
-  def insert(
-      block: BlockMessage,
-      invalid: Boolean,
-      approved: Boolean
+  override def insertNew(
+      blockMetadata: BlockMetadata,
+      block: BlockMessage
   ): F[DagRepresentation] = {
     val logAlreadyStored =
       Log[F].warn(s"Block ${PrettyPrinter.buildString(block, short = true)} is already stored.")
 
-    // Add LM either if there is no existing message for the sender, or if sequence number advances
-    // - assumes block sender is not valid hash
-    def shouldAddAsLatest: F[Boolean] =
-      latestMessagesIndex
-      // Try get sender's latest message
-        .get1(block.sender)
-        // Get metadata from index
-        .flatMap(_.traverse(blockMetadataIndex.getUnsafe))
-        // Check if seq number is greater that existing
-        .map(_.map(_.seqNum))
-        // Evaluate option and result. Add if:
-        // - latest message is not found, or
-        // - is found with seq num greater then existing
-        .map(lmSeqNumOpt => lmSeqNumOpt.isEmpty || lmSeqNumOpt.exists(block.seqNum >= _))
-
-    def doInsert: F[Unit] = {
-      val blockMetadata = BlockMetadata.fromBlock(block).copy(invalid = invalid)
+    def doInsert: F[Unit] =
       for {
         // Add block metadata
         _ <- blockMetadataIndex.add(blockMetadata)
 
+        _ <- Log[F].info(s"Block ${PrettyPrinter.buildString(block, short = true)} added to DAG.")
+
         // Add deploys to deploy index storage
         deployHashes = block.state.deploys.map(_.deploy.sig)
         _            <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
-
-        // Resolve if block should be added as the latest message for the block sender
-        isLatestFromSender <- shouldAddAsLatest
-        newLatestToAdd = if (isLatestFromSender) Map((block.sender, block.blockHash))
-        else Map[Validator, BlockHash]()
-
-        // Add latest messages to DB
-        _ <- latestMessagesIndex.put(newLatestToAdd.toList)
-
-        // if block added as approved, record it as directly finalized.
-        _ <- blockMetadataIndex.recordFinalized(blockMetadata.blockHash, Set.empty).whenA(approved)
       } yield ()
-    }
 
     lock.withPermit(
       blockMetadataIndex
-        .contains(block.blockHash)
+        .contains(blockMetadata.blockHash)
         .ifM(logAlreadyStored, doInsert) >> {
-        // TODO BlockDagStore inset method should be rewritten to only save to disk,
-        //  all logic should be done on the state.
-        //  This update of the state as a result of insert method should be removed.
         for {
           // Take current DAG state / view of the DAG
-          latestMessages     <- latestMessagesIndex.toMap
-          dagSet             <- blockMetadataIndex.dagSet
-          childMap           <- blockMetadataIndex.childMapData
-          heightMap          <- blockMetadataIndex.heightMap
-          lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
-          finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
+          dagSet    <- blockMetadataIndex.dagSet
+          childMap  <- blockMetadataIndex.childMapData
+          heightMap <- blockMetadataIndex.heightMap
           dag <- representationState.updateAndGet {
                   dr =>
-                    val dagMsgSt = dr.dagMessageState
-
                     // Update DAG messages state
-                    // TODO: temporary don't expect that all justifications are available in msgMap to satisfy the failing tests
-                    //  - with multi-parent finalizer all messages should be available
-                    val justificationsOpt =
-                      block.justifications
-                        .map(dagMsgSt.msgMap.get)
-                        .sequence
-                        .map(_.toSet)
+                    val dagMsgSt       = dr.dagMessageState
+                    val msg            = messageFromBlockMetadata(blockMetadata, dagMsgSt.msgMap)
+                    val newDagMsgState = dagMsgSt.insertMsg(msg)
 
-                    val newDagMsgState = justificationsOpt
-                      .map { justifications =>
-                        val newMsg = dagMsgSt.createMessage(
-                          block.blockHash,
-                          block.blockNumber,
-                          block.sender,
-                          block.seqNum,
-                          block.bonds,
-                          justifications
-                        )
-                        dagMsgSt.insertMsg(newMsg)
-                      }
-                      .getOrElse(dagMsgSt)
+                    // Update fringes state
+                    val fringeStateHash       = blockMetadata.fringeStateHash.toBlake2b256Hash
+                    val fringeRejectedDeploys = block.rejectedDeploys.toSet
+                    val fringeStateRecord     = (fringeStateHash, fringeRejectedDeploys)
+                    val newFringes            = dr.fringeStates + ((msg.fringe, fringeStateRecord))
 
                     // Updated DagRepresentation
                     dr.copy(
                       dagSet,
-                      latestMessages,
                       childMap,
                       heightMap,
-                      lastFinalizedBlock,
-                      finalizedBlocksSet,
-                      newDagMsgState
+                      newDagMsgState,
+                      fringeStates = newFringes
                     )
                 }
+
           _ <- removeExpiredFromPool(deployStore, dag).map(
                 _.map((_, ())).map((expiredMap.update _).tupled)
               )
@@ -144,37 +99,35 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     )
   }
 
-  /** Record that some hash is directly finalized (detected by finalizer and becomes LFB). */
-  def recordDirectlyFinalized(
-      directlyFinalizedHash: BlockHash,
-      finalizationEffect: Set[BlockHash] => F[Unit]
-  ): F[Unit] = {
-    implicit val bds = this
-    // Lock here is a safeguard for persisting changes in BlockMetadataIndex which can happen concurrently when
-    // blocks are replayed in parallel
-    lock.withPermit(
-      for {
-        dag    <- getRepresentation
-        errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
-        _      <- new Exception(errMsg).raiseError.unlessA(dag.contains(directlyFinalizedHash))
-        // all non finalized ancestors should be finalized as well (indirectly)
-        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).pure.not)
-        // invoke effects
-        _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
-        // persist finalization
-        _ <- blockMetadataIndex.recordFinalized(directlyFinalizedHash, indirectlyFinalized)
+  // TODO: legacy function, used only in tests, it should be removed when tests are fixed
+  def insert(block: BlockMessage, invalid: Boolean, approved: Boolean): F[DagRepresentation] =
+    for {
+      fringeWithState <- if (approved) {
+                          (Set(block.blockHash), block.postStateHash).pure[F]
+                        } else {
+                          for {
+                            dag       <- getRepresentation
+                            dagMsgSt  = dag.dagMessageState
+                            finalizer = Finalizer(dagMsgSt.msgMap)
+                            parents   = block.justifications.map(dagMsgSt.msgMap).toSet
+                            fringe    = finalizer.latestFringe(parents).map(_.id)
+                            (fringeState, _) = if (fringe.isEmpty)
+                              (
+                                RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
+                                Set[ByteString]()
+                              )
+                            else
+                              dag.fringeStates(fringe)
+                          } yield (fringe, fringeState.toByteString)
+                        }
 
-        // TODO: temp code to satisfy tests
-        _ <- representationState.update { dag =>
-              val newFinalizedSet = dag.finalizedBlocksSet ++ indirectlyFinalized + directlyFinalizedHash
-              dag.copy(
-                finalizedBlocksSet = newFinalizedSet,
-                lastFinalizedBlockHash = directlyFinalizedHash.some
-              )
-            }
-      } yield ()
-    )
-  }
+      (fringe, fringeState) = fringeWithState
+      bmd = BlockMetadata
+        .fromBlock(block)
+        .copy(invalid = invalid, fringe = fringe.toList, fringeStateHash = fringeState)
+
+      result <- insertNew(bmd, block)
+    } yield result
 
   override def lookup(
       blockHash: BlockHash
@@ -221,6 +174,7 @@ object BlockDagKeyValueStorage {
                         codecByteString,
                         codecBlockHash
                       )
+
       // Deploy pool storage
       deployPoolDb <- KeyValueStoreManager[F].database[DeployId, Signed[DeployData]](
                        "deploy-pool",
@@ -245,31 +199,69 @@ object BlockDagKeyValueStorage {
         import stores._
         for {
           // Take current DAG state / view of the DAG
-          latestMessages     <- latestMessages.toMap
-          dagSet             <- metadata.dagSet
-          childMap           <- metadata.childMapData
-          heightMap          <- metadata.heightMap
-          lastFinalizedBlock <- metadata.lastFinalizedBlock
-          finalizedBlocksSet <- metadata.finalizedBlockSet
-        } yield DagRepresentation(
-          dagSet,
-          latestMessages,
-          childMap,
-          heightMap,
-          lastFinalizedBlock,
-          finalizedBlocksSet,
-          DagMessageState(Set())
-        )
+          dagSet    <- metadata.dagSet
+          childMap  <- metadata.childMapData
+          heightMap <- metadata.heightMap
+
+          // Fill message map from BlockMetadata
+          // TODO: include only non-finalized block
+          dmsSt <- Ref.of(DagMessageState[BlockHash, Validator]())
+          fsSt  <- Ref.of(Map[Set[BlockHash], (Blake2b256Hash, Set[ByteString])]())
+          initMsgMapJob = Stream.fromIterator(heightMap.values.flatten.iterator).evalMap { hash =>
+            for {
+              ds     <- dmsSt.get
+              fs     <- fsSt.get
+              msgMap = ds.msgMap
+              updateMessage = for {
+                block <- metadata.getUnsafe(hash)
+                msg   = messageFromBlockMetadata(block, msgMap)
+                newDs = ds.insertMsg(msg)
+
+                // TODO: fill rejected deploys! should we store it in BlockMetadata?
+                fringeStateHash = block.fringeStateHash.toBlake2b256Hash
+                newFs           = fs + ((block.fringe.toSet, (fringeStateHash, Set[ByteString]())))
+                _               <- dmsSt.set(newDs)
+                _               <- fsSt.set(newFs)
+              } yield ()
+
+              // Check if already created
+              _ <- updateMessage.unlessA(msgMap.contains(hash))
+            } yield ()
+          }
+
+          // Initialize DagMessageState
+          _            <- initMsgMapJob.compile.drain
+          dagMsgsState <- dmsSt.get
+          fringeStates <- fsSt.get
+        } yield DagRepresentation(dagSet, childMap, heightMap, dagMsgsState, fringeStates)
       }
       stRef <- Ref.of[F, DagRepresentation](initST)
     } yield new BlockDagKeyValueStorage[F](
       stRef,
       lock,
-      stores.latestMessages,
       stores.metadata,
       stores.deploys,
       stores.deployPool
     )
+
+  private def messageFromBlockMetadata(
+      block: BlockMetadata,
+      msgMap: Map[BlockHash, Message[BlockHash, Validator]]
+  ) = {
+    val parents = block.justifications.toSet
+    // Seen messages are all seen from justifications combined
+    val seen = parents.map(msgMap).flatMap(_.seen) + block.blockHash
+    Message(
+      id = block.blockHash,
+      height = block.blockNum,
+      sender = block.sender,
+      senderSeq = block.seqNum,
+      bondsMap = block.bondsMap,
+      parents = parents,
+      fringe = block.fringe.toSet,
+      seen = seen
+    )
+  }
 
   def removeExpiredFromPool[F[_]: Monad](
       deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]],

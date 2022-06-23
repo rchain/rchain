@@ -1,36 +1,29 @@
 package coop.rchain.casper
 
-import coop.rchain.casper.protocol._
-import coop.rchain.crypto.signatures.Signed
+import com.google.protobuf.ByteString
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 /**
-  * Casper snapshot is a state that is changing in discrete manner with each new block added.
-  * This class represents full information about the state. It is required for creating new blocks
-  * as well as for validating blocks.
+  * [[ParentsPreState]] represents required data to create or validate a block from the view of
+  * parent relations (justifications) or for the new block, latest messages which will be used as justifications.
+  *
+  * @param justifications block justifications (latest blocks for the new block)
+  * @param fringe finalized fringe seen (finalized) by parents
+  * @param fringeState finalized fringe (merged) state
+  * @param bondsMap bonds map of validators on fringe state
+  * @param rejectedDeploys rejected deploys from blocks finalized with [[fringe]] blocks
+  * @param maxBlockNum maximum block height from parent blocks
+  * @param maxSeqNums latest sequence numbers for bonded validators
   */
-final case class CasperSnapshot(
-    fringe: Seq[BlockHash],
+final case class ParentsPreState(
     justifications: Set[BlockMetadata],
-    deploysInScope: Set[Signed[DeployData]],
-    maxBlockNum: Long,
-    maxSeqNums: Map[Validator, Long],
-    onChainState: OnChainCasperState
-)
-
-final case class OnChainCasperState(
-    shardConf: CasperShardConf,
+    fringe: Set[BlockHash],
+    fringeState: Blake2b256Hash,
     bondsMap: Map[Validator, Long],
-    activeValidators: Seq[Validator]
-)
-
-final case class CasperShardConf(
-    shardName: String,
-    maxNumberOfParents: Int,
-    // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
-    // Required to enable protection from re-submitting duplicate deploys
-    deployLifespan: Int,
-    minPhloPrice: Long
+    rejectedDeploys: Set[ByteString],
+    maxBlockNum: Long,
+    maxSeqNums: Map[Validator, Long]
 )

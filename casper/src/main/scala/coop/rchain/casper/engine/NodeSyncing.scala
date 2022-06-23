@@ -17,6 +17,7 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
@@ -96,9 +97,13 @@ class NodeSyncing[F[_]
   private def onFinalizedFringeMessage(sender: PeerNode, fringe: FinalizedFringe): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
 
-    def handleApprovedBlock =
+    def handleApprovedBlock = {
+      val fringeHashesStr    = PrettyPrinter.buildString(fringe.hashes)
+      val fringeStateHashStr = PrettyPrinter.buildString(fringe.stateHash)
+      val fringeLogMsg =
+        s"Received finalized fringe from bootstrap node ($fringeStateHashStr) $fringeHashesStr."
       for {
-        _ <- Log[F].info(s"Finalized fringe received. Restoring LFS state.")
+        _ <- Log[F].info(fringeLogMsg)
 
         // Download approved state and all related blocks
         _ <- requestApprovedState(fringe)
@@ -116,17 +121,14 @@ class NodeSyncing[F[_]
 //              )
 //            )
 
-        _ <- Log[F].info(
-              s"LFS state for fringe ${PrettyPrinter.buildString(fringe.hashes)} is successfully restored."
-            )
+        _ <- Log[F].info(s"LFS state ($fringeStateHashStr) is successfully restored.")
       } yield ()
+    }
 
     for {
       isValid <- senderIsBootstrap
 
-      _ <- Log[F].info("Received finalized fringe from bootstrap node.").whenA(isValid)
-
-      _ <- Log[F].info("Received invalid message from bootstrap node.").whenA(!isValid)
+      _ <- Log[F].info("Fringe message ignored, not received from bootstrap node.").whenA(!isValid)
 
       // Start only once, when state is true and approved block is valid
       start <- startRequester.modify {
@@ -187,14 +189,20 @@ class NodeSyncing[F[_]
       minHeight: Long,
       heightMap: SortedMap[Long, Set[BlockHash]]
   ): F[Unit] = {
-    def addBlockToDag(block: BlockMessage, isInvalid: Boolean): F[Unit] =
-      Log[F].info(
-        s"Adding ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
-      ) <* BlockDagStorage[F].insert(block, invalid = isInvalid)
+    def addBlockToDag(block: BlockMessage): F[Unit] =
+      for {
+        _ <- Log[F].info(
+              s"Adding ${PrettyPrinter.buildString(block, short = true)}."
+            )
+        bmd = BlockMetadata.fromBlock(block)
+        _   <- BlockDagStorage[F].insertNew(bmd, block)
+      } yield ()
 
     for {
       _ <- Log[F].info(s"Adding blocks for approved state to DAG.")
 
+      // TODO: height map cannot be used here because invalid blocks can have
+      //  invalid block number which will break sequence in height map
       // Add sorted DAG in order from approved block to oldest
       _ <- heightMap.flatMap(_._2).toList.reverse.traverse_ { hash =>
             for {
@@ -205,7 +213,7 @@ class NodeSyncing[F[_]
               blockHeight   = block.blockNumber
               blockHeightOk = blockHeight >= minHeight
               // Add block to DAG
-              _ <- addBlockToDag(block, false).whenA(blockHeightOk)
+              _ <- addBlockToDag(block).whenA(blockHeightOk)
             } yield ()
           }
 

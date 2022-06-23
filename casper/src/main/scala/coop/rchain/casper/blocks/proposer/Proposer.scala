@@ -1,7 +1,7 @@
 package coop.rchain.casper.blocks.proposer
 
 import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -15,7 +15,8 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
+import coop.rchain.models.Validator.Validator
+import coop.rchain.shared.{EventPublisher, Log, Time}
 
 sealed abstract class ProposerResult
 object ProposerEmpty                                                         extends ProposerResult
@@ -33,29 +34,28 @@ object ProposerResult {
 }
 
 class Proposer[F[_]: Concurrent: Log: Span](
-    // base state on top of which block will be created
-    getCasperSnapshot: F[CasperSnapshot],
+    getLatestSeqNumber: Validator => F[Long],
     // propose constraint checkers
-    checkActiveValidator: (CasperSnapshot, ValidatorIdentity) => F[Boolean],
-    createBlock: (CasperSnapshot, ValidatorIdentity) => F[BlockCreatorResult],
-    validateBlock: (CasperSnapshot, BlockMessage) => F[ValidBlockProcessing],
+    checkActiveValidator: ValidatorIdentity => F[Boolean],
+    createBlock: ValidatorIdentity => F[BlockCreatorResult],
+    validateBlock: BlockMessage => F[ValidBlockProcessing],
     proposeEffect: BlockMessage => F[Unit],
     validator: ValidatorIdentity
 ) {
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "proposer")
   // This is the whole logic of propose
-  private def doPropose(s: CasperSnapshot): F[(ProposeResult, Option[BlockMessage])] =
+  private def doPropose: F[(ProposeResult, Option[BlockMessage])] =
     Span[F].traceI("do-propose") {
       // check if node is allowed to propose a block
-      checkActiveValidator(s, validator).ifM(
+      checkActiveValidator(validator).ifM(
         for {
-          b <- createBlock(s, validator)
+          b <- createBlock(validator)
           r <- b match {
                 case NoNewDeploys =>
                   (ProposeResult.failure(NoNewDeploys), none[BlockMessage]).pure[F]
                 case Created(b) =>
-                  validateBlock(s, b).flatMap {
+                  validateBlock(b).flatMap {
                     case Right(v) =>
                       proposeEffect(b) >>
                         (ProposeResult.success(v), b.some).pure[F]
@@ -76,29 +76,24 @@ class Proposer[F[_]: Concurrent: Log: Span](
       isAsync: Boolean,
       proposeIdDef: Deferred[F, ProposerResult]
   ): F[(ProposeResult, Option[BlockMessage])] = {
-    def getValidatorNextSeqNumber(cs: CasperSnapshot): Long = {
-      val valBytes = ByteString.copyFrom(validator.publicKey.bytes)
-      cs.maxSeqNums.getOrElse(valBytes, 0L) + 1L
-    }
+    val valBytes = ByteString.copyFrom(validator.publicKey.bytes)
     for {
-      // get snapshot to serve as a base for propose
-      s <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot)
+      validatorSeqNum <- getLatestSeqNumber(valBytes)
+      nextSeq         = validatorSeqNum + 1L
       result <- if (isAsync) for {
-                 nextSeq <- getValidatorNextSeqNumber(s).pure[F]
-                 _       <- proposeIdDef.complete(ProposerResult.started(nextSeq))
+                 _ <- proposeIdDef.complete(ProposerResult.started(nextSeq))
 
                  // propose
-                 r <- doPropose(s)
+                 r <- doPropose
                } yield r
                else
                  for {
                    // propose
-                   r <- doPropose(s)
+                   r <- doPropose
 
                    (result, blockHashOpt) = r
                    proposerResult = blockHashOpt.fold {
-                     val seqNumber = getValidatorNextSeqNumber(s)
-                     ProposerResult.failure(result.proposeStatus, seqNumber)
+                     ProposerResult.failure(result.proposeStatus, nextSeq)
                    } { block =>
                      ProposerResult.success(result.proposeStatus, block)
                    }
@@ -119,33 +114,62 @@ object Proposer {
   ] // format: on
   (
       validatorIdentity: ValidatorIdentity,
-      casperShardConf: CasperShardConf,
+      shardId: String,
+      minPhloPrice: Long,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
   ): Proposer[F] = {
-    val getCasperSnapshotSnapshot = MultiParentCasper.getSnapshot[F](casperShardConf)
+    // TODO: refactor proposer to get this from parent pre state
+    def getLatestSeqNumber(sender: Validator): F[Long] =
+      for {
+        dag        <- BlockDagStorage[F].getRepresentation
+        latestMsgs = dag.dagMessageState.latestMsgs
+        maxSeqNum  = latestMsgs.find(_.sender == sender).map(_.senderSeq)
+      } yield maxSeqNum.getOrElse(-1)
 
-    val createBlock = (s: CasperSnapshot, validatorIdentity: ValidatorIdentity) =>
-      BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
+    def createBlock(validatorIdentity: ValidatorIdentity) =
+      for {
+        parentsPreState <- MultiParentCasper.getPreStateForNewBlock
+        result          <- BlockCreator.create(parentsPreState, validatorIdentity, shardId, dummyDeployOpt)
+      } yield result
 
-    val validateBlock = (s: CasperSnapshot, b: BlockMessage) => MultiParentCasper.validate(b, s)
+    def validateBlock(block: BlockMessage) =
+      MultiParentCasper.validate(block, shardId, minPhloPrice).flatMap { result =>
+        result
+          .map { blockMeta =>
+            BlockDagStorage[F].insertNew(blockMeta, block).as(BlockStatus.valid.asRight[BlockError])
+          }
+          .leftMap {
+            case (_, err) =>
+              new Exception(s"Unexpected fatal error when replay own block: $err")
+                .raiseError[F, ValidBlockProcessing]
+          }
+          .merge
+      }
 
-    val checkValidatorIsActive = (s: CasperSnapshot, validator: ValidatorIdentity) =>
-      Sync[F].delay(
-        s.onChainState.activeValidators.contains(ByteString.copyFrom(validator.publicKey.bytes))
-      )
+    def checkValidatorIsActive(validator: ValidatorIdentity): F[Boolean] =
+      for {
+        dag          <- BlockDagStorage[F].getRepresentation
+        latestFringe = dag.dagMessageState.latestFringe
+        // TODO: take bonds map from merged state of fringe
+        //  - it should also include consensus bonds map
+        bondsMap <- if (latestFringe.nonEmpty) latestFringe.head.bondsMap.pure[F]
+                   else dag.lookupUnsafe(dag.heightMap.head._2.head).map(_.bondsMap)
+        sender = ByteString.copyFrom(validator.publicKey.bytes)
+      } yield bondsMap.contains(sender)
 
     val proposeEffect = (b: BlockMessage) =>
       // store block
       BlockStore[F].put(b) >>
         // save changes to Casper
-        MultiParentCasper.handleValidBlock(b) >>
+        // TODO: temp this is done after validation
+//        MultiParentCasper.handleValidBlock(b) >>
         // broadcast hash to peers
         CommUtil[F].sendBlockHash(b.blockHash, b.sender) >>
         // Publish event
         EventPublisher[F].publish(MultiParentCasper.createdEvent(b))
 
     new Proposer(
-      getCasperSnapshotSnapshot,
+      getLatestSeqNumber,
       checkValidatorIsActive,
       createBlock,
       validateBlock,

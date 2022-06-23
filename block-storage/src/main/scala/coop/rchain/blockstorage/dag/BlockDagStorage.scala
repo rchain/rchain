@@ -8,16 +8,14 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 
 trait BlockDagStorage[F[_]] {
+
   def getRepresentation: F[DagRepresentation]
-  def insert(
-      block: BlockMessage,
-      invalid: Boolean,
-      approved: Boolean = false
-  ): F[DagRepresentation]
-  def recordDirectlyFinalized(
-      direct: BlockHash,
-      finalizationEffect: Set[BlockHash] => F[Unit]
-  ): F[Unit]
+
+  def insertNew(blockMetadata: BlockMetadata, block: BlockMessage): F[DagRepresentation]
+
+  // TODO: legacy function, used only in tests, it should be removed when tests are fixed
+  def insert(block: BlockMessage, invalid: Boolean, approved: Boolean = false): F[DagRepresentation]
+
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
 
   /* Deploys included in the DAG */
