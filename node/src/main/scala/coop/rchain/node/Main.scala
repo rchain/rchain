@@ -3,12 +3,12 @@ package coop.rchain.node
 import cats.Parallel
 import cats.effect._
 import cats.syntax.all._
-import com.google.common.base.CharMatcher
 import coop.rchain.casper.protocol.client.{DeployRuntime, GrpcDeployService, GrpcProposeService}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
+import coop.rchain.models.syntax._
 import coop.rchain.monix.Monixable
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
@@ -401,7 +401,7 @@ object Main {
   private def checkShardNameOnlyAscii[F[_]: Sync: Log](shardName: String): F[Unit] =
     (Log[F].error("Shard name should contain only ASCII characters") >>
       Sync[F].raiseError(new RuntimeException("Invalid shard name")))
-      .whenA(!CharMatcher.ascii().matchesAllOf(shardName))
+      .whenA(!shardName.onlyAscii)
 
   private def logConfiguration[F[_]: Sync: Log](
       conf: NodeConf,
