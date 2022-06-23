@@ -99,7 +99,6 @@ object Main {
             .whenA(options.run.allowPrivateAddresses.isSupplied)
 
       _ <- checkShardNameOnlyAscii(nodeConf.casper.shardName)
-            .whenA(options.run.shardName.isSupplied)
 
       // Create node runtime
       _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
