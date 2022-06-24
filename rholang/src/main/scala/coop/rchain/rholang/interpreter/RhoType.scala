@@ -80,7 +80,7 @@ object RhoType {
   }
 
   type RhoList = List.type
-  object RhoList {
+  object List {
     def unapply(p: Par): Option[List[Par]] =
       p.singleExpr().collect {
         case Expr(EListBody(EList(s, _, _, _))) => s.toList
@@ -90,7 +90,7 @@ object RhoType {
   }
 
   type RhoSet = Set.type
-  object RhoSet {
+  object Set {
     def unapply(p: Par): Option[Set[Par]] =
       p.singleExpr().collect {
         case Expr(ESetBody(ParSet(s, _, _, _))) => s.toSet
@@ -100,7 +100,7 @@ object RhoType {
   }
 
   type RhoMap = Map.type
-  object RhoMap {
+  object Map {
     def unapply(p: Par): Option[Map[Par, Par]] =
       p.singleExpr().collect {
         case Expr(EMapBody(ParMap(s, _, _, _))) => s.toMap

@@ -339,9 +339,9 @@ object WebApi {
     // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
     case data: ExprPar   => exprParToParProto(data)
     case ExprTuple(data) => Expression(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
-    case ExprList(data)  => RhoList(data.map(rhoExprToParProto))
-    case ExprSet(data)   => RhoSet(data.map(rhoExprToParProto))
-    case ExprMap(data)   => RhoMap(data.map { case (k, v) => (String(k), rhoExprToParProto(v)) })
+    case ExprList(data)  => List(data.map(rhoExprToParProto))
+    case ExprSet(data)   => Set(data.map(rhoExprToParProto))
+    case ExprMap(data)   => Map(data.map { case (k, v) => (String(k), rhoExprToParProto(v)) })
     // Terminal expressions (here is the data)
     case ExprBool(data)   => Boolean(data)
     case ExprInt(data)    => Number(data)
@@ -383,12 +383,13 @@ object WebApi {
 
   private def toDataAtNameResponse(req: (Seq[DataWithBlockInfo], Int)): DataAtNameResponse = {
     val (dbs, length) = req
-    val exprsWithBlock = dbs.foldLeft(List[RhoExprWithBlock]()) { (acc, data) =>
-      val exprs = data.postBlockData.flatMap(exprFromParProto)
-      // Implements semantic of Par with Unit: P | Nil ==> P
-      val expr  = if (exprs.size == 1) exprs.head else ExprPar(exprs.toList)
-      val block = data.block
-      RhoExprWithBlock(expr, block) +: acc
+    val exprsWithBlock = dbs.foldLeft(collection.immutable.List[RhoExprWithBlock]()) {
+      (acc, data) =>
+        val exprs = data.postBlockData.flatMap(exprFromParProto)
+        // Implements semantic of Par with Unit: P | Nil ==> P
+        val expr  = if (exprs.size == 1) exprs.head else ExprPar(exprs.toList)
+        val block = data.block
+        RhoExprWithBlock(expr, block) +: acc
     }
     DataAtNameResponse(exprsWithBlock, length)
   }
