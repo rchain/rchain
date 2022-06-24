@@ -84,7 +84,7 @@ object StateBalances {
       (rhoRuntime, _)            = runtimes
       vaultChannel               <- getGenesisVaultMapPar(rhoRuntime)
       _ <- rhoRuntime.reset(
-            Blake2b256Hash.fromByteString(block.body.state.postStateHash)
+            Blake2b256Hash.fromByteString(block.postStateHash)
           )
       balances <- VaultBalanceGetter.getAllVaultBalance(
                    vaultTreeHashMapDepth,

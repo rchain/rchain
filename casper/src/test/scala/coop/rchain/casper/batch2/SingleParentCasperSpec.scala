@@ -37,7 +37,7 @@ class SingleParentCasperSpec extends AnyFlatSpec with Matchers with Inspectors {
           _ <- n2.syncWith(n1)
 
           b3 <- n1.addBlock(deployDatas(2))
-        } yield b3.header.parentsHashList.size shouldBe 1
+        } yield b3.justifications.size shouldBe 1
     }
   }
 }

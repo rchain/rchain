@@ -1,24 +1,24 @@
 package coop.rchain.node.runtime
 
-import cats.{Parallel, Show}
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
-import coop.rchain.blockstorage.syntax._
+import cats.{Parallel, Show}
 import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.blocks.{BlockProcessor, BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, NodeRunning, PeerMessage}
+import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, PeerMessage}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.syntax._
 import coop.rchain.comm.RoutingMessage
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.ConnectionsCell
@@ -27,7 +27,7 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Par
+import coop.rchain.models.{BlockVersion, Par}
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
@@ -40,7 +40,6 @@ import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.{ReportingRoutes, Transaction}
 import coop.rchain.rholang.interpreter.RhoRuntime
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
@@ -62,7 +61,6 @@ object Setup {
         Queue[F, RoutingMessage],
         APIServers,
         CasperLoop[F],
-        CasperLoop[F],
         F[Unit], // Node startup process (protocol messages handling)
         ReportingHttpRoutes[F],
         WebApi[F],
@@ -74,14 +72,6 @@ object Setup {
     )
   ] =
     for {
-      // In memory state for last approved block
-      lab <- LastApprovedBlock.of[F]
-
-      span = if (conf.metrics.zipkin)
-        diagnostics.effects
-          .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
-      else Span.noop[F]
-
       // RNode key-value store manager / manages LMDB databases
       rnodeStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
 
@@ -95,16 +85,11 @@ object Setup {
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
-      synchronyConstraintChecker = {
-        implicit val bs  = blockStore
-        implicit val bds = blockDagStorage
-        SynchronyConstraintChecker[F]
-      }
-      lastFinalizedHeightConstraintChecker = {
-        implicit val bs  = blockStore
-        implicit val bds = blockDagStorage
-        LastFinalizedHeightConstraintChecker[F]
-      }
+      // Create metrics if enabled
+      span = if (conf.metrics.zipkin)
+        diagnostics.effects
+          .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
+      else Span.noop[F]
 
       // Runtime for `rnode eval`
       evalRuntime <- {
@@ -151,24 +136,6 @@ object Setup {
       }
       (rnodeStateManager, rspaceStateManager) = stateManagers
 
-      casperShardConf = CasperShardConf(
-        conf.casper.faultToleranceThreshold,
-        conf.casper.shardName,
-        conf.casper.finalizationRate,
-        conf.casper.maxNumberOfParents,
-        conf.casper.maxParentDepth.getOrElse(Int.MaxValue),
-        conf.casper.synchronyConstraintThreshold.toFloat,
-        conf.casper.heightConstraintThreshold,
-        50,
-        1,
-        1,
-        conf.casper.genesisBlockData.bondMinimum,
-        conf.casper.genesisBlockData.bondMaximum,
-        conf.casper.genesisBlockData.epochLength,
-        conf.casper.genesisBlockData.quarantineLength,
-        conf.casper.minPhloPrice
-      )
-
       // Load validator private key if specified
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
@@ -177,14 +144,18 @@ object Setup {
       // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
-        implicit val (br, ep)     = (blockRetriever, eventPublisher)
-        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val ep           = eventPublisher
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
         val dummyDeployerKeyOpt   = conf.dev.deployerPrivateKey
         val dummyDeployerKey      = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
-        Proposer[F](validatorIdentity, casperShardConf, dummyDeployerKey.map((_, "Nil")))
+        Proposer[F](
+          validatorIdentity,
+          conf.casper.shardName,
+          conf.casper.minPhloPrice,
+          dummyDeployerKey.map((_, "Nil"))
+        )
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
@@ -211,34 +182,6 @@ object Setup {
         triggerProposeFOpt.traverse(_(true)) whenA conf.autopropose
       }
 
-      // Block receiver, incoming blocks from peers
-      incomingBlockStream = incomingBlocksQueue.dequeue
-      blockReceiverState <- {
-        implicit val hashShow = Show.show[BlockHash](_.toHexString)
-        Ref.of(BlockReceiverState[BlockHash])
-      }
-      blockReceiverStream <- {
-        implicit val (bs, bd, br) = (blockStore, blockDagStorage, blockRetriever)
-        BlockReceiver[F](
-          blockReceiverState,
-          incomingBlockStream,
-          validatedBlocksStream,
-          casperShardConf.shardName
-        )
-      }
-
-      // Block processor (validation of blocks)
-      blockProcessorInputBlocksStream = blockReceiverStream.evalMap(blockStore.getUnsafe)
-      blockProcessorStream = {
-        implicit val (rm, sp)     = (runtimeManager, span)
-        implicit val (bs, bd, cu) = (blockStore, blockDagStorage, commUtil)
-        BlockProcessor[F](
-          blockProcessorInputBlocksStream,
-          validatedBlocksQueue,
-          MultiParentCasper.getSnapshot[F](casperShardConf)
-        )
-      }
-
       // Network packets handler (queue)
       routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
       // Peer message stream
@@ -257,11 +200,12 @@ object Setup {
         }
         .collect { case Some(m) => m }
 
+      // Node initialization process, sync LFS to running
+      incomingBlockStream = incomingBlocksQueue.dequeue
       nodeLaunch = {
         implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
-        implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
-        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (ra, rc)     = (rpConfAsk, rpConnections)
         implicit val (rm, cu)     = (runtimeManager, commUtil)
         implicit val (rsm, sp)    = (rspaceStateManager, span)
         NodeLaunch[F](
@@ -271,15 +215,51 @@ object Setup {
           !conf.protocolClient.disableLfs,
           conf.protocolServer.disableStateExporter,
           validatorIdentityOpt,
-          casperShardConf,
           conf.standalone
+        )
+      }
+
+      // Block receiver, process incoming blocks and order by validated dependencies
+      blockReceiverState <- {
+        implicit val hashShow = Show.show[BlockHash](_.toHexString)
+        Ref.of(BlockReceiverState[BlockHash])
+      }
+      blockReceiverStream <- {
+        implicit val (bs, bd, br) = (blockStore, blockDagStorage, blockRetriever)
+        BlockReceiver[F](
+          blockReceiverState,
+          incomingBlockStream,
+          validatedBlocksStream,
+          conf.casper.shardName
+        )
+      }
+      // Blocks from receiver with fork-choice tips request on idle
+      // TODO: instead of idle timeout more precise trigger can be when peers connect
+      blockReceiverFCTStream = blockReceiverStream.evalOnIdle(
+        commUtil.sendForkChoiceTipRequest,
+        conf.casper.forkChoiceStaleThreshold
+      )
+
+      // Block processor (validation of blocks)
+      blockProcessorInputBlocksStream = {
+        import coop.rchain.blockstorage.syntax._
+        blockReceiverFCTStream.evalMap(blockStore.getUnsafe)
+      }
+      blockProcessorStream = {
+        implicit val (rm, sp)     = (runtimeManager, span)
+        implicit val (bs, bd, cu) = (blockStore, blockDagStorage, commUtil)
+        BlockProcessor[F](
+          blockProcessorInputBlocksStream,
+          validatedBlocksQueue,
+          conf.casper.shardName,
+          conf.casper.minPhloPrice
         )
       }
 
       // Query for network information (address, peers, nodes)
       getNetworkStatus = for {
         address <- rpConfAsk.ask
-        peers   <- rpConnections.read
+        peers   <- rpConnections.get
         nodes   <- NodeDiscovery[F].peers
       } yield (address.local, peers, nodes)
 
@@ -340,16 +320,6 @@ object Setup {
         } yield ()
       }
 
-      // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
-      // For why - look at updateForkChoiceTipsIfStuck method description.
-      updateForkChoiceLoop = {
-        implicit val (bs, cu, bds) = (blockStore, commUtil, blockDagStorage)
-        for {
-          _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
-          _ <- NodeRunning.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
-        } yield ()
-      }
-
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
@@ -357,7 +327,6 @@ object Setup {
       routingMessageQueue,
       apiServers,
       casperLoop,
-      updateForkChoiceLoop,
       nodeLaunch,
       reportingRoutes,
       webApi,

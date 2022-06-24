@@ -49,8 +49,8 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
       validatorKeys,
       validatorKeys,
       Genesis(
+        sender = pub1, // First key as genesis creator
         shardId = shardId,
-        blockTimestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
           maximumBond = Long.MaxValue,
@@ -127,15 +127,15 @@ class PosMultiSigTransferSpec extends AnyFlatSpec with Matchers with Inspectors 
       val rm = node.runtimeManager
       for {
         b1   <- node.addBlock(initialTransfer)
-        _    = assert(b1.body.deploys.head.systemDeployError.isEmpty)
-        _    = assert(!b1.body.deploys.head.isFailed)
+        _    = assert(b1.state.deploys.head.systemDeployError.isEmpty)
+        _    = assert(!b1.state.deploys.head.isFailed)
         b2   <- node.addBlock(transferDeploy)
-        _    = assert(b2.body.deploys.head.systemDeployError.isEmpty)
-        _    = assert(!b2.body.deploys.head.isFailed)
+        _    = assert(b2.state.deploys.head.systemDeployError.isEmpty)
+        _    = assert(!b2.state.deploys.head.isFailed)
         b3   <- node.addBlock(confirmDeploy)
-        _    = assert(b3.body.deploys.head.systemDeployError.isEmpty)
-        _    = assert(!b3.body.deploys.head.isFailed)
-        ret2 <- rm.playExploratoryDeploy(getBalance, b3.body.state.postStateHash)
+        _    = assert(b3.state.deploys.head.systemDeployError.isEmpty)
+        _    = assert(!b3.state.deploys.head.isFailed)
+        ret2 <- rm.playExploratoryDeploy(getBalance, b3.postStateHash)
         _    = assert(ret2.head.exprs.head.getGInt == transferAmount)
       } yield ()
     }

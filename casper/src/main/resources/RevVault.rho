@@ -206,8 +206,8 @@ in {
                       if (Nil != *logCh) {
                         new bd(`rho:block:data`), bdCh in {
                           bd!(*bdCh) |
-                          for (@blockNumber, @timestamp, @sender <- bdCh) {
-                            logCh!(["transfer", targetAddress, amount, result, blockNumber, timestamp, sender])
+                          for (@blockNumber, @sender <- bdCh) {
+                            logCh!(["transfer", targetAddress, amount, result, blockNumber, sender])
                           }
                         }
                       }

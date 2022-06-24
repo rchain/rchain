@@ -69,7 +69,7 @@ package object effects {
     new JLineConsoleIO(consoleReader)
 
   def rpConnections[F[_]: Concurrent]: F[ConnectionsCell[F]] =
-    Cell.mvarCell[F, Connections](Connections.empty)
+    Ref[F].of(Connections.empty)
 
   def rpConfState[F[_]: Monad: Sync](conf: RPConf): MonadState[F, RPConf] =
     new AtomicMonadState[F, RPConf](AtomicAny(conf))

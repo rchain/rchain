@@ -5,15 +5,14 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.engine
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.engine.BlockRetriever.RequestState
-import coop.rchain.casper.engine.Setup.peerNode
 import coop.rchain.casper.protocol._
-import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper._
+import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{createRPConfAsk, LogStub, TransportLayerStub}
-import coop.rchain.shared.{Cell, Time}
+import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.BeforeAndAfterEach
@@ -23,6 +22,10 @@ import org.scalatest.matchers.should.Matchers
 class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
+  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
+
+  private def peerNode(name: String, port: Int): PeerNode =
+    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   val hash                 = ByteString.copyFrom("newHash", "utf-8")
   val local: PeerNode      = peerNode("src", 40400)
@@ -34,7 +37,7 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
   implicit val currentRequests: engine.BlockRetriever.RequestedBlocks[Task] =
     Ref.unsafe[Task, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
   implicit val connectionsCell: ConnectionsCell[Task] =
-    Cell.unsafe[Task, Connections](List(local))
+    Ref.unsafe[Task, Connections](List(local))
   implicit val transportLayer = new TransportLayerStub[Task]
   implicit val rpConf         = createRPConfAsk[Task](local)
   implicit val time           = Time.fromTimer[Task]

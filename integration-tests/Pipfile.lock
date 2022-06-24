@@ -421,11 +421,11 @@
         },
         "pyrchain": {
             "hashes": [
-                "sha256:2a9d25d5231cf9dd02d1936af3f70433e951fc7b4d9ebac745007821e842635a",
-                "sha256:ed8e7e60e0e19a73245ff8df9a5c9af6c2c69b718c5f5d5e5a7810e20c5bb933"
+                "sha256:e85dd0003872be6736a53829a8cde49146e5845cb08389d9ca062cbc6a195452",
+                "sha256:f73a6b5fd35a7bacf0ef8ce152aa1a517e7bd59b5b9e3f407ca2e5be4b8e1451"
             ],
             "index": "pypi",
-            "version": "==0.3.13a0"
+            "version": "==0.4.0-alpha1"
         },
         "pytest": {
             "hashes": [

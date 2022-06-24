@@ -17,23 +17,16 @@ object PrettyPrinter {
       case _               => "Unknown consensus protocol message"
     }
 
-  // TODO shouldn header.parentsHashList be nonempty list?
   private def buildString(b: BlockMessage, short: Boolean): String =
-    b.header.parentsHashList.headOption
-      .fold(
-        s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) with empty parents (supposedly genesis)"
-      )(
-        mainParent =>
-          if (short) {
-            s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"
-          } else {
-            s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
-              s"-- Sender ID ${buildString(b.sender)} " +
-              s"-- M Parent Hash ${buildString(mainParent)} " +
-              s"-- Contents ${buildString(b.body.state)}" +
-              s"-- Shard ID ${limit(b.shardId, 10)}"
-          }
-      )
+    if (short) {
+      s"#${b.blockNumber} (${buildString(b.blockHash)})"
+    } else {
+      s"Block #${b.blockNumber} (${buildString(b.blockHash)}) " +
+        s"sender: ${buildString(b.sender)}, " +
+        s"state: ${buildString(b.postStateHash)}, " +
+        s"shard: ${limit(b.shardId, maxLength = 10)}, " +
+        s"justifications: ${buildString(b.justifications)}"
+    }
 
   def buildString(bh: BlockHashMessage): String =
     s"Block hash: ${buildString(bh.blockHash)}"
@@ -64,12 +57,6 @@ object PrettyPrinter {
 
   def buildString(d: DeployData): String =
     s"DeployData #${d.timestamp} -- ${d.term}"
-
-  def buildString(r: RChainState): String =
-    buildString(r.postStateHash)
-
-  def buildString(b: Bond): String =
-    s"${buildStringNoLimit(b.validator)}: ${b.stake.toString}"
 
   def buildString(hashes: Traversable[BlockHash]): String =
     hashes.map(PrettyPrinter.buildString).mkString("[", " ", "]")

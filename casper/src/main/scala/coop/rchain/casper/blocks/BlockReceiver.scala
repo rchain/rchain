@@ -10,8 +10,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.{CasperShardConf, PrettyPrinter, Validate}
+import coop.rchain.casper.{PrettyPrinter, Validate}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
@@ -220,7 +219,7 @@ object BlockReceiver {
     def checkIfKnown(b: BlockMessage): F[Boolean] = {
       val isStored = BlockStore[F].contains(b.blockHash)
       val isTooOld = BlockDagStorage[F].getRepresentation.map { dag =>
-        dag.heightMap.headOption.map(_._1).forall(ProtoUtil.blockNumber(b) < _)
+        dag.heightMap.headOption.map(_._1).getOrElse(-1L) > b.blockNumber
       }
       isStored ||^ isTooOld
     }
@@ -246,11 +245,13 @@ object BlockReceiver {
               // Save block to block store, resolve parents to request
               _ <- BlockStore[F].put(block)
               parents <- block.justifications
-                          .map(_.latestBlockHash)
                           .traverse { hash =>
                             BlockStore[F].contains(hash).not.map((hash, _))
                           }
               pendingRequests <- state.modify(_.endStored(block.blockHash, parents))
+
+              // Notify BlockRetriever of finished validation of block
+              _ <- BlockRetriever[F].ackReceived(block.blockHash)
 
               // Send request for missing dependencies
               _ <- requestMissingDependencies(pendingRequests)
@@ -258,7 +259,7 @@ object BlockReceiver {
               // Check if block have all dependencies in the DAG
               dag <- BlockDagStorage[F].getRepresentation
               hasAllDeps = pendingRequests.isEmpty &&
-                block.justifications.map(_.latestBlockHash).forall(dag.contains)
+                block.justifications.forall(dag.contains)
 
               _ <- receiverOutputQueue.enqueue1(block.blockHash).whenA(hasAllDeps)
             } yield ()
@@ -274,13 +275,10 @@ object BlockReceiver {
     // Process validated blocks
     def validatedBlocks(receiverOutputQueue: Queue[F, BlockHash]) =
       finishedProcessingStream.parEvalMapUnorderedProcBounded { block =>
-        val parents = block.justifications.map(_.latestBlockHash).toSet
+        val parents = block.justifications.toSet
         for {
           // Update state with finalized block and get next for validation
           next <- state.modify(_.finished(block.blockHash, parents))
-
-          // Notify BlockRetriever of finished validation of block
-          _ <- BlockRetriever[F].ackInCasper(block.blockHash)
 
           // Send dependency free blocks to validation
           _ <- next.toList.traverse_(receiverOutputQueue.enqueue1)

@@ -29,7 +29,7 @@ class LimitedParentDepthSpec extends AnyFlatSpec with Matchers {
           b4 <- n2.propagateBlock(produceDeploys(3))(nodes: _*)
           b5 <- n2.propagateBlock(produceDeploys(4))(nodes: _*)
           b6 <- n1.propagateBlock(produceDeploys(5))(nodes: _*)
-        } yield b6.header.parentsHashList shouldBe List(b1.blockHash, b5.blockHash)
+        } yield b6.justifications shouldBe List(b1.blockHash, b5.blockHash)
     }
   }
 }

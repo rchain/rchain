@@ -9,18 +9,18 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.protocol.{BlockMessage, Justification}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockMetadata
+import coop.rchain.models.{BlockMetadata, BlockVersion}
 import coop.rchain.shared._
 
 import scala.util.{Success, Try}
 
+// TODO: refactor all validation functions to separate logging from actual validation logic
 object Validate {
   type PublicKey = Array[Byte]
   type Data      = Array[Byte]
@@ -69,7 +69,7 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
       } yield false
-    } else if (b.body.state.postStateHash.isEmpty) {
+    } else if (b.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
@@ -77,65 +77,56 @@ object Validate {
       true.pure
     }
 
-  def version[F[_]: Monad: Log](b: BlockMessage, version: Long): F[Boolean] = {
-    val blockVersion = b.header.version
-    if (blockVersion == version) {
+  def version[F[_]: Monad: Log](b: BlockMessage): F[Boolean] = {
+    val blockVersion = b.version
+    if (BlockVersion.Supported.contains(blockVersion)) {
       true.pure
     } else {
-      Log[F]
-        .warn(
-          ignore(
-            b,
-            s"received block version $blockVersion is the expected version $version."
-          )
-        )
-        .as(false)
+      val versionsStr = BlockVersion.Supported.mkString(" or ")
+      val msg         = s"received block version $blockVersion is not the expected version $versionsStr."
+      Log[F].warn(ignore(b, msg)).as(false)
     }
   }
 
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: BlockDagStorage: Metrics: Span](
+  def blockSummary[F[_]: Sync: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
-      s: CasperSnapshot,
       shardId: String,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
     (for {
-      _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
-      _ <- EitherT(Validate.timestamp(block))
+      // First validate justifications because they are basis for all other validation
+      _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
+      _ <- EitherT(Validate.justificationRegressions(block))
+      // Validator sequence number validation
+      _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
+      _ <- EitherT(Validate.sequenceNumber(block))
+      // Block number validation
+      _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
+      _ <- EitherT(Validate.blockNumber(block))
+      // Deploys validation
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
       _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
-      _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
-      _ <- EitherT(Validate.repeatDeploy(block, s, expirationThreshold))
-      _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
-      _ <- EitherT(Validate.blockNumber(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
       _ <- EitherT(Validate.futureTransaction(block))
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
-      _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
-      _ <- EitherT(Validate.sequenceNumber(block, s))
-      _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
-      s <- EitherT(Validate.justificationRegressions(block))
+      _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
+      s <- EitherT(Validate.repeatDeploy(block, expirationThreshold))
     } yield s).value
 
   /**
     * Validate no deploy with the same sig has been produced in the chain
-    *
-    * Agnostic of non-parent justifications
     */
   def repeatDeploy[F[_]: Sync: Log: BlockStore: BlockDagStorage: Span](
       block: BlockMessage,
-      s: CasperSnapshot,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
-    val deployKeySet = block.body.deploys.map(_.deploy.sig).toSet
+    val deployKeySet = block.state.deploys.map(_.deploy.sig).toSet
 
     for {
       _                   <- Span[F].mark("before-repeat-deploy-get-parents")
-      blockMetadata       = BlockMetadata.fromBlock(block, invalid = false)
-      initParents         <- ProtoUtil.getParentsMetadata(blockMetadata, s.dag)
+      blockMetadata       = BlockMetadata.fromBlock(block)
+      initParents         <- ProtoUtil.getParentsMetadata(blockMetadata)
       maxBlockNumber      = ProtoUtil.maxBlockNumberMetadata(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
       _                   <- Span[F].mark("before-repeat-deploy-duplicate-block")
@@ -145,16 +136,13 @@ object Validate {
                                            ProtoUtil
                                              .getParentMetadatasAboveBlockNumber(
                                                b,
-                                               earliestBlockNumber,
-                                               s.dag
+                                               earliestBlockNumber
                                              )
                                        )
                                        .findF { blockMetadata =>
                                          for {
-                                           block <- BlockStore[F].getUnsafe(
-                                                     blockMetadata.blockHash
-                                                   )
-                                           blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
+                                           block        <- BlockStore[F].getUnsafe(blockMetadata.blockHash)
+                                           blockDeploys = block.state.deploys.map(_.deploy)
                                          } yield blockDeploys.exists(
                                            d => deployKeySet.contains(d.sig)
                                          )
@@ -169,8 +157,7 @@ object Validate {
                                              )
                            currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
                            blockHashString        = PrettyPrinter.buildString(duplicatedBlock.blockHash)
-                           duplicatedDeploy = ProtoUtil
-                             .deploys(duplicatedBlock)
+                           duplicatedDeploy = duplicatedBlock.state.deploys
                              .map(_.deploy)
                              .find(d => deployKeySet.contains(d.sig))
                              .get
@@ -187,65 +174,14 @@ object Validate {
     } yield maybeError.toLeft(BlockStatus.valid)
   }
 
-  // This is not a slashable offence
-  def timestamp[F[_]: Sync: Log: Time: BlockStore](
-      b: BlockMessage
-  ): F[ValidBlockProcessing] = {
-    import cats.instances.list._
-
+  def blockNumber[F[_]: Sync: BlockDagStorage: Log](b: BlockMessage): F[ValidBlockProcessing] =
     for {
-      currentTime  <- Time[F].currentMillis
-      timestamp    = b.header.timestamp
-      beforeFuture = currentTime + DRIFT >= timestamp
-      latestParentTimestamp <- ProtoUtil.parentHashes(b).foldM(0L) {
-                                case (latestTimestamp, parentHash) =>
-                                  BlockStore[F]
-                                    .getUnsafe(parentHash)
-                                    .map(parent => {
-                                      val timestamp = parent.header.timestamp
-                                      math.max(latestTimestamp, timestamp)
-                                    })
-                              }
-      afterLatestParent = timestamp >= latestParentTimestamp
-      result <- if (beforeFuture && afterLatestParent) {
-                 BlockStatus.valid.asRight[BlockError].pure[F]
-               } else {
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(
-                           b,
-                           s"block timestamp $timestamp is not between latest parent block time and current time."
-                         )
-                       )
-                 } yield BlockStatus.invalidTimestamp.asLeft[ValidBlock]
-               }
-    } yield result
-  }
-
-  // Agnostic of non-parent justifications
-  def blockNumber[F[_]: Sync: BlockDagStorage: Log](
-      b: BlockMessage,
-      s: CasperSnapshot
-  ): F[ValidBlockProcessing] = {
-    import cats.instances.list._
-
-    for {
-      parents <- ProtoUtil.parentHashes(b).traverse { parentHash =>
-                  s.dag.lookup(parentHash).flatMap {
-                    case Some(p) => p.pure[F]
-                    case None =>
-                      Sync[F].raiseError[BlockMetadata](
-                        new Exception(
-                          s"Block dag store was missing ${PrettyPrinter.buildString(parentHash)}."
-                        )
-                      )
-                  }
-                }
-      maxBlockNumber = parents.foldLeft(-1L) {
-        case (acc, p) => math.max(acc, p.blockNum)
-      }
-      number = ProtoUtil.blockNumber(b)
-      result = maxBlockNumber + 1 == number
+      parents <- b.justifications
+                  .traverse(BlockDagStorage[F].lookupUnsafe(_))
+                  .map(_.filter(!_.invalid))
+      maxBlockNumber = parents.map(_.blockNum).maximumOption.getOrElse(-1L)
+      number         = b.blockNumber
+      result         = maxBlockNumber + 1 == number
       status <- if (result) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
                } else {
@@ -259,14 +195,11 @@ object Validate {
                  } yield BlockStatus.invalidBlockNumber.asLeft[ValidBlock]
                }
     } yield status
-  }
 
   def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
-    val blockNumber       = ProtoUtil.blockNumber(b)
-    val deploys           = ProtoUtil.deploys(b).map(_.deploy)
-    val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber >= blockNumber)
+    val blockNumber       = b.blockNumber
+    val deploys           = b.state.deploys.map(_.deploy)
+    val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber > blockNumber)
     maybeFutureDeploy
       .traverse { futureDeploy =>
         Log[F]
@@ -285,10 +218,8 @@ object Validate {
       b: BlockMessage,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
-    val earliestAcceptableValidAfterBlockNumber = ProtoUtil.blockNumber(b) - expirationThreshold
-    val deploys                                 = ProtoUtil.deploys(b).map(_.deploy)
+    val earliestAcceptableValidAfterBlockNumber = b.blockNumber - expirationThreshold
+    val deploys                                 = b.state.deploys.map(_.deploy)
     val maybeExpiredDeploy =
       deploys.find(_.data.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
     maybeExpiredDeploy
@@ -311,27 +242,13 @@ object Validate {
     * creator justification, this check will fail as expected. The exception is when
     * B's creator justification is the genesis block.
     */
-  @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def sequenceNumber[F[_]: Monad: BlockDagStorage: Log](
-      b: BlockMessage,
-      s: CasperSnapshot
-  ): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
+  def sequenceNumber[F[_]: Sync: BlockDagStorage: Log](b: BlockMessage): F[ValidBlockProcessing] =
     for {
-      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
-                                        case (_, Justification(_, latestBlockHash)) =>
-                                          s.dag.lookup(latestBlockHash).map {
-                                            case Some(block) =>
-                                              block.seqNum
-                                            case None =>
-                                              throw new Exception(
-                                                s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
-                                              )
-                                          }
-                                      }
-      number = b.seqNum
-      result = creatorJustificationSeqNumber + 1 == number
+      justifications         <- b.justifications.traverse(BlockDagStorage[F].lookupUnsafe(_))
+      creatorJustifications  = justifications.filter(_.sender == b.sender)
+      creatorLatestSeqNumber = creatorJustifications.map(_.seqNum).maximumOption.getOrElse(-1L)
+      number                 = b.seqNum
+      result                 = creatorLatestSeqNumber + 1L == number
       status <- if (result) {
                  BlockStatus.valid.asRight[BlockError].pure[F]
                } else {
@@ -339,20 +256,19 @@ object Validate {
                    _ <- Log[F].warn(
                          ignore(
                            b,
-                           s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+                           s"seq number $number is not one more than creator justification number $creatorLatestSeqNumber."
                          )
                        )
                  } yield BlockStatus.invalidSequenceNumber.asLeft[ValidBlock]
                }
     } yield status
-  }
 
   // Validator should only process deploys from its own shard
   def deploysShardIdentifier[F[_]: Monad: Log](
       b: BlockMessage,
       shardId: String
   ): F[ValidBlockProcessing] =
-    if (b.body.deploys.forall(_.deploy.data.shardId == shardId)) {
+    if (b.state.deploys.forall(_.deploy.data.shardId == shardId)) {
       BlockStatus.valid.asRight[BlockError].pure
     } else {
       for {
@@ -397,11 +313,11 @@ object Validate {
   ): F[Option[Boolean]] =
     for {
       msgMap <- BlockDagStorage[F].getRepresentation.map(_.dagMessageState.msgMap)
-//      justifications = b.justifications.map(_.latestBlockHash).map(msgMap)
+//      justifications = b.justifications.map(msgMap)
     } yield for {
       // TODO: temporary don't expect that all justifications are available in msgMap to satisfy the failing tests
       //  - with multi-parent finalizer all messages should be available
-      justifications <- b.justifications.map(_.latestBlockHash).map(msgMap.get).sequence
+      justifications <- b.justifications.map(msgMap.get).sequence
       prevMsg        <- justifications.find(_.sender == b.sender)
       res = justifications.forall { just =>
         val justPrevMsgOpt = prevMsg.parents.map(msgMap).find(_.sender == just.sender)
@@ -418,21 +334,19 @@ object Validate {
     * If block contains an invalid justification block B and the creator of B is still bonded,
     * return a RejectableBlock. Otherwise return an IncludeableBlock.
     */
-  def neglectedInvalidBlock[F[_]: Applicative: BlockDagStorage](
-      block: BlockMessage,
-      s: CasperSnapshot
+  def neglectedInvalidBlock[F[_]: Monad: BlockDagStorage](
+      block: BlockMessage
   ): F[ValidBlockProcessing] =
     for {
-      invalidJustifications <- block.justifications.filterA { justification =>
-                                for {
-                                  latestBlockOpt <- s.dag.lookup(justification.latestBlockHash)
-                                } yield latestBlockOpt.exists(_.invalid)
-                              }
-      neglectedInvalidJustification = invalidJustifications.exists { justification =>
-        val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
+      justifications <- block.justifications.flatTraverse(
+                         BlockDagStorage[F].lookup(_).map(_.toList)
+                       )
+      invalidValidators = justifications.filter(_.invalid).map(b => b.sender)
+      neglectedInvalidJustification = invalidValidators.exists { invalidValidator =>
+        val slashedValidatorBond = block.bonds.get(invalidValidator)
         slashedValidatorBond match {
-          case Some(bond) => bond.stake > 0
-          case None       => false
+          case Some(stake) => stake > 0
+          case None        => false
         }
       }
       result = if (neglectedInvalidJustification) {
@@ -442,28 +356,20 @@ object Validate {
       }
     } yield result
 
-  def bondsCache[F[_]: Log: Concurrent](
-      b: BlockMessage,
-      runtimeManager: RuntimeManager[F]
+  def bondsCache[F[_]: Concurrent: RuntimeManager: Log](
+      b: BlockMessage
   ): F[ValidBlockProcessing] = {
-    val bonds          = ProtoUtil.bonds(b)
-    val tuplespaceHash = ProtoUtil.postStateHash(b)
+    val bonds          = b.bonds
+    val tuplespaceHash = b.postStateHash
 
-    runtimeManager.computeBonds(tuplespaceHash).attempt.flatMap {
-      case Right(computedBonds) =>
-        if (bonds.toSet == computedBonds.toSet) {
-          BlockStatus.valid.asRight[BlockError].pure
-        } else {
-          for {
-            _ <- Log[F].warn(
-                  "Bonds in proof of stake contract do not match block's bond cache."
-                )
-          } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
-        }
-      case Left(ex: Throwable) =>
+    RuntimeManager[F].computeBonds(tuplespaceHash).flatMap { computedBonds =>
+      if (bonds.toSet == computedBonds.toSet) {
+        BlockStatus.valid.asRight[BlockError].pure
+      } else {
         for {
-          _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
-        } yield BlockError.BlockException(ex).asLeft[ValidBlock]
+          _ <- Log[F].warn("Bonds in proof of stake contract do not match block's bond cache.")
+        } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
+      }
     }
   }
 
@@ -474,9 +380,9 @@ object Validate {
       b: BlockMessage,
       minPhloPrice: Long
   ): F[ValidBlockProcessing] =
-    if (b.body.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
+    if (b.state.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
       BlockStatus.valid.asRight[BlockError].pure
     } else {
-      BlockStatus.lowDeployCost.asLeft[ValidBlock].pure
+      BlockStatus.containsLowCostDeploy.asLeft[ValidBlock].pure
     }
 }

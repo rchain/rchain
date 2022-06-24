@@ -49,7 +49,7 @@ trait BlockApiFixture {
       blockApi <- BlockApiImpl[F](
                    validatorOpt = node.validatorIdOpt,
                    networkId = "rchain",
-                   shardId = node.casperShardConf.shardName,
+                   shardId = node.shardName,
                    minPhloPrice = 1,
                    version = "",
                    (thisNode, List[Connection](), Seq[PeerNode]()).pure[F],

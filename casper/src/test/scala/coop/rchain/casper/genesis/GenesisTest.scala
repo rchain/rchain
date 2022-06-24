@@ -3,24 +3,21 @@ package coop.rchain.casper.genesis
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.DagRepresentation
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
-import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.{InterpreterUtil, Resources, RuntimeManager}
-import coop.rchain.casper.util.{BondsParser, GenesisBuilder, ProtoUtil, VaultParser}
-import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
+import coop.rchain.casper.util.{BondsParser, GenesisBuilder, VaultParser}
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.syntax._
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.Time
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -36,24 +33,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
 
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = NoopSpan[Task]()
-
-  def mkCasperSnapshot(dag: DagRepresentation) =
-    CasperSnapshot(
-      dag,
-      ByteString.EMPTY,
-      ByteString.EMPTY,
-      IndexedSeq.empty,
-      List.empty,
-      Set.empty,
-      Set.empty,
-      0,
-      Map.empty,
-      OnChainCasperState(
-        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        Map.empty,
-        Seq.empty
-      )
-    )
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -94,16 +73,14 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
-          log: LogStub[Task],
-          time: LogicalTime[Task]
+          log: LogStub[Task]
       ) =>
         for {
           _ <- fromInputFiles()(
                 genesisPath,
                 runtimeManager,
                 implicitly[Concurrent[Task]],
-                log,
-                time
+                log
               )
           _ = log.warns.count(
             _.contains(
@@ -119,8 +96,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
-          log: LogStub[Task],
-          time: LogicalTime[Task]
+          log: LogStub[Task]
       ) =>
         val nonExistingPath = storageLocation.resolve("not/a/real/file").toString
         for {
@@ -128,8 +104,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                              genesisPath,
                              runtimeManager,
                              implicitly[Concurrent[Task]],
-                             log,
-                             time
+                             log
                            ).attempt
         } yield log.warns.exists(_.contains("BONDS FILE NOT FOUND"))
     }
@@ -140,8 +115,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
-          log: LogStub[Task],
-          time: LogicalTime[Task]
+          log: LogStub[Task]
       ) =>
         val badBondsFile = genesisPath.resolve("misformatted.txt").toString
 
@@ -154,8 +128,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                              genesisPath,
                              runtimeManager,
                              implicitly[Concurrent[Task]],
-                             log,
-                             time
+                             log
                            ).attempt
         } yield genesisAttempt.left.value.getMessage should include(
           "FAILED PARSING BONDS FILE"
@@ -168,8 +141,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
-          log: LogStub[Task],
-          time: LogicalTime[Task]
+          log: LogStub[Task]
       ) =>
         val bondsFile = genesisPath.resolve("givenBonds.txt").toString
         printBonds(bondsFile)
@@ -179,16 +151,15 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                       genesisPath,
                       runtimeManager,
                       implicitly[Concurrent[Task]],
-                      log,
-                      time
+                      log
                     )
-          bonds = ProtoUtil.bonds(genesis)
+          bonds = genesis.bonds.toList
           _     = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
+              case (v, i) => (v.unsafeHexToByteString, i.toLong)
             }
-        } yield result.forall(bonds.contains(_)) should be(true)
+        } yield result.forall(bonds.contains) should be(true)
     }
   )
 
@@ -198,27 +169,21 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
         (
             runtimeManager: RuntimeManager[Task],
             genesisPath: Path,
-            log: LogStub[Task],
-            time: LogicalTime[Task]
+            log: LogStub[Task]
         ) =>
+          implicit val rm     = runtimeManager
           implicit val logEff = log
           for {
             genesis <- fromInputFiles()(
                         genesisPath,
                         runtimeManager,
                         implicitly[Concurrent[Task]],
-                        log,
-                        time
+                        log
                       )
-            _   <- blockDagStorage.insert(genesis, false, approved = true)
-            _   <- BlockStore[Task].put(genesis.blockHash, genesis)
-            dag <- blockDagStorage.getRepresentation
+            _ <- blockDagStorage.insert(genesis, false, approved = true)
+            _ <- BlockStore[Task].put(genesis.blockHash, genesis)
             maybePostGenesisStateHash <- InterpreterUtil
-                                          .validateBlockCheckpoint[Task](
-                                            genesis,
-                                            mkCasperSnapshot(dag),
-                                            runtimeManager
-                                          )
+                                          .validateBlockCheckpoint[Task](genesis)
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }
   }
@@ -228,8 +193,7 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
-          log: LogStub[Task],
-          time: LogicalTime[Task]
+          log: LogStub[Task]
       ) =>
         val bondsFile = genesisPath.resolve("bonds.txt").toString
         printBonds(bondsFile)
@@ -239,16 +203,15 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                       genesisPath,
                       runtimeManager,
                       implicitly[Concurrent[Task]],
-                      log,
-                      time
+                      log
                     )
-          bonds = ProtoUtil.bonds(genesis)
+          bonds = genesis.bonds.toList
           _     = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
+              case (v, i) => (v.unsafeHexToByteString, i.toLong)
             }
-        } yield result.forall(bonds.contains(_)) should be(true)
+        } yield result.forall(bonds.contains) should be(true)
     }
   )
 
@@ -277,8 +240,7 @@ object GenesisTest {
       implicit genesisPath: Path,
       runtimeManager: RuntimeManager[Task],
       c: Concurrent[Task],
-      log: LogStub[Task],
-      time: LogicalTime[Task]
+      log: LogStub[Task]
   ): Task[BlockMessage] =
     for {
       vaults <- VaultParser.parse[Task](
@@ -288,10 +250,13 @@ object GenesisTest {
                 maybeBondsPath.getOrElse(genesisPath + "/bonds.txt"),
                 autogenShardSize
               )
-      validators     = bonds.toSeq.map(Validator.tupled)
-      blockTimestamp <- Time[Task].currentMillis
+      // Initial set of validators
+      validators = bonds.toSeq.map(Validator.tupled)
+      validator  = ValidatorIdentity(Secp256k1.newKeyPair._1)
       genesisBlock <- createGenesisBlock(
+                       validator,
                        Genesis(
+                         sender = validator.publicKey,
                          shardId = shardId,
                          proofOfStake = ProofOfStake(
                            minimumBond = minimumBond,
@@ -306,20 +271,18 @@ object GenesisTest {
                          ),
                          registry = Registry(GenesisBuilder.defaultSystemContractPubKey),
                          vaults = vaults,
-                         blockNumber = blockNumber,
-                         blockTimestamp = blockTimestamp
+                         blockNumber = blockNumber
                        )
                      )
     } yield genesisBlock
 
   def withGenResources[F[_]: Concurrent: ContextShift: Parallel](
-      body: (RuntimeManager[F], Path, LogStub[F], LogicalTime[F]) => F[Unit]
+      body: (RuntimeManager[F], Path, LogStub[F]) => F[Unit]
   ): F[Unit] = {
     val storePath                        = storageLocation
     val gp                               = genesisPath
     implicit val noopMetrics: Metrics[F] = new metrics.Metrics.MetricsNOP[F]
     implicit val span: Span[F]           = NoopSpan[F]()
-    val time                             = new LogicalTime[F]
     implicit val log                     = new LogStub[F]
 
     for {
@@ -328,7 +291,7 @@ object GenesisTest {
       mStore         <- RuntimeManager.mergeableStore(kvsManager)
       t              = RuntimeManager.noOpExecutionTracker
       runtimeManager <- RuntimeManager[F](rStore, mStore, Genesis.NonNegativeMergeableTagName, t)
-      result         <- body(runtimeManager, genesisPath, log, time)
+      result         <- body(runtimeManager, genesisPath, log)
       _              <- Sync[F].delay { storePath.recursivelyDelete() }
       _              <- Sync[F].delay { gp.recursivelyDelete() }
     } yield result

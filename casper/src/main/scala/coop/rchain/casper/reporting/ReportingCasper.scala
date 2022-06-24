@@ -91,11 +91,10 @@ object ReportingCasper {
         for {
           reportingRspace  <- ReportingRuntime.createReportingRSpace(rspaceStore)
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
-          dag              <- BlockDagStorage[F].getRepresentation
-          preStateHash     = ProtoUtil.preStateHash(block)
+          preStateHash     = block.preStateHash
 
           // Block with empty justifications is genesis which is build with turned off cost accounting
-          withCostAccounting = block.justifications.nonEmpty || block.header.parentsHashList.nonEmpty
+          withCostAccounting = block.justifications.nonEmpty
 
           // Set Rholang runtime data
           blockdata = BlockData.fromBlock(block)
@@ -107,8 +106,8 @@ object ReportingCasper {
           // Replay block deploys with reporting
           res <- replayDeploys(
                   reportingRuntime,
-                  block.body.deploys,
-                  block.body.systemDeploys,
+                  block.state.deploys,
+                  block.state.systemDeploys,
                   blockdata,
                   withCostAccounting
                 )

@@ -33,9 +33,7 @@ def test_trim_state(command_line_options: CommandLineOptions, random_generator: 
 
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_KEY,
                                   validator_bonds_dict=bonded_validator_map, wallets_dict=genesis_vault) as context, \
-        ready_bootstrap_with_network(context=context, synchrony_constraint_threshold=0,
-                                     cli_options={"--fault-tolerance-threshold": -1}) as bootstrap_node:
-        # use fault-tolerance-threshold==-1 make sure that every block added to the bootstrap node is finalized
+        ready_bootstrap_with_network(context=context, synchrony_constraint_threshold=0) as bootstrap_node:
         relative_paths = bootstrap_node.shell_out('sh', '-c','ls /opt/docker/examples/*.rho').splitlines()
 
         # create some blocks to generate a new finalized state
@@ -46,8 +44,7 @@ def test_trim_state(command_line_options: CommandLineOptions, random_generator: 
             bootstrap_node.deploy(full_path, BOOTSTRAP_KEY, 100000, 1)
             latest_block_hash = bootstrap_node.propose()
 
-        with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='trim-node', private_key=VALIDATOR_PEER_KEY,
-                                      cli_options={"--fault-tolerance-threshold": "-1"}) as trim_state_node:
+        with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='trim-node', private_key=VALIDATOR_PEER_KEY) as trim_state_node:
             # trim node should retrieve the latest approved block and replay
             wait_for_node_sees_block(context, trim_state_node, latest_block_hash)
             for _ in range(1, 5):

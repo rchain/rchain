@@ -164,9 +164,7 @@ storage {
 }
 
 casper {
-  fault-tolerance-threshold = 1
   shard-name = root
-  finalization-rate = 1
 }
 
 metrics {

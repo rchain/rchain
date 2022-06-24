@@ -25,30 +25,30 @@ object SystemDeployUtil {
   // (Quote: https://github.com/rchain/rchain/pull/2879#discussion_r378948921)
   import coop.rchain.models.Validator.Validator
 
-  val SYSTEM_DEPLOY_PREFIX = 1
+  val SYSTEM_DEPLOY_PREFIX = 1L
 
-  private def serializeInt32Fixed(value: Int): Array[Byte] = {
+  private def serializeInt64Fixed(value: Long): Array[Byte] = {
     val stream = new ByteArrayOutputStream
     val proto  = CodedOutputStream.newInstance(stream)
-    proto.writeFixed32NoTag(value)
+    proto.writeFixed64NoTag(value)
     proto.flush()
     stream.toByteArray
   }
-  def generateSystemDeployRandomSeed(sender: Validator, seqNum: Int): Blake2b512Random =
+  def generateSystemDeployRandomSeed(sender: Validator, seqNum: Long): Blake2b512Random =
     Tools.rng(
-      serializeInt32Fixed(SYSTEM_DEPLOY_PREFIX) ++ sender
-        .toByteArray() ++ serializeInt32Fixed(seqNum)
+      serializeInt64Fixed(SYSTEM_DEPLOY_PREFIX) ++ sender
+        .toByteArray() ++ serializeInt64Fixed(seqNum)
     )
 
-  def generateCloseDeployRandomSeed(sender: Validator, seqNum: Int): Blake2b512Random =
+  def generateCloseDeployRandomSeed(sender: Validator, seqNum: Long): Blake2b512Random =
     generateSystemDeployRandomSeed(sender, seqNum).splitByte(0)
 
-  def generateCloseDeployRandomSeed(pk: PublicKey, seqNum: Int): Blake2b512Random = {
+  def generateCloseDeployRandomSeed(pk: PublicKey, seqNum: Long): Blake2b512Random = {
     val sender = ByteString.copyFrom(pk.bytes)
     generateCloseDeployRandomSeed(sender, seqNum)
   }
 
-  def generateSlashDeployRandomSeed(sender: Validator, seqNum: Int): Blake2b512Random =
+  def generateSlashDeployRandomSeed(sender: Validator, seqNum: Long): Blake2b512Random =
     generateSystemDeployRandomSeed(sender, seqNum).splitByte(1)
 
   def generatePreChargeDeployRandomSeed(deploy: Signed[DeployData]): Blake2b512Random =

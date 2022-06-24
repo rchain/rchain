@@ -18,7 +18,6 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Log
-import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
@@ -45,7 +44,7 @@ class BlockQueryResponseAPITest
   val badTestHashQuery = "1234acd"
   val invalidHexQuery  = "No such a hash"
 
-  val genesisBlock: BlockMessage = getRandomBlock()
+  val genesisBlock: BlockMessage = getRandomBlock(setJustifications = Seq().some)
 
   val deployCount = 10
   val randomDeploys =
@@ -56,18 +55,15 @@ class BlockQueryResponseAPITest
   val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"
   val sender: ByteString = senderString.unsafeHexToByteString
-  val bondsValidator     = Bond(sender, 1)
+  val bondsValidator     = (sender, 1L)
 
   val secondBlock: BlockMessage =
     getRandomBlock(
       setValidator = sender.some,
       setDeploys = randomDeploys.some,
-      setJustifications = List(Justification(bondsValidator.validator, genesisBlock.blockHash)).some,
-      setParentsHashList = List(genesisBlock.blockHash).some,
-      setBonds = List(bondsValidator).some
+      setJustifications = List(genesisBlock.blockHash).some,
+      setBonds = Map(bondsValidator).some
     )
-
-  val faultTolerance = -1f
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 
@@ -94,28 +90,18 @@ class BlockQueryResponseAPITest
               b.sig should be(secondBlock.sig.toHexString)
               b.sigAlgorithm should be(secondBlock.sigAlgorithm)
               b.shardId should be(secondBlock.toProto.shardId)
-              b.extraBytes should be(secondBlock.toProto.extraBytes)
-              b.version should be(secondBlock.header.version)
-              b.timestamp should be(secondBlock.header.timestamp)
-              b.headerExtraBytes should be(secondBlock.header.extraBytes)
-              b.parentsHashList should be(
-                secondBlock.header.parentsHashList.map(_.toHexString)
-              )
-              b.blockNumber should be(secondBlock.body.state.blockNumber)
+              b.version should be(secondBlock.version)
+              b.blockNumber should be(secondBlock.blockNumber)
               b.preStateHash should be(
-                secondBlock.body.state.preStateHash.toHexString
+                secondBlock.preStateHash.toHexString
               )
               b.postStateHash should be(
-                secondBlock.body.state.postStateHash.toHexString
+                secondBlock.postStateHash.toHexString
               )
-              b.bodyExtraBytes should be(secondBlock.body.extraBytes)
-              b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+              b.bonds should be(secondBlock.bonds.map(BlockApi.bondToBondInfo))
               b.blockSize should be(secondBlock.toProto.serializedSize.toString)
-              b.deployCount should be(secondBlock.body.deploys.length)
-              b.faultTolerance should be(faultTolerance)
-              b.justifications should be(
-                secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
-              )
+              b.deployCount should be(secondBlock.state.deploys.length)
+              b.justifications should be(secondBlock.justifications.map(_.toHexString))
           }
         } yield ()
       }
@@ -189,28 +175,18 @@ class BlockQueryResponseAPITest
               blockInfo.sig should be(secondBlock.sig.toHexString)
               blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
               blockInfo.shardId should be(secondBlock.toProto.shardId)
-              blockInfo.extraBytes should be(secondBlock.toProto.extraBytes)
-              blockInfo.version should be(secondBlock.header.version)
-              blockInfo.timestamp should be(secondBlock.header.timestamp)
-              blockInfo.headerExtraBytes should be(secondBlock.header.extraBytes)
-              blockInfo.parentsHashList should be(
-                secondBlock.header.parentsHashList.map(_.toHexString)
-              )
-              blockInfo.blockNumber should be(secondBlock.body.state.blockNumber)
+              blockInfo.version should be(secondBlock.version)
+              blockInfo.blockNumber should be(secondBlock.blockNumber)
               blockInfo.preStateHash should be(
-                secondBlock.body.state.preStateHash.toHexString
+                secondBlock.preStateHash.toHexString
               )
               blockInfo.postStateHash should be(
-                secondBlock.body.state.postStateHash.toHexString
+                secondBlock.postStateHash.toHexString
               )
-              blockInfo.bodyExtraBytes should be(secondBlock.body.extraBytes)
-              blockInfo.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+              blockInfo.bonds should be(secondBlock.bonds.map(BlockApi.bondToBondInfo))
               blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
-              blockInfo.deployCount should be(secondBlock.body.deploys.length)
-              blockInfo.faultTolerance should be(faultTolerance)
-              blockInfo.justifications should be(
-                secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
-              )
+              blockInfo.deployCount should be(secondBlock.state.deploys.length)
+              blockInfo.justifications should be(secondBlock.justifications.map(_.toHexString))
           }
         } yield ()
       }
@@ -236,9 +212,9 @@ class BlockQueryResponseAPITest
   private def prepareDagStorage[F[_]: Sync: BlockDagStorage: BlockStore]: F[Unit] = {
     import coop.rchain.blockstorage.syntax._
     for {
+      _ <- List(genesisBlock, secondBlock).traverse(BlockStore[F].put(_))
       _ <- BlockDagStorage[F].insert(genesisBlock, false, approved = true)
       _ <- BlockDagStorage[F].insert(secondBlock, false)
-      _ <- List(genesisBlock, secondBlock).traverse(BlockStore[F].put(_))
     } yield ()
   }
 }

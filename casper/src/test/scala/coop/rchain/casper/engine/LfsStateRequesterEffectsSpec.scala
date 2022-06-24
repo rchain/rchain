@@ -22,7 +22,8 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
 
-  def createApprovedBlock(block: BlockMessage): ApprovedBlock = ApprovedBlock(block)
+  def createFinalizedFringe(block: BlockMessage): FinalizedFringe =
+    FinalizedFringe(block.justifications, block.postStateHash)
 
   // Create hash from hex string (padding to 32 bytes)
   def createHash(s: String) = Blake2b256Hash.fromHex(s.padTo(64, '0'))
@@ -88,8 +89,8 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       else exceptionInvalidState.raiseError
     }
 
-    // Approved block has initial root hash of the state
-    val approvedBlock = createApprovedBlock(
+    // Finalized fringe has initial root hash of the state
+    val finalizedFringe = createFinalizedFringe(
       blockImplicits.getRandomBlock(setPostStateHash = historyHash1.toByteString.some)
     )
 
@@ -131,7 +132,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
 
       // Queue for processing the internal state (ST)
       processingStream <- LfsTupleSpaceRequester.stream(
-                           approvedBlock,
+                           finalizedFringe,
                            responseQueue,
                            requestQueue.enqueue1(_, _),
                            requestTimeout,

@@ -4,16 +4,13 @@ import java.nio.file.Path
 import scala.concurrent.duration.FiniteDuration
 
 final case class CasperConf(
-    faultToleranceThreshold: Float,
     validatorPublicKey: Option[String],
     validatorPrivateKey: Option[String],
     validatorPrivateKeyPath: Option[Path],
     shardName: String,
     casperLoopInterval: FiniteDuration,
     requestedBlocksTimeout: FiniteDuration,
-    finalizationRate: Int,
     maxNumberOfParents: Int,
-    maxParentDepth: Option[Int],
     forkChoiceStaleThreshold: FiniteDuration,
     forkChoiceCheckIfStaleInterval: FiniteDuration,
     synchronyConstraintThreshold: Double,

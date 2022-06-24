@@ -65,7 +65,7 @@ class SentUnapprovedBlock(LogsContainMessage):
 
 class SentApprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'Sending ApprovedBlock')
+        super().__init__(node, 'Sending genesis Block')
 
 
 class LogsReMatch:

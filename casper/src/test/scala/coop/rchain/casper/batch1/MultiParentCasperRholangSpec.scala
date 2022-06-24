@@ -27,13 +27,13 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       for {
-        deploy  <- ConstructDeploy.basicDeployData[Effect](0)
-        block   <- node.createBlockUnsafe(deploy)
-        deploys = block.body.deploys.map(_.deploy)
-        parents = ProtoUtil.parentHashes(block)
+        deploy         <- ConstructDeploy.basicDeployData[Effect](0)
+        block          <- node.createBlockUnsafe(deploy)
+        deploys        = block.state.deploys.map(_.deploy)
+        justifications = block.justifications
 
-        _      = parents.size should be(1)
-        _      = parents.head should be(genesis.genesisBlock.blockHash)
+        _      = justifications.size should be(1)
+        _      = justifications.head should be(genesis.genesisBlock.blockHash)
         _      = deploys.size should be(1)
         _      = deploys.head should be(deploy)
         data   <- getDataAtPublicChannel[Effect](block, 0)

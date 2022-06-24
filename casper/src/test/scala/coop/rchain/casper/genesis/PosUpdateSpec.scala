@@ -104,7 +104,7 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
       val rm = node.runtimeManager
       for {
         b2 <- node.addBlock(updateDeploy)
-        _ = inside(b2.body.deploys) {
+        _ = inside(b2.state.deploys) {
           case Seq(deploy) =>
             assert(deploy.cost.cost > 0L, s"$b2 deploy cost is 0L")
             assert(deploy.systemDeployError.isEmpty, s"$b2 system deploy failed")
@@ -113,11 +113,11 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
 
         originalEpoch <- rm.playExploratoryDeploy(
                           exploreUpdateResultTerm,
-                          genesis.genesisBlock.body.state.postStateHash
+                          genesis.genesisBlock.postStateHash
                         )
         _ = originalEpoch should matchPattern { case Seq(Number(1000)) => }
 
-        ret                  <- rm.playExploratoryDeploy(getBalanceTerm, b2.body.state.postStateHash)
+        ret                  <- rm.playExploratoryDeploy(getBalanceTerm, b2.postStateHash)
         Seq(Number(balance)) = ret
 
         b5 <- node
@@ -125,14 +125,14 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
                  ConstructDeploy
                    .sourceDeployNow(transferTerm, sec = p1, shardId = shardId, phloLimit = 9000000L)
                )
-        _ = assert(b5.body.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
-        _ = assert(b5.body.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
-        _ = assert(!b5.body.deploys.head.isFailed, s"$b5 deploy failed")
+        _ = assert(b5.state.deploys.head.cost.cost > 0L, s"$b5 deploy cost is 0L")
+        _ = assert(b5.state.deploys.head.systemDeployError.isEmpty, s"$b5 system deploy failed")
+        _ = assert(!b5.state.deploys.head.isFailed, s"$b5 deploy failed")
 
-        ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b5.body.state.postStateHash)
+        ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b5.postStateHash)
         _    = inside(ret2) { case Seq(Number(n)) => n shouldBe balance + transferAmount.toLong }
 
-        ret3 <- rm.playExploratoryDeploy(explorePosNewMethod, b5.body.state.postStateHash)
+        ret3 <- rm.playExploratoryDeploy(explorePosNewMethod, b5.postStateHash)
         _    = ret3 should matchPattern { case Seq(String("hello")) => }
       } yield ()
     }
@@ -151,12 +151,12 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
       val rm = node.runtimeManager
       for {
         b2 <- node.addBlock(updateDeploy)
-        _  = assert(b2.body.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
-        _  = assert(b2.body.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
-        _  = assert(!b2.body.deploys.head.isFailed, s"$b2 deploy failed")
+        _  = assert(b2.state.deploys.head.cost.cost > 0L, s"$b2 deploy cost is 0L")
+        _  = assert(b2.state.deploys.head.systemDeployError.isEmpty, s"$b2 system deploy failed")
+        _  = assert(!b2.state.deploys.head.isFailed, s"$b2 deploy failed")
 
         // Get update contract result
-        updateResult <- rm.getData(b2.body.state.postStateHash)(GDeployId(updateDeploy.sig))
+        updateResult <- rm.getData(b2.postStateHash)(GDeployId(updateDeploy.sig))
         // Expect failed update
         _ = updateResult should matchPattern {
           case Seq(Tuple2((Boolean(false), String(_)))) =>

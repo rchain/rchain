@@ -4,20 +4,20 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation}
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil._
 import coop.rchain.casper.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.types.SystemDeploy
-import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
+import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParametersSize}
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
-import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -44,61 +44,30 @@ class InterpreterUtilTest
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
-  def mkCasperSnapshot(dag: DagRepresentation) =
-    CasperSnapshot(
-      dag,
-      ByteString.EMPTY,
-      ByteString.EMPTY,
-      IndexedSeq.empty,
-      List.empty,
-      Set.empty,
-      Set.empty,
-      0,
-      Map.empty,
-      OnChainCasperState(
-        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        Map.empty,
-        Seq.empty
-      )
-    )
-  def computeDeploysCheckpoint[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: Span: Time: Metrics](
-      parents: Seq[BlockMessage],
+
+  def computeDeploysCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+      parents: Seq[BlockHash],
       deploys: Seq[Signed[DeployData]],
-      dag: DagRepresentation,
-      runtimeManager: RuntimeManager[F],
       blockNumber: Long = 0L,
-      seqNum: Int = 0
+      seqNum: Long = 0
   ): F[
     Either[
       Throwable,
       (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])
     ]
   ] =
-    Time[F].currentMillis >>= (
-        now =>
-          computeParentsPostState(
-            parents,
-            mkCasperSnapshot(dag),
-            runtimeManager
-          ).flatMap(
-              preState =>
-                InterpreterUtil
-                  .computeDeploysCheckpoint[F](
-                    deploys,
-                    List.empty[SystemDeploy],
-                    runtimeManager,
-                    BlockData(
-                      now,
-                      // TODO this should be blockNumber
-                      blockNumber,
-                      genesisContext.validatorPks.head,
-                      seqNum
-                    ),
-                    preState
-                  )
+    computeParentsPostState(parents, dummyParentsPreState)
+      .flatMap(
+        preState =>
+          InterpreterUtil
+            .computeDeploysCheckpoint[F](
+              deploys,
+              List.empty[SystemDeploy],
+              BlockData(blockNumber, genesisContext.validatorPks.head, seqNum),
+              preState
             )
-            .attempt
       )
+      .attempt
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in effectTest {
     val time    = 0L
@@ -135,7 +104,7 @@ class InterpreterUtilTest
      *           |
      *          genesis
      */
-    val genesisContext = buildGenesis(buildGenesisParameters())
+    val genesisContext = buildGenesis(buildGenesisParametersSize(4))
     TestNode.standaloneEff(genesisContext).use { node =>
       implicit val runtimeManager = node.runtimeManager
       for {
@@ -191,7 +160,7 @@ class InterpreterUtilTest
           b2 <- node2.propagateBlock(b2Deploys: _*)(node1)
           b3 <- node1.addBlock(b3Deploys: _*)
 
-          _ = b3.header.parentsHashList.toSet shouldBe Set(b1, b2).map(_.blockHash)
+          _ = b3.justifications shouldBe Set(b1, b2).map(_.blockHash)
           _ <- getDataAtPublicChannel[Task](b3, 5) shouldBeF Seq("5")
           _ <- getDataAtPublicChannel[Task](b3, 1) shouldBeF Seq("15")
         } yield ()
@@ -233,7 +202,7 @@ class InterpreterUtilTest
 
   it should "merge histories in case of multiple parents with complex contract" ignore withGenesis(
     genesisContext
-  ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
+  ) { implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
     val contract = registry
 
     val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2L))
@@ -250,24 +219,22 @@ class InterpreterUtilTest
      *         genesis
      */
     for {
-      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost, now = 100)
-      b2 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost, now = 200)
+      b1 <- buildBlock[Task](justifications = Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+      b2 <- buildBlock[Task](justifications = Seq(genesis.blockHash), deploys = b2DeploysWithCost)
       b3 <- buildBlock[Task](
-             Seq(b1.blockHash, b2.blockHash),
-             deploys = b3DeploysWithCost,
-             now = 300
+             justifications = Seq(b1.blockHash, b2.blockHash),
+             deploys = b3DeploysWithCost
            )
-      _         <- step(runtimeManager)(b1, genesis)
-      _         <- step(runtimeManager)(b2, genesis)
-      dag       <- blockDagStorage.getRepresentation
-      postState <- validateBlockCheckpoint[Task](b3, mkCasperSnapshot(dag), runtimeManager)
+      _         <- step[Task](b1)
+      _         <- step[Task](b2)
+      postState <- validateBlockCheckpoint[Task](b3)
       result    = postState shouldBe Right(None)
     } yield result
   }
 
   it should "merge histories in case of multiple parents (uneven histories)" ignore withGenesis(
     genesisContext
-  ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
+  ) { implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
     val contract = registry
 
     val b1DeploysWithCost = prepareDeploys(Vector(contract), PCost(2L))
@@ -293,44 +260,37 @@ class InterpreterUtilTest
      *         genesis
      */
     for {
-      b1 <- buildBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost, now = 100)
-      b2 <- buildBlock[Task](Seq(b1.blockHash), deploys = b2DeploysWithCost, now = 200)
-      b3 <- buildBlock[Task](Seq(b1.blockHash), deploys = b3DeploysWithCost, now = 200)
-      b4 <- buildBlock[Task](Seq(b3.blockHash), deploys = b4DeploysWithCost, now = 300)
+      b1 <- buildBlock[Task](justifications = Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+      b2 <- buildBlock[Task](justifications = Seq(b1.blockHash), deploys = b2DeploysWithCost)
+      b3 <- buildBlock[Task](justifications = Seq(b1.blockHash), deploys = b3DeploysWithCost)
+      b4 <- buildBlock[Task](justifications = Seq(b3.blockHash), deploys = b4DeploysWithCost)
       b5 <- buildBlock[Task](
-             Seq(b2.blockHash, b4.blockHash),
-             deploys = b5DeploysWithCost,
-             now = 500
+             justifications = Seq(b2.blockHash, b4.blockHash),
+             deploys = b5DeploysWithCost
            )
-      _ <- step(runtimeManager)(b1, genesis)
-      _ <- step(runtimeManager)(b2, genesis)
-      _ <- step(runtimeManager)(b3, genesis)
-      _ <- step(runtimeManager)(b4, genesis)
+      _ <- step[Task](b1)
+      _ <- step[Task](b2)
+      _ <- step[Task](b3)
+      _ <- step[Task](b4)
 
-      dag       <- blockDagStorage.getRepresentation
-      postState <- validateBlockCheckpoint[Task](b5, mkCasperSnapshot(dag), runtimeManager)
+      postState <- validateBlockCheckpoint[Task](b5)
       result    = postState shouldBe Right(None)
     } yield result
   }
 
-  def computeDeployCosts(
-      runtimeManager: RuntimeManager[Task],
-      dag: DagRepresentation,
-      deploy: Signed[DeployData]*
-  )(implicit blockStore: BlockStore[Task], bds: BlockDagStorage[Task]): Task[Seq[PCost]] =
+  def computeDeployCosts(deploy: Signed[DeployData]*)(
+      implicit runtimeManager: RuntimeManager[Task],
+      bds: BlockDagStorage[Task],
+      blockStore: BlockStore[Task]
+  ): Task[Seq[PCost]] =
     for {
-      computeResult <- computeDeploysCheckpoint[Task](
-                        Seq(genesis),
-                        deploy,
-                        dag,
-                        runtimeManager
-                      )
+      computeResult                         <- computeDeploysCheckpoint[Task](Seq(genesis.blockHash), deploy)
       Right((_, _, processedDeploys, _, _)) = computeResult
     } yield processedDeploys.map(_.cost)
 
   "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in withGenesis(
     genesisContext
-  ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
+  ) { implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
     //reference costs
     //deploy each Rholang program separately and record its cost
 
@@ -339,12 +299,11 @@ class InterpreterUtilTest
       deploy2 <- ConstructDeploy.sourceDeployNowF("@3!([1,2,3,4])")
       deploy3 <- ConstructDeploy.sourceDeployNowF("for(@x <- @0) { @4!(x.toByteArray()) }")
 
-      dag          <- blockDagStorage.getRepresentation
-      cost1        <- computeDeployCosts(runtimeManager, dag, deploy1)
-      cost2        <- computeDeployCosts(runtimeManager, dag, deploy2)
-      cost3        <- computeDeployCosts(runtimeManager, dag, deploy3)
+      cost1        <- computeDeployCosts(deploy1)
+      cost2        <- computeDeployCosts(deploy2)
+      cost3        <- computeDeployCosts(deploy3)
       accCostsSep  = cost1 ++ cost2 ++ cost3
-      accCostBatch <- computeDeployCosts(runtimeManager, dag, deploy1, deploy2, deploy3)
+      accCostBatch <- computeDeployCosts(deploy1, deploy2, deploy3)
     } yield accCostBatch should contain theSameElementsAs accCostsSep
   }
 
@@ -352,39 +311,33 @@ class InterpreterUtilTest
     pendingUntilFixed { //reference costs
       withGenesis(genesisContext) {
         implicit blockStore => implicit blockDagStorage =>
-          runtimeManager =>
+          implicit runtimeManager =>
             //deploy each Rholang program separately and record its cost
             val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
             val deploy2 = ConstructDeploy.sourceDeployNow("@2!([1,2,3,4])")
             for {
-              dag <- blockDagStorage.getRepresentation
-
-              cost1 <- computeDeployCosts(runtimeManager, dag, deploy1)
-              cost2 <- computeDeployCosts(runtimeManager, dag, deploy2)
+              cost1 <- computeDeployCosts(deploy1)
+              cost2 <- computeDeployCosts(deploy2)
 
               accCostsSep = cost1 ++ cost2
 
               deployErr    = ConstructDeploy.sourceDeployNow("@3!(\"a\" + 3)")
-              accCostBatch <- computeDeployCosts(runtimeManager, dag, deploy1, deploy2, deployErr)
+              accCostBatch <- computeDeployCosts(deploy1, deploy2, deployErr)
             } yield accCostBatch should contain theSameElementsAs accCostsSep
       }
     }
 
-  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in withStorage {
+  // TODO: ignored until support is for invalid block is implemented
+  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" ignore withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow(_))
       val processedDeploys =
         deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, false))
       val invalidHash = ByteString.EMPTY
-      mkRuntimeManager[Task]("interpreter-util-test").use { runtimeManager =>
+      mkRuntimeManager[Task]("interpreter-util-test").use { implicit runtimeManager =>
         for {
-          block <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
-          dag   <- blockDagStorage.getRepresentation
-          validateResult <- validateBlockCheckpoint[Task](
-                             block,
-                             mkCasperSnapshot(dag),
-                             runtimeManager
-                           )
+          block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
+          validateResult   <- validateBlockCheckpoint[Task](block)
           Right(stateHash) = validateResult
         } yield stateHash should be(None)
       }
@@ -392,7 +345,7 @@ class InterpreterUtilTest
 
   it should "return a checkpoint with the right hash for a valid block" in withGenesis(
     genesisContext
-  ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
+  ) { implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
     val deploys =
       Vector(
         "@1!(1)",
@@ -405,31 +358,26 @@ class InterpreterUtilTest
         "for (@x <- @2) { @3!(x) }"
       ).map(ConstructDeploy.sourceDeployNow(_))
     for {
-      dag1 <- blockDagStorage.getRepresentation
       deploysCheckpoint <- computeDeploysCheckpoint[Task](
-                            Seq(genesis),
-                            deploys,
-                            dag1,
-                            runtimeManager
+                            Seq(genesis.blockHash),
+                            deploys
                           )
       Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
       block <- createBlock[Task](
-                Seq(genesis.blockHash),
-                genesis,
                 ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                 deploys = processedDeploys,
                 postStateHash = computedTsHash,
-                preStateHash = preStateHash
+                preStateHash = preStateHash,
+                justifications = Seq(genesis.blockHash)
               )
-      dag2 <- blockDagStorage.getRepresentation
 
-      validateResult <- validateBlockCheckpoint[Task](block, mkCasperSnapshot(dag2), runtimeManager)
+      validateResult <- validateBlockCheckpoint[Task](block)
       Right(tsHash)  = validateResult
     } yield tsHash should be(Some(computedTsHash))
   }
 
   it should "pass linked list test" in withGenesis(genesisContext) {
-    implicit blockStore => implicit blockDagStorage => runtimeManager =>
+    implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
       val deploys = Vector(
         """
         |contract @"recursionTest"(@list) = {
@@ -456,34 +404,25 @@ class InterpreterUtilTest
       """.stripMargin
       ).map(ConstructDeploy.sourceDeployNow(_))
       for {
-        dag1 <- blockDagStorage.getRepresentation
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
-                              Seq(genesis),
-                              deploys,
-                              dag1,
-                              runtimeManager
+                              Seq(genesis.blockHash),
+                              deploys
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
-                  Seq(genesis.blockHash),
-                  genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   postStateHash = computedTsHash,
-                  preStateHash = preStateHash
+                  preStateHash = preStateHash,
+                  justifications = Seq(genesis.blockHash)
                 )
-        dag2 <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](
-                           block,
-                           mkCasperSnapshot(dag2),
-                           runtimeManager
-                         )
-        Right(tsHash) = validateResult
+        validateResult <- validateBlockCheckpoint[Task](block)
+        Right(tsHash)  = validateResult
       } yield tsHash should be(Some(computedTsHash))
   }
 
   it should "pass persistent produce test with causality" in withGenesis(genesisContext) {
-    implicit blockStore => implicit blockDagStorage => runtimeManager =>
+    implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
       val deploys =
         Vector("""new x, y, delay in {
               contract delay(@n) = {
@@ -515,34 +454,25 @@ class InterpreterUtilTest
           .map(ConstructDeploy.sourceDeployNow(_))
 
       for {
-        dag1 <- blockDagStorage.getRepresentation
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
-                              Seq(genesis),
-                              deploys,
-                              dag1,
-                              runtimeManager
+                              Seq(genesis.blockHash),
+                              deploys
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
-                  Seq(genesis.blockHash),
-                  genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   postStateHash = computedTsHash,
-                  preStateHash = preStateHash
+                  preStateHash = preStateHash,
+                  justifications = Seq(genesis.blockHash)
                 )
-        dag2 <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](
-                           block,
-                           mkCasperSnapshot(dag2),
-                           runtimeManager
-                         )
-        Right(tsHash) = validateResult
+        validateResult <- validateBlockCheckpoint[Task](block)
+        Right(tsHash)  = validateResult
       } yield tsHash should be(Some(computedTsHash))
   }
 
   it should "pass tests involving primitives" in withGenesis(genesisContext) {
-    implicit blockStore => implicit blockDagStorage => runtimeManager =>
+    implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
       val deploys =
         Vector(
           """
@@ -571,34 +501,25 @@ class InterpreterUtilTest
         ).map(ConstructDeploy.sourceDeployNow(_))
 
       for {
-        dag1 <- blockDagStorage.getRepresentation
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
-                              Seq(genesis),
-                              deploys,
-                              dag1,
-                              runtimeManager
+                              Seq(genesis.blockHash),
+                              deploys
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
-                  Seq(genesis.blockHash),
-                  genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
                   postStateHash = computedTsHash,
-                  preStateHash = preStateHash
+                  preStateHash = preStateHash,
+                  justifications = Seq(genesis.blockHash)
                 )
-        dag2 <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](
-                           block,
-                           mkCasperSnapshot(dag2),
-                           runtimeManager
-                         )
-        Right(tsHash) = validateResult
+        validateResult <- validateBlockCheckpoint[Task](block)
+        Right(tsHash)  = validateResult
       } yield tsHash should be(Some(computedTsHash))
   }
 
   it should "pass tests involving races" in withGenesis(genesisContext) {
-    implicit blockStore => implicit blockDagStorage => runtimeManager =>
+    implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
       (0 to 10).toList.traverse_ { i =>
         val deploys =
           Vector(
@@ -619,49 +540,37 @@ class InterpreterUtilTest
           ).map(ConstructDeploy.sourceDeployNow(_))
 
         for {
-          dag1 <- blockDagStorage.getRepresentation
           deploysCheckpoint <- computeDeploysCheckpoint[Task](
-                                Seq(genesis),
+                                Seq(genesis.blockHash),
                                 deploys,
-                                dag1,
-                                runtimeManager,
-                                (i + 1).toLong,
-                                (i + 1)
+                                i + 1L,
+                                i + 1L
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
           block <- createBlock[Task](
-                    Seq(genesis.blockHash),
-                    genesis,
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
                     postStateHash = computedTsHash,
                     preStateHash = preStateHash,
-                    seqNum = i + 1
+                    seqNum = i + 1L,
+                    justifications = Seq(genesis.blockHash)
                   )
-          dag2 <- blockDagStorage.getRepresentation
 
-          validateResult <- validateBlockCheckpoint[Task](
-                             block,
-                             mkCasperSnapshot(dag2),
-                             runtimeManager
-                           )
-          Right(tsHash) = validateResult
+          validateResult <- validateBlockCheckpoint[Task](block)
+          Right(tsHash)  = validateResult
         } yield tsHash should be(Some(computedTsHash))
       }
   }
 
   it should "return None for logs containing extra comm events" in withGenesis(genesisContext) {
-    implicit blockStore => implicit blockDagStorage => runtimeManager =>
+    implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
       val deploys =
         (0 until 1).map(i => ConstructDeploy.sourceDeployNow(s"for(_ <- @$i){ Nil } | @$i!($i)"))
 
       for {
-        dag1 <- blockDagStorage.getRepresentation
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
-                              Seq(genesis),
-                              deploys,
-                              dag1,
-                              runtimeManager
+                              Seq(genesis.blockHash),
+                              deploys
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         //create single deploy with log that includes excess comm events
@@ -669,25 +578,19 @@ class InterpreterUtilTest
           deployLog = processedDeploys.head.deployLog ++ processedDeploys.last.deployLog.take(5)
         )
         block <- createBlock[Task](
-                  Seq(genesis.blockHash),
-                  genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = Seq(badProcessedDeploy, processedDeploys.last),
                   postStateHash = computedTsHash,
-                  preStateHash = preStateHash
+                  preStateHash = preStateHash,
+                  justifications = Seq(genesis.blockHash)
                 )
-        dag2 <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](
-                           block,
-                           mkCasperSnapshot(dag2),
-                           runtimeManager
-                         )
-        Right(tsHash) = validateResult
+        validateResult <- validateBlockCheckpoint[Task](block)
+        Right(tsHash)  = validateResult
       } yield tsHash should be(None)
   }
 
   it should "pass map update test" in withGenesis(genesisContext) {
-    implicit blockStore => implicit blockDagStorage => runtimeManager =>
+    implicit blockStore => implicit blockDagStorage => implicit runtimeManager =>
       (0 to 10).toList.traverse_ { i =>
         val deploys =
           Vector(
@@ -710,32 +613,23 @@ class InterpreterUtilTest
           ).map(s => ConstructDeploy.sourceDeployNow(s))
 
         for {
-          dag1 <- blockDagStorage.getRepresentation
           deploysCheckpoint <- computeDeploysCheckpoint[Task](
-                                Seq(genesis),
+                                Seq(genesis.blockHash),
                                 deploys,
-                                dag1,
-                                runtimeManager,
-                                (i + 1).toLong,
-                                (i + 1)
+                                i + 1L,
+                                i + 1L
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
           block <- createBlock[Task](
-                    Seq(genesis.blockHash),
-                    genesis,
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
                     postStateHash = computedTsHash,
                     preStateHash = preStateHash,
-                    seqNum = i + 1
+                    seqNum = i + 1L,
+                    justifications = Seq(genesis.blockHash)
                   )
-          dag2 <- blockDagStorage.getRepresentation
-          validateResult <- validateBlockCheckpoint[Task](
-                             block,
-                             mkCasperSnapshot(dag2),
-                             runtimeManager
-                           )
-          Right(tsHash) = validateResult
+          validateResult <- validateBlockCheckpoint[Task](block)
+          Right(tsHash)  = validateResult
         } yield tsHash.map(_.toHexString) should be(Some(computedTsHash.toHexString))
       }
   }
@@ -774,8 +668,8 @@ class InterpreterUtilTest
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
-        _ = b.body.deploys.size shouldBe 1
-        _ = b.body.deploys.get(0).get.cost.cost shouldBe 3000
+        _ = b.state.deploys.size shouldBe 1
+        _ = b.state.deploys.get(0).get.cost.cost shouldBe 3000
       } yield ()
     }
   }
@@ -810,8 +704,8 @@ class InterpreterUtilTest
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
-        _ = b.body.deploys.size shouldBe 1
-        _ = b.body.deploys.get(0).get.cost.cost shouldBe 20000
+        _ = b.state.deploys.size shouldBe 1
+        _ = b.state.deploys.get(0).get.cost.cost shouldBe 20000
       } yield ()
     }
   }
@@ -829,8 +723,8 @@ class InterpreterUtilTest
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
-        _ = b.body.deploys.size shouldBe 1
-        _ = b.body.deploys.get(0).get.cost.cost shouldBe 300000
+        _ = b.state.deploys.size shouldBe 1
+        _ = b.state.deploys.get(0).get.cost.cost shouldBe 300000
       } yield ()
     }
   }

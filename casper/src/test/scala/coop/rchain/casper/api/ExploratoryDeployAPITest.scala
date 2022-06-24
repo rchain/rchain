@@ -6,7 +6,7 @@ import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture, BlockGenerator, TestNode}
 import coop.rchain.casper.util.ConstructDeploy.{basicDeployData, sourceDeployNowF}
-import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
+import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParametersFromBonds}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -27,7 +27,7 @@ class ExploratoryDeployAPITest
     with BlockDagStorageFixture
     with BlockApiFixture {
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
-  val genesisParameters   = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
+  val genesisParameters   = buildGenesisParametersFromBonds(List(10L, 10L, 10L, 10L))
   val genesisContext      = buildGenesis(genesisParameters)
 
   def exploratoryDeploy(node: TestNode[Task])(term: String, block: BlockHash) =

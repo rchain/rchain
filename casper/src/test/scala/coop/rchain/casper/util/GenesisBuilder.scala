@@ -2,14 +2,14 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ConstructDeploy._
-import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -22,39 +22,15 @@ import coop.rchain.shared.syntax._
 import monix.eval.Task
 
 import java.nio.file.{Files, Path}
+import scala.collection.compat.immutable.LazyList
 import scala.collection.mutable
 
 object GenesisBuilder {
 
-  def createBonds(validators: Iterable[PublicKey]): Map[PublicKey, Long] =
-    validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
+  val fixedValidatorKeyPairs = List((defaultSec, defaultPub), (defaultSec2, defaultPub2))
 
-  def createGenesis(): BlockMessage =
-    buildGenesis().genesisBlock
-
-  val defaultValidatorKeyPairs                   = (1 to 4).map(_ => Secp256k1.newKeyPair)
-  val (defaultValidatorSks, defaultValidatorPks) = defaultValidatorKeyPairs.unzip
-
-  def buildGenesisParameters(
-      bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
-      validatorsNum: Int = 4
-  ): GenesisParameters = buildGenesisParameters(
-    defaultValidatorKeyPairs.take(validatorsNum),
-    bondsFunction(defaultValidatorPks.take(validatorsNum))
-  )
-
-  def buildGenesisParametersWithRandom(
-      bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
-      validatorsNum: Int = 4
-  ): GenesisParameters = {
-    // 4 default fixed validators, others are random generated
-    val randomValidatorKeyPairs = (5 to validatorsNum).map(_ => Secp256k1.newKeyPair)
-    val (_, randomValidatorPks) = randomValidatorKeyPairs.unzip
-    buildGenesisParameters(
-      defaultValidatorKeyPairs ++ randomValidatorKeyPairs,
-      bondsFunction(defaultValidatorPks ++ randomValidatorPks)
-    )
-  }
+  val randomValidatorKeyPairs                  = LazyList.continually(Secp256k1.newKeyPair)
+  val (randomValidatorSks, randomValidatorPks) = randomValidatorKeyPairs.unzip
 
   val defaultPosMultiSigPublicKeys = List(
     "04db91a53a2b72fcdcb201031772da86edad1e4979eb6742928d27731b1771e0bc40c9e9c9fa6554bdec041a87cee423d6f2e09e9dfb408b78e85a4aa611aad20c",
@@ -64,54 +40,63 @@ object GenesisBuilder {
 
   val defaultPosVaultPubKey =
     "0432946f7f91f8f767d7c3d43674faf83586dffbd1b8f9278a5c72820dc20308836299f47575ff27f4a736b72e63d91c3cd853641861f64e08ee5f9204fc708df6"
+
+  def createBonds(validators: Iterable[PublicKey]): Iterable[(PublicKey, Long)] =
+    validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }
+
+  def createGenesis(): BlockMessage =
+    buildGenesis().genesisBlock
+
+  /*
+   * buildGenesisParameters and buildGenesis functions have very strange combinations with TestNode
+   *  to create network based on number of validators (and read-only nodes).
+   * TestNode network creation function accepts number of nodes to create together with result from
+   *  buildGenesis function which also accepts genesis parameters with specific number of nodes.
+   */
+
+  def buildGenesisParametersSize(numOfValidators: Int): GenesisParameters = {
+    val validators = randomValidatorKeyPairs.take(numOfValidators).toList
+    buildGenesisParameters(validators)()
+  }
+
+  def buildGenesisParametersFromBonds(bonds: List[Long]): GenesisParameters = {
+    val validators = randomValidatorKeyPairs.take(bonds.size).toList
+    val bondsPair  = validators.map(_._2).zip(bonds)
+    buildGenesisParameters(validators)(bondsPair)
+  }
   val defaultSystemContractPubKey =
     "04e2eb6b06058d10b30856043c29076e2d2d7c374d2beedded6ecb8d1df585dfa583bd7949085ac6b0761497b0cfd056eb3d0db97efb3940b14c00fff4e53c85bf"
 
   def buildGenesisParameters(
-      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
+      validatorKeyPairs: Seq[(PrivateKey, PublicKey)],
       genesisVaults: Seq[(PrivateKey, Long)],
       bonds: Map[PublicKey, Long]
   ): GenesisParameters =
-    (
-      validatorKeyPairs,
-      genesisVaults.map { case (k, _) => (k, Secp256k1.toPublic(k)) },
-      Genesis(
-        shardId = "root",
-        blockTimestamp = 0L,
-        proofOfStake = ProofOfStake(
-          minimumBond = 1L,
-          maximumBond = Long.MaxValue,
-          // Epoch length is set to large number to prevent trigger of epoch change
-          // in PoS close block method, which causes block merge conflicts
-          // - epoch change can be set as a parameter in Rholang tests (e.g. PosSpec)
-          epochLength = 1000,
-          quarantineLength = 50000,
-          numberOfActiveValidators = 100,
-          validators = bonds.map(Validator.tupled).toSeq,
-          posMultiSigPublicKeys = defaultPosMultiSigPublicKeys,
-          posMultiSigQuorum = defaultPosMultiSigPublicKeys.length - 1,
-          posVaultPubKey = defaultPosVaultPubKey
-        ),
-        registry = Registry(defaultSystemContractPubKey),
-        vaults = genesisVaults.toList.map {
+    buildGenesisParameters(validatorKeyPairs.toList)(bonds) match {
+      case (validatorKeys, _, genesisConf) =>
+        // Use default build parameters function and modify vaults
+        val newVaults = genesisVaults.toList.map {
           case (p, s) => Vault(RevAddress.fromPublicKey(Secp256k1.toPublic(p)).get, s)
-        },
-        blockNumber = 0
-      )
-    )
+        }
+        val newGenesisVaults = genesisVaults.map { case (k, _) => (k, Secp256k1.toPublic(k)) }
+        val newGenesisConf   = genesisConf.copy(vaults = newVaults)
+        (validatorKeys, newGenesisVaults, newGenesisConf)
+    }
+
   def buildGenesisParameters(
-      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
-      bonds: Map[PublicKey, Long]
+      validatorKeyPairs: List[(PrivateKey, PublicKey)] = randomValidatorKeyPairs.take(4).toList
+  )(
+      bonds: Iterable[(PublicKey, Long)] = createBonds(validatorKeyPairs.map(_._2))
   ): GenesisParameters = {
-    val genesisVaults: Seq[(PrivateKey, PublicKey)] =
-      IndexedSeq((defaultSec, defaultPub), (defaultSec2, defaultPub2)) ++ (3 to validatorKeyPairs.size)
-        .map(_ => Secp256k1.newKeyPair)
+    val (_, firstValidatorPubKey) = validatorKeyPairs.head
+    // Genesis vaults includes fixed keys to be always accessible for deploys
+    val genesisVaults = fixedValidatorKeyPairs ++ validatorKeyPairs
     (
       validatorKeyPairs,
       genesisVaults,
       Genesis(
+        sender = firstValidatorPubKey,
         shardId = "root",
-        blockTimestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 1L,
           maximumBond = Long.MaxValue,
@@ -150,20 +135,16 @@ object GenesisBuilder {
   private var cacheAccesses = 0
   private var cacheMisses   = 0
 
-  def buildGenesis(
-      parameters: GenesisParameters = buildGenesisParameters()
-  ): GenesisContext =
+  def buildGenesis(parameters: GenesisParameters = buildGenesisParametersSize(4)): GenesisContext =
     genesisCache.synchronized {
       cacheAccesses += 1
       genesisCache.getOrElseUpdate(parameters, doBuildGenesis(parameters))
     }
 
-  def buildGenesis(
-      validatorsNum: Int
-  ): GenesisContext =
+  def buildGenesis(validatorsNum: Int): GenesisContext =
     genesisCache.synchronized {
       cacheAccesses += 1
-      val parameters = buildGenesisParametersWithRandom(validatorsNum = validatorsNum)
+      val parameters = buildGenesisParametersSize(validatorsNum + 5)
       genesisCache.getOrElseUpdate(
         parameters,
         doBuildGenesis(parameters)
@@ -194,9 +175,11 @@ object GenesisBuilder {
       mStore         <- RuntimeManager.mergeableStore(kvsManager)
       t              = RuntimeManager.noOpExecutionTracker[Task]
       runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName, t)
+      // First bonded validator is the creator
+      creator = ValidatorIdentity(parameters._1.head._1)
       genesis <- {
         implicit val rm = runtimeManager
-        Genesis.createGenesisBlock[Task](genesisParameters)
+        Genesis.createGenesisBlock[Task](creator, genesisParameters)
       }
       blockStore      <- BlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)

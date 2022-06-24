@@ -15,7 +15,7 @@ class PosSpec
       Seq.empty,
       400.seconds,
       genesisParameters = {
-        val p = GenesisBuilder.buildGenesisParameters()
+        val p = GenesisBuilder.buildGenesisParametersSize(4)
         (p._1, p._2, p._3.copy(vaults = p._3.vaults ++ PosSpec.testVaults))
       }
     )

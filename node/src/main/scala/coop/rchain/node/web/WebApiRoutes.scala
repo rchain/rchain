@@ -2,15 +2,13 @@ package coop.rchain.node.web
 
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
+import coop.rchain.node.encode.JsonEncoder._
 import coop.rchain.sdk.syntax.all._
 import coop.rchain.shared.Log
 import io.circe.generic.semiauto._
 import org.http4s.{HttpRoutes, Response}
-import coop.rchain.node.encode.JsonEncoder._
 
 object WebApiRoutes {
 
@@ -80,8 +78,6 @@ object WebApiRoutes {
 
     // TODO: Create generic encoders/decoders for
     // ADT's with discriminator field
-    implicit val encodeByteString: Encoder[ByteString] =
-      Encoder.encodeString.contramap[ByteString](PrettyPrinter.buildStringNoLimit)
     implicit val encodeLightBlockInfo: Encoder[LightBlockInfo] = deriveEncoder[LightBlockInfo]
 
     implicit val encodeBlockInfo: Encoder[BlockInfo] = deriveEncoder[BlockInfo]

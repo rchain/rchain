@@ -206,7 +206,6 @@ For node clients, see BlockMessage for actual Casper protocol Block representati
 | tupleSpaceHash | [string](#string) |  | Same as postStateHash of BlockMessage |
 | tupleSpaceDump | [string](#string) |  |  |
 | timestamp | [int64](#int64) |  |  |
-| faultTolerance | [float](#float) |  |  |
 | mainParentHash | [string](#string) |  |  |
 | parentsHashList | [string](#string) | repeated |  |
 | sender | [string](#string) |  |  |
@@ -232,7 +231,6 @@ For node clients, see BlockMessage for actual Casper protocol Block representati
 | deployCount | [int32](#int32) |  |  |
 | tupleSpaceHash | [string](#string) |  | Same as postStateHash of BlockMessage |
 | timestamp | [int64](#int64) |  |  |
-| faultTolerance | [float](#float) |  |  |
 | mainParentHash | [string](#string) |  |  |
 | parentsHashList | [string](#string) | repeated |  |
 | sender | [string](#string) |  |  |

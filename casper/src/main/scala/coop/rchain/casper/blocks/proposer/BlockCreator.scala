@@ -1,23 +1,24 @@
 package coop.rchain.casper.blocks.proposer
 
 import cats.effect.Concurrent
-import cats.instances.list._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.InterpreterUtil.computeParentsPostState
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.casper.{MultiParentCasper, ParentsMergedState, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockVersion
+import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, Stopwatch, Time}
 
@@ -36,37 +37,41 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def create[F[_]: Concurrent: Log: Time: BlockStore: BlockDagStorage: Metrics: RuntimeManager: Span](
-      s: CasperSnapshot,
+  def create[F[_]: Concurrent: Time: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+      preState: ParentsMergedState,
       validatorIdentity: ValidatorIdentity,
+      shardId: String,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
-  )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
+  ): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-      val nextSeqNum     = s.maxSeqNums(selfId) + 1
-      val nextBlockNum   = s.maxBlockNum + 1
-      val parents        = s.parents
-      val justifications = s.justifications
+      val nextSeqNum     = preState.maxSeqNums.get(selfId).map(_ + 1L).getOrElse(0L)
+      val nextBlockNum   = preState.maxBlockNum + 1
+      val justifications = preState.justifications.map(_.blockHash).toList
 
       def prepareUserDeploys(blockNumber: Long): F[Set[Signed[DeployData]]] =
         for {
           unfinalized         <- BlockDagStorage[F].pooledDeploys.map(_.values.toSet)
-          earliestBlockNumber = blockNumber - s.onChainState.shardConf.deployLifespan
-          valid = unfinalized.filter(
-            d =>
-              notFutureDeploy(blockNumber, d.data) &&
-                notExpiredDeploy(earliestBlockNumber, d.data)
-          )
+          earliestBlockNumber = blockNumber - MultiParentCasper.deployLifespan
+          valid = unfinalized.filter { d =>
+            notFutureDeploy(blockNumber, d.data) &&
+            notExpiredDeploy(earliestBlockNumber, d.data)
+          }
           // this is required to prevent resending the same deploy several times by validator
-          validUnique = valid -- s.deploysInScope
-        } yield validUnique
+//          validUnique = valid -- s.deploysInScope
+          // TODO: temp solution to filter duplicated deploys
+          validUnique <- valid.toList.filterA { d =>
+                          BlockDagStorage[F].lookupByDeployId(d.sig).map(_.isEmpty)
+                        }
+        } yield validUnique.toSet
 
-      def prepareSlashingDeploys(seqNum: Int): F[Seq[SlashDeploy]] =
+      def prepareSlashingDeploys(seqNum: Long): F[Seq[SlashDeploy]] =
         for {
-          ilm <- s.dag.invalidLatestMessages
+          // TODO: fix invalid blocks from non-finalized scope
+          ilm <- Seq[(Validator, BlockHash)]().pure[F]
           // if the node is already not active as per main parent, the node won't slash once more
           ilmFromBonded = ilm.toList.filter {
-            case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L
+            case (validator, _) => preState.bondsMap.getOrElse(validator, 0L) > 0L
           }
           slashingDeploysWithBlocks = ilmFromBonded.map {
             case (slashedValidator, invalidBlock) =>
@@ -101,7 +106,6 @@ object BlockCreator {
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
-        shardId         = s.onChainState.shardConf.shardName
         userDeploys     <- prepareUserDeploys(nextBlockNum)
         dummyDeploys    = prepareDummyDeploy(nextBlockNum, shardId)
         slashingDeploys <- prepareSlashingDeploys(nextSeqNum)
@@ -110,16 +114,22 @@ object BlockCreator {
           SystemDeployUtil
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
-        deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
-        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
+        deploys = userDeploys ++ dummyDeploys
+        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
+              val blockData = BlockData(nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
               for {
-                now                 <- Time[F].currentMillis
-                blockData           = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
-                computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager)
+                parents <- justifications
+                            .traverse(BlockDagStorage[F].lookupUnsafe(_))
+                            .map(_.filter(!_.invalid))
+                            .map(_.map(_.blockHash))
+
+                // Merge justifications and get pre-state for the new block
+                computedParentsInfo <- InterpreterUtil.computeParentsPostState(parents, preState)
+
+                // Execute deploys in the new block and get checkpoint of the new state
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
                                    systemDeploys,
-                                   runtimeManager,
                                    blockData,
                                    computedParentsInfo
                                  )
@@ -129,31 +139,40 @@ object BlockCreator {
                   processedDeploys,
                   rejectedDeploys,
                   processedSystemDeploys
-                )             = checkpointData
-                newBonds      <- runtimeManager.computeBonds(postStateHash)
-                _             <- Span[F].mark("before-packing-block")
-                casperVersion = s.onChainState.shardConf.casperVersion
-                // unsignedBlock got blockHash(hashed without signature)
+                ) = checkpointData
+
+                newBonds <- RuntimeManager[F].computeBonds(postStateHash)
+                _        <- Span[F].mark("before-packing-block")
+
+                // Create block and calculate block hash
                 unsignedBlock = packageBlock(
+                  validatorIdentity.publicKey,
                   blockData,
-                  parents.map(_.blockHash),
-                  justifications.toSeq,
+                  justifications,
                   preStateHash,
                   postStateHash,
                   processedDeploys,
-                  rejectedDeploys,
+                  rejectedDeploys.toList,
                   processedSystemDeploys,
                   newBonds,
                   shardId,
-                  casperVersion
+                  BlockVersion.Current
                 )
                 _ <- Span[F].mark("block-created")
-                // signedBlock add signature and replace hashed-without-signature
-                // blockHash to hashed-with-signature blockHash
+
+                // Sign a block (hash should not be changed)
                 signedBlock = validatorIdentity.signBlock(unsignedBlock)
                 _           <- Span[F].mark("block-signed")
+
+                // This check is temporary until signing function will re-hash the block
+                unsignedHash = PrettyPrinter.buildString(unsignedBlock.blockHash)
+                signedHash   = PrettyPrinter.buildString(signedBlock.blockHash)
+                _ = assert(
+                  unsignedBlock.blockHash == signedBlock.blockHash,
+                  s"Signed block has different block hash unsigned: $unsignedHash, signed: $signedHash."
+                )
               } yield BlockCreatorResult.created(signedBlock)
-            else
+            } else
               BlockCreatorResult.noNewDeploys.pure[F]
       } yield r
 
@@ -164,7 +183,7 @@ object BlockCreator {
         _ <- blockStatus match {
               case Created(block) =>
                 val blockInfo   = PrettyPrinter.buildString(block, short = true)
-                val deployCount = block.body.deploys.size
+                val deployCount = block.state.deploys.size
                 Log[F].info(s"Block created: $blockInfo (${deployCount}d) [$elapsed]")
               case _ => ().pure[F]
             }
@@ -172,28 +191,32 @@ object BlockCreator {
     }
 
   private def packageBlock(
+      sender: PublicKey,
       blockData: BlockData,
-      parents: Seq[BlockHash],
-      justifications: Seq[Justification],
+      justifications: List[BlockHash],
       preStateHash: StateHash,
       postStateHash: StateHash,
       deploys: Seq[ProcessedDeploy],
-      rejectedDeploys: Seq[ByteString],
+      rejectedDeploys: List[ByteString],
       systemDeploys: Seq[ProcessedSystemDeploy],
-      bondsMap: Seq[Bond],
+      bondsMap: Map[Validator, Long],
       shardId: String,
-      version: Long
+      version: Int
   ): BlockMessage = {
-    val state = RChainState(preStateHash, postStateHash, bondsMap.toList, blockData.blockNumber)
-    val body =
-      Body(
-        state,
-        deploys.toList,
-        rejectedDeploys.map(r => RejectedDeploy(r)).toList,
-        systemDeploys.toList
-      )
-    val header = Header(parents.toList, blockData.timeStamp, version)
-    ProtoUtil.unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
+    val state = RholangState(deploys.toList, systemDeploys.toList)
+    ProtoUtil.unsignedBlockProto(
+      version,
+      shardId,
+      blockData.blockNumber,
+      sender,
+      blockData.seqNum,
+      preStateHash,
+      postStateHash,
+      justifications,
+      bondsMap,
+      rejectedDeploys,
+      state
+    )
   }
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =

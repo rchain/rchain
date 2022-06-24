@@ -13,6 +13,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
@@ -20,7 +21,6 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.util.unpackOptionWithPeek
-import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Serialize}
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
@@ -224,7 +224,14 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     // Rethrow single error
     case Vector(ex) =>
-      ex.raiseError[M, Unit]
+      ex match {
+        // Rethrow ArithmeticException as ReduceError
+        // TODO: quick fix for arithmetic errors in reducer to not be fatal
+        //  - reducer error handling should be refactored to handle ALL Scala errors as reduce errors
+        //  - properly create _chained exception_ not just String message as in ReduceError
+        case _: ArithmeticException => ReduceError(ex.getMessage).raiseError[M, Unit]
+        case _                      => ex.raiseError[M, Unit]
+      }
 
     // Collect errors from parallel execution
     case errList =>

@@ -8,7 +8,6 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{
-  Bond,
   DeployData,
   Event,
   ProcessedDeploy,
@@ -135,7 +134,6 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     */
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockTime: Long,
       blockNumber: Long
   )(
       implicit s: Sync[F],
@@ -144,9 +142,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   ): F[(StateHash, StateHash, Seq[UserDeployRuntimeResult])] =
     Span[F].traceI("compute-genesis") {
       for {
-        _ <- runtime.setBlockData(
-              BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0)
-            )
+        _                             <- runtime.setBlockData(BlockData(blockNumber, PublicKey(Array[Byte]()), 0))
         genesisPreStateHash           <- emptyStateHash
         playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData)
         (stateHash, processedDeploys) = playResult
@@ -570,7 +566,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       )(validatorsPar => validatorsPar.size == 1)
       .map(validatorsPar => toValidatorSeq(validatorsPar.head))
 
-  def computeBonds(hash: StateHash)(implicit s: Sync[F]): F[Seq[Bond]] =
+  def computeBonds(hash: StateHash)(implicit s: Sync[F]): F[Map[Validator, Long]] =
     // Create a deploy with newly created private key
     playExploratoryDeploy(bondsQuerySource, hash)
       .ensureOr(
@@ -581,7 +577,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
           )
       )(bondsPar => bondsPar.size == 1)
       .map { bondsPar =>
-        toBondSeq(bondsPar.head)
+        toBondMap(bondsPar.head)
       }
 
   private def activateValidatorQuerySource: String =
@@ -610,13 +606,13 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       validator.exprs.head.getGByteArray
     }.toList
 
-  private def toBondSeq(bondsMap: Par): Seq[Bond] =
+  private def toBondMap(bondsMap: Par): Map[Validator, Long] =
     bondsMap.exprs.head.getEMapBody.ps.map {
       case (validator: Par, bond: Par) =>
         assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
         assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
         val validatorName = validator.exprs.head.getGByteArray
         val stakeAmount   = bond.exprs.head.getGInt
-        Bond(validatorName, stakeAmount)
-    }.toList
+        (validatorName, stakeAmount)
+    }.toMap
 }

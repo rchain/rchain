@@ -1,20 +1,28 @@
 package coop.rchain.models
 
-import com.google.protobuf.ByteString
+import com.google.protobuf
 import coop.rchain.casper.protocol._
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash.StateHash
 
 final case class BlockMetadata(
-    blockHash: ByteString,
+    blockHash: BlockHash,
     blockNum: Long,
-    sender: ByteString,
-    seqNum: Int,
-    justifications: List[Justification],
-    weightMap: Map[ByteString, Long],
+    sender: Validator,
+    seqNum: Long,
+    justifications: List[BlockHash],
+    bondsMap: Map[Validator, Long],
+    validated: Boolean,
     invalid: Boolean,
-    directlyFinalized: Boolean,
     finalized: Boolean,
-    parents: List[ByteString]
-)
+    fringe: List[BlockHash],
+    fringeStateHash: StateHash
+) {
+  // BlockMetadata is uniquely identified with BlockHash
+  // - overridden hashCode is to be more performant when used in Set or Map
+  override def hashCode(): Int = blockHash.hashCode()
+}
 
 object BlockMetadata {
   def from(b: BlockMetadataProto) = BlockMetadata(
@@ -22,12 +30,13 @@ object BlockMetadata {
     b.blockNum,
     b.sender,
     b.seqNum,
-    b.justifications.map(Justification.from),
+    b.justifications,
     b.bonds.map(b => b.validator -> b.stake).toMap,
+    b.validated,
     b.invalid,
-    b.directlyFinalized,
     b.finalized,
-    b.parents
+    b.fringe,
+    b.fringeStateHash
   )
 
   def toProto(b: BlockMetadata) = BlockMetadataProto(
@@ -35,12 +44,13 @@ object BlockMetadata {
     b.blockNum,
     b.sender,
     b.seqNum,
-    b.justifications.map(Justification.toProto),
-    b.weightMap.map { case (validator, stake) => BondProto(validator, stake) }.toList,
+    b.justifications,
+    b.bondsMap.map { case (validator, stake) => BondProto(validator, stake) }.toList,
+    b.validated,
     b.invalid,
-    b.directlyFinalized,
     b.finalized,
-    b.parents
+    b.fringe,
+    b.fringeStateHash
   )
 
   def fromBytes(bytes: Array[Byte]): BlockMetadata =
@@ -48,27 +58,18 @@ object BlockMetadata {
 
   def toBytes(b: BlockMetadata) = BlockMetadata.toProto(b).toByteArray
 
-  private def weightMap(state: RChainState): Map[ByteString, Long] =
-    state.bonds.map {
-      case Bond(validator, stake) => validator -> stake
-    }.toMap
-
-  def fromBlock(
-      b: BlockMessage,
-      invalid: Boolean,
-      directlyFinalized: Boolean = false,
-      finalized: Boolean = false
-  ): BlockMetadata =
+  def fromBlock(b: BlockMessage): BlockMetadata =
     BlockMetadata(
       b.blockHash,
-      b.body.state.blockNumber,
+      b.blockNumber,
       b.sender,
       b.seqNum,
       b.justifications,
-      weightMap(b.body.state),
-      invalid,
-      directlyFinalized,
-      finalized,
-      b.header.parentsHashList
+      b.bonds,
+      validated = false,
+      invalid = false,
+      finalized = false,
+      fringe = List(),
+      fringeStateHash = protobuf.ByteString.EMPTY
     )
 }

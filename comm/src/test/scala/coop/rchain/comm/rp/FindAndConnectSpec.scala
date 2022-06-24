@@ -1,20 +1,21 @@
 package coop.rchain.comm.rp
 
-import Connect._, Connections._
-import coop.rchain.comm._, CommError._, protocol.routing._
-import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.metrics.Metrics
-import scala.concurrent.duration._
-import org.scalatest._
+import cats.effect.concurrent.Ref
+import cats.syntax.all._
+import cats.{catsInstancesForId => _, _}
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.enablers.Containing
-import cats.{catsInstancesForId => _, _}, cats.data._, cats.syntax.all._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.rp.Connect.Connections._
+import coop.rchain.comm.rp.Connect._
+import coop.rchain.metrics.Metrics
+import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
-import coop.rchain.comm.transport._
-import coop.rchain.comm.rp.ProtocolHelper._
+import org.scalatest._
+
+import scala.concurrent.duration._
 
 class FindAndConnectSpec
     extends AnyFunSpec
@@ -112,8 +113,8 @@ class FindAndConnectSpec
     PeerNode(NodeIdentifier(name.getBytes), Endpoint("host", 80, 80))
 
   private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
-    Cell.id[Connections](peers.reverse.foldLeft(Connections.empty) {
-      case (acc, el) => acc.addConn[Id](el)
+    Ref.unsafe[Id, Connections](peers.reverse.foldLeft(Connections.empty) {
+      case (acc, el) => acc.addConn(el)
     })
 
   private def conf(

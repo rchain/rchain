@@ -24,16 +24,13 @@ object BlockProcessor {
   def apply[F[_]: Concurrent: Timer: Time: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
       inputBlocks: Stream[F, BlockMessage],
       validatedQueue: Queue[F, BlockMessage],
-      // Casper state to validate block against
-      getCasperSnapshot: F[CasperSnapshot]
+      shardId: String,
+      minPhloPrice: Long
   ): Stream[F, (BlockMessage, ValidBlockProcessing)] =
     inputBlocks.parEvalMapUnorderedProcBounded { block =>
       for {
-        result <- validateAndAddToDag(block, getCasperSnapshot)
-
-        // Log block validation result
-        blockStr = PrettyPrinter.buildString(block, short = true)
-        _        <- Log[F].info(s"Block $blockStr validated: $result")
+        // Validate block and add it to the DAG
+        result <- validateAndAddToDag(block, shardId, minPhloPrice)
 
         // Notify finished block validation
         _ <- validatedQueue.enqueue1(block)
@@ -45,21 +42,27 @@ object BlockProcessor {
 
   def validateAndAddToDag[F[_]: Concurrent: Timer: Time: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
       block: BlockMessage,
-      getCasperSnapshot: F[CasperSnapshot]
+      shardId: String,
+      minPhloPrice: Long
   ): F[ValidBlockProcessing] =
     for {
-      snapshot <- getCasperSnapshot
-      result   <- MultiParentCasper.validate(block, snapshot)
-      dag      <- BlockDagStorage[F].getRepresentation
+      result <- MultiParentCasper.validate(block, shardId, minPhloPrice)
+      dag    <- BlockDagStorage[F].getRepresentation
       // TODO: legacy code returns updated DAG
       updatedDag <- result
-                     .as(MultiParentCasper.handleValidBlock(block))
+                     .map { blockMeta =>
+                       BlockDagStorage[F].insertNew(blockMeta, block)
+                     }
                      .leftMap {
-                       case i: InvalidBlock => MultiParentCasper.handleInvalidBlock(block, i, dag)
+                       // TODO: refactor/remove all this nonsense with Either/BlockError/ValidBlock statuses!
+                       case (blockMeta, _: InvalidBlock) =>
+                         // TODO: error should already in BlockMetadata
+                         BlockDagStorage[F].insertNew(blockMeta, block)
                        // TODO: legacy code, raise error in this case
                        case _ => dag.pure[F] // this should never happen
                      }
                      .merge
-    } yield result
+      // TODO: TEMP result trimmed to satisfy existing code
+    } yield result.as(BlockStatus.valid).leftMap(_._2)
 
 }
