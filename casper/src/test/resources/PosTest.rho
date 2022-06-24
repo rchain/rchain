@@ -141,6 +141,7 @@ let @posPubKey, @posVaultPubKey <-
                         rhoSpec!("assertMany",
                           [
                             ((closeRes.nth(0), "==", true), "no epoch on block number 1"),
+                            // TODO use other ways to assert instead of string for non epoch result
                             ((closeRes.nth(1), "==", "Current block is not epoch block"), "no epoch on block number 1"),
                             ((closeRes2.nth(1), "==", Nil), "epoch should happen in epoch block")
                           ],
@@ -172,6 +173,7 @@ let @posPubKey, @posVaultPubKey <-
                         rhoSpec!("assertMany",
                           [
                             ((setEpochRes.nth(0), "==", true), "Settomg epoch block with correct deployId should work"),
+                            // TODO use other ways to assert instead of string for non epoch result
                             ((closeRes.nth(1), "==", "Current block is not epoch block"), "epoch block would not happen before setting epoch block number"),
                             ((closeRes2.nth(1), "==", Nil), "epoch block would happen after setting epoch block number"),
                           ],
