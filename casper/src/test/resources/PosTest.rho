@@ -33,6 +33,7 @@ let @posPubKey, @posVaultPubKey <-
       test_bonding_fails_if_not_in_whitelist,
       test_bonding_fails_if_removed_from_whitelist,
       test_bonding_fails_if_stake_is_not_the_same_as_whitelist,
+      test_epoch_change_on_setting_epoch_block,
       getPosBalance, getCoopBalance,
       closeBlock,
       makeDeployerId(`rho:test:deployerId:make`),
@@ -59,6 +60,7 @@ let @posPubKey, @posVaultPubKey <-
           @RhoSpec!("testSuite", *setup,
             [
               ("PoS is created with empty rewards", *test_make_pos_succeeds),
+              ("epoch change should happen successfully on setting block", *test_epoch_change_on_setting_epoch_block),
               ("closeBlock finishes successfully", *test_close_block_finishes),
               ("bonding success", *test_bonding_succeeds),
               ("withdraw succeeds", *test_withdraw_succeeds),
@@ -130,15 +132,17 @@ let @posPubKey, @posVaultPubKey <-
                 setBlockData!("blockNumber", 1, *initialBlockDataCh) |
                 for (_ <- initialBlockDataCh) {
                   closeBlock!(*close1Ch) |
-                  for (@(true, _) <- close1Ch) {
+                  for (@closeRes <- close1Ch) {
                     // epoch change closeBlock
                     setBlockData!("blockNumber", epochLength, *finalBlockDataCh) |
                     for (_ <- finalBlockDataCh) {
                       closeBlock!(*close2Ch) |
-                      for (@(true, _) <- close2Ch) {
+                      for (@closeRes2 <- close2Ch) {
                         rhoSpec!("assertMany",
                           [
-                            (true, "all good here")
+                            ((closeRes.nth(0), "==", true), "no epoch on block number 1"),
+                            ((closeRes.nth(1), "==", "Current block is not epoch block"), "no epoch on block number 1"),
+                            ((closeRes2.nth(1), "==", Nil), "epoch should happen in epoch block")
                           ],
                           *ackCh
                         )
@@ -147,6 +151,37 @@ let @posPubKey, @posVaultPubKey <-
                   }
                 }
               }
+            }
+          } |
+
+          contract test_epoch_change_on_setting_epoch_block(rhoSpec, _, ackCh) = {
+            new close1Ch, close2Ch, setBlockData(`rho:test:block:data:set`),
+                initialBlockDataCh, finalBlockDataCh, setEpochRet
+            in {
+              // non epoch change closeBlock
+              let @targetEpochBlockNumber <- 1234 in {
+                setBlockData!("blockNumber", targetEpochBlockNumber, *initialBlockDataCh) |
+                for (_ <- initialBlockDataCh) {
+                  closeBlock!(*close1Ch) |
+                  for (@closeRes <- close1Ch) {
+                    // epoch change closeBlock
+                    @PoS!("setEpochBlockNumber", *posVaultDeploerId, targetEpochBlockNumber, *setEpochRet) |
+                    for (@setEpochRes <- setEpochRet) {
+                      closeBlock!(*close2Ch) |
+                      for (@closeRes2 <- close2Ch) {
+                        rhoSpec!("assertMany",
+                          [
+                            ((setEpochRes.nth(0), "==", true), "Settomg epoch block with correct deployId should work"),
+                            ((closeRes.nth(1), "==", "Current block is not epoch block"), "epoch block would not happen before setting epoch block number"),
+                            ((closeRes2.nth(1), "==", Nil), "epoch block would happen after setting epoch block number"),
+                          ],
+                          *ackCh
+                        )
+                      }
+                    }
+                  }
+                }
+              }              
             }
           } |
           // Tests that a user's bond is added to the bonds map properly and all balances change accordingly.

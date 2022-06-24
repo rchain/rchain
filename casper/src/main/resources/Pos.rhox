@@ -323,7 +323,7 @@ in {
                   contract PoS(@"getQuarantineLength", returnCh) = {
                     returnCh!($$quarantineLength$$)
                   } |
-                  contract PoS(@"setEpochBLockNumber", @deployerId, @blockNumber, ret) = {
+                  contract PoS(@"setEpochBlockNumber", @deployerId, @blockNumber, ret) = {
                     new authRet in {
                       checkAuth!(*posVaultPubKey, deployerId, *authRet)|
                       for (@isValid <- authRet){
@@ -589,9 +589,9 @@ in {
                               getBlockData!(*blockDataCh) |
                               for (@epochBlockNumber <<- epochBlockNumberCh){
                                 for (@blockNumber, _ <- blockDataCh) {
-                                  if (blockNumber % $$epochLength$$ != 0 || epochBlockNumber == blockNumber) {
+                                  if (blockNumber % $$epochLength$$ != 0 && epochBlockNumber != blockNumber) {
                                     // Epoch change does not occur.
-                                    ackCh!((true, Nil))
+                                    ackCh!((true, "Current block is not epoch block"))
                                   } else {
                                     // Epoch change occurs.
                                     new payWithdrawer, removeQuarantinedWithdrawers,
