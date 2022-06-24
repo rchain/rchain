@@ -14,6 +14,10 @@ import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
 import fs2.concurrent.Queue
+import monix.eval.Task
+
+import java.net.InetAddress
+import scala.util.Try
 
 object HandleMessages {
 
@@ -70,22 +74,52 @@ object HandleMessages {
       _ <- ConnectionsCell[F].addConnAndReport(peer)
     } yield handledWithoutMessage
 
-  def handleProtocolHandshake[F[_]: Monad: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
+  def handleProtocolHandshake[F[_]: Monad: TransportLayer: Log: ConnectionsCell: RPConfAsk: Metrics](
       peer: PeerNode,
       protocolHandshake: ProtocolHandshake
-  ): F[CommunicationResponse] =
-    for {
-      conf     <- RPConfAsk[F].ask
-      response = ProtocolHelper.protocolHandshakeResponse(conf.local, conf.networkId)
-      resErr   <- TransportLayer[F].send(peer, response)
-      _ <- resErr.fold(
-            kp(().pure[F]),
-            kp(
-              Log[F].info(s"Responded to protocol handshake request from $peer") >>
-                ConnectionsCell[F].addConnAndReport(peer)
+  ): F[CommunicationResponse] = {
+    def isValidPublicInetAddress(host: String): Boolean =
+      Try(InetAddress.getByName(host))
+        .map { addr =>
+          !(addr.isAnyLocalAddress ||
+            addr.isLinkLocalAddress ||
+            addr.isLoopbackAddress ||
+            addr.isMulticastAddress ||
+            addr.isSiteLocalAddress)
+        }
+        .getOrElse(false)
+
+    def canAddNewHost(conf: RPConf): F[Boolean] = {
+      val isCurrentPeerLocal  = isValidPublicInetAddress(conf.local.endpoint.host)
+      val isIncomingPeerLocal = isValidPublicInetAddress(peer.endpoint.host)
+      val bothPeersAreLocal   = isCurrentPeerLocal && isIncomingPeerLocal
+      val bothPeersArePublic  = !isCurrentPeerLocal && !isIncomingPeerLocal
+
+      (bothPeersAreLocal || bothPeersArePublic).pure[F]
+    }
+
+    def acceptConnection(conf: RPConf): F[CommunicationResponse] = {
+      val response = ProtocolHelper.protocolHandshakeResponse(conf.local, conf.networkId)
+      for {
+        resErr <- TransportLayer[F].send(peer, response)
+        _ <- resErr.fold(
+              kp(().pure[F]),
+              kp(
+                Log[F].info(s"Responded to protocol handshake request from $peer") >>
+                  ConnectionsCell[F].addConnAndReport(peer)
+              )
             )
-          )
-    } yield handledWithoutMessage
+      } yield handledWithoutMessage
+    }
+
+    def declineConnection: F[CommunicationResponse] =
+      Log[F]
+        .info(s"Unable to add connection: incoming address ${peer.toAddress}")
+        .as(handledWithoutMessage)
+
+    RPConfAsk[F].ask
+      .flatMap(conf => canAddNewHost(conf).ifM(acceptConnection(conf), declineConnection))
+  }
 
   def handleHeartbeat[F[_]: Monad: ConnectionsCell](
       peer: PeerNode,
