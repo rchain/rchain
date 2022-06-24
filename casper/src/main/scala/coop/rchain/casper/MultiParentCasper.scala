@@ -113,11 +113,6 @@ object MultiParentCasper {
       (_, newFringeOpt) = finalizer.calculateFinalization(parents, bondsMap)
       newFringeHashes   = newFringeOpt.map(_.map(_.id))
 
-      prevFringeStr      = PrettyPrinter.buildString(prevFringeHashes)
-      prevFringeStateStr = PrettyPrinter.buildString(prevFringeState.toByteString)
-      _                  = println(s"PREV FRINGE $prevFringeStr")
-      _                  = println(s"PREV FRINGE STATE $prevFringeStateStr")
-
       // If new fringe is finalized, merge it
       newFringeResult <- newFringeHashes.traverse { fringe =>
                           val seenByPrevFringe = prevFringeHashes.map(msgMap).flatMap(_.seen)
@@ -132,10 +127,6 @@ object MultiParentCasper {
                                        RuntimeManager[F].getHistoryRepo,
                                        DagMerger.costOptimalRejectionAlg
                                      )
-
-                            fringeBlocksCount = fringeBlocks.size
-                            fringeDiffBlocks  = PrettyPrinter.buildString(fringeBlocks)
-                            _                 = println(s"FRINGE DIFF ($fringeBlocksCount) $fringeDiffBlocks")
 
                             (finalizedState, rejected) = result
                             finalizedStateStr = PrettyPrinter.buildString(
