@@ -1,16 +1,16 @@
 package coop.rchain.node.api
 
 import cats.effect.Sync
+import cats.kernel.Monoid
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockApi
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
-import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.syntax._
+import coop.rchain.models.{Bundle, ETuple, Expr, GUnforgeable, Par}
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
 import coop.rchain.rholang.interpreter.RhoType._
@@ -335,10 +335,33 @@ object WebApi {
 
   // RhoExpr to protobuf
 
-  private def rhoExprToParProto(exp: RhoExpr): Par = exp match {
+  /**
+    * Private definition of [[Monoid]] for [[Par]] with the implementation of
+    * combining fields used by WebApi representation of Par [[RhoExpr]].
+    */
+  implicit private object ParMonoid extends Monoid[Par] {
+    override def empty: Par = VectorPar()
+
+    override def combine(x: Par, y: Par): Par =
+      x.copy(
+        x.sends ++ y.sends,
+        x.receives ++ y.receives,
+        x.news ++ y.news,
+        x.exprs ++ y.exprs,
+        x.matches ++ y.matches,
+        x.unforgeables ++ y.unforgeables,
+        x.bundles ++ y.bundles,
+        x.connectives ++ y.connectives
+      )
+  }
+
+  /**
+    * Converts [[RhoExpr]] WebApi representation to protobuf [[Par]] type.
+    */
+  def rhoExprToParProto(exp: RhoExpr): Par = exp match {
     // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
-    case data: ExprPar   => exprParToParProto(data)
-    case ExprTuple(data) => Expression(Expr().withETupleBody(ETuple(data.map(rhoExprToParProto))))
+    case ExprPar(data)   => data.map(rhoExprToParProto).combineAll
+    case ExprTuple(data) => TupleN(data.map(rhoExprToParProto))
     case ExprList(data)  => List(data.map(rhoExprToParProto))
     case ExprSet(data)   => Set(data.map(rhoExprToParProto))
     case ExprMap(data)   => Map(data.map { case (k, v) => (String(k), rhoExprToParProto(v)) })
@@ -352,28 +375,11 @@ object WebApi {
     case ExprUnforg(data) => unforgToParProto(data)
   }
 
-  private def exprParToParProto(expr: ExprPar): Par = {
-    val exprs = expr.data.map(rhoExprToParProto)
-    VectorPar().copy(
-      exprs.flatMap(_.sends),
-      exprs.flatMap(_.receives),
-      exprs.flatMap(_.news),
-      exprs.flatMap(_.exprs),
-      exprs.flatMap(_.matches),
-      exprs.flatMap(_.unforgeables),
-      exprs.flatMap(_.bundles),
-      exprs.flatMap(_.connectives)
-    )
+  private def unforgToParProto(unforg: RhoUnforg): Par = unforg match {
+    case UnforgPrivate(name)  => Name(name.unsafeHexToByteString)
+    case UnforgDeploy(name)   => DeployId(name.unsafeDecodeHex)
+    case UnforgDeployer(name) => DeployerId(name.unsafeDecodeHex)
   }
-
-  private def unforgToUnforgProto(unforg: RhoUnforg): GUnforgeable.UnfInstance = unforg match {
-    case UnforgPrivate(name)  => GPrivateBody(GPrivate(name.unsafeHexToByteString))
-    case UnforgDeploy(name)   => GDeployIdBody(GDeployId(name.unsafeHexToByteString))
-    case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(name.unsafeHexToByteString))
-  }
-
-  private def unforgToParProto(unforg: RhoUnforg): Par =
-    Unforgeable(GUnforgeable(unforgToUnforgProto(unforg)))
 
   // Data request/response protobuf wrappers
 
