@@ -140,10 +140,10 @@ object BlockCreator {
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
                                    systemDeploys,
+                                   rand,
                                    runtimeManager,
                                    blockData,
-                                   computedParentsInfo,
-                                   rand
+                                   computedParentsInfo
                                  )
                 (
                   preStateHash,

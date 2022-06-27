@@ -112,13 +112,7 @@ object InterpreterUtil {
         withCostAccounting = block.justifications.nonEmpty || block.header.parentsHashList.nonEmpty
         rand               = BlockRandomSeed.fromBlock(block)
         replayResultF = runtimeManager
-          .replayComputeState(initialStateHash)(
-            rand,
-            internalDeploys,
-            internalSystemDeploys,
-            blockData,
-            withCostAccounting
-          )
+          .replayComputeState(initialStateHash)(internalDeploys, internalSystemDeploys, rand, blockData, withCostAccounting)
         replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
                          RetryPolicies.limitRetries(3), {
                            case Right(stateHash) => stateHash == block.body.state.postStateHash
@@ -216,10 +210,10 @@ object InterpreterUtil {
   def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: BlockDagStorage: Log: Metrics](
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
+      rand: Blake2b512Random,
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
-      computedParentsInfo: (StateHash, Seq[ByteString]),
-      rand: Blake2b512Random
+      computedParentsInfo: (StateHash, Seq[ByteString])
   )(
       implicit spanF: Span[F]
   ): F[
@@ -228,7 +222,7 @@ object InterpreterUtil {
     spanF.trace(ComputeDeploysCheckpointMetricsSource) {
       val (preStateHash, rejectedDeploys) = computedParentsInfo
       for {
-        result                                                    <- runtimeManager.computeState(preStateHash)(rand, deploys, systemDeploys, blockData)
+        result                                                    <- runtimeManager.computeState(preStateHash)(deploys, systemDeploys, rand, blockData)
         (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (
         preStateHash,

@@ -43,7 +43,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
     kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
-    mergeableTag = Genesis.NonNegativeMergeableTagName(
+    mergeableTag = Genesis.nonNegativeMergeableTagName(
       genesis.shardId,
       PublicKey(genesis.sender),
       genesis.body.state.blockNumber
@@ -104,7 +104,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
         )
       )
       systemDeploys = CloseBlockDeploy(rand.splitByte(userDeploys.length.toByte)) :: Nil
-      r             <- runtimeManager.computeState(baseState)(rand, userDeploys, systemDeploys, blockData)
+      r             <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, rand, blockData)
     } yield r
   }
 

@@ -29,7 +29,7 @@ final case class Genesis(
 object Genesis {
   val genesisPubKey = PublicKey(Array[Byte]())
 
-  def NonNegativeMergeableTagName(
+  def nonNegativeMergeableTagName(
       shardId: String,
       validatorKey: PublicKey,
       blockNumber: Long

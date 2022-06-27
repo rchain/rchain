@@ -34,7 +34,7 @@ class MergingCases extends AnyFlatSpec with Matchers {
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
     kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
-    mergeableTag = Genesis.NonNegativeMergeableTagName(
+    mergeableTag = Genesis.nonNegativeMergeableTagName(
       genesis.shardId,
       PublicKey(genesis.sender),
       genesis.body.state.blockNumber
@@ -70,7 +70,7 @@ class MergingCases extends AnyFlatSpec with Matchers {
           rand                                 = BlockRandomSeed.fromBlock(genesis)
           clodeBlockDeployIndex                = 3
           systemDeploys                        = CloseBlockDeploy(rand.splitByte(clodeBlockDeployIndex.toByte)) :: Nil
-          r                                    <- runtimeManager.computeState(baseState)(rand, userDeploys, systemDeploys, blockData)
+          r                                    <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, rand, blockData)
           (postStateHash, processedDeploys, _) = r
           _                                    = processedDeploys.size shouldBe 2
 

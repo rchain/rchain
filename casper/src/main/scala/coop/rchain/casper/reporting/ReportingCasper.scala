@@ -111,9 +111,8 @@ object ReportingCasper {
                   reportingRuntime,
                   block.body.deploys,
                   block.body.systemDeploys,
-                  blockdata,
-                  withCostAccounting,
-                  rand
+                  rand,
+                  withCostAccounting
                 )
         } yield res
 
@@ -121,9 +120,8 @@ object ReportingCasper {
           runtime: ReportingRuntime[F],
           terms: Seq[ProcessedDeploy],
           systemDeploys: Seq[ProcessedSystemDeploy],
-          blockData: BlockData,
-          withCostAccounting: Boolean,
-          rand: Blake2b512Random
+          rand: Blake2b512Random,
+          withCostAccounting: Boolean
       ): F[ReplayResult] =
         for {
           res <- terms.zipWithIndex.toList.traverse {

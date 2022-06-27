@@ -86,17 +86,12 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
       )
     )
     for {
-      res <- runtimeManager.computeState(stateHash)(
-              rand,
-              deploy :: Nil,
-              Nil,
-              BlockData(
+      res <- runtimeManager.computeState(stateHash)(deploy :: Nil, Nil, rand, BlockData(
                 deploy.data.timestamp,
                 genesisBlockNum,
                 genesisContext.validatorPks.head,
                 genesisSeqNum
-              )
-            )
+              ))
       (hash, Seq(result), _) = res
     } yield (hash, result)
   }
@@ -113,18 +108,12 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         Blake2b256Hash.fromByteString(stateHash)
       )
     )
-    runtimeManager.replayComputeState(stateHash)(
-      rand,
-      processedDeploy :: Nil,
-      Nil,
-      BlockData(
+    runtimeManager.replayComputeState(stateHash)(processedDeploy :: Nil, Nil, rand, BlockData(
         processedDeploy.deploy.data.timestamp,
         genesisBlockNum,
         genesisContext.validatorPks.head,
         genesisSeqNum
-      ),
-      withCostAccounting = true
-    )
+      ), withCostAccounting = true)
   }
 
   "computeState" should "charge for deploys" in effectTest {
@@ -352,23 +341,12 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             Blake2b256Hash.fromByteString(gps)
           )
         )
-        playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(
-                                               rand,
-                                               deploys0.toList,
-                                               CloseBlockDeploy(
+        playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(deploys0.toList, CloseBlockDeploy(
                                                  rand.splitByte(deploys0.length.toByte)
-                                               ) :: Nil,
-                                               blockData
-                                             )
+                                               ) :: Nil, rand, blockData)
         (playStateHash0, processedDeploys0, processedSysDeploys0) = playStateHash0AndProcessedDeploys0
         bonds0                                                    <- runtimeManager.computeBonds(playStateHash0)
-        replayError0OrReplayStateHash0 <- runtimeManager.replayComputeState(gps)(
-                                           rand,
-                                           processedDeploys0,
-                                           processedSysDeploys0,
-                                           blockData,
-                                           withCostAccounting = true
-                                         )
+        replayError0OrReplayStateHash0 <- runtimeManager.replayComputeState(gps)(processedDeploys0, processedSysDeploys0, rand, blockData, withCostAccounting = true)
         Right(replayStateHash0) = replayError0OrReplayStateHash0
         _                       = assert(playStateHash0 == replayStateHash0)
         bonds1                  <- runtimeManager.computeBonds(playStateHash0)
@@ -381,23 +359,12 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             Blake2b256Hash.fromByteString(playStateHash0)
           )
         )
-        playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(
-                                               rand2,
-                                               deploys1.toList,
-                                               CloseBlockDeploy(
+        playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(deploys1.toList, CloseBlockDeploy(
                                                  rand2.splitByte(deploys1.length.toByte)
-                                               ) :: Nil,
-                                               blockData
-                                             )
+                                               ) :: Nil, rand2, blockData)
         (playStateHash1, processedDeploys1, processedSysDeploys1) = playStateHash1AndProcessedDeploys1
         bonds2                                                    <- runtimeManager.computeBonds(playStateHash1)
-        replayError1OrReplayStateHash1 <- runtimeManager.replayComputeState(playStateHash0)(
-                                           rand2,
-                                           processedDeploys1,
-                                           processedSysDeploys1,
-                                           blockData,
-                                           withCostAccounting = true
-                                         )
+        replayError1OrReplayStateHash1 <- runtimeManager.replayComputeState(playStateHash0)(processedDeploys1, processedSysDeploys1, rand2, blockData, withCostAccounting = true)
         Right(replayStateHash1) = replayError1OrReplayStateHash1
         _                       = assert(playStateHash1 == replayStateHash1)
         bonds3                  <- runtimeManager.computeBonds(playStateHash1)
@@ -588,22 +555,11 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
           )
         )
         deploys = deploy :: Nil
-        computeStateResult <- runtimeManager.computeState(genPostState)(
-                               rand,
-                               deploys,
-                               CloseBlockDeploy(
+        computeStateResult <- runtimeManager.computeState(genPostState)(deploys, CloseBlockDeploy(
                                  rand.splitByte(deploys.length.toByte)
-                               ) :: Nil,
-                               blockData
-                             )
+                               ) :: Nil, rand, blockData)
         (playPostState, processedDeploys, processedSystemDeploys) = computeStateResult
-        replayComputeStateResult <- runtimeManager.replayComputeState(genPostState)(
-                                     rand,
-                                     processedDeploys,
-                                     processedSystemDeploys,
-                                     blockData,
-                                     withCostAccounting = true
-                                   )
+        replayComputeStateResult <- runtimeManager.replayComputeState(genPostState)(processedDeploys, processedSystemDeploys, rand, blockData, withCostAccounting = true)
       } yield {
         replayComputeStateResult match {
           case Right(replayPostState) =>
@@ -643,28 +599,13 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         )
         deploys = deploy0 :: Nil
         firstDeploy <- mgr
-                        .computeState(genPostState)(
-                          rand,
-                          deploys,
-                          CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
-                          blockData
-                        )
+                        .computeState(genPostState)(deploys, CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil, rand, blockData)
                         .map(_._2)
         secondDeploy <- mgr
-                         .computeState(genPostState)(
-                           rand,
-                           deploy1 :: Nil,
-                           CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
-                           blockData
-                         )
+                         .computeState(genPostState)(deploy1 :: Nil, CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil, rand, blockData)
                          .map(_._2)
         compoundDeploy <- mgr
-                           .computeState(genPostState)(
-                             rand,
-                             deploy0 :: deploy1 :: Nil,
-                             CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
-                             blockData
-                           )
+                           .computeState(genPostState)(deploy0 :: deploy1 :: Nil, CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil, rand, blockData)
                            .map(_._2)
         _                  = assert(firstDeploy.size == 1)
         _                  = assert(secondDeploy.size == 1)
@@ -797,27 +738,16 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         )
         deploys = Seq(deploy)
         newState <- runtimeManager
-                     .computeState(genPostState)(
-                       rand,
-                       Seq(deploy),
-                       Seq(
+                     .computeState(genPostState)(Seq(deploy), Seq(
                          CloseBlockDeploy(rand.splitByte(deploys.length.toByte))
-                       ),
-                       blockData
-                     )
+                       ), rand, blockData)
         (_, processedDeploys, processedSystemDeploys) = newState
         processedDeploy                               = processedDeploys.head
         processedDeployCost                           = processedDeploy.cost.cost
         invalidProcessedDeploy = processedDeploy.copy(
           cost = PCost(processedDeployCost - 1)
         )
-        result <- runtimeManager.replayComputeState(genPostState)(
-                   rand,
-                   Seq(invalidProcessedDeploy),
-                   processedSystemDeploys,
-                   blockData,
-                   withCostAccounting = true
-                 )
+        result <- runtimeManager.replayComputeState(genPostState)(Seq(invalidProcessedDeploy), processedSystemDeploys, rand, blockData, withCostAccounting = true)
       } yield result
     }
 
@@ -872,15 +802,9 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                      )
                    )
                    invalidBlocks                                      = Map.empty[BlockHash, Validator]
-                   newState                                           <- rm.computeState(genPostState)(rand, Seq(deploy), Seq(), blockData)
+                   newState                                           <- rm.computeState(genPostState)(Seq(deploy), Seq(), rand, blockData)
                    (stateHash, processedDeploys, processedSysDeploys) = newState
-                   result <- rm.replayComputeState(genPostState)(
-                              rand,
-                              processedDeploys,
-                              processedSysDeploys,
-                              blockData,
-                              withCostAccounting = true
-                            )
+                   result <- rm.replayComputeState(genPostState)(processedDeploys, processedSysDeploys, rand, blockData, withCostAccounting = true)
                  } yield (stateHash, result.right.get)
                }
       (playHash, replayHash) = result

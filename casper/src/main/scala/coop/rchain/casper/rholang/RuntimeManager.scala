@@ -41,16 +41,16 @@ import scala.concurrent.duration.FiniteDuration
 
 trait RuntimeManager[F[_]] {
   def replayComputeState(startHash: StateHash)(
-      rand: Blake2b512Random,
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
       withCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
-      rand: Blake2b512Random,
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
@@ -107,9 +107,9 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     } yield runtime
 
   def computeState(startHash: StateHash)(
-      rand: Blake2b512Random,
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     for {
@@ -162,9 +162,9 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       }
 
   def replayComputeState(startHash: StateHash)(
-      rand: Blake2b512Random,
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
       withCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]] =

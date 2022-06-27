@@ -98,10 +98,10 @@ object BlockGenerator {
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],
+                 rand,
                  runtimeManager,
                  BlockData.fromBlock(b),
-                 computedParentsInfo,
-                 rand
+                 computedParentsInfo
                ).attempt
       Right((preStateHash, postStateHash, processedDeploys, rejectedDeploys, _)) = result
     } yield (postStateHash, processedDeploys)

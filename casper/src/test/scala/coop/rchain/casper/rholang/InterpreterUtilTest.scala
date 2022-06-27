@@ -95,6 +95,7 @@ class InterpreterUtilTest
                   .computeDeploysCheckpoint[F](
                     deploys,
                     List.empty[SystemDeploy],
+                    rand,
                     runtimeManager,
                     BlockData(
                       now,
@@ -103,8 +104,7 @@ class InterpreterUtilTest
                       genesisContext.validatorPks.head,
                       seqNum
                     ),
-                    preState,
-                    rand
+                    preState
                   )
               }
             )
