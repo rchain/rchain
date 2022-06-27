@@ -2,12 +2,16 @@ package coop.rchain.blockstorage.dag
 
 import cats.syntax.all._
 
+object DagMessageState {
+  def apply[M: Ordering, S: Ordering](): DagMessageState[M, S] =
+    new DagMessageState[M, S](Set(), Map())
+}
+
 // DagMessageState represents state of one validator in the network
 final case class DagMessageState[M: Ordering, S: Ordering](
-    me: S,
     latestMsgs: Set[Message[M, S]],
     // Message - updated when new message is added
-    msgMap: Map[M, Message[M, S]] = Map()
+    msgMap: Map[M, Message[M, S]]
 ) {
 
   /**
@@ -47,11 +51,9 @@ final case class DagMessageState[M: Ordering, S: Ordering](
       )
 
     /* Debug log */
-    if (me == sender) {
-      // val fringeStr = newFringeOpt.map(ms => s"+ ${showMsgs(ms)}").getOrElse("")
-      // println(s"${newMsg.id} $fringeStr")
-      debugLogMessage(finalizer, newMsg, justifications, parentFringe, newFringeOpt)
-    }
+    // val fringeStr = newFringeOpt.map(ms => s"+ ${showMsgs(ms)}").getOrElse("")
+    // println(s"${newMsg.id} $fringeStr")
+    debugLogMessage(finalizer, newMsg, justifications, parentFringe, newFringeOpt)
     /* End Debug log */
 
     newMsg
@@ -78,8 +80,9 @@ final case class DagMessageState[M: Ordering, S: Ordering](
         if (latestFromSender) latestMsgs -- latest + msg
         else latestMsgs
 
-      if (!latestFromSender)
-        println(s"ERROR: add NOT latest message '${msg.id}' for sender '$me''")
+      // TODO: temp disabled until working finalizer
+//      if (!latestFromSender)
+//        println(s"ERROR: add NOT latest message '${msg.id}' for sender '$me''")
 
       // Create new sender state with added message
       copy(latestMsgs = newLatestMsgs, msgMap = newMsgMap)
@@ -88,23 +91,26 @@ final case class DagMessageState[M: Ordering, S: Ordering](
   /**
     * Creates a new message and adds it to sender state
     */
-  def createMsgAndUpdateSender(genMsgId: (S, Long) => M): (DagMessageState[M, S], Message[M, S]) = {
+  def createMsgAndUpdateSender(
+      creator: S,
+      genMsgId: (S, Long) => M
+  ): (DagMessageState[M, S], Message[M, S]) = {
     val maxHeight      = latestMsgs.map(_.height).max
     val newHeight      = maxHeight + 1
-    val seqNum         = latestMsgs.find(_.sender == me).map(_.senderSeq).getOrElse(0L)
+    val seqNum         = latestMsgs.find(_.sender == creator).map(_.senderSeq).getOrElse(0L)
     val newSeqNum      = seqNum + 1
     val justifications = latestMsgs
     // Bonds map taken from any latest message (assumes no epoch change happen)
     val bondsMap = latestMsgs.head.bondsMap
 
     // Generate message ID (to be updated with real block hash)
-    val msgId = genMsgId(me, newHeight)
+    val msgId = genMsgId(creator, newHeight)
 
     // Create a new message
     val newMsg = createMessage(
       id = msgId,
       height = newHeight,
-      sender = me,
+      sender = creator,
       senderSeq = newSeqNum,
       bondsMap,
       justifications
@@ -112,6 +118,14 @@ final case class DagMessageState[M: Ordering, S: Ordering](
 
     // Insert message to self state
     (insertMsg(newMsg), newMsg)
+  }
+
+  /**
+    * Convenient method to get latest fringe
+    */
+  def latestFringe: Set[Message[M, S]] = {
+    val finalizer = Finalizer(msgMap)
+    finalizer.latestFringe(latestMsgs)
   }
 
   /**
@@ -173,7 +187,7 @@ final case class DagMessageState[M: Ordering, S: Ordering](
 
     val printOutputs = Seq(nextLayerStr, fringeSupportStr, minMsgsStr, fringeStr, parentFringeStr)
     if (printOutputs.exists(_ != "")) {
-      println(s"${me}: ${msg.id}")
+      println(s"${msg.sender}: ${msg.id}")
       println(s"SUPPORT:\n$fringeSupportStr")
       println(s"MIN    : $minMsgsStr")
       println(s"NEXT   : $nextLayerStr")

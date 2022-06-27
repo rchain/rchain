@@ -50,9 +50,9 @@ object BlockRandomSeed {
     generateRandomNumber(
       BlockRandomSeed(
         block.shardId,
-        block.body.state.blockNumber,
+        block.blockNumber,
         PublicKey(block.sender),
-        Blake2b256Hash.fromByteString(block.body.state.preStateHash)
+        Blake2b256Hash.fromByteString(block.preStateHash)
       )
     )
 

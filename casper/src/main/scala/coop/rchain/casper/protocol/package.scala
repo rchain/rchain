@@ -17,10 +17,9 @@ package object protocol extends CasperMessageProtocol {
         case HasBlock         => convert[HasBlock.type](packet)
         // Tips
         case ForkChoiceTipRequest => convert[ForkChoiceTipRequest.type](packet)
-        // Approved block
-        case ApprovedBlock            => convert[ApprovedBlock.type](packet)
-        case ApprovedBlockRequest     => convert[ApprovedBlockRequest.type](packet)
-        case NoApprovedBlockAvailable => convert[NoApprovedBlockAvailable.type](packet)
+        // Finalized fringe
+        case FinalizedFringe        => convert[FinalizedFringe.type](packet)
+        case FinalizedFringeRequest => convert[FinalizedFringeRequest.type](packet)
         // Last finalized state messages
         case StoreItemsMessageRequest => convert[StoreItemsMessageRequest.type](packet)
         case StoreItemsMessage        => convert[StoreItemsMessage.type](packet)

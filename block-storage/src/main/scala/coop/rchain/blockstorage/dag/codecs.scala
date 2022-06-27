@@ -2,12 +2,11 @@ package coop.rchain.blockstorage.dag
 
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.approvedStore.{approvedBlockToBytes, bytesToApprovedBlock}
 import coop.rchain.blockstorage.BlockStore.{blockMessageToBytes, bytesToBlockMessage}
-import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, DeployData, DeployDataProto}
+import coop.rchain.blockstorage.approvedStore.{bytesToFringe, fringeToBytes}
+import coop.rchain.casper.protocol.{BlockMessage, DeployData, DeployDataProto, FinalizedFringe}
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
+import coop.rchain.models.{BlockHash, BlockMetadata}
 import scodec.bits.ByteVector
 import scodec.codecs._
 import scodec.{Attempt, Codec, Err}
@@ -33,16 +32,10 @@ object codecs {
     blockMessage => Attempt.successful(ByteVector(blockMessageToBytes(blockMessage)))
   )
 
-  val codecApprovedBlock = bytes.exmap[ApprovedBlock](
-    byteVector => Attempt.fromEither(bytesToApprovedBlock(byteVector.toArray).leftMap(Err(_))),
-    approvedBlock => Attempt.successful(ByteVector(approvedBlockToBytes(approvedBlock)))
+  val codecFringe = bytes.xmap[FinalizedFringe](
+    byteVector => bytesToFringe(byteVector.toArray),
+    fringe => ByteVector(fringeToBytes(fringe))
   )
-
-  val codecValidator = xmapToByteString(bytes(Validator.Length))
-
-  val codecSeqNum = int32
-
-  val codecBlockHashSet = listOfN(int32, codecBlockHash).xmap[Set[BlockHash]](_.toSet, _.toList)
 
   val codecSignedDeployData = bytes.xmap[Signed[DeployData]](
     byteVector => DeployData.from(DeployDataProto.parseFrom(byteVector.toArray)).right.get,

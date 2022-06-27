@@ -26,7 +26,6 @@ object ConfigMapper {
       add("protocol-server.host", run.host)
       add("protocol-server.port", run.protocolPort)
       add("protocol-server.use-random-ports", run.useRandomPorts)
-      add("protocol-server.allow-private-addresses", run.allowPrivateAddresses)
       add(
         "protocol-server.disable-state-exporter",
         run.disableStateExporter
@@ -60,10 +59,7 @@ object ConfigMapper {
       add("storage.data-dir", run.dataDir)
 
       add("casper.shard-name", run.shardName)
-      add("casper.fault-tolerance-threshold", run.faultToleranceThreshold)
-      add("casper.finalization-rate", run.finalizationRate)
       add("casper.max-number-of-parents", run.maxNumberOfParents)
-      add("casper.max-parent-depth", run.maxParentDepth)
       add("casper.synchrony-constraint-threshold", run.synchronyConstraintThreshold)
       add("casper.height-constraint-threshold", run.heightConstraintThreshold)
       add("casper.validator-public-key", run.validatorPublicKey)

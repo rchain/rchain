@@ -23,7 +23,7 @@ class LastFinalizedAPITest
     with BlockGenerator
     with BlockDagStorageFixture
     with BlockApiFixture {
-  val genesisParameters = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
+  val genesisParameters = buildGenesisParametersFromBonds(List(10L, 10L, 10L))
   val genesisContext    = buildGenesis(genesisParameters)
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]

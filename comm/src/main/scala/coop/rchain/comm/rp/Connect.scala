@@ -2,6 +2,7 @@ package coop.rchain.comm.rp
 
 import cats._
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.mtl._
 import cats.syntax.all._
 import coop.rchain.comm.CommError._
@@ -19,7 +20,7 @@ object Connect {
 
   type Connection            = PeerNode
   type Connections           = List[Connection]
-  type ConnectionsCell[F[_]] = Cell[F, Connections]
+  type ConnectionsCell[F[_]] = Ref[F, Connections]
 
   implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.connect")
@@ -31,55 +32,63 @@ object Connect {
         max: Int
     ): F[Connections] =
       for {
-        peers <- ConnectionsCell[F].read
+        peers <- ConnectionsCell[F].get
       } yield Random.shuffle(peers).take(max)
   }
 
   object Connections {
     def empty: Connections = List.empty[Connection]
+
+    def reportConn[F[_]: Monad: Log: Metrics](connections: Connections): F[Unit] = {
+      val size = connections.size
+      for {
+        _ <- Log[F].info(s"Peers: $size")
+        _ <- Metrics[F].setGauge("peers", size.toLong)
+      } yield ()
+    }
+
+    // TODO: rewrite extensions to cats syntax pattern (left after migration from old Cell trait)
+
     implicit class ConnectionsOps(connections: Connections) {
-
-      def addConnAndReport[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
-        addConn[F](connection) >>= (_.reportConn[F])
-
-      def addConn[F[_]: Monad](connection: Connection): F[Connections] =
-        addConn[F](List(connection))
-
-      def addConn[F[_]: Monad](toBeAdded: List[Connection]): F[Connections] = {
+      def addConn(toBeAdded: List[Connection]): Connections = {
         val ids = toBeAdded.map(_.id)
         val newConnections = connections.partition(peer => ids.contains(peer.id)) match {
           case (_, rest) => rest ++ toBeAdded
         }
-        newConnections.pure[F]
+        newConnections
       }
+      def addConn(conn: Connection): Connections = addConn(List(conn))
 
-      def removeConnAndReport[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
-        removeConn[F](connection) >>= (_.reportConn[F])
-
-      def removeConn[F[_]: Monad](connection: Connection): F[Connections] =
-        removeConn[F](List(connection))
-
-      def removeConn[F[_]: Monad](toBeRemoved: List[Connection]): F[Connections] = {
+      def removeConn(toBeRemoved: List[Connection]): Connections = {
         val ids = toBeRemoved.map(_.id)
         val newConnections = connections.partition(peer => ids.contains(peer.id)) match {
           case (_, rest) => rest
         }
-        newConnections.pure[F]
+        newConnections
       }
+      def removeConn(conn: Connection): Connections = removeConn(List(conn))
 
-      def refreshConn[F[_]: Monad](connection: Connection): F[Connections] = {
+      def refreshConn(connection: Connection): Connections = {
         val newConnections = connections.partition(_.id == connection.id) match {
           case (peer, rest) if peer.isEmpty => rest
           case (peer, rest)                 => rest ++ peer
         }
-        newConnections.pure[F]
+        newConnections
       }
+    }
 
-      def reportConn[F[_]: Monad: Log: Metrics]: F[Connections] = {
-        val size = connections.size.toLong
-        Log[F].info(s"Peers: $size") >>
-          Metrics[F].setGauge("peers", size).as(connections)
-      }
+    implicit class ConnectionsRefOps[F[_]: Monad: Log: Metrics](connRef: Ref[F, Connections]) {
+      def addConnAndReport(conn: Connection): F[Connections] =
+        for {
+          connections <- connRef.updateAndGet(_.addConn(List(conn)))
+          _           <- reportConn(connections)
+        } yield connections
+
+      def removeConnAndReport(conn: Connection): F[Connections] =
+        for {
+          connections <- connRef.updateAndGet(_.removeConn(List(conn)))
+          _           <- reportConn(connections)
+        } yield connections
     }
   }
 
@@ -112,26 +121,26 @@ object Connect {
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
         _                      <- failedPeers.traverse(p => Log[F].info(s"Removing peer $p from connections"))
-        _ <- ConnectionsCell[F].flatModify { connections =>
-              connections.removeConn[F](toPing) >>= (_.addConn[F](successfulPeers))
+        _ <- ConnectionsCell[F].update { connections =>
+              connections.removeConn(toPing).addConn(successfulPeers)
             }
       } yield failedPeers.size
 
     for {
-      connections <- ConnectionsCell[F].read
+      connections <- ConnectionsCell[F].get
       cleared     <- clear(connections)
-      _           <- if (cleared > 0) ConnectionsCell[F].read >>= (_.reportConn[F]) else connections.pure[F]
+      _           <- (ConnectionsCell[F].get >>= reportConn[F]).whenA(cleared > 0)
     } yield cleared
   }
 
   def resetConnections[F[_]: Monad: ConnectionsCell]: F[Unit] =
-    ConnectionsCell[F].flatModify(c => c.removeConn[F](c))
+    ConnectionsCell[F].update(c => c.removeConn(c))
 
   def findAndConnect[F[_]: Monad: Log: NodeDiscovery: ConnectionsCell](
       conn: PeerNode => F[CommErr[Unit]]
   ): F[List[PeerNode]] =
     for {
-      connections <- ConnectionsCell[F].read.map(_.toSet)
+      connections <- ConnectionsCell[F].get.map(_.toSet)
       peers       <- NodeDiscovery[F].peers.map(_.filterNot(connections.contains).toList)
       responses   <- peers.traverse(conn)
       _ <- responses.collect {

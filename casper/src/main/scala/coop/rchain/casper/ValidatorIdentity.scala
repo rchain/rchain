@@ -1,10 +1,7 @@
 package coop.rchain.casper
 
 import cats.Applicative
-import cats.syntax.applicative._
-import cats.syntax.functor._
-import cats.syntax.option._
-import com.google.protobuf.ByteString
+import cats.syntax.all._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
@@ -17,43 +14,27 @@ final case class ValidatorIdentity(
     privateKey: PrivateKey,
     sigAlgorithm: String
 ) {
-  def signature(data: Array[Byte]): Signature = {
-    val sig = SignaturesAlg(sigAlgorithm).map(_.sign(data, privateKey)).get
-    Signature(publicKey, sigAlgorithm, sig)
-  }
+  // TODO: handle Option.none result with descriptive exception
+  def signature(data: Array[Byte]): Array[Byte] =
+    SignaturesAlg(sigAlgorithm).map(_.sign(data, privateKey)).get
 
-  def signBlock(
-      block: BlockMessage
-  ): BlockMessage = {
+  // TODO: remove hashing as part of signing
+  def signBlock(block: BlockMessage): BlockMessage = {
+    val blockHash = ProtoUtil.hashBlock(block)
 
-    val sender = ByteString.copyFrom(publicKey.bytes)
+    val sig = signature(blockHash.toByteArray).toByteString
 
-    // Hash should include sigAlgorithm and sender
-    val b = block.copy(sigAlgorithm = sigAlgorithm, sender = sender)
-
-    val blockHash = ProtoUtil.hashBlock(b)
-
-    val sig = signature(blockHash.toByteArray).signature.toByteString
-
-    b.copy(sig = sig, blockHash = blockHash)
+    block.copy(sig = sig, blockHash = blockHash)
   }
 }
-
-final case class Signature(pk: PublicKey, sigAlgorithm: String, signature: Array[Byte])
 
 object ValidatorIdentity {
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def apply(
-      privateKey: PrivateKey
-  ): ValidatorIdentity = {
+  def apply(privateKey: PrivateKey): ValidatorIdentity = {
     val publicKey = Secp256k1.toPublic(privateKey)
 
-    ValidatorIdentity(
-      publicKey,
-      privateKey,
-      Secp256k1.name
-    )
+    ValidatorIdentity(publicKey, privateKey, Secp256k1.name)
   }
 
   def fromHex(privKeyHex: String): Option[ValidatorIdentity] =

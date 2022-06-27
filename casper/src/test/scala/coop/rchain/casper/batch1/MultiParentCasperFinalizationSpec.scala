@@ -20,7 +20,7 @@ class MultiParentCasperFinalizationSpec extends AnyFlatSpec with Matchers with I
   implicit val timeEff = new LogicalTime[Effect]
 
   val genesis = buildGenesis(
-    buildGenesisParameters(bondsFunction = _.map(pk => pk -> 10L).toMap)
+    buildGenesisParametersFromBonds(List(10L, 10L, 10L, 10L))
   )
 
   //put a new casper instance at the start of each

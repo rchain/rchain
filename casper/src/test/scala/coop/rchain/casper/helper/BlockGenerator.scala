@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil.{
   computeDeploysCheckpoint,
@@ -14,109 +15,76 @@ import coop.rchain.casper.rholang.InterpreterUtil.{
 }
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.types.SystemDeploy
+import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.{CasperMetricsSource, ParentsMergedState}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.{
-  BlockRandomSeed,
-  CasperMetricsSource,
-  CasperShardConf,
-  CasperSnapshot,
-  OnChainCasperState
-}
+import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash._
 import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.syntax._
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 
-import scala.collection.immutable.HashMap
-
-// TODO squash this with block generator in blockimplicits
 object BlockGenerator {
-  implicit val timeEff = new LogicalTime[Task]
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
+  implicit val timeEff              = new LogicalTime[Task]
   implicit val logSource: LogSource = LogSource(this.getClass)
-  def mkCasperSnapshot[F[_]](dag: DagRepresentation) =
-    CasperSnapshot(
-      dag,
-      ByteString.EMPTY,
-      ByteString.EMPTY,
-      IndexedSeq.empty,
-      List.empty,
-      Set.empty,
-      Set.empty,
-      0,
-      Map.empty,
-      OnChainCasperState(
-        CasperShardConf(0, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        Map.empty,
-        Seq.empty
-      )
-    )
-  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Log: Span: Concurrent](
-      runtimeManager: RuntimeManager[F]
-  )(block: BlockMessage, genesis: BlockMessage): F[Unit] =
+
+  // Dummy empty Casper snapshot
+  val dummyParentsPreState = ParentsMergedState(
+    justifications = Set.empty,
+    fringe = Set(),
+    fringeState = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
+    bondsMap = Map.empty,
+    rejectedDeploys = Set(),
+    maxBlockNum = 0L,
+    maxSeqNums = Map.empty
+  )
+
+  def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+      block: BlockMessage
+  ): F[Unit] =
     for {
-      dag <- BlockDagStorage[F].getRepresentation
-      computeBlockCheckpointResult <- computeBlockCheckpoint(
-                                       block,
-                                       genesis,
-                                       mkCasperSnapshot(dag),
-                                       runtimeManager
-                                     )
+      computeBlockCheckpointResult              <- computeBlockCheckpoint(block, dummyParentsPreState)
       (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
-      result <- injectPostStateHash[F](
-                 block,
-                 genesis,
-                 postB1StateHash,
-                 postB1ProcessedDeploys
-               )
+      result                                    <- injectPostStateHash[F](block, postB1StateHash, postB1ProcessedDeploys)
     } yield result
 
-  private def computeBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: BlockDagStorage: Metrics: Span](
-      b: BlockMessage,
-      genesis: BlockMessage,
-      s: CasperSnapshot,
-      runtimeManager: RuntimeManager[F]
+  private def computeBlockCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+      block: BlockMessage,
+      preState: ParentsMergedState
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
+    val deploys = block.state.deploys.map(_.deploy)
     for {
-      parents <- ProtoUtil.getParents[F](b)
-      deploys = ProtoUtil.deploys(b).map(_.deploy)
-      computedParentsInfo <- computeParentsPostState(
-                              parents,
-                              s,
-                              runtimeManager
-                            )
-      rand = BlockRandomSeed.fromBlock(b)
+      computedParentsInfo <- computeParentsPostState(block.justifications, preState)
+      rand                = BlockRandomSeed.fromBlock(block)
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],
                  rand,
-                 runtimeManager,
-                 BlockData.fromBlock(b),
+                 BlockData.fromBlock(block),
                  computedParentsInfo
-               ).attempt
-      Right((preStateHash, postStateHash, processedDeploys, rejectedDeploys, _)) = result
+               )
+      (preStateHash, postStateHash, processedDeploys, rejectedDeploys, _) = result
     } yield (postStateHash, processedDeploys)
   }
 
   private def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
       b: BlockMessage,
-      genesis: BlockMessage,
       postGenStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
   ): F[Unit] = {
-    val updatedBlockPostState = b.body.state.copy(postStateHash = postGenStateHash)
     val updatedBlockBody =
-      b.body.copy(state = updatedBlockPostState, deploys = processedDeploys.toList)
-    val updatedBlock = b.copy(body = updatedBlockBody)
+      b.state.copy(deploys = processedDeploys.toList)
+    val updatedBlock = b.copy(postStateHash = postGenStateHash, state = updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) >>
       BlockDagStorage[F].insert(updatedBlock, invalid = false).void
   }
@@ -124,21 +92,17 @@ object BlockGenerator {
 
 trait BlockGenerator {
   def buildBlock[F[_]: Applicative](
-      parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
-      now: Long,
-      bonds: Seq[Bond] = Seq.empty[Bond],
-      justifications: Seq[Justification] = Seq.empty[Justification],
+      bonds: Map[Validator, Long] = Map.empty,
+      justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0
+      seqNum: Long = 0L
   ): F[BlockMessage] =
     getRandomBlock(
-      setParentsHashList = parentsHashList.some,
       setValidator = creator.some,
-      setTimestamp = now.some,
       setBonds = bonds.some,
       setJustifications = justifications.some,
       setDeploys = deploys.some,
@@ -148,22 +112,19 @@ trait BlockGenerator {
       setSeqNumber = seqNum.some
     ).pure[F]
 
-  def createGenesis[F[_]: Monad: Time: BlockStore: BlockDagStorage](
-      creator: Validator = ByteString.EMPTY,
-      bonds: Seq[Bond] = Seq.empty[Bond],
-      justifications: Seq[Justification] = Seq.empty[Justification],
+  def createGenesis[F[_]: Monad: BlockStore: BlockDagStorage](
+      creator: Validator = BlockUtil.generateValidator("Validator genesis"),
+      bonds: Map[Validator, Long] = Map.empty,
+      justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0
+      seqNum: Long = 0
   ): F[BlockMessage] =
     for {
-      now <- Time[F].currentMillis
       genesis <- buildBlock[F](
-                  Seq.empty,
                   creator,
-                  now,
                   bonds,
                   justifications,
                   deploys,
@@ -176,27 +137,22 @@ trait BlockGenerator {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
     } yield genesis
 
-  def createBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
-      parentsHashList: Seq[BlockHash],
-      genesis: BlockMessage,
-      creator: Validator = ByteString.EMPTY,
-      bonds: Seq[Bond] = Seq.empty[Bond],
-      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+  def createBlock[F[_]: Sync: BlockStore: BlockDagStorage](
+      creator: Validator = BlockUtil.generateValidator("Validator"),
+      bonds: Map[Validator, Long] = Map.empty,
+      justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
-      seqNum: Int = 0,
+      seqNum: Long = 0,
       invalid: Boolean = false
   ): F[BlockMessage] =
     for {
-      now <- Time[F].currentMillis
       block <- buildBlock[F](
-                parentsHashList,
                 creator,
-                now,
                 bonds,
-                justifications.toSeq.map(d => new Justification(d._1, d._2)),
+                justifications,
                 deploys,
                 postStateHash,
                 shardId,
@@ -204,44 +160,41 @@ trait BlockGenerator {
                 seqNum
               )
       dag <- BlockDagStorage[F].getRepresentation
-      nextCreatorSeqNum <- if (block.seqNum == 0)
-                            dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
-                          else block.seqNum.pure[F]
-      nextId <- parentsHashList.toList
-                 .filterNot(dag.invalidBlocksSet)
-                 .traverse(
-                   BlockStore[F].getUnsafe(_).map(_.body.state.blockNumber)
-                 )
-                 .map(_.maximumOption.getOrElse(0L) + 1)
-      newPostState = block.body.state.copy(blockNumber = nextId)
+      // TODO: format of if..then expressions in for comprehensions is awful
+      nextCreatorSeqNum = if (block.seqNum == 0L) getLatestSeqNum(block.sender, dag) + 1L
+      else block.seqNum
+      nextId <- justifications.toList
+                 .traverse(BlockStore[F].getUnsafe(_).map(_.blockNumber))
+                 .map(_.maximumOption.getOrElse(0L) + 1L)
       modifiedBlock = block
         .copy(
-          body = block.body.copy(state = newPostState),
+          blockNumber = nextId,
           seqNum = nextCreatorSeqNum
         )
       _ <- BlockDagStorage[F].insert(modifiedBlock, invalid, false)
       _ <- BlockStore[F].put(block.blockHash, modifiedBlock)
     } yield modifiedBlock
 
+  def getLatestSeqNum(sender: Validator, dag: DagRepresentation): Long = {
+    val sendersLatest = dag.dagMessageState.latestMsgs.filter(_.sender == sender)
+    sendersLatest.map(_.senderSeq).toList.maximumOption.getOrElse(-1L)
+  }
+
   def createValidatorBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
-      parents: Seq[BlockMessage],
-      genesis: BlockMessage,
       justifications: Seq[BlockMessage],
       validator: Validator,
-      bonds: Seq[Bond],
-      seqNum: Int = 0,
+      bonds: Map[Validator, Long],
+      seqNum: Long = 0,
       invalid: Boolean = false,
       shardId: String
   ): F[BlockMessage] =
     for {
       deploy <- ConstructDeploy.basicProcessedDeploy[F](0, shardId)
       result <- createBlock[F](
-                 parents.map(_.blockHash),
-                 genesis,
                  creator = validator,
                  bonds = bonds,
                  deploys = Seq(deploy),
-                 justifications = justifications.map(b => b.sender -> b.blockHash).toMap,
+                 justifications = justifications.map(_.blockHash),
                  seqNum = seqNum,
                  invalid = invalid
                )

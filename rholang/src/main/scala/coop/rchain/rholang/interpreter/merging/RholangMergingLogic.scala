@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter.merging
 
 import cats.Monad
+import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -19,7 +19,7 @@ import coop.rchain.rspace.{HotStoreTrieAction, TrieInsertBinaryProduce}
 import coop.rchain.scodec.codecs
 import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bytes, int64, uint16, variableSizeBytes}
+import scodec.codecs.{bytes, int64, uint16, variableSizeBytes, vlong}
 
 object RholangMergingLogic {
 
@@ -202,7 +202,7 @@ object RholangMergingLogic {
 
   val codecByteVectorVar: Codec[ByteVector] = variableSizeBytes(uint16, bytes)
 
-  val codecMergeableKey: Codec[(ByteVector, ByteVector, Int)] =
-    (codecByteVectorVar :: codecByteVectorVar :: uint16).as[(ByteVector, ByteVector, Int)]
+  val codecMergeableKey: Codec[(ByteVector, ByteVector, Long)] =
+    (codecByteVectorVar :: codecByteVectorVar :: vlong).as[(ByteVector, ByteVector, Long)]
 
 }

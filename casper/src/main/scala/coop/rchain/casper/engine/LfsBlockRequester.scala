@@ -4,7 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
+import coop.rchain.casper.protocol.{BlockMessage, FinalizedFringe}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
@@ -35,7 +35,8 @@ object LfsBlockRequester {
       latest: Set[Key],
       lowerBound: Long,
       heightMap: SortedMap[Long, Set[Key]],
-      finished: Set[Key]
+      finished: Set[Key],
+      extraHeights: Int
   ) {
     // Adds new keys to Init state, ready for processing. Existing keys are skipped.
     def add(keys: Set[Key]): ST[Key] = {
@@ -75,26 +76,22 @@ object LfsBlockRequester {
 
     // Confirm key is Received if it was Requested.
     // Returns updated state with the flags if Requested and last latest received.
-    def received(
-        k: Key,
-        height: Long,
-        latestReplacement: Option[Key] = None
-    ): (ST[Key], ReceiveInfo) = {
+    def received(k: Key, height: Long): (ST[Key], ReceiveInfo) = {
       val isReq = d.get(k).contains(Requested)
       if (isReq) {
         // Remove message from the set of latest messages (if exists)
-        val adjLatest = latest - k
-        val isLatest  = latest != adjLatest
-        // Add replacement message if supplied
-        val newLatest    = latestReplacement.map(adjLatest + _).getOrElse(adjLatest)
+        val newLatest    = latest - k
+        val isLatest     = latest != newLatest
         val isLastLatest = isLatest && newLatest.isEmpty
         // Save in height map
         val heightKeys   = heightMap.getOrElse(height, Set())
         val newHeightMap = heightMap + ((height, heightKeys + k))
         // Calculate new minimum height if latest message
-        //  - we need parents of latest message so it's `-1`
-        val newLowerBound = if (isLatest) Math.min(height - 1, lowerBound) else lowerBound
-        val newSt         = d + ((k, Received))
+        val newLowerBound1 = if (isLatest) Math.min(height - 1, lowerBound) else lowerBound
+        // Reduce lower bound if all fringes are received
+        val newLowerBound =
+          if (isLastLatest) Math.max(0, newLowerBound1 - extraHeights) else newLowerBound1
+        val newSt = d + ((k, Received))
         // Set new minimum height and update latest
         (
           this.copy(newSt, newLatest, newLowerBound, newHeightMap),
@@ -125,23 +122,25 @@ object LfsBlockRequester {
     def apply[Key](
         initial: Set[Key],
         latest: Set[Key] = Set[Key](),
-        lowerBound: Long = 0
+        lowerBound: Long = 0,
+        extraHeights: Int = 0
     ): ST[Key] =
       ST[Key](
         d = initial.map((_, Init)).toMap,
         latest,
-        lowerBound,
+        lowerBound = lowerBound,
         heightMap = SortedMap[Long, Set[Key]](),
-        finished = Set[Key]()
+        finished = Set[Key](),
+        extraHeights = extraHeights
       )
   }
 
   /**
     * Create a stream to receive blocks needed for Last Finalized State.
     *
-    * @param approvedBlock Last finalized block
+    * @param fringe Last finalized block
     * @param incomingBlocks Stream of received block messages
-    * @param initialMinimumHeight Required minimum block height before latest messages are downloaded
+    * @param blockHeightsBeforeFringe Required additional block heights before finalized fringe
     * @param requestForBlock Send request for block
     * @param requestTimeout Time after request will be resent if not received
     * @param containsBlock Check if block is in the store
@@ -150,9 +149,9 @@ object LfsBlockRequester {
     * @return fs2.Stream processing all blocks
     */
   def stream[F[_]: Concurrent: Timer: Log](
-      approvedBlock: ApprovedBlock,
+      fringe: FinalizedFringe,
       incomingBlocks: Stream[F, BlockMessage],
-      initialMinimumHeight: Long,
+      blockHeightsBeforeFringe: Int,
       requestForBlock: BlockHash => F[Unit],
       requestTimeout: FiniteDuration,
       containsBlock: BlockHash => F[Boolean],
@@ -161,13 +160,9 @@ object LfsBlockRequester {
       validateBlock: BlockMessage => F[Boolean]
   ): F[Stream[F, ST[BlockHash]]] = {
 
-    val block = approvedBlock.block
-
-    // Active validators as per approved block state
-    // - for approved state to be complete it is required to have block from each of them
-    val latestMessages = block.justifications.map(_.latestBlockHash).toSet
-
-    val initialHashes = Set(block.blockHash)
+    // Finalized block hashes from LFS sync will be started
+    val finalizedHashes = fringe.hashes.toSet
+    val initialHashes   = finalizedHashes
 
     def createStream(
         st: Ref[F, ST[BlockHash]],
@@ -201,18 +196,10 @@ object LfsBlockRequester {
       def validateReceivedBlock(block: BlockMessage) = {
         def invalidBlockMsg =
           s"Received ${PrettyPrinter.buildString(block)} with invalid hash. Ignored block."
-        val blockNumber = ProtoUtil.blockNumber(block)
+        val blockNumber = block.blockNumber
         for {
           // Mark block as received and calculate minimum height (if latest)
-          receivedResult <- st.modify(st => {
-                             // if message received is latest as per approved block - add its self justification
-                             // to target latest messages that has to be pulled
-                             val lmReplacement =
-                               if (latestMessages.contains(block.blockHash))
-                                 ProtoUtil.creatorJustification(block).map(_.latestBlockHash)
-                               else None
-                             st.received(block.blockHash, blockNumber, lmReplacement)
-                           })
+          receivedResult <- st.modify(_.received(block.blockHash, blockNumber))
           // Result if block is received and if last latest is received
           ReceiveInfo(isReceived, isReceivedLatest, isLastLatest) = receivedResult
 
@@ -332,8 +319,8 @@ object LfsBlockRequester {
       st <- Ref.of[F, ST[BlockHash]](
              ST(
                initialHashes,
-               latest = latestMessages,
-               lowerBound = initialMinimumHeight
+               latest = finalizedHashes,
+               extraHeights = blockHeightsBeforeFringe
              )
            )
 

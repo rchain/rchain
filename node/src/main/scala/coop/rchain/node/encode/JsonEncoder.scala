@@ -2,26 +2,21 @@ package coop.rchain.node.encode
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.{BondInfo, JustificationInfo, LightBlockInfo, RejectedDeployInfo}
+import coop.rchain.casper.protocol.{BondInfo, JustificationInfo, LightBlockInfo}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.GUnforgeable.UnfInstance
 import coop.rchain.models.Var.{VarInstance, WildcardMsg}
 import coop.rchain.models._
-import io.circe.parser._
-import cats.syntax.all._
-import coop.rchain.shared.Base16
 import coop.rchain.models.syntax._
 
 import scala.collection.immutable.BitSet
-import scodec.{Attempt, Err, Codec => SCodec}
-import scodec.codecs.utf8
 
 object JsonEncoder {
-  import io.circe._
-  import io.circe.Encoder._
   import io.circe.Decoder._
+  import io.circe.Encoder._
+  import io.circe._
   import io.circe.generic.semiauto._
 
   implicit val encodeByteString: Encoder[ByteString] =
@@ -29,8 +24,6 @@ object JsonEncoder {
   implicit val encodeBondInfo: Encoder[BondInfo] = deriveEncoder[BondInfo]
   implicit val encodeJustificationInfo: Encoder[JustificationInfo] =
     deriveEncoder[JustificationInfo]
-  implicit val encodeRejectedDeployInfo: Encoder[RejectedDeployInfo] =
-    deriveEncoder[RejectedDeployInfo]
   implicit val encodeLightBlockInfo: Encoder[LightBlockInfo] = deriveEncoder[LightBlockInfo]
   implicit val encodePar: Encoder[Par]                       = deriveEncoder[Par]
   implicit val encodeSend: Encoder[Send]                     = deriveEncoder[Send]
@@ -97,8 +90,6 @@ object JsonEncoder {
   implicit val decodeBondInfo: Decoder[BondInfo] = deriveDecoder[BondInfo]
   implicit val decodeJustificationInfo: Decoder[JustificationInfo] =
     deriveDecoder[JustificationInfo]
-  implicit val decodeRejectedDeployInfo: Decoder[RejectedDeployInfo] =
-    deriveDecoder[RejectedDeployInfo]
   implicit val decodeLightBlockInfo: Decoder[LightBlockInfo] = deriveDecoder[LightBlockInfo]
   implicit val decodePar: Decoder[Par]                       = deriveDecoder[Par]
   implicit val decodeSend: Decoder[Send]                     = deriveDecoder[Send]

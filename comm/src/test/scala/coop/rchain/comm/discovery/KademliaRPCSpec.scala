@@ -127,33 +127,6 @@ abstract class KademliaRPCSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
           }
       }
 
-      "response contains an invalid address" should {
-        "filter out the invalid address" in
-          new TwoNodesRuntime[Seq[PeerNode]](
-            lookupHandler = Handler.lookupHandler(
-              Seq(
-                otherPeer,
-                PeerNode.from(NodeIdentifier(key), "0.0.0.0", 0, 0)
-              )
-            )
-          ) {
-            def execute(
-                kademliaRPC: KademliaRPC[F],
-                local: PeerNode,
-                remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
-
-            val result: TwoNodesResult = run()
-
-            result() shouldEqual Seq(otherPeer)
-            lookupHandler.received should have length 1
-            val (receiver, (sender, k)) = lookupHandler.received.head
-            receiver shouldEqual result.remoteNode
-            sender shouldEqual result.localNode
-            k should be(key)
-          }
-      }
-
       "response takes to long" should {
         "get an empty list result" in
           new TwoNodesRuntime[Seq[PeerNode]](

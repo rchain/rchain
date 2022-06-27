@@ -23,18 +23,16 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
   def mkHash(s: String) = ByteString.copyFromUtf8(s)
 
   def getBlock(hash: BlockHash, number: Long, latestMessages: Seq[BlockHash]) = {
-    val justifications                     = latestMessages.map(Justification(ByteString.EMPTY, _))
     val hashFun: BlockMessage => BlockHash = _ => hash
     blockImplicits.getRandomBlock(
       hashF = hashFun.some,
       setBlockNumber = number.some,
-      setJustifications = justifications.some,
-      // Parents must be set also to prevent auto generation
-      setParentsHashList = justifications.map(_.latestBlockHash).some
+      setJustifications = latestMessages.some
     )
   }
 
-  def createApprovedBlock(block: BlockMessage): ApprovedBlock = ApprovedBlock(block)
+  def createFinalizedFringe(block: BlockMessage): FinalizedFringe =
+    FinalizedFringe(block.justifications, block.postStateHash)
 
   val hash9 = mkHash("9")
   val hash8 = mkHash("8")
@@ -87,8 +85,8 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       requestTimeout: FiniteDuration
   )(test: Mock[F] => F[Unit]): F[Unit] = {
 
-    // Approved block has initial latest messages
-    val approvedBlock = createApprovedBlock(startBlock)
+    // Finalized fringe is initial latest messages
+    val finalizedFringe = createFinalizedFringe(startBlock)
 
     // Approved block is already saved in block storage
     val savedBlocks = Map(startBlock.blockHash -> startBlock)
@@ -107,9 +105,9 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
 
       // Queue for processing the internal state (ST)
       processingStream <- LfsBlockRequester.stream(
-                           approvedBlock,
+                           finalizedFringe,
                            responseQueue.dequeue,
-                           initialMinimumHeight = 0,
+                           blockHeightsBeforeFringe = 0,
                            requestQueue.enqueue1,
                            requestTimeout,
                            hash => testState.get.map(_.blocks.contains(hash)),

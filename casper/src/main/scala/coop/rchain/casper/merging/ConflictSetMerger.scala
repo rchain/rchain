@@ -2,33 +2,22 @@ package coop.rchain.casper.merging
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.models.ListParWithRandom
-import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.HistoryReaderBinary
 import coop.rchain.rspace.merger.EventLogMergingLogic._
-import coop.rchain.rspace.merger.StateChange._
-import coop.rchain.rspace.merger._
-import coop.rchain.rspace.serializers.ScodecSerialize.DatumB
 import coop.rchain.shared.{Log, Stopwatch}
-import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.convertToReadNumber
-import coop.rchain.rspace.internal.Datum
 
 object ConflictSetMerger {
 
   /** R is a type for minimal rejection unit */
-  def merge[F[_]: Concurrent: Log, R: Ordering](
+  def merge[R: Ordering](
       actualSet: Set[R],
       lateSet: Set[R],
       depends: (R, R) => Boolean,
       conflicts: (Set[R], Set[R]) => Boolean,
       cost: R => Long,
-      stateChanges: R => F[StateChange],
       mergeableChannels: R => NumberChannelsDiff,
-      computeTrieActions: (StateChange, NumberChannelsDiff) => F[Vector[HotStoreTrieAction]],
-      applyTrieActions: Seq[HotStoreTrieAction] => F[Blake2b256Hash],
-      getData: Blake2b256Hash => F[Seq[Datum[ListParWithRandom]]]
-  ): F[(Blake2b256Hash, Set[R])] = {
+      baseMergeableChRes: Map[Blake2b256Hash, Long]
+  ): (Set[R], Set[R], String) = {
 
     type Branch = Set[R]
 
@@ -124,51 +113,23 @@ object ConflictSetMerger {
     /** target function for rejection is minimising cost of deploys rejected */
     val rejectionTargetF = (dc: Branch) => dc.map(cost).sum
 
-    for {
-      baseMergeableChRes <- branches.flatten
-                             .map(mergeableChannels)
-                             .flatMap(_.keys)
-                             .toList
-                             .traverse(
-                               channelHash =>
-                                 convertToReadNumber(getData)
-                                   .apply(channelHash)
-                                   .map(res => (channelHash, res.getOrElse(0L)))
-                             )
-                             .map(_.toMap)
-      rejectionOptionsWithOverflow = getMergedResultRejection(
-        branches,
-        rejectionOptions,
-        baseMergeableChRes
-      )
-      optimalRejection = getOptimalRejection(rejectionOptionsWithOverflow, rejectionTargetF)
-      rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
-      toMerge          = branches diff optimalRejection
-      r                <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
-
-      (allChanges, combineAllChanges) = r
-
-      // All number channels merged
-      // TODO: Negative or overflow should be rejected before!
-      allMergeableChannels = toMerge.toList.flatten.map(mergeableChannels).combineAll
-
-      r                                 <- Stopwatch.duration(computeTrieActions(allChanges, allMergeableChannels))
-      (trieActions, computeActionsTime) = r
-      r                                 <- Stopwatch.duration(applyTrieActions(trieActions))
-      (newState, applyActionsTime)      = r
-      overallChanges                    = s"${allChanges.datumsChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.consumeChannelsToJoinSerializedMap.size} J"
-      logStr = s"Merging done: " +
-        s"late set size ${lateSet.size}; " +
-        s"actual set size ${actualSet.size}; " +
+    val rejectionOptionsWithOverflow = getMergedResultRejection(
+      branches,
+      rejectionOptions,
+      baseMergeableChRes
+    )
+    val optimalRejection = getOptimalRejection(rejectionOptionsWithOverflow, rejectionTargetF)
+    val rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
+    val logStr =
+      s"conflicts map in ${conflictsMapTime}; " +
         s"computed branches (${branches.size}) in ${branchesTime}; " +
-        s"conflicts map in ${conflictsMapTime}; " +
         s"rejection options (${rejectionOptions.size}) in ${rejectionOptionsTime}; " +
         s"optimal rejection set size ${optimalRejection.size}; " +
-        s"rejected as late dependency ${rejectedAsDependents.size}; " +
-        s"changes combined (${overallChanges}) in ${combineAllChanges}; " +
-        s"trie actions (${trieActions.size}) in ${computeActionsTime}; " +
-        s"actions applied in ${applyActionsTime}"
-      _ <- Log[F].debug(logStr)
-    } yield (newState, rejected)
+        s"rejected as late dependency ${rejectedAsDependents.size}; "
+    (
+      (branches diff optimalRejection).flatten,
+      rejected,
+      logStr
+    )
   }
 }

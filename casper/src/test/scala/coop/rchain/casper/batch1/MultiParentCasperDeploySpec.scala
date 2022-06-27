@@ -43,7 +43,7 @@ class MultiParentCasperDeploySpec
         deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
         r              <- node.createBlock(deployData)
         Created(block) = r
-      } yield assert(block.body.deploys.head.isFailed)
+      } yield assert(block.state.deploys.head.isFailed)
     }
   }
 
@@ -55,13 +55,13 @@ class MultiParentCasperDeploySpec
         deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
         r              <- node.createBlock(deployData)
         Created(block) = r
-      } yield assert(!block.body.deploys.head.isFailed)
+      } yield assert(!block.state.deploys.head.isFailed)
     }
   }
 
   it should "reject deploy with phloPrice lower than minPhloPrice" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      val minPhloPrice = node.casperShardConf.minPhloPrice
+      val minPhloPrice = node.minPhloPrice
       val phloPrice    = minPhloPrice - 1L
       for {
         deployData <- ConstructDeploy

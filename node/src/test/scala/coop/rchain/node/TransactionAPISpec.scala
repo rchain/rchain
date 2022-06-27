@@ -49,7 +49,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
           Transaction.transferUnforgeable(
             this.genesis.genesisBlock.shardId,
             PublicKey(this.genesis.genesisBlock.sender),
-            this.genesis.genesisBlock.body.state.blockNumber
+            this.genesis.genesisBlock.blockNumber
           )
         )
         transferBlock <- validator.addBlock(deploy)
@@ -101,7 +101,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
           case Refund(_) =>
             t.transaction.toAddr should be(fromAddr)
             t.transaction.amount should be(
-              phloLimit * phloPrice - transferBlock.body.deploys.head.cost.cost
+              phloLimit * phloPrice - transferBlock.state.deploys.head.cost.cost
             )
             t.transaction.failReason should be(None)
           case _ => ()
@@ -130,7 +130,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
           case Refund(_) =>
             t.transaction.toAddr should be(fromAddr)
             t.transaction.amount should be(
-              phloLimit * phloPrice - block.body.deploys.head.cost.cost
+              phloLimit * phloPrice - block.state.deploys.head.cost.cost
             )
             t.transaction.failReason should be(None)
           case _ => ()
@@ -157,7 +157,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
     } yield (t, block)).runSyncUnsafe()
     transaction.transactionType shouldBe a[PreCharge]
     transaction.transaction.fromAddr shouldBe fromAddr
-    transaction.transaction.amount shouldBe phloLimit * phloPrice - block.body.deploys.head.cost.cost
+    transaction.transaction.amount shouldBe phloLimit * phloPrice - block.state.deploys.head.cost.cost
     transaction.transaction.failReason shouldBe Some("Insufficient funds")
   }
 }

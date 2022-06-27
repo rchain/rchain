@@ -8,6 +8,7 @@ import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.Serialize
@@ -27,10 +28,9 @@ object CasperMessage {
     case m: HasBlockRequestProto  => Right(HasBlockRequest.from(m))
     // Tips request
     case _: ForkChoiceTipRequestProto => Right(ForkChoiceTipRequest)
-    // Approved block
-    case m: ApprovedBlockProto            => ApprovedBlock.from(m)
-    case m: ApprovedBlockRequestProto     => Right(ApprovedBlockRequest.from(m))
-    case m: NoApprovedBlockAvailableProto => Right(NoApprovedBlockAvailable.from(m))
+    // Finalized fringe
+    case m: FinalizedFringeProto        => Right(FinalizedFringe.from(m))
+    case m: FinalizedFringeRequestProto => Right(FinalizedFringeRequest.from(m))
     // Last finalized state messages
     case m: StoreItemsMessageRequestProto => Right(StoreItemsMessageRequest.from(m))
     case m: StoreItemsMessageProto        => Right(StoreItemsMessage.from(m))
@@ -39,36 +39,24 @@ object CasperMessage {
 
 /* Approved block message */
 
-final case class ApprovedBlock(block: BlockMessage) extends CasperMessage {
-  def toProto: ApprovedBlockProto = ApprovedBlockProto().withBlock(block.toProto)
-}
-
-object ApprovedBlock {
-  def from(ba: ApprovedBlockProto): Either[String, ApprovedBlock] =
-    BlockMessage.from(ba.block).map(ApprovedBlock(_))
-}
-
-final case class ApprovedBlockRequest(identifier: String, trimState: Boolean = false)
+final case class FinalizedFringe(hashes: Seq[BlockHash], stateHash: StateHash)
     extends CasperMessage {
-  def toProto: ApprovedBlockRequestProto = ApprovedBlockRequestProto(identifier, trimState)
+  def toProto: FinalizedFringeProto =
+    FinalizedFringeProto().withHashes(hashes.toList).withStateHash(stateHash)
 }
 
-object ApprovedBlockRequest {
-  def from(abr: ApprovedBlockRequestProto): ApprovedBlockRequest =
-    ApprovedBlockRequest(abr.identifier, abr.trimState)
+object FinalizedFringe {
+  def from(f: FinalizedFringeProto): FinalizedFringe = FinalizedFringe(f.hashes, f.stateHash)
 }
 
-final case class NoApprovedBlockAvailable(identifier: String, nodeIdentifer: String)
+final case class FinalizedFringeRequest(identifier: String, trimState: Boolean = false)
     extends CasperMessage {
-  def toProto: NoApprovedBlockAvailableProto =
-    NoApprovedBlockAvailableProto()
-      .withIdentifier(identifier)
-      .withNodeIdentifer(nodeIdentifer)
+  def toProto: FinalizedFringeRequestProto = FinalizedFringeRequestProto(identifier, trimState)
 }
 
-object NoApprovedBlockAvailable {
-  def from(naba: NoApprovedBlockAvailableProto): NoApprovedBlockAvailable =
-    NoApprovedBlockAvailable(naba.identifier, naba.nodeIdentifer)
+object FinalizedFringeRequest {
+  def from(abr: FinalizedFringeRequestProto): FinalizedFringeRequest =
+    FinalizedFringeRequest(abr.identifier, abr.trimState)
 }
 
 /* Tips message */
@@ -113,16 +101,23 @@ object BlockHashMessage {
 }
 
 final case class BlockMessage(
-    blockHash: ByteString,
-    header: Header,
-    body: Body,
-    justifications: List[Justification],
-    sender: ByteString,
-    seqNum: Int,
-    sig: ByteString,
-    sigAlgorithm: String,
+    version: Int,
     shardId: String,
-    extraBytes: ByteString = ByteString.EMPTY
+    blockHash: BlockHash,
+    blockNumber: Long,
+    sender: Validator,
+    seqNum: Long,
+    preStateHash: ByteString,
+    postStateHash: ByteString,
+    justifications: List[BlockHash],
+    bonds: Map[Validator, Long],
+    // Rejections
+    rejectedDeploys: List[ByteString],
+    // Rholang (tuple space) state change
+    state: RholangState,
+    // Block signature
+    sigAlgorithm: String,
+    sig: ByteString
 ) extends CasperMessage {
   def toProto: BlockMessageProto = BlockMessage.toProto(this)
 
@@ -133,141 +128,76 @@ object BlockMessage {
 
   def from(bm: BlockMessageProto): Either[String, BlockMessage] =
     for {
-      body <- Body.from(bm.body)
+      state <- RholangState.from(bm.state)
     } yield BlockMessage(
+      bm.version,
+      bm.shardId,
       bm.blockHash,
-      Header.from(bm.header),
-      body,
-      bm.justifications.toList.map(Justification.from),
+      bm.blockNumber,
       bm.sender,
       bm.seqNum,
-      bm.sig,
+      bm.preStateHash,
+      bm.postStateHash,
+      bm.justifications,
+      bm.bonds.map(b => (b.validator, b.stake)).toMap,
+      bm.rejectedDeploys,
+      state,
       bm.sigAlgorithm,
-      bm.shardId,
-      bm.extraBytes
+      bm.sig
     )
 
-  def toProto(bm: BlockMessage): BlockMessageProto =
+  def toProto(bm: BlockMessage): BlockMessageProto = {
+    // To guarantee the same hash lists and maps must be sorted
+    // - can be defined on common place
+    implicit val byteStringOrdering: Ordering[ByteString] =
+      Ordering.by[ByteString, Iterable[Byte]](_.toByteArray)(Ordering.Iterable[Byte])
+    // Sorted justifications
+    val sortedJustifications = bm.justifications.sorted
+    // Sorted bonds map
+    val sortedBonds = bm.bonds.toList
+      .sortBy { case (validator, _) => validator }
+      .map { case (validator, stake) => BondProto(validator, stake) }
+    // Sorted rejections
+    val sortedRejectedDeploys = bm.rejectedDeploys.sorted
+    // Build proto message
     BlockMessageProto()
+      .withVersion(bm.version)
+      .withShardId(bm.shardId)
       .withBlockHash(bm.blockHash)
-      .withHeader(Header.toProto(bm.header))
-      .withBody(Body.toProto(bm.body))
-      .withJustifications(bm.justifications.map(Justification.toProto))
+      .withBlockNumber(bm.blockNumber)
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
-      .withSig(bm.sig)
+      .withPreStateHash(bm.preStateHash)
+      .withPostStateHash(bm.postStateHash)
+      .withJustifications(sortedJustifications)
+      .withBonds(sortedBonds)
+      .withRejectedDeploys(sortedRejectedDeploys)
+      .withState(RholangState.toProto(bm.state))
       .withSigAlgorithm(bm.sigAlgorithm)
-      .withShardId(bm.shardId)
-      .withExtraBytes(bm.extraBytes)
+      .withSig(bm.sig)
+  }
 
 }
 
-final case class Header(
-    parentsHashList: List[ByteString],
-    timestamp: Long,
-    version: Long,
-    extraBytes: ByteString = ByteString.EMPTY
-) {
-  def toProto: HeaderProto = Header.toProto(this)
-}
-
-object Header {
-  def from(h: HeaderProto): Header = Header(
-    h.parentsHashList.toList,
-    h.timestamp,
-    h.version,
-    h.extraBytes
-  )
-
-  def toProto(h: Header): HeaderProto =
-    HeaderProto()
-      .withParentsHashList(h.parentsHashList)
-      .withTimestamp(h.timestamp)
-      .withVersion(h.version)
-      .withExtraBytes(h.extraBytes)
-}
-
-final case class RejectedDeploy(
-    sig: ByteString
-)
-
-object RejectedDeploy {
-  def from(r: RejectedDeployProto): RejectedDeploy =
-    RejectedDeploy(r.sig)
-
-  def toProto(r: RejectedDeploy): RejectedDeployProto =
-    RejectedDeployProto().withSig(r.sig)
-}
-
-final case class Body(
-    state: RChainState,
+final case class RholangState(
     deploys: List[ProcessedDeploy],
-    rejectedDeploys: List[RejectedDeploy],
-    systemDeploys: List[ProcessedSystemDeploy],
-    extraBytes: ByteString = ByteString.EMPTY
+    systemDeploys: List[ProcessedSystemDeploy]
 ) {
-  def toProto: BodyProto = Body.toProto(this)
+  def toProto: RholangStateProto = RholangState.toProto(this)
 }
 
-object Body {
-  def from(b: BodyProto): Either[String, Body] =
+object RholangState {
+  def from(b: RholangStateProto): Either[String, RholangState] =
     for {
-      deploys         <- b.deploys.toList.traverse(ProcessedDeploy.from)
-      systemDeploys   <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
-      rejectedDeploys = b.rejectedDeploys.toList.map(RejectedDeploy.from)
-    } yield Body(RChainState.from(b.state), deploys, rejectedDeploys, systemDeploys, b.extraBytes)
+      deploys       <- b.deploys.toList.traverse(ProcessedDeploy.from)
+      systemDeploys <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
+    } yield RholangState(deploys, systemDeploys)
 
-  def toProto(b: Body): BodyProto =
-    BodyProto()
-      .withState(RChainState.toProto(b.state))
+  def toProto(b: RholangState): RholangStateProto =
+    RholangStateProto()
       .withDeploys(b.deploys.map(ProcessedDeploy.toProto))
-      .withRejectedDeploys(b.rejectedDeploys.map(RejectedDeploy.toProto))
       .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))
-      .withExtraBytes(b.extraBytes)
 
-}
-
-final case class Justification(
-    validator: ByteString,
-    latestBlockHash: ByteString
-) {
-  def toProto: JustificationProto = Justification.toProto(this)
-}
-
-object Justification {
-  def from(j: JustificationProto): Justification = Justification(
-    j.validator,
-    j.latestBlockHash
-  )
-
-  def toProto(j: Justification): JustificationProto =
-    JustificationProto(j.validator, j.latestBlockHash)
-}
-
-final case class RChainState(
-    preStateHash: ByteString,
-    postStateHash: ByteString,
-    bonds: List[Bond],
-    blockNumber: Long
-) {
-  def toProto: RChainStateProto = RChainState.toProto(this)
-}
-
-object RChainState {
-  def from(rchs: RChainStateProto): RChainState =
-    RChainState(
-      rchs.preStateHash,
-      rchs.postStateHash,
-      rchs.bonds.toList.map(Bond.from),
-      rchs.blockNumber
-    )
-
-  def toProto(rchsp: RChainState): RChainStateProto =
-    RChainStateProto()
-      .withPreStateHash(rchsp.preStateHash)
-      .withPostStateHash(rchsp.postStateHash)
-      .withBonds(rchsp.bonds.map(Bond.toProto))
-      .withBlockNumber(rchsp.blockNumber)
 }
 
 final case class ProcessedDeploy(
@@ -532,16 +462,6 @@ object Event {
 
   private def toConsumeEventProto(ce: ConsumeEvent): ConsumeEventProto =
     ConsumeEventProto(ce.channelsHashes, ce.hash, ce.persistent)
-}
-
-final case class Bond(
-    validator: ByteString,
-    stake: Long
-)
-
-object Bond {
-  def from(b: BondProto): Bond    = Bond(b.validator, b.stake)
-  def toProto(b: Bond): BondProto = BondProto(b.validator, b.stake)
 }
 
 // Last finalized state

@@ -51,7 +51,7 @@ object HandleMessages {
   ): F[CommunicationResponse] =
     for {
       _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
-      _ <- ConnectionsCell[F].flatModify(_.removeConnAndReport[F](sender))
+      _ <- ConnectionsCell[F].removeConnAndReport(sender)
       _ <- Metrics[F].incrementCounter("disconnect")
     } yield handledWithoutMessage
 
@@ -70,7 +70,7 @@ object HandleMessages {
   ): F[CommunicationResponse] =
     for {
       _ <- Log[F].debug(s"Received protocol handshake response from $peer.")
-      _ <- ConnectionsCell[F].flatModify(_.addConnAndReport[F](peer))
+      _ <- ConnectionsCell[F].addConnAndReport(peer)
     } yield handledWithoutMessage
 
   def handleProtocolHandshake[F[_]: Monad: TransportLayer: Log: ConnectionsCell: RPConfAsk: Metrics](
@@ -85,7 +85,7 @@ object HandleMessages {
             kp(().pure[F]),
             kp(
               Log[F].info(s"Responded to protocol handshake request from $peer") >>
-                ConnectionsCell[F].flatModify(_.addConnAndReport[F](peer))
+                ConnectionsCell[F].addConnAndReport(peer)
             )
           )
     } yield handledWithoutMessage
@@ -95,6 +95,6 @@ object HandleMessages {
       heartbeat: Heartbeat
   ): F[CommunicationResponse] =
     ConnectionsCell[F]
-      .flatModify(_.refreshConn[F](peer))
+      .update(_.refreshConn(peer))
       .map(kp(handledWithoutMessage))
 }

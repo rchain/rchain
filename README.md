@@ -98,7 +98,7 @@ Evaluating:
 A peer node can be started with the following command (note that `--bootstrap` takes the listening address of `rnode0`):
 
 ```bash
-$ docker run -it --rm --name rnode1 --network rnode-net rchain/rnode:latest run --bootstrap 'rnode://8c775b2143b731a225f039838998ef0fac34ba25@rnode0?protocol=40400&discovery=40404' --allow-private-addresses --host rnode1
+$ docker run -it --rm --name rnode1 --network rnode-net rchain/rnode:latest run --bootstrap 'rnode://8c775b2143b731a225f039838998ef0fac34ba25@rnode0?protocol=40400&discovery=40404' --host rnode1
 [...]
 15:41:41.818 [INFO ] [node-runner-39      ] [coop.rchain.node.NodeRuntime ] - Starting node that will bootstrap from rnode://8c775b2143b731a225f039838998ef0fac34ba25@rnode0?protocol=40400&discovery=40404
 15:57:37.021 [INFO ] [node-runner-32      ] [coop.rchain.comm.rp.Connect$ ] - Peers: 1
@@ -164,9 +164,7 @@ storage {
 }
 
 casper {
-  fault-tolerance-threshold = 1
   shard-name = root
-  finalization-rate = 1
 }
 
 metrics {

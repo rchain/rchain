@@ -124,8 +124,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         implicit val p = peerNodeAsk
         effects.kademliaRPC(
           nodeConf.protocolServer.networkId,
-          nodeConf.protocolClient.networkTimeout,
-          nodeConf.protocolServer.allowPrivateAddresses
+          nodeConf.protocolClient.networkTimeout
         )
       }
 
@@ -158,7 +157,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         routingMessageQueue,
         apiServers,
         casperLoop,
-        updateForkChoiceLoop,
         casperLaunch,
         reportingHTTPRoutes,
         webApi,
@@ -184,7 +182,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         nodeProgram(
           apiServers,
           casperLoop,
-          updateForkChoiceLoop,
           reportingHTTPRoutes,
           webApi,
           adminWebApi,
@@ -219,7 +216,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
   private def nodeProgram(
       apiServers: APIServers,
       casperLoop: CasperLoop[F],
-      updateForkChoiceLoop: CasperLoop[F],
       reportingRoutes: ReportingHttpRoutes[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
@@ -284,7 +280,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
     def waitForFirstConnection: F[Unit] =
       for {
         _ <- time.sleep(1.second)
-        _ <- ConnectionsCell[F].read
+        _ <- ConnectionsCell[F].get
               .map(_.isEmpty)
               .ifM(waitForFirstConnection, ().pure[F])
       } yield ()
@@ -335,8 +331,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           .create[F](proposeRequestsQueue, proposer.get, proposerStateRefOpt.get)
       else fs2.Stream.empty
 
-      updateForkChoiceLoopStream = fs2.Stream.eval(updateForkChoiceLoop).repeat
-
       serverStream = fs2
         .Stream(
           servers.externalApiServer,
@@ -345,8 +339,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           servers.adminHttpServer,
           blockProcessorStream,
           proposerStream,
-          casperLoopStream,
-          updateForkChoiceLoopStream
+          casperLoopStream
         )
         .parJoinUnbounded
 

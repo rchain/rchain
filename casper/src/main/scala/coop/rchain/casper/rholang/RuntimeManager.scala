@@ -13,6 +13,7 @@ import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
@@ -55,11 +56,11 @@ trait RuntimeManager[F[_]] {
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockTime: Long,
       blockNumber: Long,
+      sender: PublicKey,
       shardId: String
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
-  def computeBonds(startHash: StateHash): F[Seq[Bond]]
+  def computeBonds(startHash: StateHash): F[Map[Validator, Long]]
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]]
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]]
   def getContinuation(hash: StateHash)(
@@ -132,7 +133,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       mergeableChs = usrMergeable ++ sysMergeable
 
       // Block data used for mergeable key
-      BlockData(_, _, sender, seqNum) = blockData
+      BlockData(_, sender, seqNum) = blockData
       // Convert from final to diff values and persist mergeable (number) channels for post-state hash
       preStateHash  = startHash.toBlake2b256Hash
       postSTateHash = stateHash.toBlake2b256Hash
@@ -142,12 +143,12 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockTime: Long,
       blockNumber: Long,
+      sender: PublicKey,
       shardId: String
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
     spawnRuntime
-      .flatMap(_.computeGenesis(terms, blockTime, blockNumber, shardId))
+      .flatMap(_.computeGenesis(terms, blockNumber, shardId))
       .flatMap {
         case (preState, stateHash, processed) =>
           val (processedDeploys, mergeableChs, _) =
@@ -157,7 +158,13 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
           val preStateHash  = preState.toBlake2b256Hash
           val postStateHash = stateHash.toBlake2b256Hash
           this
-            .saveMergeableChannels(postStateHash, Array(), seqNum = 0, mergeableChs, preStateHash)
+            .saveMergeableChannels(
+              postStateHash,
+              sender.bytes,
+              seqNum = 0,
+              mergeableChs,
+              preStateHash
+            )
             .as((preState, stateHash, processedDeploys))
       }
 
@@ -180,7 +187,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       EitherT(replayOp).semiflatMap {
         case (stateHash, mergeableChs) =>
           // Block data used for mergeable key
-          val BlockData(_, _, sender, seqNum) = blockData
+          val BlockData(_, sender, seqNum) = blockData
           // Convert from final to diff values and persist mergeable (number) channels for post-state hash
           val preStateHash = startHash.toBlake2b256Hash
           this
@@ -192,7 +199,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
     spawnRuntime.flatMap(_.getActiveValidators(startHash))
 
-  def computeBonds(hash: StateHash): F[Seq[Bond]] =
+  def computeBonds(hash: StateHash): F[Map[Validator, Long]] =
     spawnRuntime.flatMap { runtime =>
       def logError(err: Throwable, details: RetryDetails): F[Unit] = details match {
         case WillDelayAndRetry(_, retriesSoFar: Int, _) =>
@@ -210,7 +217,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       }
 
       //TODO this retry is a temp solution for debugging why this throws `IllegalArgumentException`
-      retryingOnAllErrors[Seq[Bond]](
+      retryingOnAllErrors[Map[Validator, Long]](
         RetryPolicies.limitRetries[F](5),
         onError = logError
       )(runtime.computeBonds(hash))

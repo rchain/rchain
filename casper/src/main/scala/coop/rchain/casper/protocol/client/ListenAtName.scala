@@ -1,8 +1,8 @@
 package coop.rchain.casper.protocol.client
 
+import cats.Id
 import cats.effect.Sync
 import cats.syntax.all._
-import cats.{Id, MonadError}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.rholang.InterpreterUtil
 import coop.rchain.models.{GPrivate, NormalizerEnv, Par}
@@ -20,7 +20,7 @@ object ListenAtName {
 
   private def buildPar[G[_]: BuildPar](name: G[Name]) = implicitly[BuildPar[G]].build(name)
 
-  implicit def buildParF[F[_]: MonadError[*[_], Throwable]] = new BuildPar[λ[A => F[Id[A]]]] {
+  implicit def buildParF[F[_]: Sync] = new BuildPar[λ[A => F[Id[A]]]] {
     override def build(f: F[Name]) =
       for {
         name <- f
@@ -28,24 +28,24 @@ object ListenAtName {
       } yield res
   }
 
-  implicit def buildParListF[F[_]: MonadError[*[_], Throwable]] =
+  implicit def buildParListF[F[_]: Sync] =
     new BuildPar[λ[A => F[List[A]]]] {
       override def build(f: F[List[Name]]): F[List[Par]] =
         f.flatMap(_.traverse(buildParId[F]))
     }
 
-  private def buildParId[F[_]: MonadError[*[_], Throwable]](name: Name): F[Par] = {
+  private def buildParId[F[_]: Sync](name: Name): F[Par] = {
     import coop.rchain.models.rholang.implicits._
 
-    val par: Either[Throwable, Par] = name match {
+    name match {
       case PubName(content) =>
         InterpreterUtil.mkTerm(content, NormalizerEnv.Empty)
       case PrivName(content) =>
-        val par: Par = content.getBytes.toParUnforgeableName
-        Right(par)
+        Sync[F].delay {
+          val par: Par = content.getBytes.toParUnforgeableName
+          par
+        }
     }
-
-    MonadError[F, Throwable].fromEither(par)
   }
 
   private def applyUntil[A, F[_]: Sync: Time](retrieve: F[A])(breakCond: A => Boolean): F[A] = {

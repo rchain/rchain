@@ -32,6 +32,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
@@ -178,7 +179,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
         val deployIdCh = DeployId(deployId.toByteArray)
         for {
           block     <- BlockStore[F].getUnsafe(blockHash)
-          deployOpt = block.body.deploys.find(_.deploy.sig == deployId)
+          deployOpt = block.state.deploys.find(_.deploy.sig == deployId)
           deploy <- deployOpt.liftTo {
                      val blockHashStr = PrettyPrinter.buildString(blockHash)
                      val deploySigStr = PrettyPrinter.buildString(deployId)
@@ -382,7 +383,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   ): F[Option[DataWithBlockInfo]] =
     // TODO: For Produce it doesn't make sense to have multiple names
     if (isListeningNameReduced(block, Seq(sortedListeningName))) {
-      val stateHash = ProtoUtil.postStateHash(block)
+      val stateHash = block.postStateHash
       for {
         data      <- RuntimeManager[F].getData(stateHash)(sortedListeningName)
         blockInfo = getLightBlockInfo(block)
@@ -396,7 +397,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       block: BlockMessage
   ): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
-      val stateHash = ProtoUtil.postStateHash(block)
+      val stateHash = block.postStateHash
       for {
         continuations <- RuntimeManager[F].getContinuation(stateHash)(sortedListeningNames)
         continuationInfos = continuations.map(
@@ -414,7 +415,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       block: BlockMessage,
       sortedListeningName: Seq[Par]
   ): Boolean = {
-    val eventLog = block.body.deploys.flatMap(_.deployLog).map(EventConverter.toRspaceEvent)
+    val eventLog = block.state.deploys.flatMap(_.deployLog).map(EventConverter.toRspaceEvent)
     eventLog.exists {
       case Produce(channelHash, _, _) =>
         assert(sortedListeningName.size == 1, "Produce can have only one channel")
@@ -500,7 +501,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
   override def machineVerifiableDag(depth: Int): F[ApiErr[String]] =
     toposortDag[String](depth, maxDepthLimit) { topoSort =>
       val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
-        BlockStore[F].getUnsafe(blockHash) map (_.header.parentsHashList)
+        BlockStore[F].getUnsafe(blockHash) map (_.justifications)
       }
 
       MachineVerifiableDag[F](topoSort, fetchParents)
@@ -599,9 +600,9 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     for {
       dag                <- BlockDagStorage[F].getRepresentation
       lastFinalizedBlock <- dag.lastFinalizedBlockUnsafe.flatMap(BlockStore[F].getUnsafe)
-      postStateHash      = ProtoUtil.postStateHash(targetBlock.getOrElse(lastFinalizedBlock))
+      postStateHash      = targetBlock.getOrElse(lastFinalizedBlock).postStateHash
       bonds              <- RuntimeManager[F].computeBonds(postStateHash)
-      validatorBondOpt   = bonds.find(_.validator == publicKey)
+      validatorBondOpt   = bonds.get(publicKey)
     } yield validatorBondOpt.isDefined.asRight[Error]
 
   /**
@@ -636,8 +637,8 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
                         } yield block
         res <- targetBlock.traverse(b => {
                 val postStateHash =
-                  if (usePreStateHash) ProtoUtil.preStateHash(b)
-                  else ProtoUtil.postStateHash(b)
+                  if (usePreStateHash) b.preStateHash
+                  else b.postStateHash
                 for {
                   res            <- RuntimeManager[F].playExploratoryDeploy(term, postStateHash)
                   lightBlockInfo = getLightBlockInfo(b)
@@ -654,10 +655,17 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
 
   override def getLatestMessage: F[ApiErr[BlockMetadata]] =
     for {
-      validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
-      dag              <- BlockDagStorage[F].getRepresentation
-      latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
-      latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
+      dag            <- BlockDagStorage[F].getRepresentation
+      validator      <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
+      validatorBytes = ByteString.copyFrom(validator.publicKey.bytes)
+      // TODO: return list of latest messages for a validator
+      //  - this is possible with invalid blocks
+      latestMessageOpt <- dag.dagMessageState.latestMsgs
+                           .filter(_.sender == validatorBytes)
+                           .map(_.id)
+                           .headOption
+                           .traverse(BlockDagStorage[F].lookupUnsafe(_))
+      latestMessage <- latestMessageOpt.liftTo[F](NoBlockMessageError)
     } yield latestMessage.asRight[Error]
 
   override def getDataAtPar(
@@ -685,8 +693,8 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     for {
       block     <- BlockStore[F].getUnsafe(blockHash)
       sortedPar <- parSortable.sortMatch[F](par).map(_.term)
-      stateHash = if (usePreStateHash) block.body.state.preStateHash
-      else block.body.state.postStateHash
+      stateHash = if (usePreStateHash) block.preStateHash
+      else block.postStateHash
       data <- RuntimeManager[F].getData(stateHash)(sortedPar)
       lbi  = getLightBlockInfo(block)
     } yield (data, lbi)

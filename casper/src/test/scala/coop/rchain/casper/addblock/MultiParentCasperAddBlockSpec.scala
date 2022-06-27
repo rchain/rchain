@@ -3,7 +3,6 @@ package coop.rchain.casper.addblock
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer.NoNewDeploys
 import coop.rchain.casper.helper.TestNode._
@@ -11,9 +10,9 @@ import coop.rchain.casper.helper.{BlockUtil, TestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.PCost
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.models.syntax._
@@ -21,8 +20,8 @@ import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable
@@ -208,27 +207,6 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
   }
    */
 
-  it should "reject blocks not from bonded validators" ignore effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      implicit val timeEff = new LogicalTime[Effect]
-      implicit val bds     = node.blockDagStorage
-
-      for {
-        basicDeployData  <- ConstructDeploy.basicDeployData[Effect](0)
-        block            <- node.createBlockUnsafe(basicDeployData)
-        dag              <- node.blockDagStorage.getRepresentation
-        (sk, pk)         = Secp256k1.newKeyPair
-        validatorId      = ValidatorIdentity(sk)
-        sender           = ByteString.copyFrom(pk.bytes)
-        latestMessageOpt <- dag.latestMessage(sender)
-        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        illSignedBlock = validatorId
-          .signBlock(block)
-        status <- node.addBlock(illSignedBlock)
-      } yield (status shouldBe Left(InvalidSender))
-    }
-  }
-
   it should "propose blocks it adds to peers" in effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
@@ -246,7 +224,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         signedBlock1Prime     <- nodes(0).publishBlock(deployData)(nodes: _*)
         _                     <- nodes(1).syncWith(nodes(0)) // should receive BlockMessage here
         maybeHash             <- nodes(1).blockStore.get1(signedBlock1Prime.blockHash)
-        noMoreRequestedBlocks <- nodes(1).requestedBlocks.get.map(!_.exists(_._2.received == false))
+        noMoreRequestedBlocks <- nodes(1).requestedBlocks.get.map(_.isEmpty)
       } yield {
         maybeHash shouldBe Some(signedBlock1Prime)
         noMoreRequestedBlocks shouldBe true
@@ -395,7 +373,6 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         ) // Invalid seq num
 
         blockWithInvalidJustification <- buildBlockWithInvalidJustification(
-                                          nodes,
                                           deploysWithCost,
                                           signedInvalidBlock
                                         )
@@ -418,10 +395,8 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
     }
   }
 
-  it should "estimate parent properly" in effectTest {
-
-    val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
-    val (_, validatorPks) = validatorKeyPairs.unzip
+  // TODO: ignored when parents are removed from BlockMessage
+  it should "estimate parent properly" ignore effectTest {
 
     def deployment(ts: Long) =
       ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts, shardId = SHARD_ID)
@@ -438,45 +413,31 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         node.addBlock(signed)
       )
 
-    TestNode
-      .networkEff(
-        buildGenesis(
-          buildGenesisParameters(
-            validatorKeyPairs,
-            Map(
-              validatorPks(0) -> 3L,
-              validatorPks(1) -> 1L,
-              validatorPks(2) -> 5L,
-              validatorPks(3) -> 2L,
-              validatorPks(4) -> 4L
-            )
-          )
-        ),
-        networkSize = 3
-      )
-      .map(_.toList)
-      .use { nodes =>
-        val v1 = nodes(0)
-        val v2 = nodes(1)
-        val v3 = nodes(2)
-        for {
-          _    <- v1.deploy(deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
-          v2c1 <- v2.deploy(deployment(2)) >> create(v2) //V2#1
-          _    <- v2.handleReceive()
-          _    <- v3.handleReceive()
-          _    <- v1.deploy(deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
-          v3c2 <- v3.deploy(deployment(5)) >> create(v3) //V3#2
-          _    <- v3.handleReceive()
-          _    <- add(v3, v3c2) //V3#2
-          _    <- add(v2, v2c1) //V2#1
-          _    <- v3.handleReceive()
-          r    <- v3.deploy(deployment(6)) >> create(v3) >>= (b => add(v3, b))
-          _    = r shouldBe Right(Right(Valid))
-        } yield ()
-      }
+    val genesis = buildGenesis(buildGenesisParametersFromBonds(List(3L, 1L, 5L, 2L, 4L)))
+
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+      val v1 = nodes(0)
+      val v2 = nodes(1)
+      val v3 = nodes(2)
+      for {
+        _    <- v1.deploy(deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
+        v2c1 <- v2.deploy(deployment(2)) >> create(v2) //V2#1
+        _    <- v2.handleReceive()
+        _    <- v3.handleReceive()
+        _    <- v1.deploy(deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
+        v3c2 <- v3.deploy(deployment(5)) >> create(v3) //V3#2
+        _    <- v3.handleReceive()
+        _    <- add(v3, v3c2) //V3#2
+        _    <- add(v2, v2c1) //V2#1
+        _    <- v3.handleReceive()
+        r    <- v3.deploy(deployment(6)) >> create(v3) >>= (b => add(v3, b))
+        _    = r shouldBe Right(Right(Valid))
+      } yield ()
+    }
   }
 
-  it should "succeed at slashing" in effectTest {
+  // TODO: ignored until support is for invalid block is implemented
+  it should "succeed at slashing" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployData <- ConstructDeploy
@@ -488,8 +449,8 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         status2       <- nodes(2).addBlock(invalidSigned)
         signedBlock2  <- nodes(1).createBlockUnsafe()
         status3       <- nodes(1).addBlock(signedBlock2)
-        bonds         <- nodes(1).runtimeManager.computeBonds(ProtoUtil.postStateHash(signedBlock2))
-        _             = bonds.map(_.stake).min should be(0) // Slashed validator has 0 stake
+        bonds         <- nodes(1).runtimeManager.computeBonds(signedBlock2.postStateHash)
+        _             = bonds.map { case (_, stake) => stake }.min should be(0) // Slashed validator has 0 stake
         _             <- nodes(2).handleReceive()
         signedBlock3  <- nodes(2).createBlockUnsafe()
         status4       <- nodes(2).addBlock(signedBlock3)
@@ -504,49 +465,34 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
   }
 
   private def buildBlockWithInvalidJustification(
-      nodes: IndexedSeq[TestNode[Effect]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
-    val postState: RChainState =
-      RChainState(
-        preStateHash = ByteString.EMPTY,
-        postStateHash = ByteString.EMPTY,
-        bonds = ProtoUtil.bonds(genesis.genesisBlock).toList,
-        blockNumber = 1
-      )
-    val header = Header(
-      parentsHashList = signedInvalidBlock.header.parentsHashList,
-      timestamp = 0L,
-      version = 0L
-    )
-    val blockHash = Blake2b256.hash(header.toProto.toByteArray)
-    val body      = Body(postState, deploys.toList, List.empty, List.empty)
-    val serializedJustifications =
-      List(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
-    val serializedBlockHash = ByteString.copyFrom(blockHash)
+    val blockHash                = ProtoUtil.hashBlock(signedInvalidBlock)
+    val state                    = RholangState(deploys.toList, List.empty)
+    val serializedJustifications = List(signedInvalidBlock.blockHash)
+    val serializedBlockHash      = blockHash
     val blockThatPointsToInvalidBlock =
       BlockMessage(
+        version = 0,
+        shardId = "root",
         serializedBlockHash,
-        header,
-        body,
-        serializedJustifications,
+        blockNumber = 1,
         sender = ByteString.EMPTY,
         seqNum = 0,
-        sig = ByteString.EMPTY,
+        preStateHash = ByteString.EMPTY,
+        postStateHash = ByteString.EMPTY,
+        serializedJustifications,
+        bonds = genesis.genesisBlock.bonds,
+        rejectedDeploys = List.empty,
+        state,
         sigAlgorithm = "",
-        shardId = "root"
+        sig = ByteString.EMPTY
       )
-    nodes(1).blockDagStorage.getRepresentation.flatMap { dag =>
-      val sender       = blockThatPointsToInvalidBlock.sender
-      implicit val bds = nodes(1).blockDagStorage
-      for {
-        latestMessageOpt <- dag.latestMessage(sender)
-        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        block = ValidatorIdentity(defaultValidatorSks(1)).signBlock(
-          blockThatPointsToInvalidBlock
-        )
-      } yield block
-    }
+    ValidatorIdentity(randomValidatorSks(1))
+      .signBlock(
+        blockThatPointsToInvalidBlock
+      )
+      .pure[Task]
   }
 }

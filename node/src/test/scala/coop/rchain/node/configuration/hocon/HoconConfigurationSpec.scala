@@ -47,7 +47,6 @@ class HoconConfigurationSpec extends AnyFunSuite with Matchers {
       protocolServer = ProtocolServer(
         networkId = "testnet",
         host = None,
-        allowPrivateAddresses = false,
         useRandomPorts = false,
         dynamicIp = false,
         noUpnp = false,
@@ -105,16 +104,13 @@ class HoconConfigurationSpec extends AnyFunSuite with Matchers {
         customKeyLocation = false
       ),
       casper = CasperConf(
-        faultToleranceThreshold = 0,
         validatorPublicKey = None,
         validatorPrivateKey = None,
         validatorPrivateKeyPath = None,
         shardName = "root",
         casperLoopInterval = 30.seconds,
         requestedBlocksTimeout = 240.seconds,
-        finalizationRate = 1,
         maxNumberOfParents = 2147483647,
-        maxParentDepth = Some(2147483647),
         forkChoiceStaleThreshold = 10.minutes,
         forkChoiceCheckIfStaleInterval = 11.minutes,
         synchronyConstraintThreshold = 0.67,

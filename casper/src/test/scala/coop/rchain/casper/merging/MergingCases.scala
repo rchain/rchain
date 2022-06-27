@@ -37,7 +37,7 @@ class MergingCases extends AnyFlatSpec with Matchers {
     mergeableTag = Genesis.nonNegativeMergeableTagName(
       genesis.shardId,
       PublicKey(genesis.sender),
-      genesis.body.state.blockNumber
+      genesis.blockNumber
     )
     rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
   } yield rm
@@ -50,11 +50,11 @@ class MergingCases extends AnyFlatSpec with Matchers {
   "Two deploys executed inside single state transition" should "be dependent" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       {
-        val baseState              = genesis.body.state.postStateHash
+        val baseState              = genesis.postStateHash
         val payer1Key              = genesisContext.genesisVaults.head._1
         val payer2Key              = genesisContext.genesisVaults.tail.head._1
         val stateTransitionCreator = genesisContext.validatorKeyPairs.head._2
-        val seqNum                 = 1
+        val seqNum                 = 1L
         val blockNum               = 1L
 
         for {
@@ -62,7 +62,6 @@ class MergingCases extends AnyFlatSpec with Matchers {
           d2          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer2Key)
           userDeploys = Seq(d1, d2)
           blockData = BlockData(
-            d1.data.timestamp,
             blockNum,
             stateTransitionCreator,
             seqNum

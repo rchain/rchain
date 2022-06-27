@@ -133,17 +133,17 @@ trait ComputeMerge {
             bBlock = getRandomBlock(
               setPreStateHash = RuntimeManager.emptyStateHashFixed.some,
               setPostStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
-              setParentsHashList = List.empty.some
+              setJustifications = List.empty.some
             )
             rBlock = getRandomBlock(
               setPreStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
               setPostStateHash = ByteString.copyFrom(rightCheckpoint.root.bytes.toArray).some,
-              setParentsHashList = List(bBlock.blockHash).some
+              setJustifications = List(bBlock.blockHash).some
             )
             lBlock = getRandomBlock(
               setPreStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
               setPostStateHash = ByteString.copyFrom(leftCheckpoint.root.bytes.toArray).some,
-              setParentsHashList = List(bBlock.blockHash).some
+              setJustifications = List(bBlock.blockHash).some
             )
             _   <- dagStore.insert(bBlock, false, approved = true)
             _   <- dagStore.insert(lBlock, false)
@@ -172,7 +172,7 @@ trait ComputeMerge {
               implicit val bds = dagStore
               DagMerger.merge[F](
                 dag,
-                bBlock.blockHash,
+                Seq(bBlock.blockHash),
                 baseCheckpoint.root,
                 indices(_).deployChains.pure[F],
                 historyRepo,

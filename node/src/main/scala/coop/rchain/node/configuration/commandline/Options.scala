@@ -361,11 +361,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Name of the shard this node is connected to."
     )
 
-    val faultToleranceThreshold = opt[Float](
-      descr = "Float value representing that the node tolerates up " +
-        "to fault-tolerance-threshold fraction of the total weight to equivocate."
-    )
-
     val validatorPublicKey = opt[String](
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
         "Can be inferred from the private key for some signature algorithms."
@@ -391,16 +386,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Timeout for blocks requests"
     )
 
-    val finalizationRate = opt[Int](
-      descr = "Finalization is called every `n` blocks."
-    )
-
     val maxNumberOfParents = opt[Int](
       descr = "Maximum number of block parents."
-    )
-
-    val maxParentDepth = opt[Int](
-      descr = "Maximum depth of block parents."
     )
 
     val forkChoiceStaleThreshold = opt[FiniteDuration](

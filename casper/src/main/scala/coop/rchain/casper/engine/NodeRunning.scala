@@ -19,10 +19,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{EventLog, EventPublisher, Log, Time}
-import fs2.Stream
 import fs2.concurrent.Queue
-
-import scala.concurrent.duration._
 
 object NodeRunning {
 
@@ -59,42 +56,6 @@ object NodeRunning {
   final case class IgnoreCasperMessageStatus(doIgnore: Boolean, status: CasperMessageStatus)
 
   /**
-    * As we introduced synchrony constraint - there might be situation when node is stuck.
-    * As an edge case with `sync = 0.99`, if node misses the block that is the last one to meet sync constraint,
-    * it has no way to request it after it was broadcasted. So it will never meet synchrony constraint.
-    * To mitigate this issue we can update fork choice tips if current fork-choice tip has old timestamp,
-    * which means node does not propose new blocks and no new blocks were received recently.
-    */
-  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: BlockDagStorage](
-      delayThreshold: FiniteDuration
-  ): F[Unit] =
-    for {
-      dag            <- BlockDagStorage[F].getRepresentation
-      latestMessages <- dag.latestMessageHashes.map(_.values.toSet)
-      now            <- Time[F].currentMillis
-      hasRecentLatestMessage = Stream
-        .fromIterator(latestMessages.iterator)
-        .evalMap(BlockStore[F].getUnsafe)
-        // filter only blocks that are recent
-        .filter { b =>
-          val blockTimestamp = b.header.timestamp
-          (now - blockTimestamp) < delayThreshold.toMillis
-        }
-        .head
-        .compile
-        .last
-        .map(_.isDefined)
-      stuck <- hasRecentLatestMessage.not
-      requestWithLog = Log[F].info(
-        "Requesting tips update as newest latest message " +
-          s"is more then ${delayThreshold.toString} old. " +
-          s"Might be network is faulty."
-      ) >> CommUtil[F].sendForkChoiceTipRequest
-
-      _ <- requestWithLog.whenA(stuck)
-    } yield ()
-
-  /**
     * Peer broadcasted block hash.
     */
   def handleBlockHashMessage[F[_]: Monad: BlockRetriever: Log](
@@ -125,21 +86,20 @@ object NodeRunning {
     */
   def handleHasBlockMessage[F[_]: Monad: BlockRetriever: Log](
       peer: PeerNode,
-      hb: HasBlock
+      blockHash: BlockHash
   )(
       ignoreMessageF: BlockHash => F[Boolean]
   ): F[Unit] = {
-    val h = hb.hash
     def logIgnore = Log[F].debug(
-      s"Ignoring ${PrettyPrinter.buildString(h)} HasBlockMessage"
+      s"Ignoring ${PrettyPrinter.buildString(blockHash)} HasBlockMessage"
     )
     val logProcess = Log[F].debug(
-      s"Incoming HasBlockMessage ${PrettyPrinter.buildString(h)} from ${peer.endpoint.host}"
+      s"Incoming HasBlockMessage ${PrettyPrinter.buildString(blockHash)} from ${peer.endpoint.host}"
     )
     val processHash =
-      BlockRetriever[F].admitHash(h, peer.some, BlockRetriever.HasBlockMessageReceived)
+      BlockRetriever[F].admitHash(blockHash, peer.some, BlockRetriever.HasBlockMessageReceived)
 
-    ignoreMessageF(h).ifM(
+    ignoreMessageF(blockHash).ifM(
       logIgnore,
       logProcess >> processHash.void
     )
@@ -196,8 +156,8 @@ object NodeRunning {
       Log[F].info(
         s"Sending tips ${PrettyPrinter.buildString(tips)} to ${peer.endpoint.host}"
       )
-    val getTips = BlockDagStorage[F].getRepresentation
-      .flatMap(_.latestMessageHashes.map(_.values.toList.distinct))
+    val getTips =
+      BlockDagStorage[F].getRepresentation.map(_.dagMessageState.latestMsgs.map(_.id).toList)
     // TODO respond with all tips in a single message
     def respondToPeer(tip: BlockHash) = TransportLayer[F].sendToPeer(peer, HasBlockProto(tip))
 
@@ -207,17 +167,15 @@ object NodeRunning {
   }
 
   /**
-    * Peer asks for ApprovedBlock
+    * Peer asks for FinalizedFringe
     */
-  def handleApprovedBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: Log](
+  def handleFinalizedFringeRequest[F[_]: Monad: TransportLayer: RPConfAsk: Log](
       peer: PeerNode,
-      approvedBlock: ApprovedBlock
+      finalizedFringe: FinalizedFringe
   ): F[Unit] =
-    Log[F].info(s"Received ApprovedBlockRequest from ${peer}") >>
-      TransportLayer[F].streamToPeer(peer, approvedBlock.toProto) >>
-      Log[F].info(s"ApprovedBlock sent to ${peer}")
-  final case object LastFinalizedBlockNotFoundError
-      extends Exception("Last finalized block not found in the block storage.")
+    Log[F].info(s"Received FinalizedFringeRequest from ${peer}") >>
+      TransportLayer[F].streamToPeer(peer, finalizedFringe.toProto) >>
+      Log[F].info(s"FinalizedFringe sent to ${peer}")
 
   private def handleStateItemsMessageRequest[F[_]: Sync: TransportLayer: RPConfAsk: RSpaceStateManager: Log](
       peer: PeerNode,
@@ -308,34 +266,29 @@ class NodeRunning[F[_]
         dag <- BlockDagStorage[F].getRepresentation
         res <- handleHasBlockRequest(peer, hbr)(dag.contains(_).pure[F])
       } yield res
-    case hb: HasBlock => handleHasBlockMessage(peer, hb)(checkBlockReceived)
+    case HasBlock(blockHash) => handleHasBlockMessage(peer, blockHash)(checkBlockReceived)
 
-    case _: ForkChoiceTipRequest.type => handleForkChoiceTipRequest(peer)
+    case ForkChoiceTipRequest => handleForkChoiceTipRequest(peer)
 
-    case abr: ApprovedBlockRequest =>
+    case FinalizedFringeRequest(_, _) =>
       for {
-        lfBlockHash <- BlockDagStorage[F].getRepresentation.flatMap(_.lastFinalizedBlockUnsafe)
+        dag <- BlockDagStorage[F].getRepresentation
 
-        // Create approved block from last finalized block
-        lastFinalizedBlock = for {
-          lfBlock           <- BlockStore[F].getUnsafe(lfBlockHash)
-          lastApprovedBlock = ApprovedBlock(lfBlock)
-        } yield lastApprovedBlock
+        // Respond with latest finalized fringe
+        // TODO: optimize response to read from cache
+        latestFringeHashes         = dag.dagMessageState.latestFringe.map(_.id)
+        (latestFringeStateHash, _) = dag.fringeStates(latestFringeHashes)
+        fringeResponse = FinalizedFringe(
+          latestFringeHashes.toList,
+          latestFringeStateHash.toByteString
+        )
 
-        // TODO: fix finalized block depending if trim state requested
-        approvedBlock <- if (abr.trimState)
-                          // If Last Finalized State is requested return Last Finalized block as Approved block
-                          lastFinalizedBlock
-                        else
-                          // Respond with approved block that this node is started from.
-                          // The very first one is genesis, but this node still might start from later block,
-                          // so it will not necessary be genesis.
-                          lastFinalizedBlock
+        _ <- handleFinalizedFringeRequest(peer, fringeResponse)
 
-        _ <- handleApprovedBlockRequest(peer, approvedBlock)
+        fringeStr      = PrettyPrinter.buildString(fringeResponse.hashes)
+        fringeStateStr = PrettyPrinter.buildString(latestFringeStateHash.toByteString)
+        _              <- Log[F].info(s"Sent fringe response ($fringeStateStr) $fringeStr.")
       } yield ()
-
-    case na: NoApprovedBlockAvailable => NodeSyncing.logNoApprovedBlockAvailable(na.nodeIdentifer)
 
     // Approved state store records
     case StoreItemsMessageRequest(startPath, skip, take) =>

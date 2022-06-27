@@ -6,20 +6,22 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.{RuntimeManager, Tools}
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
-import coop.rchain.casper.util.Sorting.byteArrayOrdering
-import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
+import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PublicKey
+import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.models.{GPrivate, Par}
+import coop.rchain.models.Par
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.models.BlockVersion
 
 final case class Genesis(
+    sender: PublicKey,
     shardId: String,
-    blockTimestamp: Long,
     blockNumber: Long,
     proofOfStake: ProofOfStake,
     registry: Registry,
@@ -91,58 +93,70 @@ object Genesis {
       StandardDeploys.poSGenerator(posParams, shardId)
   }
 
-  def createGenesisBlock[F[_]: Concurrent: RuntimeManager](genesis: Genesis): F[BlockMessage] = {
-    import genesis._
-
-    val blessedTerms = defaultBlessedTerms(proofOfStake, registry, vaults, genesis.shardId)
+  def createGenesisBlock[F[_]: Concurrent: RuntimeManager](
+      validator: ValidatorIdentity,
+      genesis: Genesis
+  ): F[BlockMessage] = {
+    val blessedTerms =
+      defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
 
     RuntimeManager[F]
-      .computeGenesis(blessedTerms, blockTimestamp, genesis.blockNumber, genesis.shardId)
+      .computeGenesis(blessedTerms, genesis.blockNumber, genesis.sender, genesis.shardId)
       .map {
         case (startHash, stateHash, processedDeploys) =>
-          createProcessedDeploy(genesis, startHash, stateHash, processedDeploys)
+          val unsignedBlock =
+            createBlockWithProcessedDeploys(genesis, startHash, stateHash, processedDeploys)
+          // Sign a block (hash should not be changed)
+          val signedBlock = validator.signBlock(unsignedBlock)
+
+          // This check is temporary until signing function will re-hash the block
+          val unsignedHash = PrettyPrinter.buildString(unsignedBlock.blockHash)
+          val signedHash   = PrettyPrinter.buildString(signedBlock.blockHash)
+          assert(
+            unsignedBlock.blockHash == signedBlock.blockHash,
+            s"Signed block has different block hash unsigned: $unsignedHash, signed: $signedHash."
+          )
+
+          // Return signed genesis block
+          signedBlock
       }
   }
 
-  private def createProcessedDeploy(
+  private def createBlockWithProcessedDeploys(
       genesis: Genesis,
-      startHash: StateHash,
-      stateHash: StateHash,
+      preStateHash: StateHash,
+      postStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
   ): BlockMessage = {
-    import genesis._
+    // Ensure that all deploys are successfully executed
+    assert(processedDeploys.forall(!_.isFailed), s"Genesis block contains failed deploys.")
 
-    val state = RChainState(
-      preStateHash = startHash,
-      postStateHash = stateHash,
-      blockNumber = genesis.blockNumber,
-      bonds = bondsProto(proofOfStake).toList
-    )
+    val state   = RholangState(deploys = processedDeploys.toList, systemDeploys = List.empty)
+    val version = BlockVersion.Current
+    val seqNum  = 0L
 
-    //FIXME any failures here should terminate the genesis ceremony
-    val blockDeploys = processedDeploys.filterNot(_.isFailed)
-    val sortedDeploys =
-      blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
-    val body = Body(
-      state = state,
-      deploys = sortedDeploys.toList,
+    // Return unsigned block with calculated hash
+    unsignedBlockProto(
+      version,
+      genesis.shardId,
+      genesis.blockNumber,
+      genesis.sender,
+      seqNum,
+      preStateHash = preStateHash,
+      postStateHash = postStateHash,
+      justifications = List.empty,
+      bonds = buildBondsMap(genesis.proofOfStake),
       rejectedDeploys = List.empty,
-      systemDeploys = List.empty
+      state = state
     )
-    val version = 1L //FIXME make this part of Genesis, and pass it from upstream
-    val header  = blockHeader(List.empty[StateHash], version, blockTimestamp)
-
-    unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
 
-  private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {
+  private def buildBondsMap(proofOfStake: ProofOfStake): Map[StateHash, Long] = {
     val bonds = proofOfStake.validators.flatMap(Validator.unapply).toMap
-    import coop.rchain.crypto.util.Sorting.publicKeyOrdering
-    //sort to have deterministic order (to get reproducible hash)
-    bonds.toIndexedSeq.sorted.map {
+    bonds.map {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk.bytes)
-        Bond(validator, stake)
+        (validator, stake)
     }
   }
 }

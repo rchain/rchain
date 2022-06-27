@@ -82,7 +82,7 @@ class DeployIdTest extends AnyFlatSpec with Matchers {
       for {
         block <- node.addBlock(contract)
         result <- node.runtimeManager.spawnRuntime >>= {
-                   _.captureResults(ProtoUtil.postStateHash(block), contractCall)
+                   _.captureResults(block.postStateHash, contractCall)
                  }
         _ = assert(result.size == 1)
         _ = assert(result.head == (GBool(false): Par))

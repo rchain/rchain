@@ -371,7 +371,7 @@ in {
                     getUser!(deployerId, *userCh) |
                     for (@state, resultCh   <- processCh &
                         @userPk            <- userCh &
-                        @blockNumber, _, _ <- blockDataCh) {
+                        @blockNumber, _ <- blockDataCh) {
                       if (state.get("allBonds").contains(userPk)) {
                         // The withdrawal goes into effect at the start of the next epoch.
                         resultCh!(
@@ -513,7 +513,7 @@ in {
                         if (isValid) {
                           new blockDataCh, getBlockData(`rho:block:data`) in {
                             getBlockData!(*blockDataCh) |
-                            for (@blockNumber, _, _ <- blockDataCh) {
+                            for (@blockNumber, _ <- blockDataCh) {
                               if (blockNumber % $$epochLength$$ != 0) {
                                 // Epoch change does not occur.
                                 ackCh!((true, Nil))

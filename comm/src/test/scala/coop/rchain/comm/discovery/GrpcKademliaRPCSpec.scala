@@ -37,7 +37,7 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
         def ask: Task[PeerNode]            = Task.pure(env.peer)
       }
     Task.delay {
-      new GrpcKademliaRPC(networkId, 500.millis, true)
+      new GrpcKademliaRPC(networkId, 500.millis)
     }
   }
 
