@@ -19,7 +19,7 @@ import org.bouncycastle.asn1.{
 import org.bouncycastle.util.BigIntegers
 
 import scala.io.Source
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Try, Using}
 
 object CertificateHelper {
 
@@ -53,15 +53,15 @@ object CertificateHelper {
   def publicAddress(input: Array[Byte]): Array[Byte] =
     Keccak256.hash(input).drop(12)
 
-  def from(certFilePath: String): X509Certificate =
+  def from(certFilePath: String): Try[X509Certificate] =
     fromFile(new File(certFilePath))
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-  def fromFile(certFile: File): X509Certificate = {
-    val cf = CertificateFactory.getInstance("X.509")
-    val is = new FileInputStream(certFile)
-    cf.generateCertificate(is).asInstanceOf[X509Certificate]
-  }
+  def fromFile(certFile: File): Try[X509Certificate] =
+    Using(new FileInputStream(certFile)) { file =>
+      val cf = CertificateFactory.getInstance("X.509")
+      cf.generateCertificate(file).asInstanceOf[X509Certificate]
+    }
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def readKeyPair(keyFile: File): KeyPair = {
