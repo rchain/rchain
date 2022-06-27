@@ -51,7 +51,6 @@ object Main {
     )
     implicit val console: ConsoleIO[Task] = consoleIO
     implicit val log: Log[Task]           = effects.log
-    implicit val eventLog: EventLog[Task] = EventLog.eventLogger
 
     // Ensure terminal is restored on exit
     sys.addShutdownHook {
@@ -73,7 +72,7 @@ object Main {
     * Starts RNode instance
     * @param options command line options
     */
-  private def startNode[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log: EventLog](
+  private def startNode[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log](
       options: commandline.Options
   )(implicit s: Scheduler): F[Unit] = Sync[F].defer {
     // Create merged configuration from CLI options and config file

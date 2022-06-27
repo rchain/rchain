@@ -37,7 +37,7 @@ object NodeLaunch {
     /* State */       : RPConfAsk: ConnectionsCell
     /* Rholang */     : RuntimeManager
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
-    /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+    /* Diagnostics */ : Log: Metrics: Span] // format: on
   (
       packets: Stream[F, PeerMessage],
       incomingBlocksQueue: Queue[F, BlockMessage],

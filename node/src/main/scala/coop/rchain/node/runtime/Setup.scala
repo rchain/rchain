@@ -49,7 +49,7 @@ import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
 object Setup {
-  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
+  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: Metrics: NodeDiscovery](
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       commUtil: CommUtil[F],

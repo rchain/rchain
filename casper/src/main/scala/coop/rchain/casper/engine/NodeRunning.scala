@@ -18,7 +18,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{EventLog, EventPublisher, Log, Time}
+import coop.rchain.shared.{EventPublisher, Log, Time}
 import fs2.concurrent.Queue
 
 object NodeRunning {
@@ -29,7 +29,7 @@ object NodeRunning {
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : RPConfAsk: ConnectionsCell
   /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager
-  /* Diagnostics */ : Log: EventLog: Metrics] // format: on
+  /* Diagnostics */ : Log: Metrics] // format: on
   (
       blockProcessingQueue: Queue[F, BlockMessage],
       validatorId: Option[ValidatorIdentity],

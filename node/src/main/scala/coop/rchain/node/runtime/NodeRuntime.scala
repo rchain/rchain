@@ -40,7 +40,7 @@ import monix.execution.Scheduler
 import scala.concurrent.duration._
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShift: LocalEnvironment: Log: EventLog] private[node] (
+class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShift: LocalEnvironment: Log] private[node] (
     nodeConf: NodeConf,
     kamonConf: Config,
     id: NodeIdentifier,
@@ -303,9 +303,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                   kamonConf,
                   grpcScheduler
                 )
-      //_ <- addShutdownHook(servers, runtimeCleanup, blockStore)
-
-      _ <- EventLog[F].publish(Event.NodeStarted(address))
 
       nodeDiscoveryStream    = fs2.Stream.eval(nodeDiscoveryLoop).repeat
       clearConnectionsStream = fs2.Stream.eval(clearConnectionsLoop).repeat
@@ -394,7 +391,7 @@ object NodeRuntime {
   type CasperLoop[F[_]] = F[Unit]
   type EngineInit[F[_]] = F[Unit]
 
-  def start[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: Log: EventLog](
+  def start[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: Log](
       nodeConf: NodeConf,
       kamonConf: Config
   )(implicit scheduler: Scheduler): F[Unit] = {
@@ -463,7 +460,6 @@ object NodeRuntime {
       * https://github.com/typelevel/cats-tagless/issues/60 (Cheers, Marcin!!)
       */
     implicit val lg: Log[TaskEnv]       = Log[F].mapK(taskToEnv)
-    implicit val el: EventLog[TaskEnv]  = EventLog[F].mapK(taskToEnv)
     implicit val tm: Timer[TaskEnv]     = Timer[F].mapK(taskToEnv)
     implicit val mn: Monixable[TaskEnv] = Monixable[F].mapK(taskToEnv, NodeCallCtx.init)
 
