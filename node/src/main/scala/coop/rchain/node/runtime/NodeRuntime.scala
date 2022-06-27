@@ -26,6 +26,7 @@ import coop.rchain.node.api._
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.instances.ProposerInstance
+import coop.rchain.node.runtime.NodeCallCtx.NodeCallCtxReader
 import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
@@ -389,85 +390,29 @@ object NodeRuntime {
   type LocalEnvironment[F[_]] = ApplicativeLocal[F, NodeCallCtx]
 
   type CasperLoop[F[_]] = F[Unit]
-  type EngineInit[F[_]] = F[Unit]
 
   def start[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: Log](
       nodeConf: NodeConf,
       kamonConf: Config
   )(implicit scheduler: Scheduler): F[Unit] = {
 
-    /**
-      * Current implementation of Span uses ReaderT layer to hold the local state for tracing.
-      *
-      * To be able to instantiate NodeRuntime dependencies we need ReaderT implementation for each of them.
-      * If it's possible to construct FunctorK implementation like we have for Log then this can be used as a
-      * more general implementation.
-      */
-    type TaskEnv[A] = ReaderT[F, NodeCallCtx, A]
-
-    // Conversions from/to ReaderT and F
-    val taskToEnv: F ~> TaskEnv = λ[F ~> TaskEnv](ReaderT.liftF(_))
-    val envToTask: TaskEnv ~> F = λ[TaskEnv ~> F](x => x.run(NodeCallCtx.init))
-
-    implicit val localEnvironment = cats.mtl.instances.all.localReader[F, NodeCallCtx]
-
-    /**
-      * Implementation for ConcurrentEffect for ReaderT cannot be constructed automatically so it's
-      * wired up here from existing Concurrent[ReaderT[F, S, *]] and ConcurrentEffect[F] implementations.
-      *
-      * `runCancelable` and `runAsync` are newly provided.
-      */
-    implicit val ce = new ConcurrentEffect[TaskEnv] {
-      val c = Concurrent[TaskEnv]
-      val t = ConcurrentEffect[F]
-
-      // ConcurrentEffect
-      override def runCancelable[A](fa: TaskEnv[A])(
-          cb: Either[Throwable, A] => IO[Unit]
-      ): SyncIO[CancelToken[TaskEnv]] =
-        t.runCancelable(envToTask(fa))(cb).map(taskToEnv(_))
-      override def runAsync[A](
-          fa: TaskEnv[A]
-      )(cb: Either[Throwable, A] => IO[Unit]): SyncIO[Unit] =
-        t.runAsync(envToTask(fa))(cb)
-      // Async
-      override def async[A](k: (Either[Throwable, A] => Unit) => Unit): TaskEnv[A] = c.async(k)
-      override def asyncF[A](k: (Either[Throwable, A] => Unit) => TaskEnv[Unit]): TaskEnv[A] =
-        c.asyncF(k)
-      // Concurrent
-      override def start[A](fa: TaskEnv[A]): TaskEnv[Fiber[TaskEnv, A]] = c.start(fa)
-      override def racePair[A, B](
-          fa: TaskEnv[A],
-          fb: TaskEnv[B]
-      ): TaskEnv[Either[(A, Fiber[TaskEnv, B]), (Fiber[TaskEnv, A], B)]] = c.racePair(fa, fb)
-      override def suspend[A](thunk: => TaskEnv[A]): TaskEnv[A]          = c.defer(thunk)
-      override def bracketCase[A, B](acquire: TaskEnv[A])(use: A => TaskEnv[B])(
-          release: (A, ExitCase[Throwable]) => TaskEnv[Unit]
-      ): TaskEnv[B]                                        = c.bracketCase(acquire)(use)(release)
-      override def raiseError[A](e: Throwable): TaskEnv[A] = c.raiseError(e)
-      override def handleErrorWith[A](fa: TaskEnv[A])(f: Throwable => TaskEnv[A]): TaskEnv[A] =
-        c.handleErrorWith(fa)(f)
-      override def flatMap[A, B](fa: TaskEnv[A])(f: A => TaskEnv[B]): TaskEnv[B] =
-        c.flatMap(fa)(f)
-      override def tailRecM[A, B](a: A)(f: A => TaskEnv[Either[A, B]]): TaskEnv[B] =
-        c.tailRecM(a)(f)
-      override def pure[A](x: A): TaskEnv[A] = c.pure(x)
-    }
+    val nodeCallCtxReader: NodeCallCtxReader[F] = NodeCallCtxReader[F]()
+    import nodeCallCtxReader._
 
     /**
       * ReaderT instances for NodeRuntime dependencies. Implementations for Log and EventLog are created "manually"
       * although they can be generated with cats.tagless @autoFunctorK macros but support is missing for IntelliJ.
       * https://github.com/typelevel/cats-tagless/issues/60 (Cheers, Marcin!!)
       */
-    implicit val lg: Log[TaskEnv]       = Log[F].mapK(taskToEnv)
-    implicit val tm: Timer[TaskEnv]     = Timer[F].mapK(taskToEnv)
-    implicit val mn: Monixable[TaskEnv] = Monixable[F].mapK(taskToEnv, NodeCallCtx.init)
+    implicit val lg: Log[ReaderNodeCallCtx]       = Log[F].mapK(effToEnv)
+    implicit val tm: Timer[ReaderNodeCallCtx]     = Timer[F].mapK(effToEnv)
+    implicit val mn: Monixable[ReaderNodeCallCtx] = Monixable[F].mapK(effToEnv, NodeCallCtx.init)
 
     for {
       id <- NodeEnvironment.create[F](nodeConf)
 
       // Create NodeRuntime instance
-      runtime = new NodeRuntime[TaskEnv](nodeConf, kamonConf, id, scheduler)
+      runtime = new NodeRuntime[ReaderNodeCallCtx](nodeConf, kamonConf, id, scheduler)
 
       // Run reader layer with initial state
       _ <- runtime.main.run(NodeCallCtx.init)
