@@ -96,8 +96,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       initPeer        = if (nodeConf.standalone) None else Some(nodeConf.protocolClient.bootstrap)
       peerNode        = rpConf(local, initPeer)
       rpConfState     = effects.rpConfState[F](peerNode)
-      peerNodeAsk     = effects.peerNodeAsk[F](Sync[F], rpConfState)
-      rpConfAsk       = effects.rpConfAsk[F](Sync[F], rpConfState)
+      peerNodeAsk     = effects.peerNodeAsk[F](rpConfState)
+      rpConfAsk       = effects.rpConfAsk[F](rpConfState)
       requestedBlocks <- Ref.of[F, Map[BlockHash, engine.BlockRetriever.RequestState]](Map.empty)
 
       commUtil = {
