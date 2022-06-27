@@ -220,9 +220,7 @@ object LfsBlockRequester {
                                  .whenA(isLastLatest)
 
                            // Update dependencies for requesting
-                           requestDependencies = Sync[F].delay(
-                             ProtoUtil.dependenciesHashesOf(block)
-                           ) >>= (deps => st.update(_.add(deps.toSet)))
+                           requestDependencies = st.update(_.add(block.justifications.toSet))
 
                            // Accept block if it's requested and satisfy conditions
                            // - received one of latest messages

@@ -1,10 +1,7 @@
 package coop.rchain.node
 
-import java.nio.file.Path
-
-import cats.data.ReaderT
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, Sync}
 import cats.mtl._
 import cats.syntax.all._
 import cats.{Applicative, Monad, Parallel}
@@ -20,6 +17,7 @@ import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
 
+import java.nio.file.Path
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.tools.jline.console._
@@ -74,46 +72,15 @@ package object effects {
   def rpConfState[F[_]: Monad: Sync](conf: RPConf): MonadState[F, RPConf] =
     new AtomicMonadState[F, RPConf](AtomicAny(conf))
 
-  def rpConfAsk[F[_]: Monad](
-      implicit state: MonadState[F, RPConf]
-  ): ApplicativeAsk[F, RPConf] =
+  def rpConfAsk[F[_]: Monad](state: MonadState[F, RPConf]): ApplicativeAsk[F, RPConf] =
     new DefaultApplicativeAsk[F, RPConf] {
       val applicative: Applicative[F] = Applicative[F]
       def ask: F[RPConf]              = state.get
     }
 
-  def peerNodeAsk[F[_]: Monad](
-      implicit state: MonadState[F, RPConf]
-  ): ApplicativeAsk[F, PeerNode] =
+  def peerNodeAsk[F[_]: Monad](state: MonadState[F, RPConf]): ApplicativeAsk[F, PeerNode] =
     new DefaultApplicativeAsk[F, PeerNode] {
       val applicative: Applicative[F] = Applicative[F]
       def ask: F[PeerNode]            = state.get.map(_.local)
     }
-
-  def readerTApplicativeAsk[F[_]: Monad, E, B](
-      askF: ApplicativeAsk[F, B]
-  ): ApplicativeAsk[ReaderT[F, E, *], B] =
-    new ApplicativeAsk[ReaderT[F, E, *], B] {
-      override val applicative: Applicative[ReaderT[F, E, *]] = Applicative[ReaderT[F, E, *]]
-
-      override def ask: ReaderT[F, E, B] = ReaderT.liftF(askF.ask)
-
-      override def reader[A](f: B => A): ReaderT[F, E, A] = ReaderT.liftF(askF.reader(f))
-    }
-
-  def readerTMonadState[F[_]: Monad: Sync, E, S](
-      stateF: MonadState[F, S]
-  ): MonadState[ReaderT[F, E, *], S] =
-    new MonadState[ReaderT[F, E, *], S] {
-      override val monad: Monad[ReaderT[F, E, *]] = Monad[ReaderT[F, E, *]]
-
-      override def get: ReaderT[F, E, S] = ReaderT.liftF(stateF.get)
-
-      override def set(s: S): ReaderT[F, E, Unit] = ReaderT.liftF(stateF.set(s))
-
-      override def inspect[A](f: S => A): ReaderT[F, E, A] = ReaderT.liftF(stateF.inspect(f))
-
-      override def modify(f: S => S): ReaderT[F, E, Unit] = ReaderT.liftF(stateF.modify(f))
-    }
-
 }
