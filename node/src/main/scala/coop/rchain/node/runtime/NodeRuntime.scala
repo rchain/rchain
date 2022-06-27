@@ -354,18 +354,15 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
   }
 
   def addShutdownHook(
-      servers: ServersInstances[F],
-      runtimeCleanup: Cleanup[F]
+      servers: ServersInstances[F]
   ): F[Unit] =
-    Sync[F].delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup))).void
+    Sync[F].delay(sys.addShutdownHook(clearResources(servers))).void
 
   def clearResources(
-      servers: ServersInstances[F],
-      runtimeCleanup: Cleanup[F]
+      servers: ServersInstances[F]
   ): Unit = {
     val shutdown = for {
       _ <- Sync[F].delay(Kamon.stopAllReporters())
-      _ <- runtimeCleanup.close()
       _ <- Log[F].info("Bringing BlockStore down ...")
       _ <- Log[F].info("Goodbye.")
     } yield ()
@@ -418,19 +415,4 @@ object NodeRuntime {
       _ <- runtime.main.run(NodeCallCtx.init)
     } yield ()
   }
-
-  trait Cleanup[F[_]] {
-    def close(): F[Unit]
-  }
-
-  def cleanup[F[_]: Sync: Log](
-      casperStoreManager: KeyValueStoreManager[F]
-  ): Cleanup[F] =
-    new Cleanup[F] {
-      override def close(): F[Unit] =
-        for {
-          _ <- Log[F].info("Shutting down Casper store manager ...")
-          _ <- casperStoreManager.shutdown
-        } yield ()
-    }
 }

@@ -319,10 +319,6 @@ object Setup {
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)
         } yield ()
       }
-
-      runtimeCleanup = NodeRuntime.cleanup(
-        rnodeStoreManager
-      )
     } yield (
       routingMessageQueue,
       apiServers,
