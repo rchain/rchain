@@ -1,19 +1,18 @@
 package coop.rchain.node.effects
 
-import java.io.{Closeable, FileNotFoundException}
-import java.nio.file._
-import java.util.concurrent.TimeUnit
-
 import cats.effect.Sync
-
-import scala.io.Source
 import cats.syntax.all._
 import coop.rchain.monix.Monixable
 import coop.rchain.node.model.repl._
-import coop.rchain.shared.Resources
-import io.grpc.{ManagedChannel, ManagedChannelBuilder}
-import monix.eval.Task
 import coop.rchain.shared.syntax._
+import io.grpc.ManagedChannel
+import io.grpc.netty.NettyChannelBuilder
+
+import java.io.{Closeable, FileNotFoundException}
+import java.nio.file._
+import java.util.concurrent.TimeUnit
+import scala.io.Source
+import scala.util.Using
 
 trait ReplClient[F[_]] {
   def run(line: String): F[Either[Throwable, String]]
@@ -32,7 +31,7 @@ class GrpcReplClient[F[_]: Monixable: Sync](host: String, port: Int, maxMessageS
     with Closeable {
 
   private val channel: ManagedChannel =
-    ManagedChannelBuilder
+    NettyChannelBuilder
       .forAddress(host, port)
       .maxInboundMessageSize(maxMessageSize)
       .usePlaintext()
@@ -51,11 +50,8 @@ class GrpcReplClient[F[_]: Monixable: Sync](host: String, port: Int, maxMessageS
   def eval(
       fileNames: List[String],
       unmatchedSends: Boolean
-  ): F[List[Either[Throwable, String]]] = {
-    import cats.instances.list._
-
+  ): F[List[Either[Throwable, String]]] =
     fileNames.traverse(eval(_, unmatchedSends))
-  }
 
   def eval(fileName: String, printUnmatchedSendsOnly: Boolean): F[Either[Throwable, String]] = {
     val filePath = Paths.get(fileName)

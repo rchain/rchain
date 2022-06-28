@@ -86,10 +86,25 @@ object Main {
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
     for {
-      confWithPorts   <- checkPorts[F](nodeConf)
-      confWithDecrypt <- loadPrivateKeyFromFile[F](confWithPorts)
-      _               <- Log[F].info(VersionInfo.get)
-      _               <- logConfiguration[F](confWithDecrypt, profile, configFile)
+      // Update ports in node configuration
+      // TODO: split this in two functions to make it more clear what's updated
+      nodeConfUpdPorts <- checkPorts[F](nodeConf)
+
+      // Update validator's private key if found in PEM file
+      pemFilePathOpt = nodeConfUpdPorts.casper.validatorPrivateKeyPath
+      privateKeyOpt  <- pemFilePathOpt.traverse(loadPrivateKeyFromPemFile[F](_))
+      nodeConfUpdPem = privateKeyOpt
+        .map { privKey =>
+          // If key file is supplied by the user, it overrides plain text private key
+          val casperConf =
+            nodeConfUpdPorts.casper.copy(validatorPrivateKey = privKey.bytes.toHexString.some)
+          nodeConfUpdPorts.copy(casper = casperConf)
+        }
+        .getOrElse(nodeConfUpdPorts)
+
+      _ <- Log[F].info(VersionInfo.get)
+      _ <- logConfiguration[F](nodeConfUpdPem, profile, configFile)
+
       // TODO: This check may be removed in the future after updating clients like a VSCode extension
       _ <- Log[F]
             .warn(
@@ -100,7 +115,7 @@ object Main {
       _ <- checkShardNameOnlyAscii(nodeConf.casper.shardName)
 
       // Create node runtime
-      _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
+      _ <- NodeRuntime.start[F](nodeConfUpdPem, kamonConf)
     } yield ()
   }
 
@@ -153,7 +168,7 @@ object Main {
         val getPrivateKey =
           maybePrivateKey
             .map(_.pure[F])
-            .orElse(maybePrivateKeyPath.map(decryptKeyFromCon[F]))
+            .orElse(maybePrivateKeyPath.map(decryptKeyFromPemFile[F]))
             .sequence
         for {
           privateKey <- getPrivateKey
@@ -233,7 +248,7 @@ object Main {
       case _                                  => Help
     }
 
-  private def decryptKeyFromCon[F[_]: Sync: ConsoleIO](
+  private def decryptKeyFromPemFile[F[_]: Sync: ConsoleIO](
       encryptedPrivateKeyPath: Path
   ): F[PrivateKey] =
     for {
@@ -289,7 +304,7 @@ object Main {
   def getValidatorPassword[F[_]: Sync: ConsoleIO]: F[String] =
     sys.env.get(RNodeValidatorPasswordEnvVar) match {
       case Some(password) =>
-        if (password.length > 0) password.pure[F] else requestForPassword[F]
+        if (password.nonEmpty) password.pure[F] else requestForPassword[F]
       case None => requestForPassword[F]
     }
 
@@ -300,20 +315,13 @@ object Main {
     )
 
   /**
-    * Loads validator key from file into configuration.
-    * If key file is supplied by user, it overrides plain text private key
-    * @param conf Node configuration instance
-    * @return
+    * Loads validator key from PEM file.
+    *
+    * @param keyFilePath file path to PEM file with validator's private key
+    * @return base 16 encoded private key
     */
-  private def loadPrivateKeyFromFile[F[_]: Sync: ConsoleIO](conf: NodeConf): F[NodeConf] =
-    conf.casper.validatorPrivateKeyPath match {
-      case Some(privateKeyPath) =>
-        for {
-          privateKeyBase16 <- decryptKeyFromCon[F](privateKeyPath)
-                               .map(sk => Base16.encode(sk.bytes))
-        } yield conf.copy(casper = conf.casper.copy(validatorPrivateKey = Some(privateKeyBase16)))
-      case _ => conf.pure[F]
-    }
+  private def loadPrivateKeyFromPemFile[F[_]: Sync: ConsoleIO](keyFilePath: Path): F[PrivateKey] =
+    decryptKeyFromPemFile[F](keyFilePath)
 
   private def checkPorts[F[_]: Sync: Log](conf: NodeConf): F[NodeConf] = {
     def getFreePort: F[Int] =
@@ -369,8 +377,6 @@ object Main {
             "Hint: Run me with --use-random-ports to use a random port for Kademlia port"
           ) >> Sync[F].raiseError(new Exception("Invalid Kademlia port"))
       )
-
-    import cats.instances.list._
 
     for {
       portsAvailability <- List(

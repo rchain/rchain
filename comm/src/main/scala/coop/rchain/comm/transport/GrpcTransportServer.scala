@@ -1,11 +1,7 @@
 package coop.rchain.comm.transport
 
-import java.io.ByteArrayInputStream
-import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicReference
-
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -20,15 +16,26 @@ import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl._
 import monix.execution.{Cancelable, Scheduler}
 
+import java.io.ByteArrayInputStream
+import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicReference
 import scala.collection.concurrent.TrieMap
 import scala.io.Source
-import scala.util.{Left, Right}
+import scala.util.{Left, Right, Using}
 
 trait TransportLayerServer[F[_]] {
   def handleReceive(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): F[Cancelable]
+}
+
+// TODO: temporary two traits until complete migration to safe Resource implementation
+trait TransportLayerServerRes[F[_]] {
+  def resource(
+      dispatch: Protocol => F[CommunicationResponse],
+      handleStreamed: Blob => F[Unit]
+  ): Resource[F, Unit]
 }
 
 class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
@@ -58,11 +65,6 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
           .trustManager(HostnameTrustManagerFactory.Instance)
           .clientAuth(ClientAuth.REQUIRE)
           .build()
-      }
-      .attempt
-      .flatMap {
-        case Right(sslContext) => sslContext.pure[F]
-        case Left(t)           => Sync[F].raiseError[SslContext](t)
       }
 
   def handleReceive(
@@ -103,6 +105,9 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
 }
 
 object GrpcTransportServer {
+  type ServerCreator[F[_]] =
+    (Protocol => F[CommunicationResponse], Blob => F[Unit]) => Resource[F, F[Unit]]
+
   def acquireServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
       networkId: String,
       port: Int,
@@ -111,10 +116,12 @@ object GrpcTransportServer {
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
       parallelism: Int
-  )(implicit mainScheduler: Scheduler): TransportServer[F] = {
-    val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
-    val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TransportServer[F](
+  )(
+      implicit mainScheduler: Scheduler
+  ): TransportLayerServerRes[F] = {
+    val cert = Using.resource(Source.fromFile(certPath.toFile))(_.mkString)
+    val key  = Using.resource(Source.fromFile(keyPath.toFile))(_.mkString)
+    val server = new TransportServer[F](
       new GrpcTransportServer[F](
         networkId,
         port,
@@ -125,6 +132,13 @@ object GrpcTransportServer {
         parallelism
       )
     )
+    new TransportLayerServerRes[F] {
+      override def resource(
+          dispatch: Protocol => F[CommunicationResponse],
+          handleStreamed: Blob => F[Unit]
+      ): Resource[F, Unit] =
+        Resource.make(server.start(dispatch, handleStreamed))(_ => server.stop())
+    }
   }
 }
 

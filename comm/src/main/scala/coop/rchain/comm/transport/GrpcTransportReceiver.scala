@@ -12,8 +12,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, UncaughtExceptionLogger}
-import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
+import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
 import monix.execution.{Cancelable, Scheduler}

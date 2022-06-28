@@ -13,6 +13,9 @@ class GrpcKademliaRPCServer[F[_]: Monixable: Sync](
     lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
 ) extends KademliaGrpcMonix.KademliaRPCService {
 
+  // TODO: legacy code generates KademliaGrpcMonix methods with Task
+  //  so these methods cannot be abstracted over effect type
+
   def sendLookup(lookup: Lookup): Task[LookupResponse] =
     if (lookup.networkId == networkId) {
       val id               = lookup.id.toByteArray

@@ -21,13 +21,13 @@ object HandleMessages {
   implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.handle")
 
-  def handle[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ConnectionsCell: RPConfAsk](
+  def handle[F[_]: Sync: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
       protocol: Protocol,
       routingMessageQueue: Queue[F, RoutingMessage]
   ): F[CommunicationResponse] =
     handle_[F](protocol, ProtocolHelper.sender(protocol), routingMessageQueue)
 
-  private def handle_[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: ConnectionsCell: RPConfAsk](
+  private def handle_[F[_]: Sync: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
       proto: Protocol,
       sender: PeerNode,
       routingMessageQueue: Queue[F, RoutingMessage]
@@ -45,7 +45,7 @@ object HandleMessages {
           .pure[F]
     }
 
-  def handleDisconnect[F[_]: Monad: Sync: Metrics: TransportLayer: Log: ConnectionsCell](
+  def handleDisconnect[F[_]: Sync: TransportLayer: ConnectionsCell: Log: Metrics](
       sender: PeerNode,
       disconnect: Disconnect
   ): F[CommunicationResponse] =
@@ -55,17 +55,14 @@ object HandleMessages {
       _ <- Metrics[F].incrementCounter("disconnect")
     } yield handledWithoutMessage
 
-  def handlePacket[F[_]: Monad: Time: TransportLayer: Log: RPConfAsk](
+  def handlePacket[F[_]: Functor](
       remote: PeerNode,
       packet: Packet,
       routingMessageQueue: Queue[F, RoutingMessage]
   ): F[CommunicationResponse] =
-    for {
-      conf <- RPConfAsk[F].ask
-      _    <- routingMessageQueue.enqueue1(RoutingMessage(remote, packet))
-    } yield handledWithoutMessage
+    routingMessageQueue.enqueue1(RoutingMessage(remote, packet)).as(handledWithoutMessage)
 
-  def handleProtocolHandshakeResponse[F[_]: Monad: TransportLayer: Metrics: ConnectionsCell: Log: RPConfAsk](
+  def handleProtocolHandshakeResponse[F[_]: Monad: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
       peer: PeerNode
   ): F[CommunicationResponse] =
     for {
@@ -73,7 +70,7 @@ object HandleMessages {
       _ <- ConnectionsCell[F].addConnAndReport(peer)
     } yield handledWithoutMessage
 
-  def handleProtocolHandshake[F[_]: Monad: TransportLayer: Log: ConnectionsCell: RPConfAsk: Metrics](
+  def handleProtocolHandshake[F[_]: Monad: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
       peer: PeerNode,
       protocolHandshake: ProtocolHandshake
   ): F[CommunicationResponse] =

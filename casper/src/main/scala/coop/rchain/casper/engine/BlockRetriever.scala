@@ -1,6 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.Monad
+import cats.effect.Timer
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.tagless.autoFunctorK
@@ -12,8 +13,9 @@ import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.Log
 
+import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
 
 /**
@@ -90,7 +92,7 @@ object BlockRetriever {
 
   def apply[F[_]](implicit ev: BlockRetriever[F]): BlockRetriever[F] = ev
 
-  def of[F[_]: Monad: RequestedBlocks: Log: Time: RPConfAsk: TransportLayer: CommUtil: Metrics]
+  def of[F[_]: Monad: RequestedBlocks: Log: Timer: RPConfAsk: TransportLayer: CommUtil: Metrics]
       : BlockRetriever[F] =
     new BlockRetriever[F] {
 
@@ -135,7 +137,7 @@ object BlockRetriever {
           admitHashReason: AdmitHashReason
       ): F[AdmitHashResult] =
         for {
-          now <- Time[F].currentMillis
+          now <- Timer[F].clock.realTime(TimeUnit.MILLISECONDS)
           result <- RequestedBlocks[F]
                      .modify[AdmitHashResult] { state =>
                        val unknownHash = !state.contains(hash)
@@ -214,9 +216,7 @@ object BlockRetriever {
                 .whenA(isReceived)
         } yield ()
 
-      override def requestAll(
-          ageThreshold: FiniteDuration
-      ): F[Unit] = {
+      override def requestAll(ageThreshold: FiniteDuration): F[Unit] = {
 
         def tryRerequest(
             hash: BlockHash,
@@ -230,7 +230,7 @@ object BlockRetriever {
                         s"Remain waiting: ${waitingListTail.map(_.endpoint.host).mkString(", ")}."
                     )
                 _  <- CommUtil[F].requestForBlock(nextPeer, hash)
-                ts <- Time[F].currentMillis
+                ts <- Timer[F].clock.realTime(TimeUnit.MILLISECONDS)
                 _ <- RequestedBlocks.put(
                       hash,
                       requested.copy(
@@ -261,7 +261,8 @@ object BlockRetriever {
           _ <- state.keySet.toList.traverse(hash => {
                 val requested = state(hash)
                 for {
-                  expired <- Time[F].currentMillis
+                  expired <- Timer[F].clock
+                              .realTime(TimeUnit.MILLISECONDS)
                               .map(_ - requested.timestamp > ageThreshold.toMillis)
                   _ <- Log[F]
                         .debug(

@@ -1,28 +1,27 @@
 package coop.rchain.comm.discovery
 
-import java.net.ServerSocket
+import cats._
+import cats.effect.{Resource, Sync, Timer}
+import cats.syntax.all._
+import coop.rchain.comm._
+import io.grpc
 
+import java.net.ServerSocket
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.util.{Try, Using}
 
-import cats._
-import cats.effect.Timer
-import cats.syntax.all._
-
-import coop.rchain.comm._
-import coop.rchain.grpc.Server
-import coop.rchain.shared.Resources
-
-abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
+abstract class KademliaRPCRuntime[F[_]: Sync: Timer, E <: Environment] {
 
   def createEnvironment(port: Int): F[E]
 
   def createKademliaRPC(env: E): F[KademliaRPC[F]]
+
   def createKademliaRPCServer(
       env: E,
       pingHandler: PeerNode => F[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
-  ): F[Server[F]]
+  ): Resource[F, grpc.Server]
 
   def extract[A](fa: F[A]): A
 
@@ -64,14 +63,12 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
             local    <- e1.peer.pure[F]
             remote   = e2.peer
             localRpc <- createKademliaRPC(e1)
-            remoteRpc <- createKademliaRPCServer(
-                          e2,
-                          pingHandler.handle(remote),
-                          lookupHandler.handle(remote)
-                        )
-            _ <- remoteRpc.start
-            r <- execute(localRpc, local, remote)
-            _ <- remoteRpc.stop
+            remoteRpc = createKademliaRPCServer(
+              e2,
+              pingHandler.handle(remote),
+              lookupHandler.handle(remote)
+            )
+            r <- remoteRpc.use(_ => execute(localRpc, local, remote))
           } yield new TwoNodesResult {
             def localNode: PeerNode  = local
             def remoteNode: PeerNode = remote

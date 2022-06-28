@@ -21,6 +21,7 @@ import java.nio.file.Path
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.tools.jline.console._
+import scala.util.Using
 
 package object effects {
 
@@ -29,13 +30,10 @@ package object effects {
   def kademliaStore[F[_]: Sync: KademliaRPC: Metrics](id: NodeIdentifier): KademliaStore[F] =
     KademliaStore.table[F](id)
 
-  def nodeDiscovery[F[_]: Monad](id: NodeIdentifier)(
-      implicit
-      kademliaStore: KademliaStore[F],
-      kademliaRPC: KademliaRPC[F]
-  ): NodeDiscovery[F] = NodeDiscovery.kademlia(id)
+  def nodeDiscovery[F[_]: Monad: KademliaStore: KademliaRPC](id: NodeIdentifier): NodeDiscovery[F] =
+    NodeDiscovery.kademlia(id)
 
-  def kademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
+  def kademliaRPC[F[_]: Monixable: Sync: RPConfAsk: Metrics](
       networkId: String,
       timeout: FiniteDuration
   )(implicit scheduler: Scheduler): KademliaRPC[F] = new GrpcKademliaRPC(networkId, timeout)
@@ -49,8 +47,8 @@ package object effects {
       ioScheduler: Scheduler
   )(implicit scheduler: Scheduler): F[TransportLayer[F]] =
     Ref.of[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]](Map()) map { channels =>
-      val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
-      val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
+      val cert = Using.resource(Source.fromFile(certPath.toFile))(_.mkString)
+      val key  = Using.resource(Source.fromFile(keyPath.toFile))(_.mkString)
       new GrpcTransportClient(
         networkId,
         cert,
@@ -76,11 +74,5 @@ package object effects {
     new DefaultApplicativeAsk[F, RPConf] {
       val applicative: Applicative[F] = Applicative[F]
       def ask: F[RPConf]              = state.get
-    }
-
-  def peerNodeAsk[F[_]: Monad](state: MonadState[F, RPConf]): ApplicativeAsk[F, PeerNode] =
-    new DefaultApplicativeAsk[F, PeerNode] {
-      val applicative: Applicative[F] = Applicative[F]
-      def ask: F[PeerNode]            = state.get.map(_.local)
     }
 }
