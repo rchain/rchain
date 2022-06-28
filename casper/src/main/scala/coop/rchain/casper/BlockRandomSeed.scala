@@ -2,6 +2,7 @@ package coop.rchain.casper
 
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
 import scodec.codecs.{bytes, uint8, ulong, utf8, variableSizeBytes}
@@ -20,7 +21,10 @@ object BlockRandomSeed {
       blockNumber: Long,
       sender: PublicKey,
       preStateHash: Blake2b256Hash
-  ): BlockRandomSeed = new BlockRandomSeed(shardId, blockNumber, sender, preStateHash)
+  ): BlockRandomSeed = {
+    assert(shardId.onlyAscii, "Shard name should contain only ASCII characters")
+    new BlockRandomSeed(shardId, blockNumber, sender, preStateHash)
+  }
 
   private val codecPublicKey: Codec[PublicKey] = variableSizeBytes(uint8, bytes)
     .xmap[PublicKey](bv => PublicKey(bv.toArray), pk => ByteVector(pk.bytes))
