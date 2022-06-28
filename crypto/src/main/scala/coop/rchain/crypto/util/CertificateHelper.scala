@@ -1,5 +1,11 @@
 package coop.rchain.crypto.util
 
+import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.sdk.syntax.all._
+import coop.rchain.shared.Base16
+import org.bouncycastle.asn1._
+import org.bouncycastle.util.BigIntegers
+
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, FileInputStream}
 import java.math.BigInteger
 import java.security._
@@ -7,17 +13,6 @@ import java.security.cert._
 import java.security.interfaces.{ECPrivateKey, ECPublicKey}
 import java.security.spec._
 import java.util.Base64
-import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.shared.Base16
-import org.bouncycastle.asn1.{
-  ASN1Encodable,
-  ASN1InputStream,
-  ASN1Integer,
-  ASN1Sequence,
-  DERSequenceGenerator
-}
-import org.bouncycastle.util.BigIntegers
-
 import scala.io.Source
 import scala.util.{Failure, Try, Using}
 
@@ -65,8 +60,7 @@ object CertificateHelper {
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def readKeyPair(keyFile: File): KeyPair = {
-    import coop.rchain.shared.Resources._
-    val str = withResource(Source.fromFile(keyFile)) {
+    val str = Using.resource(Source.fromFile(keyFile)) {
       _.getLines().filter(!_.contains("KEY")).mkString
     }
     val spec     = new PKCS8EncodedKeySpec(Base64.getDecoder.decode(str))
@@ -175,8 +169,6 @@ object CertificateHelper {
         bis.close
       }
     }
-
-    import coop.rchain.shared.TrySyntax._
 
     if (signatureDER.isEmpty)
       Failure(new IllegalArgumentException("Input array must not be empty"))

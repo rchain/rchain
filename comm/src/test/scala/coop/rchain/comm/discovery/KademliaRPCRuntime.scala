@@ -26,18 +26,20 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def extract[A](fa: F[A]): A
 
-  private def getFreePort: Int =
-    Resources.withResource(new ServerSocket(0)) { s =>
-      s.setReuseAddress(true)
-      s.getLocalPort
+  private def getFreePort: Try[Int] =
+    Using(new ServerSocket(0)) { server =>
+      server.setReuseAddress(true)
+      server.getLocalPort
     }
 
-  def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
+  def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] = {
+    def freePort: F[Int] = Sync[F].fromTry(getFreePort)
     for {
-      e1 <- createEnvironment(getFreePort)
-      e2 <- createEnvironment(getFreePort)
+      e1 <- freePort >>= createEnvironment
+      e2 <- freePort >>= createEnvironment
       r  <- block(e1, e2)
     } yield r
+  }
 
   trait Runtime[A] {
     protected def pingHandler: PingHandler[F]

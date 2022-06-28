@@ -1,12 +1,11 @@
 package coop.rchain.store
 
-import java.nio.ByteBuffer
-
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.shared.Resources.withResource
 import org.lmdbjava._
 
+import java.nio.ByteBuffer
+import scala.util.Using
 import scala.util.control.NonFatal
 
 final case class DbEnv[F[_]](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer], done: F[Unit])
@@ -84,7 +83,7 @@ final case class LmdbKeyValueStore[F[_]: Sync](
   // ITERATE
   override def iterate[T](f: Iterator[(ByteBuffer, ByteBuffer)] => T): F[T] =
     withReadTxn { (txn, dbi) =>
-      withResource(dbi.iterate(txn)) { iterator =>
+      Using.resource(dbi.iterate(txn)) { iterator =>
         import scala.collection.JavaConverters._
         f(iterator.iterator.asScala.map(c => (c.key, c.`val`)))
       }

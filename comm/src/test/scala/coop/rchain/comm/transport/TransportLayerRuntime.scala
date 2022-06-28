@@ -1,23 +1,21 @@
 package coop.rchain.comm.transport
 
-import java.net.ServerSocket
-
-import scala.collection.mutable
-import scala.concurrent.duration._
-
 import cats._
-import cats.effect.Timer
 import cats.effect.concurrent.MVar2
+import cats.effect.{Sync, Timer}
 import cats.syntax.all._
-
 import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.shared.Resources
 
-abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
+import java.net.ServerSocket
+import scala.collection.mutable
+import scala.concurrent.duration._
+import scala.util.{Try, Using}
+
+abstract class TransportLayerRuntime[F[_]: Sync: Timer, E <: Environment] {
 
   val networkId = "test"
 
@@ -30,24 +28,26 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
 
   def extract[A](fa: F[A]): A
 
-  private def getFreePort: Int =
-    Resources.withResource(new ServerSocket(0)) { s =>
+  private def getFreePort: Try[Int] =
+    Using(new ServerSocket(0)) { s =>
       s.setReuseAddress(true)
       s.getLocalPort
     }
 
+  private def getFreePortF: F[Int] = Sync[F].fromTry(getFreePort)
+
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
-      e1 <- createEnvironment(getFreePort)
-      e2 <- createEnvironment(getFreePort)
+      e1 <- getFreePortF >>= createEnvironment
+      e2 <- getFreePortF >>= createEnvironment
       r  <- block(e1, e2)
     } yield r
 
   def threeNodesEnvironment[A](block: (E, E, E) => F[A]): F[A] =
     for {
-      e1 <- createEnvironment(getFreePort)
-      e2 <- createEnvironment(getFreePort)
-      e3 <- createEnvironment(getFreePort)
+      e1 <- getFreePortF >>= createEnvironment
+      e2 <- getFreePortF >>= createEnvironment
+      e3 <- getFreePortF >>= createEnvironment
       r  <- block(e1, e2, e3)
     } yield r
 

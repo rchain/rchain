@@ -11,8 +11,9 @@ import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax._
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.shared.{Log, Resources}
+import coop.rchain.rspace.syntax._
+import coop.rchain.sdk.syntax.all._
+import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.{mb, Db, LmdbEnvConfig}
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
 import monix.eval.{Coeval, Task}
@@ -26,7 +27,7 @@ import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.io.Source
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success, Try, Using}
 
 object RholangCLI {
 
@@ -202,7 +203,7 @@ object RholangCLI {
       else
         evaluatePar(
           runtime,
-          Resources.withResource(Source.fromFile(fileName))(_.mkString),
+          Using.resource(Source.fromFile(fileName))(_.mkString),
           quiet,
           unmatchedSendsOnly
         )

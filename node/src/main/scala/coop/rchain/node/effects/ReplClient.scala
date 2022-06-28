@@ -70,7 +70,7 @@ class GrpcReplClient[F[_]: Monixable: Sync](host: String, port: Int, maxMessageS
   }
 
   private def readContent(filePath: Path): String =
-    Resources.withResource(Source.fromFile(filePath.toFile))(_.mkString)
+    Using.resource(Source.fromFile(filePath.toFile))(_.mkString)
 
   private def processError(t: Throwable): Throwable =
     Option(t.getCause).getOrElse(t)
