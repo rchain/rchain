@@ -63,12 +63,6 @@ object StateBalances {
     } yield unf
   }
 
-  // TODO make a hard-coded mainnet unforgeable name after the config of the hard-fork 2 is launched
-  def MainnetStoreTokenUnf: Par = {
-    val rand = Blake2b512Random.defaultRandom
-    rand.next().toParUnforgeableName
-  }
-
   def read[F[_]: Concurrent: Parallel: ContextShift](
       shardId: String,
       blockHash: String,

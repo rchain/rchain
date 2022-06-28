@@ -55,14 +55,6 @@ object Genesis {
     unforgeableByte.toParUnforgeableName
   }
 
-  // TODO config this with different name with different chain(shard)
-  // https://github.com/rchain/rchain/issues/3685
-  def MainnetNonNegativeMergeableTagName: Par = {
-    val rand = Blake2b512Random.defaultRandom
-    import coop.rchain.models.rholang.implicits._
-    rand.next().toParUnforgeableName
-  }
-
   def defaultBlessedTerms(
       posParams: ProofOfStake,
       registry: Registry,

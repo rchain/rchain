@@ -256,13 +256,6 @@ object Transaction {
     unfogeableBytes.toParUnforgeableName
   }
 
-  // TODO config this with different name with different chain(shard)
-  // https://github.com/rchain/rchain/issues/3685
-  def MainnetTransferUnforgeable: Par = {
-    val rand = Blake2b512Random.defaultRandom
-    rand.next().toParUnforgeableName
-  }
-
   def apply[F[_]: Concurrent](
       blockReportAPI: BlockReportApi[F],
       // The transferUnforgeable can be retrieved based on the deployer and the timestamp of RevVault.rho
