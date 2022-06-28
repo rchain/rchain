@@ -33,7 +33,7 @@ object NodeLaunch {
   // format: off
   def apply[F[_]
     /* Execution */   : Concurrent: Parallel: ContextShift: Time: Timer
-    /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+    /* Transport */   : TransportLayer: CommUtil: BlockRetriever
     /* State */       : RPConfAsk: ConnectionsCell
     /* Rholang */     : RuntimeManager
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager

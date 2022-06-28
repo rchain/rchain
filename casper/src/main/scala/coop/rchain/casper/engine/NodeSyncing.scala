@@ -33,7 +33,7 @@ object NodeSyncing {
   // format: off
   def apply[F[_]
   /* Execution */   : Concurrent: Time: Timer
-  /* Transport */   : TransportLayer: CommUtil: EventPublisher
+  /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
@@ -63,7 +63,7 @@ object NodeSyncing {
 // format: off
 class NodeSyncing[F[_]
   /* Execution */   : Concurrent: Time: Timer
-  /* Transport */   : TransportLayer: CommUtil: EventPublisher
+  /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
