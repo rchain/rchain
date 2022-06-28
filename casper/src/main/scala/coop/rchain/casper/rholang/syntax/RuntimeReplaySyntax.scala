@@ -275,7 +275,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
   def replayBlockSystemDeploy(
       processedSysDeploy: ProcessedSystemDeploy,
       rand: Blake2b512Random
-  )(implicit s: Sync[F], span: Span[F]): EitherT[F, ReplayFailure, NumberChannelsEndVal] = {
+  )(implicit s: Sync[F], span: Span[F]): EitherT[F, ReplayFailure, NumberChannelsEndVal] =
     processedSysDeploy.systemDeploy match {
       case SlashSystemDeployData(slashedValidator) =>
         val slashDeploy = {
@@ -302,7 +302,6 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
       case Empty =>
         EitherT.leftT(ReplayFailure.internalError(new Exception("Expected system deploy")))
     }
-  }
 
   def replaySystemDeployInternal[S <: SystemDeploy](
       systemDeploy: S,

@@ -474,7 +474,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     val returnName = rand.copy().next().toParUnforgeableName
 
     // Execute deploy on top of specified block hash
-    captureResults(hash, rand, deploy, returnName)
+    captureResults(hash, deploy, rand, returnName)
   }
 
   /* Checkpoints */
@@ -503,13 +503,13 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     // Create return channel as first unforgeable name created in deploy term
     val rand       = Blake2b512Random.defaultRandom
     val returnName = rand.copy().next().toParUnforgeableName
-    captureResults(start, rand, deploy, returnName)
+    captureResults(start, deploy, rand, returnName)
   }
 
   def captureResults(
       start: StateHash,
-      rand: Blake2b512Random,
       deploy: Signed[DeployData],
+      rand: Blake2b512Random,
       name: Par
   )(
       implicit s: Sync[F]
