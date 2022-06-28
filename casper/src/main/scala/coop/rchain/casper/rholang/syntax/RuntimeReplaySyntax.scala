@@ -276,8 +276,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
       processedSysDeploy: ProcessedSystemDeploy,
       rand: Blake2b512Random
   )(implicit s: Sync[F], span: Span[F]): EitherT[F, ReplayFailure, NumberChannelsEndVal] = {
-    import processedSysDeploy._
-    systemDeploy match {
+    processedSysDeploy.systemDeploy match {
       case SlashSystemDeployData(slashedValidator) =>
         val slashDeploy = {
           SlashDeploy(slashedValidator, rand)
