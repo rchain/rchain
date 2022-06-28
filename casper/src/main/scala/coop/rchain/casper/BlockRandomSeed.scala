@@ -1,6 +1,8 @@
 package coop.rchain.casper
 
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -56,6 +58,14 @@ object BlockRandomSeed {
       )
     )
 
+  def fromGenesis(block: BlockMessage): Blake2b512Random = generateRandomNumber(
+    BlockRandomSeed(
+      block.shardId,
+      Genesis.genesisRandomSeedBlockNumber,
+      Genesis.genesisPubKey,
+      Blake2b256Hash.fromByteString(emptyStateHashFixed)
+    )
+  )
   // When deploying the user deploy , the chain would execute prechargeDeploy, userDeploy and RefundDeploy in
   // sequence. The split index for the random seed is based on the index of the executions.
   val PreChargeSplitIndex: Byte  = 0.toByte

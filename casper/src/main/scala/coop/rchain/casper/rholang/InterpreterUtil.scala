@@ -85,6 +85,8 @@ object InterpreterUtil {
                      maxSeqNums = Map[Validator, Long](block.sender -> 0L)
                    ).pure[F]
                  }
+      rand = if (parentsSet.nonEmpty) BlockRandomSeed.fromBlock(block)
+      else BlockRandomSeed.fromGenesis(block)
       computedParentsInfo <- computeParentsPostState(parents, preState)
       _ <- Log[F].info(
             s"Computed parents post state for ${PrettyPrinter.buildString(block, short = true)}."
@@ -112,7 +114,7 @@ object InterpreterUtil {
             .as(InvalidRejectedDeploy.asLeft)
         } else {
           for {
-            replayResult <- replayBlock(incomingPreStateHash, block)
+            replayResult <- replayBlock(incomingPreStateHash, block, rand)
             result       <- handleErrors(block.postStateHash, replayResult)
           } yield result
         }
@@ -165,6 +167,8 @@ object InterpreterUtil {
                      maxSeqNums = Map[Validator, Long](block.sender -> 0L)
                    ).pure[F]
                  }
+      rand = if (parentsSet.nonEmpty) BlockRandomSeed.fromBlock(block)
+      else BlockRandomSeed.fromGenesis(block)
       computedParentsInfo <- computeParentsPostState(parents, preState)
       _ <- Log[F].info(
             s"Computed parents post state for ${PrettyPrinter.buildString(block, short = true)}."
@@ -192,7 +196,7 @@ object InterpreterUtil {
             .as(InvalidRejectedDeploy.asLeft)
         } else {
           for {
-            replayResult <- replayBlock(incomingPreStateHash, block)
+            replayResult <- replayBlock(incomingPreStateHash, block, rand)
             result       <- handleErrors(block.postStateHash, replayResult)
           } yield result
         }
@@ -202,7 +206,8 @@ object InterpreterUtil {
 
   private def replayBlock[F[_]: Sync: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
       initialStateHash: StateHash,
-      block: BlockMessage
+      block: BlockMessage,
+      rand: Blake2b512Random
   ): F[Either[ReplayFailure, StateHash]] =
     Span[F].trace(ReplayBlockMetricsSource) {
       val internalDeploys       = block.state.deploys
@@ -211,7 +216,6 @@ object InterpreterUtil {
         _                  <- Span[F].mark("before-process-pre-state-hash")
         blockData          = BlockData.fromBlock(block)
         withCostAccounting = block.justifications.nonEmpty
-        rand               = BlockRandomSeed.fromBlock(block)
         replayResultF = RuntimeManager[F]
           .replayComputeState(initialStateHash)(
             internalDeploys,
