@@ -62,14 +62,10 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
         vaultTreeHashMapDepth = StateBalanceMain.genesisVaultMapDepth
         vaultChannel <- StateBalances.getGenesisVaultMapPar(
                          genesis.genesisBlock.shardId,
-                         genesis.genesisBlock.blockNumber,
-                         PublicKey(genesis.genesisBlock.sender),
                          runtime
                        )
         storeToken = RhoTrieTraverser.storeTokenUnforgeable(
-          genesis.genesisBlock.shardId,
-          genesis.genesisBlock.blockNumber,
-          PublicKey(genesis.genesisBlock.sender)
+          genesis.genesisBlock.shardId
         )
         balances <- VaultBalanceGetter.getAllVaultBalance(
                      vaultTreeHashMapDepth,

@@ -48,10 +48,6 @@ final case class StateOptions(arguments: Seq[String]) extends ScallopConf(argume
     descr = "ShardId of the node",
     required = true
   )
-  val genesisBlockNumber = opt[Long](
-    descr = "the genesis block number",
-    default = Some(0L)
-  )
   val outputDir = opt[Path](
     descr = s"The output dir for generating the results. There are 3 files would be generated->" +
       s"tupleSpaceBalance.csv, transactionBalance.csv and PosBalance.csv.",
@@ -73,12 +69,11 @@ object StateBalanceMain {
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
-    val options     = StateOptions(args)
-    val dataDir     = options.dataDir()
-    val blockHash   = options.blockHash()
-    val shardId     = options.shardId()
-    val blockNumber = options.genesisBlockNumber()
-    val outputDir   = options.outputDir()
+    val options   = StateOptions(args)
+    val dataDir   = options.dataDir()
+    val blockHash = options.blockHash()
+    val shardId   = options.shardId()
+    val outputDir = options.outputDir()
     if (!Files.exists(outputDir)) {
       Files.createDirectory(outputDir)
     }
@@ -89,8 +84,6 @@ object StateBalanceMain {
     val task: Task[Unit] = for {
       stateBalances <- StateBalances.read(
                         shardId,
-                        Genesis.genesisPubKey,
-                        blockNumber,
                         blockHash,
                         genesisVaultMapDepth,
                         dataDir

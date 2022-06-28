@@ -28,10 +28,11 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
       val readonly  = nodes(1)
       import readonly._
       for {
-        kvm             <- Resources.mkTestRNodeStoreManager[Task](readonly.dataDir)
-        rspaceStore     <- kvm.rSpaceStores
-        reportingCasper = ReportingCasper.rhoReporter[Task](rspaceStore)
-        reportingStore  <- ReportStore.store[Task](kvm)
+        kvm         <- Resources.mkTestRNodeStoreManager[Task](readonly.dataDir)
+        rspaceStore <- kvm.rSpaceStores
+        reportingCasper = ReportingCasper
+          .rhoReporter[Task](rspaceStore, this.genesis.genesisBlock.shardId)
+        reportingStore <- ReportStore.store[Task](kvm)
         blockReportAPI = BlockReportApi[Task](
           reportingCasper,
           reportingStore,

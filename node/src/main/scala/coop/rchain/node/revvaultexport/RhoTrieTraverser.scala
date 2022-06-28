@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.casper.rholang.Tools
@@ -79,15 +80,15 @@ object RhoTrieTraverser {
   private def nodeMapStore(mapWithNyb: Par, storeTokenPar: Par) =
     Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenPar))))))
 
-  def storeTokenUnforgeable(shardId: String, blockNumber: Long, validatorKey: PublicKey): Par = {
+  def storeTokenUnforgeable(shardId: String): Par = {
     // TreeHashMap contract is the 1st contract deployed in the genesis, start from 0. Index should be 0
     val TreeHashMapContractDeployIndex: Byte = 0
     val rand = BlockRandomSeed
       .generateSplitRandomNumber(
         BlockRandomSeed(
           shardId,
-          blockNumber,
-          validatorKey,
+          Genesis.genesisRandomSeedBlockNumber,
+          Genesis.genesisPubKey,
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
         ),
         TreeHashMapContractDeployIndex,

@@ -35,9 +35,7 @@ class MergingCases extends AnyFlatSpec with Matchers {
     dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
     kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
     mergeableTag = Genesis.nonNegativeMergeableTagName(
-      genesis.shardId,
-      PublicKey(genesis.sender),
-      genesis.blockNumber
+      genesis.shardId
     )
     rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
   } yield rm

@@ -31,10 +31,11 @@ final case class Genesis(
 object Genesis {
   val genesisPubKey = PublicKey(Array[Byte]())
 
+  // using fixed 0 to make sure unforgeable name is predictable without configuring blockNumber
+  val genesisRandomSeedBlockNumber = 0L
+
   def nonNegativeMergeableTagName(
-      shardId: String,
-      validatorKey: PublicKey,
-      blockNumber: Long
+      shardId: String
   ): Par = {
     // NonNegative contract is the 4th contract deployed in the genesis, start from 0. Index should be 3
     val nonNegativeContractIndex: Byte = 3
@@ -42,8 +43,8 @@ object Genesis {
       .generateSplitRandomNumber(
         BlockRandomSeed(
           shardId,
-          blockNumber,
-          validatorKey,
+          genesisRandomSeedBlockNumber,
+          genesisPubKey, // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
         ),
         nonNegativeContractIndex,

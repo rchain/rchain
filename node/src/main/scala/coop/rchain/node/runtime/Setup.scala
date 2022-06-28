@@ -107,7 +107,7 @@ object Setup {
                  .createWithHistory[F](
                    rStores,
                    mergeStore,
-                   Genesis.MainnetNonNegativeMergeableTagName,
+                   Genesis.nonNegativeMergeableTagName(conf.casper.shardName),
                    executionTracker
                  )
         } yield rm
@@ -119,7 +119,7 @@ object Setup {
         implicit val (bd, sp) = (blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
-          rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
+          rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_, conf.casper.shardName))
         } else
           ReportingCasper.noop.pure[F]
       }

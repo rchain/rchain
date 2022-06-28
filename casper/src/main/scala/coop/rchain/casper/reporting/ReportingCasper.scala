@@ -85,14 +85,18 @@ object ReportingCasper {
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   def rhoReporter[F[_]: Concurrent: ContextShift: Parallel: BlockDagStorage: Log: Metrics: Span](
-      rspaceStore: RSpaceStore[F]
+      rspaceStore: RSpaceStore[F],
+      shardId: String
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       override def trace(block: BlockMessage): F[ReplayResult] =
         for {
-          reportingRspace  <- ReportingRuntime.createReportingRSpace(rspaceStore)
-          reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
-          preStateHash     = block.preStateHash
+          reportingRspace <- ReportingRuntime.createReportingRSpace(rspaceStore)
+          reportingRuntime <- ReportingRuntime.createReportingRuntime(
+                               reportingRspace,
+                               shardId = shardId
+                             )
+          preStateHash = block.preStateHash
 
           // Block with empty justifications is genesis which is build with turned off cost accounting
           withCostAccounting = block.justifications.nonEmpty
@@ -179,7 +183,8 @@ object ReportingRuntime {
 
   def createReportingRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       reporting: RhoReportingRspace[F],
-      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
+      shardId: String
   ): F[ReportingRuntime[F]] =
     for {
       cost     <- CostAccounting.emptyCost[F]
@@ -189,7 +194,7 @@ object ReportingRuntime {
         createRhoEnv(
           reporting,
           mergeChs,
-          Genesis.MainnetNonNegativeMergeableTagName,
+          Genesis.nonNegativeMergeableTagName(shardId),
           extraSystemProcesses
         )
       }

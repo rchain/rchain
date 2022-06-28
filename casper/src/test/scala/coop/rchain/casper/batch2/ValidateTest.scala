@@ -463,9 +463,7 @@ class ValidateTest
                            rStore,
                            mStore,
                            Genesis.nonNegativeMergeableTagName(
-                             genesis.shardId,
-                             PublicKey(genesis.sender),
-                             genesis.blockNumber
+                             genesis.shardId
                            ),
                            RuntimeManager.noOpExecutionTracker[Task]
                          )
