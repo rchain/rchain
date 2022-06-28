@@ -15,14 +15,9 @@ import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.p2p.EffectsTestInstances.{
-  createRPConfAsk,
-  LogStub,
-  LogicalTime,
-  TransportLayerStub
-}
+import coop.rchain.p2p.EffectsTestInstances.{createRPConfAsk, LogStub, TransportLayerStub}
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import monix.execution.schedulers.TestScheduler
 import org.scalatest._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
@@ -45,7 +40,6 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
     Ref.unsafe[Task, Connections](List(local))
   implicit val transportLayer = new TransportLayerStub[Task]
   implicit val rpConf         = createRPConfAsk[Task](local)
-  implicit val time           = new LogicalTime[Task]
   implicit val commUtil       = CommUtil.of[Task]
   implicit val blockRetriever = BlockRetriever.of[Task]
 
@@ -65,14 +59,16 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 
-  private def timedOut: Long    = time.clock - (2 * timeout.toMillis)
-  private def notTimedOut: Long = time.clock - 1
+  // Instance of testing ExecutionContext (Scheduler)
+  implicit val ec = TestScheduler()
+
+  private def timedOut: Long    = -2 * timeout.toMillis
+  private def notTimedOut: Long = -1
 
   override def beforeEach(): Unit = {
     transportLayer.reset()
     transportLayer.setResponses(alwaysSuccess)
     log.reset()
-    time.reset()
     currentRequests.set(Map.empty).runSyncUnsafe()
   }
 
@@ -136,7 +132,7 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
             blockRetriever.requestAll(timeout).runSyncUnsafe()
             // then
             val Some(requestedAfter) = currentRequests.get.runSyncUnsafe().get(hash)
-            requestedAfter.timestamp shouldBe time.clock
+            requestedAfter.timestamp shouldBe 0
           }
         }
         describe("if waiting list has no peers left") {
