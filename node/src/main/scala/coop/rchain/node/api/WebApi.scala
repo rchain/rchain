@@ -262,7 +262,7 @@ object WebApi {
 
   // RhoExpr from protobuf
 
-  private def exprFromParProto(par: Par): Option[RhoExpr] = {
+  def exprFromParProto(par: Par): Option[RhoExpr] = {
     val exprs =
       par.exprs.flatMap(exprFromExprProto) ++
         par.unforgeables.flatMap(unforgFromProto) ++
