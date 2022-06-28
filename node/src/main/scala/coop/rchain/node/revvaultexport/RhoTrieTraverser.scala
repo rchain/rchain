@@ -14,6 +14,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models._
 import coop.rchain.models.syntax._
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.storage.serializePar
 import coop.rchain.rholang.interpreter.{RhoRuntime, RhoType}
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -95,7 +96,7 @@ object RhoTrieTraverser {
         BlockRandomSeed.UserDeploySplitIndex
       )
     val target = LazyList.continually(rand.next()).drop(9).head
-    target.toParUnforgeableName
+    Name(target)
   }
 
   private def TreeHashMapGetter[F[_]: Sync](

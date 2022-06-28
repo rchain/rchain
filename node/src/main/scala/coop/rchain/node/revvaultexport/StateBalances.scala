@@ -16,7 +16,9 @@ import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GString}
 import coop.rchain.models.{ETuple, Expr}
+import coop.rchain.node.revvaultexport.RhoTrieTraverser.storeTokenUnforgeable
 import coop.rchain.rholang.interpreter.RhoRuntime
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
@@ -50,7 +52,7 @@ object StateBalances {
           BlockRandomSeed.UserDeploySplitIndex
         )
       val unfogeableBytes = rand.next()
-      unfogeableBytes.toParUnforgeableName
+      Name(unfogeableBytes)
     }
 
     val extractStateString = Par(exprs = Seq(Expr(GString("extractState"))))
@@ -94,7 +96,7 @@ object StateBalances {
       balances <- VaultBalanceGetter.getAllVaultBalance(
                    vaultTreeHashMapDepth,
                    vaultChannel,
-                   MainnetStoreTokenUnf,
+                   storeTokenUnforgeable(shardId),
                    rhoRuntime
                  )
     } yield balances

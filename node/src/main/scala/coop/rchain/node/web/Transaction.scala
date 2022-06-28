@@ -6,6 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.api.BlockReportApi
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.models.GPrivate
 import coop.rchain.models.syntax._
 import coop.rchain.casper.protocol.{
@@ -21,6 +22,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.node.web.Transaction.TransactionStore
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Base16
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
@@ -238,22 +240,22 @@ object Transaction {
 
   // This is the unforgeable name for
   // https://github.com/rchain/rchain/blob/43257ddb7b2b53cffb59a5fe1d4c8296c18b8292/casper/src/main/resources/RevVault.rho#L25
-  def transferUnforgeable(shardId: String, validatorKey: PublicKey, blockNumber: Long): Par = {
+  def transferUnforgeable(shardId: String): Par = {
     // RevVault contract is the 7th contract deployed in the genesis, start from 0. Index should be 6
     val RevVaultContractDeployIndex: Byte = 6
     val rand = BlockRandomSeed
       .generateSplitRandomNumber(
         BlockRandomSeed(
           shardId,
-          blockNumber,
-          validatorKey,
+          Genesis.genesisRandomSeedBlockNumber,
+          Genesis.genesisPubKey,
           Blake2b256Hash.fromByteString(emptyStateHashFixed)
         ),
         RevVaultContractDeployIndex,
         BlockRandomSeed.UserDeploySplitIndex
       )
     val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
-    unfogeableBytes.toParUnforgeableName
+    Name(unfogeableBytes)
   }
 
   def apply[F[_]: Concurrent](

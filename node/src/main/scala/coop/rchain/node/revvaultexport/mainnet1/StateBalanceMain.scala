@@ -8,6 +8,7 @@ import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.node.revvaultexport.StateBalances
 import coop.rchain.shared.Base16
 import coop.rchain.models.syntax._
+import coop.rchain.rholang.interpreter.RhoType.Name
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
@@ -65,7 +66,7 @@ object StateBalanceMain {
 
   // TODO support mainnet1 and mainnetx
   val mainnet1VaultMapPar: Par =
-    "af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeDecodeHex.toParUnforgeableName
+    Name("af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeDecodeHex)
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {

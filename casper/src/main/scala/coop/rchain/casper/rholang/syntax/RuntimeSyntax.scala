@@ -49,6 +49,7 @@ import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.rholang.interpreter.RhoType.Name
 
 trait RuntimeSyntax {
   implicit final def casperSyntaxRholangRuntime[F[_]](
@@ -462,7 +463,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
 
     // Create return channel as first private name created in deploy term
     val rand       = Blake2b512Random.defaultRandom
-    val returnName = rand.copy().next().toParUnforgeableName
+    val returnName = Name(rand.copy().next())
 
     // Execute deploy on top of specified block hash
     captureResults(hash, deploy, rand, returnName)
@@ -493,7 +494,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   )(implicit s: Sync[F]): F[Seq[Par]] = {
     // Create return channel as first unforgeable name created in deploy term
     val rand       = Blake2b512Random.defaultRandom
-    val returnName = rand.copy().next().toParUnforgeableName
+    val returnName = Name(rand.copy().next())
     captureResults(start, deploy, rand, returnName)
   }
 

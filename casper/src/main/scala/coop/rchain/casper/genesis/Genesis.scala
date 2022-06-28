@@ -18,6 +18,7 @@ import coop.rchain.models.Par
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.models.BlockVersion
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 
 final case class Genesis(
@@ -52,7 +53,7 @@ object Genesis {
         BlockRandomSeed.UserDeploySplitIndex
       )
     val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
-    unforgeableByte.toParUnforgeableName
+    Name(unforgeableByte)
   }
 
   def defaultBlessedTerms(

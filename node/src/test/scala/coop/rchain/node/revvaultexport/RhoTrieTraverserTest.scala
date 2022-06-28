@@ -15,6 +15,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import monix.eval.Task
 import coop.rchain.models.syntax._
+import coop.rchain.rholang.interpreter.RhoType.Name
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -75,7 +76,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
           storeToken = {
             val r      = rand.copy()
             val target = LazyList.continually(r.next()).drop(9).head
-            target.toParUnforgeableName
+            Name(target)
           }
           rd <- runtime.processDeploy(
                  StandardDeploys.registryGenerator(registry, SHARD_ID),

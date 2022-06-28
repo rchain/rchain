@@ -302,7 +302,7 @@ object Setup {
       // Transaction API
       transactionAPI = Transaction[F](
         blockReportApi,
-        Transaction.MainnetTransferUnforgeable
+        Transaction.transferUnforgeable(conf.casper.shardName)
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
 

@@ -11,7 +11,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.RhoType.Number
+import coop.rchain.rholang.interpreter.RhoType.{Name, Number}
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.convertToReadNumber
@@ -95,7 +95,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   val unforgeableNameSeed: Par = {
-    baseRhoSeed.next().toParUnforgeableName
+    Name(baseRhoSeed.next())
   }
 
   def testCase[F[_]: Concurrent: ContextShift: Parallel: Span: Log](

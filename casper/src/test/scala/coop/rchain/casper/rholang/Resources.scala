@@ -11,6 +11,7 @@ import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.mb
@@ -25,7 +26,7 @@ object Resources {
   // some tests doesn't require mergeable function could use some random tag
   val dummyMergeableTag: Par = {
     val rand = Blake2b512Random.defaultRandom
-    rand.next().toParUnforgeableName
+    Name(rand.next())
   }
 
   def mkTestRNodeStoreManager[F[_]: Concurrent: Log](
