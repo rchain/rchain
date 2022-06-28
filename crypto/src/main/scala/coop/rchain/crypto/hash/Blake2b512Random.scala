@@ -138,10 +138,10 @@ object Blake2b512Random {
     apply(bytes)
   }
 
-  def defaultRandom: Blake2b512Random = Blake2b512Random(128)
-
   def apply(init: Array[Byte]): Blake2b512Random =
     apply(init, 0, init.length)
+
+  def defaultRandom: Blake2b512Random = Blake2b512Random(128)
 
   def merge(children: Seq[Blake2b512Random]): Blake2b512Random = {
     @tailrec
