@@ -116,7 +116,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     for {
       runtime  <- spawnRuntime
       _        <- terms.map(_.sig).toList.traverse(executionTracker.execStarted)
-      computed <- runtime.computeState(startHash, terms, systemDeploys, blockData, rand)
+      computed <- runtime.computeState(startHash, terms, systemDeploys, rand, blockData)
       _ <- {
         val v = computed._2.map(tx => (tx.deploy.deploy.sig, tx.evalResult))
         v.toList.traverse((executionTracker.execComplete _).tupled)
