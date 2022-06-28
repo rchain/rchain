@@ -18,6 +18,7 @@ import coop.rchain.models.Par
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.models.BlockVersion
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 
 final case class Genesis(
     sender: PublicKey,
@@ -100,9 +101,17 @@ object Genesis {
   ): F[BlockMessage] = {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
-
+    val blockData = BlockData(genesis.blockNumber, Genesis.genesisPubKey, 0)
+    val rand = BlockRandomSeed.generateRandomNumber(
+      BlockRandomSeed(
+        genesis.shardId,
+        Genesis.genesisRandomSeedBlockNumber,
+        Genesis.genesisPubKey,
+        Blake2b256Hash.fromByteString(emptyStateHashFixed)
+      )
+    )
     RuntimeManager[F]
-      .computeGenesis(blessedTerms, genesis.blockNumber, genesis.sender, genesis.shardId)
+      .computeGenesis(blessedTerms, rand, blockData)
       .map {
         case (startHash, stateHash, processedDeploys) =>
           val unsignedBlock =

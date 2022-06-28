@@ -135,26 +135,17 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
     */
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockNumber: Long,
-      shardId: String
+      rand: Blake2b512Random,
+      blockData: BlockData
   )(
       implicit s: Sync[F],
       span: Span[F],
       log: Log[F]
   ): F[(StateHash, StateHash, Seq[UserDeployRuntimeResult])] =
     Span[F].traceI("compute-genesis") {
-      val blockData = BlockData(blockNumber, Genesis.genesisPubKey, 0)
       for {
-        _                   <- runtime.setBlockData(blockData)
-        genesisPreStateHash <- emptyStateHash
-        rand = BlockRandomSeed.generateRandomNumber(
-          BlockRandomSeed(
-            shardId,
-            blockNumber,
-            Genesis.genesisPubKey,
-            Blake2b256Hash.fromByteString(genesisPreStateHash)
-          )
-        )
+        _                             <- runtime.setBlockData(blockData)
+        genesisPreStateHash           <- emptyStateHash
         playResult                    <- playDeploys(genesisPreStateHash, terms, processDeployWithMergeableData, rand)
         (stateHash, processedDeploys) = playResult
       } yield (genesisPreStateHash, stateHash, processedDeploys)

@@ -56,9 +56,8 @@ trait RuntimeManager[F[_]] {
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockNumber: Long,
-      sender: PublicKey,
-      shardId: String
+      rand: Blake2b512Random,
+      blockData: BlockData
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Map[Validator, Long]]
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]]
@@ -143,12 +142,11 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockNumber: Long,
-      sender: PublicKey,
-      shardId: String
+      rand: Blake2b512Random,
+      blockData: BlockData
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
     spawnRuntime
-      .flatMap(_.computeGenesis(terms, blockNumber, shardId))
+      .flatMap(_.computeGenesis(terms, rand, blockData))
       .flatMap {
         case (preState, stateHash, processed) =>
           val (processedDeploys, mergeableChs, _) =
@@ -160,7 +158,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
           this
             .saveMergeableChannels(
               postStateHash,
-              sender.bytes,
+              blockData.sender.bytes,
               seqNum = 0,
               mergeableChs,
               preStateHash
