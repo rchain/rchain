@@ -9,6 +9,7 @@ import com.typesafe.config.Config
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.CommUtil
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfState}
@@ -20,6 +21,7 @@ import coop.rchain.node.runtime.NodeCallCtx.NodeCallCtxReader
 import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.{diagnostics, effects}
 import coop.rchain.shared._
+import coop.rchain.shared.syntax._
 import fs2.Stream
 import monix.execution.Scheduler
 
@@ -159,35 +161,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         effects.nodeDiscovery(id)
       }
 
-      // Running node as a Stream
-      result <- {
-        implicit val (t, n, m) = (transport, nodeDiscovery, metrics)
-        Setup.setupNodeProgram[F](
-          rpConnections,
-          rpConfAsk,
-          commUtil,
-          blockRetriever,
-          nodeConf
-        )
-      }
-      (nodeLaunchStream, routingMessageQueue, grpcServices, webApi, adminWebApi, reportingRoutes) = result
-
-      // Build network resources
-      networkResources = {
-        implicit val (tr, ca, cc) = (transport, rpConfAsk, rpConnections)
-        implicit val (ks, nd, me) = (kademliaStore, nodeDiscovery, metrics)
-        NetworkServers.create(
-          routingMessageQueue,
-          grpcServices,
-          webApi,
-          adminWebApi,
-          reportingRoutes,
-          nodeConf,
-          kamonConf,
-          grpcScheduler
-        )
-      }
-
       // Maintain network connections (discover peers)
       discoveryConnect = {
         implicit val (t, n, c, r, m) = (transport, nodeDiscovery, rpConnections, rpConfAsk, metrics)
@@ -210,20 +183,60 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         } yield ()
       }
 
+      // RNode key-value store manager / manages LMDB databases
+      storeManagerResource <- RNodeKeyValueStoreManager(nodeConf.storage.dataDir).map(_.asResource)
+
+      // Node launch process (Stream) with managed resources
+      nodeLaunchResource: Resource[F, Stream[F, Unit]] = {
+        implicit val (tr, ca, cc) = (transport, rpConfAsk, rpConnections)
+        implicit val (ks, nd, me) = (kademliaStore, nodeDiscovery, metrics)
+        for {
+          storeManager <- storeManagerResource
+
+          // Running node as a Stream
+          result <- Resource.eval(
+                     Setup.setupNodeProgram[F](
+                       storeManager,
+                       rpConnections,
+                       rpConfAsk,
+                       commUtil,
+                       blockRetriever,
+                       nodeConf
+                     )
+                   )
+          (nodeLaunch, routingMsgQueue, grpcServices, webApi, adminWebApi, reportRoutes) = result
+
+          // Build network resources
+          _ <- NetworkServers.create(
+                routingMsgQueue,
+                grpcServices,
+                webApi,
+                adminWebApi,
+                reportRoutes,
+                nodeConf,
+                kamonConf,
+                grpcScheduler
+              )
+          // Return node launch stream
+        } yield nodeLaunch
+      }
+
       // Node starting log messages
       _ <- Log[F].info(s"Starting stand-alone node.").whenA(nodeConf.standalone)
       _ <- Log[F]
             .info(s"Starting node that will bootstrap from ${nodeConf.protocolClient.bootstrap}")
             .unlessA(nodeConf.standalone)
 
-      // Create main process combined from concurrent streams
-      mainProcess = nodeLaunchStream concurrently
-        Stream.eval(discoveryConnect).repeat concurrently
-        Stream.eval(clearConnections).repeat
-
-      _ <- networkResources
+      // Launch the node with concurrent processes / release resources on exit
+      _ <- nodeLaunchResource
+            .map {
+              _ concurrently
+                Stream.eval(discoveryConnect).repeat concurrently
+                Stream.eval(clearConnections).repeat
+            }
             .onFinalize(Log[F].warn(s"Graceful shutdown, all resources are successfully closed."))
-            .use(_ => mainProcess.compile.drain)
+            // Wait on never-ending-empty Stream, exit in case of an error or effect cancellation
+            .use(_.compile.drain)
     } yield ()
   }
 

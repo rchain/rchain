@@ -17,7 +17,6 @@ import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMe
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.syntax._
 import coop.rchain.comm.RoutingMessage
 import coop.rchain.comm.discovery.NodeDiscovery
@@ -45,12 +44,14 @@ import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
+import coop.rchain.store.KeyValueStoreManager
 import fs2.Stream
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
 object Setup {
   def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Timer: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](
+      storeManager: KeyValueStoreManager[F],
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       commUtil: CommUtil[F],
@@ -71,18 +72,15 @@ object Setup {
     implicit val time = Time.fromTimer(Timer[F])
 
     for {
-      // RNode key-value store manager / manages LMDB databases
-      rnodeStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
-
       // Block execution tracker
       executionTracker <- StatefulExecutionTracker[F]
 
       // Block storage
-      blockStore    <- BlockStore(rnodeStoreManager)
-      approvedStore <- approvedStore.create(rnodeStoreManager)
+      blockStore    <- BlockStore(storeManager)
+      approvedStore <- approvedStore.create(storeManager)
 
       // Block DAG storage
-      blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
+      blockDagStorage <- BlockDagKeyValueStorage.create[F](storeManager)
 
       // Create metrics if enabled
       span = if (conf.metrics.zipkin)
@@ -93,15 +91,15 @@ object Setup {
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
+        storeManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
       }
 
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
         for {
-          rStores    <- rnodeStoreManager.rSpaceStores
-          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          rStores    <- storeManager.rSpaceStores
+          mergeStore <- RuntimeManager.mergeableStore(storeManager)
           rm <- RuntimeManager
                  .createWithHistory[F](
                    rStores,
@@ -118,7 +116,7 @@ object Setup {
         implicit val (bd, sp) = (blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
-          rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
+          storeManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
         } else
           ReportingCasper.noop.pure[F]
       }
@@ -252,7 +250,7 @@ object Setup {
       }
 
       // Report API
-      reportingStore <- ReportStore.store[F](rnodeStoreManager)
+      reportingStore <- ReportStore.store[F](storeManager)
       blockReportApi = {
         implicit val bs = blockStore
         BlockReportApi[F](reportingRuntime, reportingStore, validatorIdentityOpt)
@@ -269,7 +267,7 @@ object Setup {
         blockReportApi,
         Par(unforgeables = Seq(Transaction.transferUnforgeable))
       )
-      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
+      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, storeManager)
 
       // Peer message stream
       peerMessageStream = routingMessageQueue
