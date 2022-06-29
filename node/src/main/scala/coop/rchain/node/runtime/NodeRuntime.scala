@@ -18,7 +18,7 @@ import coop.rchain.monix.Monixable
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.runtime.NodeCallCtx.NodeCallCtxReader
 import coop.rchain.node.runtime.NodeRuntime._
-import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
+import coop.rchain.node.{diagnostics, effects}
 import coop.rchain.shared._
 import fs2.Stream
 import monix.execution.Scheduler

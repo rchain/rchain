@@ -1,9 +1,9 @@
-package coop.rchain.node
+package coop.rchain.node.runtime
 
 import cats.effect.Sync
-import cats.implicits._
-import coop.rchain.comm._
-import coop.rchain.comm.transport.{GenerateCertificateIfAbsent, TlsConf}
+import cats.syntax.all._
+import coop.rchain.comm.NodeIdentifier
+import coop.rchain.comm.transport.GenerateCertificateIfAbsent
 import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.models.syntax._
 import coop.rchain.node.configuration.NodeConf
