@@ -7,7 +7,7 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
-import coop.rchain.casper.protocol.{BlockMessage, Justification}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
@@ -61,7 +61,7 @@ class BlockReceiverSpec
 
   private def makeBlock(
       node: TestNode[Task],
-      justifications: Seq[BlockHash] = Seq()
+      justifications: List[BlockHash] = List()
   ): Task[BlockMessage] =
     for {
       deploy <- makeDeploy
@@ -69,7 +69,7 @@ class BlockReceiverSpec
                 .createBlockUnsafe(deploy)
                 .map(
                   _.copy(
-                    justifications = justifications.map(Justification(ByteString.EMPTY, _)).toList
+                    justifications = justifications
                   )
                 )
       (sk, _)     = Secp256k1.newKeyPair
@@ -137,7 +137,7 @@ class BlockReceiverSpec
         for {
           // Received a parent with an empty list of justifications and its child
           a1 <- makeBlock(node)
-          a2 <- makeBlock(node, Seq(a1.blockHash))
+          a2 <- makeBlock(node, List(a1.blockHash))
 
           // Put the parent and child in the input queue
           _ <- incomingQueue.enqueue1(a2)
