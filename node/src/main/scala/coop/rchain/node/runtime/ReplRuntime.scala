@@ -1,18 +1,17 @@
-package coop.rchain.node
+package coop.rchain.node.runtime
 
-import coop.rchain.shared.StringOps._
-import cats._
-import cats.implicits._
-import coop.rchain.catscontrib._
+import cats.Monad
+import cats.syntax.all._
 import coop.rchain.node.effects.{ConsoleIO, ReplClient}
+import coop.rchain.shared.StringOps._
 import coop.rchain.shared.TerminalMode
 
 class ReplRuntime() {
 
   private val logo: String =
     """
-  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  
-  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  
+  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦
+  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
     """
 

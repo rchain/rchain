@@ -13,7 +13,7 @@ import coop.rchain.monix.Monixable
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
-import coop.rchain.node.runtime.NodeRuntime
+import coop.rchain.node.runtime.{NodeRuntime, ReplRuntime}
 import coop.rchain.node.web.VersionInfo
 import coop.rchain.shared.StringOps._
 import coop.rchain.shared._
