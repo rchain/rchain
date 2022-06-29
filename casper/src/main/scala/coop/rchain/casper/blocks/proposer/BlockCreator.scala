@@ -73,30 +73,23 @@ object BlockCreator {
                         }
         } yield validUnique.toSet
 
-      final case class SlashingStatus(invalidLatestMessages: Seq[(Validator, BlockHash)]) {
-        lazy val ilmFromBonded = invalidLatestMessages.filter {
-          case (validator, _) => preState.bondsMap.getOrElse(validator, 0L) > 0L
+      def prepareSlashingDeploys(
+          ilmFromBonded: Seq[(Validator, BlockHash)],
+          rand: Blake2b512Random,
+          startIndex: Int
+      ): F[List[SlashDeploy]] = {
+        val slashingDeploysWithBlocks = ilmFromBonded.zipWithIndex.map {
+          case ((slashedValidator, invalidBlock), i) =>
+            (SlashDeploy(slashedValidator, rand.splitByte((i + startIndex).toByte)), invalidBlock)
         }
-
-        def prepareSlashingDeploys(
-            rand: Blake2b512Random,
-            startIndex: Int
-        ): F[List[SlashDeploy]] = {
-          val slashingDeploysWithBlocks = ilmFromBonded.zipWithIndex.map {
-            case ((slashedValidator, invalidBlock), i) =>
-              (SlashDeploy(slashedValidator, rand.splitByte((i + startIndex).toByte)), invalidBlock)
-          }
-          slashingDeploysWithBlocks.toList.traverse {
-            case (sd, invalidBlock) =>
-              Log[F]
-                .info(
-                  s"Issuing slashing deploy justified by block ${PrettyPrinter.buildString(invalidBlock)}"
-                )
-                .as(sd)
-          }
+        slashingDeploysWithBlocks.toList.traverse {
+          case (sd, invalidBlock) =>
+            Log[F]
+              .info(
+                s"Issuing slashing deploy justified by block ${PrettyPrinter.buildString(invalidBlock)}"
+              )
+              .as(sd)
         }
-
-        def needSlashing: Boolean = ilmFromBonded.nonEmpty
       }
 
       def prepareDummyDeploy(blockNumber: Long, shardId: String): Seq[Signed[DeployData]] =
@@ -120,10 +113,12 @@ object BlockCreator {
         userDeploys  <- prepareUserDeploys(nextBlockNum)
         dummyDeploys = prepareDummyDeploy(nextBlockNum, shardId)
         // TODO: fix invalid blocks from non-finalized scope
-        ilm            <- Seq[(Validator, BlockHash)]().pure[F]
-        slashingStatus = SlashingStatus(ilm)
-        deploys        = userDeploys ++ dummyDeploys
-        r <- if (deploys.nonEmpty || slashingStatus.needSlashing) {
+        ilm <- Seq[(Validator, BlockHash)]().pure[F]
+        ilmFromBonded = ilm.filter {
+          case (validator, _) => preState.bondsMap.getOrElse(validator, 0L) > 0L
+        }
+        deploys = userDeploys ++ dummyDeploys
+        r <- if (deploys.nonEmpty || ilmFromBonded.nonEmpty) {
               val blockData = BlockData(nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
               for {
                 parents <- justifications
@@ -141,7 +136,7 @@ object BlockCreator {
                     Blake2b256Hash.fromByteString(computedParentsInfo._1)
                   )
                 )
-                slashingDeploys <- slashingStatus.prepareSlashingDeploys(rand, deploys.size)
+                slashingDeploys <- prepareSlashingDeploys(ilmFromBonded, rand, deploys.size)
                 // make sure closeBlock is the last system Deploy
                 systemDeploys = slashingDeploys :+ CloseBlockDeploy(
                   rand.splitByte((deploys.size + slashingDeploys.size).toByte)
