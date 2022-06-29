@@ -11,31 +11,32 @@ import coop.rchain.comm.{CommMetricsSource, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
 import coop.rchain.shared._
-import coop.rchain.shared.syntax._
 import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl._
-import monix.execution.{Cancelable, Scheduler}
+import monix.execution.Scheduler
 
 import java.io.ByteArrayInputStream
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicReference
 import scala.collection.concurrent.TrieMap
 import scala.io.Source
 import scala.util.{Left, Right, Using}
 
 trait TransportLayerServer[F[_]] {
-  def handleReceive(
-      dispatch: Protocol => F[CommunicationResponse],
-      handleStreamed: Blob => F[Unit]
-  ): F[Cancelable]
-}
-
-// TODO: temporary two traits until complete migration to safe Resource implementation
-trait TransportLayerServerRes[F[_]] {
   def resource(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): Resource[F, Unit]
+}
+
+object TransportLayerServer {
+  def apply[F[_]](grpcServer: GrpcTransportServer[F]): TransportLayerServer[F] =
+    // Use trait directly to allow IntelliJ to find implementation
+    new TransportLayerServer[F] {
+      override def resource(
+          dispatch: Protocol => F[CommunicationResponse],
+          handleStreamed: Blob => F[Unit]
+      ): Resource[F, Unit] = grpcServer.resource(dispatch, handleStreamed)
+    }
 }
 
 class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
@@ -67,10 +68,10 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
           .build()
       }
 
-  def handleReceive(
+  override def resource(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
-  ): F[Cancelable] = {
+  ): Resource[F, Unit] = {
 
     val dispatchSend: Send => F[Unit] = s =>
       dispatch(s.msg)
@@ -86,7 +87,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
             handleStreamed(blob)
         }) >> Metrics[F].incrementCounter("dispatched.packets")
 
-    for {
+    val cancelable = for {
       serverSslContext <- serverSslContextTask
       messageBuffers   <- Ref.of[F, Map[PeerNode, Deferred[F, MessageBuffers]]](Map.empty)
       receiver <- GrpcTransportReceiver.create(
@@ -101,12 +102,12 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
                    cache
                  )
     } yield receiver
+
+    Resource.make(cancelable)(c => Sync[F].delay(c.cancel())).as(())
   }
 }
 
 object GrpcTransportServer {
-  type ServerCreator[F[_]] =
-    (Protocol => F[CommunicationResponse], Blob => F[Unit]) => Resource[F, F[Unit]]
 
   def acquireServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
       networkId: String,
@@ -118,54 +119,19 @@ object GrpcTransportServer {
       parallelism: Int
   )(
       implicit mainScheduler: Scheduler
-  ): TransportLayerServerRes[F] = {
+  ): TransportLayerServer[F] = {
     val cert = Using.resource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Using.resource(Source.fromFile(keyPath.toFile))(_.mkString)
-    val server = new TransportServer[F](
-      new GrpcTransportServer[F](
-        networkId,
-        port,
-        cert,
-        key,
-        maxMessageSize,
-        maxStreamMessageSize,
-        parallelism
-      )
+    val server = new GrpcTransportServer[F](
+      networkId,
+      port,
+      cert,
+      key,
+      maxMessageSize,
+      maxStreamMessageSize,
+      parallelism
     )
-    new TransportLayerServerRes[F] {
-      override def resource(
-          dispatch: Protocol => F[CommunicationResponse],
-          handleStreamed: Blob => F[Unit]
-      ): Resource[F, Unit] =
-        Resource.make(server.start(dispatch, handleStreamed))(_ => server.stop())
-    }
+    TransportLayerServer(server)
   }
-}
 
-class TransportServer[F[_]: Monixable: Concurrent](server: GrpcTransportServer[F]) {
-  private val ref: AtomicReference[Option[Cancelable]] =
-    new AtomicReference[Option[Cancelable]](None)
-
-  def start(
-      dispatch: Protocol => F[CommunicationResponse],
-      handleStreamed: Blob => F[Unit]
-  ): F[Unit] =
-    ref.get() match {
-      case Some(_) => ().pure[F]
-      case _ =>
-        server
-          .handleReceive(dispatch, handleStreamed)
-          .toTask
-          .foreachL { cancelable =>
-            ref
-              .getAndSet(Some(cancelable))
-              .fold(())(c => c.cancel())
-          }
-          .fromTask
-    }
-
-  def stop(): F[Unit] =
-    ref
-      .getAndSet(None)
-      .fold(().pure[F])(c => Sync[F].delay(c.cancel()))
 }

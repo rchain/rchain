@@ -22,6 +22,7 @@ abstract class TransportLayerRuntime[F[_]: Sync: Timer, E <: Environment] {
   def createEnvironment(port: Int): F[E]
 
   def createTransportLayer(env: E): F[TransportLayer[F]]
+
   def createTransportLayerServer(env: E): F[TransportLayerServer[F]]
 
   def createDispatcherCallback: F[DispatcherCallback[F]]
@@ -82,14 +83,17 @@ abstract class TransportLayerRuntime[F[_]: Sync: Timer, E <: Environment] {
             local     = e1.peer
             remote    = e2.peer
             cb        <- createDispatcherCallback
-            server <- remoteTls.handleReceive(
-                       protocolDispatcher.dispatch(remote, cb),
-                       streamDispatcher.dispatch(remote, cb)
-                     )
-            r <- execute(localTl, local, remote)
-            _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
-                else implicitly[Timer[F]].sleep(1.second)
-            _ = server.cancel()
+            server = remoteTls.resource(
+              protocolDispatcher.dispatch(remote, cb),
+              streamDispatcher.dispatch(remote, cb)
+            )
+            r <- server.use { _ =>
+                  for {
+                    r <- execute(localTl, local, remote)
+                    _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
+                        else implicitly[Timer[F]].sleep(1.second)
+                  } yield r
+                }
           } yield new TwoNodesResult {
             def localNode: PeerNode        = local
             def remoteNode: PeerNode       = remote
@@ -163,21 +167,23 @@ abstract class TransportLayerRuntime[F[_]: Sync: Timer, E <: Environment] {
             cbl        <- createDispatcherCallback
             cb1        <- createDispatcherCallback
             cb2        <- createDispatcherCallback
-            server1 <- remoteTls1.handleReceive(
-                        protocolDispatcher.dispatch(remote1, cb1),
-                        streamDispatcher.dispatch(remote1, cb1)
-                      )
-            server2 <- remoteTls2.handleReceive(
-                        protocolDispatcher.dispatch(remote2, cb2),
-                        streamDispatcher.dispatch(remote2, cb2)
-                      )
-            r <- execute(localTl, local, remote1, remote2)
-            _ <- if (blockUntilDispatched) cb1.waitUntilDispatched()
-                else implicitly[Timer[F]].sleep(1.second)
-            _ <- if (blockUntilDispatched) cb2.waitUntilDispatched()
-                else implicitly[Timer[F]].sleep(1.second)
-            _ = server1.cancel()
-            _ = server2.cancel()
+            server1 = remoteTls1.resource(
+              protocolDispatcher.dispatch(remote1, cb1),
+              streamDispatcher.dispatch(remote1, cb1)
+            )
+            server2 = remoteTls2.resource(
+              protocolDispatcher.dispatch(remote2, cb2),
+              streamDispatcher.dispatch(remote2, cb2)
+            )
+            r <- (server1 *> server2).use { _ =>
+                  for {
+                    r <- execute(localTl, local, remote1, remote2)
+                    _ <- if (blockUntilDispatched) cb1.waitUntilDispatched()
+                        else implicitly[Timer[F]].sleep(1.second)
+                    _ <- if (blockUntilDispatched) cb2.waitUntilDispatched()
+                        else implicitly[Timer[F]].sleep(1.second)
+                  } yield r
+                }
           } yield new ThreeNodesResult {
             def localNode: PeerNode   = local
             def remoteNode1: PeerNode = remote1

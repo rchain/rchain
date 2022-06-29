@@ -204,34 +204,34 @@ case class TestNode[F[_]: Sync: Timer](
               }
     } yield block
 
+  // TODO: this is legacy code, check is it used and how it should work with Resource
+  //  returned from TransportLayerServer. For now it's just empty _use_.
   def handleReceive(): F[Unit] =
     tls
-      .handleReceive(
-        (
-            p =>
-              p.message match {
-                case Protocol.Message.Packet(packet) => {
-                  toCasperMessageProto(packet).toEither
-                    .flatMap(proto => CasperMessage.from(proto))
-                    .fold(
-                      err =>
-                        Log[F]
-                          .warn(s"Could not extract casper message from packet")
-                          .as(CommunicationResponse.notHandled(UnknownCommError(""))),
-                      message =>
-                        message match {
-                          case b: BlockMessage =>
-                            addBlock(b).as(CommunicationResponse.handledWithoutMessage)
-                          case _ => handle[F](p, routingMessageQueue)
-                        }
-                    )
-                }
-                case _ => handle[F](p, routingMessageQueue)
-              }
-          ),
+      .resource(
+        p =>
+          p.message match {
+            case Protocol.Message.Packet(packet) => {
+              toCasperMessageProto(packet).toEither
+                .flatMap(proto => CasperMessage.from(proto))
+                .fold(
+                  err =>
+                    Log[F]
+                      .warn(s"Could not extract casper message from packet")
+                      .as(CommunicationResponse.notHandled(UnknownCommError(""))),
+                  message =>
+                    message match {
+                      case b: BlockMessage =>
+                        addBlock(b).as(CommunicationResponse.handledWithoutMessage)
+                      case _ => handle[F](p, routingMessageQueue)
+                    }
+                )
+            }
+            case _ => handle[F](p, routingMessageQueue)
+          },
         kp(().pure[F])
       )
-      .void
+      .use(_ => ().pure[F])
 
   val maxSyncAttempts = 10
   def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {
