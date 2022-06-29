@@ -286,14 +286,19 @@ object GenesisTest {
     implicit val log                     = new LogStub[F]
 
     for {
-      kvsManager     <- Resources.mkTestRNodeStoreManager[F](storePath)
-      rStore         <- kvsManager.rSpaceStores
-      mStore         <- RuntimeManager.mergeableStore(kvsManager)
-      t              = RuntimeManager.noOpExecutionTracker
-      runtimeManager <- RuntimeManager[F](rStore, mStore, Resources.dummyMergeableTag, t)
-      result         <- body(runtimeManager, genesisPath, log)
-      _              <- Sync[F].delay { storePath.recursivelyDelete() }
-      _              <- Sync[F].delay { gp.recursivelyDelete() }
+      kvsManager <- Resources.mkTestRNodeStoreManager[F](storePath)
+      rStore     <- kvsManager.rSpaceStores
+      mStore     <- RuntimeManager.mergeableStore(kvsManager)
+      t          = RuntimeManager.noOpExecutionTracker
+      runtimeManager <- RuntimeManager[F](
+                         rStore,
+                         mStore,
+                         Genesis.nonNegativeMergeableTagName(rchainShardId),
+                         t
+                       )
+      result <- body(runtimeManager, genesisPath, log)
+      _      <- Sync[F].delay { storePath.recursivelyDelete() }
+      _      <- Sync[F].delay { gp.recursivelyDelete() }
     } yield result
   }
 

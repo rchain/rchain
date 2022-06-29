@@ -4,6 +4,7 @@ import cats.effect.Resource
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper._
@@ -31,15 +32,17 @@ class BlocksResponseAPITest
   implicit val log: Log[Task]       = new Log.NOPLog[Task]()
   implicit val noopSpan: Span[Task] = NoopSpan[Task]()
 
-  val v1     = generateValidator("Validator One")
-  val v2     = generateValidator("Validator Two")
-  val v3     = generateValidator("Validator Three")
-  val v1Bond = (v1, 25L)
-  val v2Bond = (v2, 20L)
-  val v3Bond = (v3, 15L)
-  val bonds  = Map(v1Bond, v2Bond, v3Bond)
+  val v1                         = generateValidator("Validator One")
+  val v2                         = generateValidator("Validator Two")
+  val v3                         = generateValidator("Validator Three")
+  val v1Bond                     = (v1, 25L)
+  val v2Bond                     = (v2, 20L)
+  val v3Bond                     = (v3, 15L)
+  val bonds                      = Map(v1Bond, v2Bond, v3Bond)
+  private val dummyMergeableName = Genesis.nonNegativeMergeableTagName("dummy")
+
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager("block-response-api-test")
+    mkRuntimeManager("block-response-api-test", dummyMergeableName)
   val maxBlockLimit = 50
 
   private def createDagWith8Blocks(

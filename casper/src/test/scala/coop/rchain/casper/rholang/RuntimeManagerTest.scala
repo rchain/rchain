@@ -6,6 +6,7 @@ import cats.syntax.all._
 import cats.{Applicative, Functor, Id}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.sysdeploys._
@@ -68,7 +69,9 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
     Resources
       .copyStorage[Task](genesisContext.storageDirectory)
       .evalMap(Resources.mkTestRNodeStoreManager[Task])
-      .evalMap(Resources.mkRuntimeManagerAt[Task](_))
+      .evalMap(
+        Resources.mkRuntimeManagerAt[Task](_, Genesis.nonNegativeMergeableTagName(genesis.shardId))
+      )
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],

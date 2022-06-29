@@ -23,12 +23,6 @@ import java.nio.file.{Files, Path}
 
 object Resources {
 
-  // some tests doesn't require mergeable function could use some random tag
-  val dummyMergeableTag: Par = {
-    val rand = Blake2b512Random.defaultRandom
-    Name(rand.next())
-  }
-
   def mkTestRNodeStoreManager[F[_]: Concurrent: Log](
       dirPath: Path
   ): F[KeyValueStoreManager[F]] = {
@@ -48,7 +42,7 @@ object Resources {
 
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
       prefix: String,
-      mergeableTagName: Par = dummyMergeableTag
+      mergeableTagName: Par
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
     mkTempDir[F](prefix)
       .evalMap(mkTestRNodeStoreManager[F])
@@ -58,7 +52,7 @@ object Resources {
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
   def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
       kvm: KeyValueStoreManager[F],
-      mergeableTagName: Par = dummyMergeableTag
+      mergeableTagName: Par
   )(
       implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
@@ -76,27 +70,6 @@ object Resources {
                          RuntimeManager.noOpExecutionTracker[F]
                        )
     } yield runtimeManager
-  }
-
-  def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: Parallel: ContextShift](
-      kvm: KeyValueStoreManager[F]
-  )(
-      implicit scheduler: Scheduler
-  ): F[(RuntimeManager[F], RhoHistoryRepository[F])] = {
-    implicit val log               = Log.log[F]
-    implicit val metricsEff        = new metrics.Metrics.MetricsNOP[F]
-    implicit val noopSpan: Span[F] = NoopSpan[F]()
-
-    for {
-      rStore <- kvm.rSpaceStores
-      mStore <- RuntimeManager.mergeableStore(kvm)
-      runtimeManagerWithHistory <- RuntimeManager.createWithHistory(
-                                    rStore,
-                                    mStore,
-                                    dummyMergeableTag,
-                                    RuntimeManager.noOpExecutionTracker[F]
-                                  )
-    } yield runtimeManagerWithHistory
   }
 
   def copyStorage[F[_]: Sync](

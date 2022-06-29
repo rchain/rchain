@@ -3,6 +3,7 @@ package coop.rchain.casper.rholang
 import cats.effect.Resource
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.Resources._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
@@ -22,11 +23,12 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class DeployerIdTest extends AnyFlatSpec with Matchers {
-  implicit val time           = new LogicalTime[Task]
-  implicit val log: Log[Task] = new Log.NOPLog[Task]()
+  implicit val time              = new LogicalTime[Task]
+  implicit val log: Log[Task]    = new Log.NOPLog[Task]()
+  private val dummyMergeableName = Genesis.nonNegativeMergeableTagName("dummy")
 
   val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deployer-id-runtime-manager-test")
+    mkRuntimeManager[Task]("deployer-id-runtime-manager-test", dummyMergeableName)
 
   "Deployer id" should "be equal to the deployer's public key" in effectTest {
     val sk = PrivateKey(

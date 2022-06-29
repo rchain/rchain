@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil._
@@ -346,7 +347,10 @@ class InterpreterUtilTest
       val processedDeploys =
         deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, false))
       val invalidHash = ByteString.EMPTY
-      mkRuntimeManager[Task]("interpreter-util-test").use { implicit runtimeManager =>
+      mkRuntimeManager[Task](
+        "interpreter-util-test",
+        Genesis.nonNegativeMergeableTagName(genesis.shardId)
+      ).use { implicit runtimeManager =>
         for {
           block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
           validateResult   <- validateBlockCheckpoint[Task](block)

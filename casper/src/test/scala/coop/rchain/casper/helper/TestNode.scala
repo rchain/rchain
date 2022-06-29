@@ -417,7 +417,7 @@ object TestNode {
                          RuntimeManager(
                            rSpaceStore,
                            mStore,
-                           Resources.dummyMergeableTag,
+                           Genesis.nonNegativeMergeableTagName(genesis.shardId),
                            RuntimeManager.noOpExecutionTracker[F]
                          )
                        )

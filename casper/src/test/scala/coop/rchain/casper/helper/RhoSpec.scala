@@ -132,7 +132,8 @@ class RhoSpec(
   private def getResults(
       testObject: CompiledRholangSource[_],
       otherLibs: Seq[Signed[DeployData]],
-      timeout: FiniteDuration
+      timeout: FiniteDuration,
+      shardId: String
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
       val genesis = GenesisBuilder.buildGenesis(genesisParameters)
@@ -143,7 +144,7 @@ class RhoSpec(
         .evalMap(
           RhoRuntime.createRuntime(
             _,
-            Resources.dummyMergeableTag,
+            Genesis.nonNegativeMergeableTagName(shardId),
             additionalSystemProcesses = testFrameworkContracts(testResultCollector)
           )
         )
@@ -206,7 +207,8 @@ class RhoSpec(
   }
 
   val result =
-    getResults(testObject, extraNonGenesisDeploys, executionTimeout).runSyncUnsafe(Duration.Inf)
+    getResults(testObject, extraNonGenesisDeploys, executionTimeout, genesisParameters._3.shardId)
+      .runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")

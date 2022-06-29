@@ -171,11 +171,16 @@ object GenesisBuilder {
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
     (for {
-      kvsManager     <- mkTestRNodeStoreManager[Task](storageDirectory)
-      rStore         <- kvsManager.rSpaceStores
-      mStore         <- RuntimeManager.mergeableStore(kvsManager)
-      t              = RuntimeManager.noOpExecutionTracker[Task]
-      runtimeManager <- RuntimeManager(rStore, mStore, Resources.dummyMergeableTag, t)
+      kvsManager <- mkTestRNodeStoreManager[Task](storageDirectory)
+      rStore     <- kvsManager.rSpaceStores
+      mStore     <- RuntimeManager.mergeableStore(kvsManager)
+      t          = RuntimeManager.noOpExecutionTracker[Task]
+      runtimeManager <- RuntimeManager(
+                         rStore,
+                         mStore,
+                         Genesis.nonNegativeMergeableTagName(parameters._3.shardId),
+                         t
+                       )
       // First bonded validator is the creator
       creator = ValidatorIdentity(parameters._1.head._1)
       genesis <- {

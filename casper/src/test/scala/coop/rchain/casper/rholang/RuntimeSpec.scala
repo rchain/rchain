@@ -24,9 +24,10 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
 
     val kvm = InMemoryStoreManager[Task]()
 
+    val dummyShardId = "dummy"
     for {
       store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime(store, Resources.dummyMergeableTag)
+      runtime <- RhoRuntime.createRuntime(store, Genesis.nonNegativeMergeableTagName(dummyShardId))
 
       /**
         * Root hashes compatible with RChain main net network
@@ -53,6 +54,7 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val logger: Log[Task]         = Log.log[Task]
     val kvm                                = InMemoryStoreManager[Task]()
+    val dummyShardId                       = "dummy"
 
     // fixed term , if the term changed, it is possible that the stateHash also changed.
     val contract =
@@ -77,7 +79,7 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
 
     for {
       store      <- kvm.rSpaceStores
-      runtime    <- RhoRuntime.createRuntime(store, Resources.dummyMergeableTag)
+      runtime    <- RhoRuntime.createRuntime(store, Genesis.nonNegativeMergeableTagName(dummyShardId))
       r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty, random)
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
