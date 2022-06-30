@@ -71,7 +71,8 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
       .copyStorage[Task](genesisContext.storageDirectory)
       .evalMap(Resources.mkTestRNodeStoreManager[Task])
       .evalMap(
-        Resources.mkRuntimeManagerAt[Task](_, Genesis.nonNegativeMergeableTagName(genesis.shardId))
+        Resources
+          .mkRuntimeManagerAt[Task](_, BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId))
       )
 
   private def computeState[F[_]: Functor](

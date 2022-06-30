@@ -8,13 +8,9 @@ import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
 import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
-import coop.rchain.crypto.PublicKey
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.EventLogMergingLogic.computeRelatedSets
 import coop.rchain.rspace.merger.{EventLogIndex, EventLogMergingLogic}
 import coop.rchain.shared.scalatestcontrib.effectTest
@@ -34,7 +30,7 @@ class MergingCases extends AnyFlatSpec with Matchers {
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
     kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
-    mergeableTag = Genesis.nonNegativeMergeableTagName(
+    mergeableTag = BlockRandomSeed.nonNegativeMergeableTagName(
       genesis.shardId
     )
     rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))

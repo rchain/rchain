@@ -11,7 +11,7 @@ import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
 import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.casper.rholang.RuntimeManager.{StateHash, emptyStateHashFixed}
+import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Par
@@ -20,7 +20,6 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.models.BlockVersion
 import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.hashing.Blake2b256Hash.EmptyByteStringBlakeHash
 
 final case class Genesis(
     sender: PublicKey,
@@ -32,31 +31,6 @@ final case class Genesis(
 )
 
 object Genesis {
-  // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
-  val GenesisRandomSeedPubKey: PublicKey = PublicKey(Array[Byte]())
-
-  // using fixed 0 to make sure unforgeable name is predictable without configuring blockNumber
-  val GenesisRandomSeedBlockNumber = 0L
-
-  def nonNegativeMergeableTagName(
-      shardId: String
-  ): Par = {
-    // NonNegative contract is the 4th contract deployed in the genesis, start from 0. Index should be 3
-    val nonNegativeContractIndex: Byte = 3
-    val seed = BlockRandomSeed(
-      shardId,
-      GenesisRandomSeedBlockNumber,
-      GenesisRandomSeedPubKey,
-      EmptyByteStringBlakeHash
-    )
-    val rand = BlockRandomSeed.generateSplitRandomNumber(
-      seed,
-      nonNegativeContractIndex,
-      BlockRandomSeed.UserDeploySplitIndex
-    )
-    val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
-    Name(unforgeableByte)
-  }
 
   def defaultBlessedTerms(
       posParams: ProofOfStake,
@@ -96,14 +70,8 @@ object Genesis {
   ): F[BlockMessage] = {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
-    val blockData = BlockData(genesis.blockNumber, Genesis.GenesisRandomSeedPubKey, 0)
-    val seed = BlockRandomSeed(
-      genesis.shardId,
-      Genesis.GenesisRandomSeedBlockNumber,
-      Genesis.GenesisRandomSeedPubKey,
-      EmptyByteStringBlakeHash
-    )
-    val rand = BlockRandomSeed.generateRandomNumber(seed)
+    val blockData = BlockData(genesis.blockNumber, BlockRandomSeed.GenesisRandomSeedPubKey, 0)
+    val rand      = BlockRandomSeed.fromGenesis(genesis.shardId)
     RuntimeManager[F]
       .computeGenesis(blessedTerms, rand, blockData)
       .map {

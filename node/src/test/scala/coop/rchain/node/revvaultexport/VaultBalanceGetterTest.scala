@@ -1,12 +1,12 @@
 package coop.rchain.node.revvaultexport
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.models.syntax._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.node.revvaultexport.mainnet1.StateBalanceMain
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 
@@ -64,7 +64,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
                          genesis.genesisBlock.shardId,
                          runtime
                        )
-        storeToken = RhoTrieTraverser.storeTokenUnforgeable(
+        storeToken = BlockRandomSeed.storeTokenUnforgeable(
           genesis.genesisBlock.shardId
         )
         balances <- VaultBalanceGetter.getAllVaultBalance(

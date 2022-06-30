@@ -3,6 +3,7 @@ package coop.rchain.casper.rholang
 import cats.effect.Resource
 import cats.syntax.all._
 import cats.implicits.catsSyntaxApplicativeId
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol.DeployData
@@ -26,7 +27,7 @@ import scala.concurrent.duration._
 
 class DeployIdTest extends AnyFlatSpec with Matchers {
   implicit val log: Log[Task]    = new Log.NOPLog[Task]()
-  private val dummyMergeableName = Genesis.nonNegativeMergeableTagName("dummy")
+  private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
 
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager[Task]("deploy-id-runtime-manager-test", dummyMergeableName)

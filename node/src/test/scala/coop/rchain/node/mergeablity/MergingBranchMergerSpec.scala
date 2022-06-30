@@ -23,7 +23,6 @@ import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.store.InMemoryStoreManager
@@ -43,7 +42,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
     kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
-    mergeableTag = Genesis.nonNegativeMergeableTagName(
+    mergeableTag = BlockRandomSeed.nonNegativeMergeableTagName(
       genesis.shardId
     )
     rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))

@@ -35,7 +35,7 @@ class BlockQueryResponseAPITest
   implicit val spanEff = NoopSpan[Task]()
   implicit val log     = Log.log[Task]
 
-  private val dummyMergeableName = Genesis.nonNegativeMergeableTagName("dummy")
+  private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager[Task]("block-query-response-api-test", dummyMergeableName)
 

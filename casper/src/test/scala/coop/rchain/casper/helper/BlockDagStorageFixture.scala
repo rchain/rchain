@@ -5,6 +5,7 @@ import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.rholang.{Resources, RuntimeManager}
@@ -41,7 +42,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
         indexedDag = BlockDagStorage[Task](dag)
         runtime <- Resources.mkRuntimeManagerAt[Task](
                     kvm,
-                    Genesis.nonNegativeMergeableTagName(context.genesisBlock.shardId)
+                    BlockRandomSeed.nonNegativeMergeableTagName(context.genesisBlock.shardId)
                   )
       } yield (blocks, indexedDag, runtime)
 

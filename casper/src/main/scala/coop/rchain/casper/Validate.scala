@@ -16,6 +16,7 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.{BlockMetadata, BlockVersion}
+import coop.rchain.models.syntax._
 import coop.rchain.shared._
 
 import scala.util.{Success, Try}
@@ -263,11 +264,12 @@ object Validate {
                }
     } yield status
 
-  // Validator should only process deploys from its own shard
+  // Validator should only process deploys from its own shard with shard names in ASCII characters only
   def deploysShardIdentifier[F[_]: Monad: Log](
       b: BlockMessage,
       shardId: String
-  ): F[ValidBlockProcessing] =
+  ): F[ValidBlockProcessing] = {
+    assert(shardId.onlyAscii, "Shard name should contain only ASCII characters")
     if (b.state.deploys.forall(_.deploy.data.shardId == shardId)) {
       BlockStatus.valid.asRight[BlockError].pure
     } else {
@@ -275,6 +277,7 @@ object Validate {
         _ <- Log[F].warn(ignore(b, s"not for all deploys shard identifier is $shardId."))
       } yield BlockStatus.invalidDeployShardId.asLeft[ValidBlock]
     }
+  }
 
   def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] = {
     val blockHashComputed = ProtoUtil.hashBlock(b)

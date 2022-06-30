@@ -462,7 +462,7 @@ class ValidateTest
         runtimeManager <- RuntimeManager[Task](
                            rStore,
                            mStore,
-                           Genesis.nonNegativeMergeableTagName(
+                           BlockRandomSeed.nonNegativeMergeableTagName(
                              genesis.shardId
                            ),
                            RuntimeManager.noOpExecutionTracker[Task]

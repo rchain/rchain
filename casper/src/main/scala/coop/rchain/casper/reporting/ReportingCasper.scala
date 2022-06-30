@@ -6,7 +6,6 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.models.syntax._
-import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.{BlockRandomSeed, PrettyPrinter}
 import coop.rchain.casper.genesis.Genesis
@@ -18,7 +17,6 @@ import coop.rchain.casper.protocol.{
 }
 import coop.rchain.casper.reporting.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -30,7 +28,6 @@ import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
 
@@ -195,7 +192,7 @@ object ReportingRuntime {
         createRhoEnv(
           reporting,
           mergeChs,
-          Genesis.nonNegativeMergeableTagName(shardId),
+          BlockRandomSeed.nonNegativeMergeableTagName(shardId),
           extraSystemProcesses
         )
       }

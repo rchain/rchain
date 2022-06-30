@@ -1,5 +1,6 @@
 package coop.rchain.casper.rholang
 
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.syntax._
 import coop.rchain.models.syntax._
@@ -27,8 +28,11 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
 
     val dummyShardId = "dummy"
     for {
-      store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime(store, Genesis.nonNegativeMergeableTagName(dummyShardId))
+      store <- kvm.rSpaceStores
+      runtime <- RhoRuntime.createRuntime(
+                  store,
+                  BlockRandomSeed.nonNegativeMergeableTagName(dummyShardId)
+                )
 
       /**
         * Root hashes compatible with RChain main net network
@@ -79,8 +83,11 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
       Tools.rng(Blake2b256Hash.create(Array[Byte](1)).toByteString.toByteArray)
 
     for {
-      store      <- kvm.rSpaceStores
-      runtime    <- RhoRuntime.createRuntime(store, Genesis.nonNegativeMergeableTagName(dummyShardId))
+      store <- kvm.rSpaceStores
+      runtime <- RhoRuntime.createRuntime(
+                  store,
+                  BlockRandomSeed.nonNegativeMergeableTagName(dummyShardId)
+                )
       r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty, random)
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint

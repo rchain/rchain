@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.Resources
@@ -46,7 +47,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
                  )
         transactionAPI = Transaction[Task](
           blockReportAPI,
-          Transaction.transferUnforgeable(
+          BlockRandomSeed.transferUnforgeable(
             this.genesis.genesisBlock.shardId
           )
         )

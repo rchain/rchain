@@ -80,6 +80,4 @@ object ProtoUtil {
     )
     Blake2b256.hash(blockClearSigData.toProto.toByteArray).toByteString
   }
-
-  def dependenciesHashesOf(b: BlockMessage): Set[BlockHash] = b.justifications.toSet
 }

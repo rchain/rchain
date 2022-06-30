@@ -348,7 +348,7 @@ class InterpreterUtilTest
       val invalidHash = ByteString.EMPTY
       mkRuntimeManager[Task](
         "interpreter-util-test",
-        Genesis.nonNegativeMergeableTagName(genesis.shardId)
+        BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId)
       ).use { implicit runtimeManager =>
         for {
           block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)

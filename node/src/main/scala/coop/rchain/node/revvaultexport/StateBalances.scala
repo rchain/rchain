@@ -14,10 +14,8 @@ import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GString}
 import coop.rchain.models.{ETuple, Expr}
-import coop.rchain.node.revvaultexport.RhoTrieTraverser.storeTokenUnforgeable
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoType.Name
-import coop.rchain.rspace.hashing.Blake2b256Hash.EmptyByteStringBlakeHash
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
@@ -35,26 +33,9 @@ object StateBalances {
       shardId: String,
       runtime: RhoRuntime[F]
   ): F[Par] = {
-    // RevVault contract is the 7th contract deployed in the genesis, start from 0. Index should be 6
-    val RevVaultContractDeployIndex: Byte = 6
-    val revVault = {
-      val seed = BlockRandomSeed(
-        shardId,
-        Genesis.GenesisRandomSeedBlockNumber,
-        Genesis.GenesisRandomSeedPubKey,
-        EmptyByteStringBlakeHash
-      )
-      val rand = BlockRandomSeed.generateSplitRandomNumber(
-        seed,
-        RevVaultContractDeployIndex,
-        BlockRandomSeed.UserDeploySplitIndex
-      )
-      val unfogeableBytes = rand.next()
-      Name(unfogeableBytes)
-    }
-
+    val revVaultUnf        = BlockRandomSeed.revVaultUnforgeable(shardId)
     val extractStateString = Par(exprs = Seq(Expr(GString("extractState"))))
-    val e                  = Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(revVault, extractStateString))))))
+    val e                  = Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(revVaultUnf, extractStateString))))))
     for {
       c <- runtime.getContinuation(Seq(e))
       unf = c.head.continuation.taggedCont.parBody.get.body.sends.head.data.head.exprs.head.getEMapBody.ps
@@ -92,7 +73,7 @@ object StateBalances {
       balances <- VaultBalanceGetter.getAllVaultBalance(
                    vaultTreeHashMapDepth,
                    vaultChannel,
-                   storeTokenUnforgeable(shardId),
+                   BlockRandomSeed.storeTokenUnforgeable(shardId),
                    rhoRuntime
                  )
     } yield balances

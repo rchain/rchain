@@ -3,21 +3,18 @@ package coop.rchain.node.web
 import cats.effect.concurrent.Deferred
 import cats.effect.Concurrent
 import cats.syntax.all._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.api.BlockReportApi
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.models.GPrivate
-import coop.rchain.models.syntax._
-import coop.rchain.casper.protocol.{CloseBlockSystemDeployDataProto, DeployInfoWithEventData, ReportCommProto, ReportProduceProto, SingleReport, SlashSystemDeployDataProto}
-import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.casper.protocol.{
+  CloseBlockSystemDeployDataProto,
+  DeployInfoWithEventData,
+  ReportCommProto,
+  ReportProduceProto,
+  SingleReport,
+  SlashSystemDeployDataProto
+}
 import coop.rchain.models.Par
 import coop.rchain.node.web.Transaction.TransactionStore
-import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.hashing.Blake2b256Hash.EmptyByteStringBlakeHash
 import coop.rchain.shared.Base16
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import coop.rchain.shared.syntax._
@@ -230,26 +227,6 @@ object Transaction {
       (transactionCodec :: transactionType).as[TransactionInfo]
     val transactionResponseCodec: Codec[TransactionResponse] = listOfN(int32, transactionInfo)
       .as[TransactionResponse]
-  }
-
-  // This is the unforgeable name for
-  // https://github.com/rchain/rchain/blob/43257ddb7b2b53cffb59a5fe1d4c8296c18b8292/casper/src/main/resources/RevVault.rho#L25
-  def transferUnforgeable(shardId: String): Par = {
-    // RevVault contract is the 7th contract deployed in the genesis, start from 0. Index should be 6
-    val RevVaultContractDeployIndex: Byte = 6
-    val seed = BlockRandomSeed(
-      shardId,
-      Genesis.GenesisRandomSeedBlockNumber,
-      Genesis.GenesisRandomSeedPubKey,
-      EmptyByteStringBlakeHash
-    )
-    val rand = BlockRandomSeed.generateSplitRandomNumber(
-      seed,
-      RevVaultContractDeployIndex,
-      BlockRandomSeed.UserDeploySplitIndex
-    )
-    val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
-    Name(unfogeableBytes)
   }
 
   def apply[F[_]: Concurrent](

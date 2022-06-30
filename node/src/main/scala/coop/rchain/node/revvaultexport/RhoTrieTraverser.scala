@@ -18,7 +18,6 @@ import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.storage.serializePar
 import coop.rchain.rholang.interpreter.{RhoRuntime, RhoType}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.hashing.Blake2b256Hash.EmptyByteStringBlakeHash
 import coop.rchain.shared.Serialize
 
 import scala.annotation.tailrec
@@ -81,24 +80,6 @@ object RhoTrieTraverser {
   }
   private def nodeMapStore(mapWithNyb: Par, storeTokenPar: Par) =
     Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenPar))))))
-
-  def storeTokenUnforgeable(shardId: String): Par = {
-    // TreeHashMap contract is the 1st contract deployed in the genesis, start from 0. Index should be 0
-    val TreeHashMapContractDeployIndex: Byte = 0
-    val seed = BlockRandomSeed(
-      shardId,
-      Genesis.GenesisRandomSeedBlockNumber,
-      Genesis.GenesisRandomSeedPubKey,
-      EmptyByteStringBlakeHash
-    )
-    val rand = BlockRandomSeed.generateSplitRandomNumber(
-      seed,
-      TreeHashMapContractDeployIndex,
-      BlockRandomSeed.UserDeploySplitIndex
-    )
-    val target = LazyList.continually(rand.next()).drop(9).head
-    Name(target)
-  }
 
   private def TreeHashMapGetter[F[_]: Sync](
       mapPar: Par,

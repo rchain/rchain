@@ -8,6 +8,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
+import coop.rchain.models.syntax._
 import coop.rchain.monix.Monixable
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
@@ -96,6 +97,8 @@ object Main {
               "allow-private-addresses option is deprecated and will be removed in future releases."
             )
             .whenA(options.run.allowPrivateAddresses.isSupplied)
+
+      _ <- checkShardNameOnlyAscii(nodeConf.casper.shardName)
 
       // Create node runtime
       _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
@@ -393,6 +396,11 @@ object Main {
       kademliaPortConf <- checkKademliaPort(rpPortConf)
     } yield kademliaPortConf
   }
+
+  private def checkShardNameOnlyAscii[F[_]: Sync: Log](shardName: String): F[Unit] =
+    (Log[F].error("Shard name should contain only ASCII characters") >>
+      Sync[F].raiseError(new RuntimeException("Invalid shard name")))
+      .whenA(!shardName.onlyAscii)
 
   private def logConfiguration[F[_]: Sync: Log](
       conf: NodeConf,

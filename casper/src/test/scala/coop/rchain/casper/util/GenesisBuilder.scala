@@ -2,7 +2,7 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.ValidatorIdentity
+import coop.rchain.casper.{BlockRandomSeed, ValidatorIdentity}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
@@ -178,7 +178,7 @@ object GenesisBuilder {
       runtimeManager <- RuntimeManager(
                          rStore,
                          mStore,
-                         Genesis.nonNegativeMergeableTagName(parameters._3.shardId),
+                         BlockRandomSeed.nonNegativeMergeableTagName(parameters._3.shardId),
                          t
                        )
       // First bonded validator is the creator

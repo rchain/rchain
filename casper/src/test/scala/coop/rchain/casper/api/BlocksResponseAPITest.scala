@@ -3,23 +3,17 @@ package coop.rchain.casper.api
 import cats.effect.Resource
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper._
-import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.shared.Log
-import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import scala.collection.immutable.HashMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
@@ -39,7 +33,7 @@ class BlocksResponseAPITest
   val v2Bond                     = (v2, 20L)
   val v3Bond                     = (v3, 15L)
   val bonds                      = Map(v1Bond, v2Bond, v3Bond)
-  private val dummyMergeableName = Genesis.nonNegativeMergeableTagName("dummy")
+  private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
 
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-response-api-test", dummyMergeableName)

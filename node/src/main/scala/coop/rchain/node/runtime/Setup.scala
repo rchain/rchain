@@ -107,7 +107,7 @@ object Setup {
                  .createWithHistory[F](
                    rStores,
                    mergeStore,
-                   Genesis.nonNegativeMergeableTagName(conf.casper.shardName),
+                   BlockRandomSeed.nonNegativeMergeableTagName(conf.casper.shardName),
                    executionTracker
                  )
         } yield rm
@@ -302,7 +302,7 @@ object Setup {
       // Transaction API
       transactionAPI = Transaction[F](
         blockReportApi,
-        Transaction.transferUnforgeable(conf.casper.shardName)
+        BlockRandomSeed.transferUnforgeable(conf.casper.shardName)
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
 

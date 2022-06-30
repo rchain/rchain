@@ -3,11 +3,12 @@ package coop.rchain.casper.rholang
 import cats.effect.Resource
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.Resources._
-import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
-import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
+import coop.rchain.casper.util.GenesisBuilder.buildGenesis
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.casper.syntax._
@@ -25,7 +26,7 @@ import org.scalatest.matchers.should.Matchers
 class DeployerIdTest extends AnyFlatSpec with Matchers {
   implicit val time              = new LogicalTime[Task]
   implicit val log: Log[Task]    = new Log.NOPLog[Task]()
-  private val dummyMergeableName = Genesis.nonNegativeMergeableTagName("dummy")
+  private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
 
   val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager[Task]("deployer-id-runtime-manager-test", dummyMergeableName)
