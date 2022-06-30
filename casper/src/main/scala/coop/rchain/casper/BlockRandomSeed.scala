@@ -63,7 +63,7 @@ object BlockRandomSeed {
     BlockRandomSeed(
       block.shardId,
       Genesis.genesisRandomSeedBlockNumber,
-      Genesis.genesisPubKey,
+      Genesis.genesisRandomSeedPubKey,
       emptyStateHashFixed.toBlake2b256Hash
     )
   )

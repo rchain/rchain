@@ -45,7 +45,7 @@ object StateBalances {
           BlockRandomSeed(
             shardId,
             Genesis.genesisRandomSeedBlockNumber,
-            Genesis.genesisPubKey,
+            Genesis.genesisRandomSeedPubKey,
             emptyStateHashFixed.toBlake2b256Hash
           ),
           RevVaultContractDeployIndex,

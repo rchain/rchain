@@ -31,7 +31,7 @@ final case class Genesis(
 )
 
 object Genesis {
-  val genesisPubKey = PublicKey(Array[Byte]())
+  val genesisRandomSeedPubKey: PublicKey = PublicKey(Array[Byte]())
 
   // using fixed 0 to make sure unforgeable name is predictable without configuring blockNumber
   val genesisRandomSeedBlockNumber = 0L
@@ -46,7 +46,7 @@ object Genesis {
         BlockRandomSeed(
           shardId,
           genesisRandomSeedBlockNumber,
-          genesisPubKey, // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
+          genesisRandomSeedPubKey, // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
           emptyStateHashFixed.toBlake2b256Hash
         ),
         nonNegativeContractIndex,
@@ -94,12 +94,12 @@ object Genesis {
   ): F[BlockMessage] = {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
-    val blockData = BlockData(genesis.blockNumber, Genesis.genesisPubKey, 0)
+    val blockData = BlockData(genesis.blockNumber, Genesis.genesisRandomSeedPubKey, 0)
     val rand = BlockRandomSeed.generateRandomNumber(
       BlockRandomSeed(
         genesis.shardId,
         Genesis.genesisRandomSeedBlockNumber,
-        Genesis.genesisPubKey,
+        Genesis.genesisRandomSeedPubKey,
         emptyStateHashFixed.toBlake2b256Hash
       )
     )
