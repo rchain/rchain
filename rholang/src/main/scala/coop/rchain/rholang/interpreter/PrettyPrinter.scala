@@ -130,7 +130,7 @@ final case class PrettyPrinter(
       case EVarBody(EVar(v)) => buildStringM(v)
       case GBool(b)          => pure(b.toString)
       case GInt(i)           => pure(i.toString)
-      case GBigInt(bi)       => pure("BigInt(" + bi.toString + ")")
+      case GBigInt(bi)       => pure(s"BigInt($bi)")
       case GString(s)        => pure("\"" + s + "\"")
       case GUri(u)           => pure(s"`$u`")
       // TODO: Figure out if we can prevent ScalaPB from generating

@@ -944,10 +944,11 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
   private[this] val toInt: Method = new Method() {
 
-    def bigIntToLong(bi: BigInt): M[Long] =
+    def bigIntToLong(bi: BigInt): M[Long] = Sync[M].defer {
       if (bi > Long.MaxValue || bi < Long.MinValue)
-        ReduceError("Error: input value out of range").raiseError[M, Long]
+        ReduceError(s"Method toInt(): input BigInt value $bi out of range").raiseError[M, Long]
       else Sync[M].delay(bi.toLong)
+    }
 
     def createGInt(exp: Expr): M[GInt] =
       exp.exprInstance match {
@@ -962,10 +963,11 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         case GString(str) =>
           for {
             _ <- charge[M](toIntCost(str))
-            longVal <- Sync[M].delay(str.toLong).handleErrorWith { ex =>
-                        ReduceError(
-                          s"Error: exception was thrown when decoding input String to Int: ${ex.getMessage}"
-                        ).raiseError[M, Long]
+            longVal <- Sync[M].delay(str.toLong).adaptError {
+                        case _: Throwable =>
+                          ReduceError(
+                            s"""Method toInt(): input string "$str" cannot be converted to Integer"""
+                          )
                       }
           } yield GInt(longVal)
 
@@ -998,10 +1000,11 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         case GString(str) =>
           for {
             _ <- charge[M](toBigIntCost(str))
-            bigInt <- Sync[M].delay(BigInt(str)).handleErrorWith { ex =>
-                       ReduceError(
-                         s"Error: exception was thrown when decoding input String to BigInt: ${ex.getMessage}"
-                       ).raiseError[M, BigInt]
+            bigInt <- Sync[M].delay(BigInt(str)).adaptError {
+                       case _: Throwable =>
+                         ReduceError(
+                           s"""Method toBigInt(): input string "$str" cannot be converted to BigInt"""
+                         )
                      }
           } yield GBigInt(bigInt)
 

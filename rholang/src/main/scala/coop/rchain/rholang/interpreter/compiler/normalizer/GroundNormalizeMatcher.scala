@@ -1,43 +1,26 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer
 
-import cats.MonadError
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Expr
 import coop.rchain.models.Expr.ExprInstance.{GBigInt, GInt, GString, GUri}
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
-  Ground,
-  GroundBigInt,
-  GroundBool,
-  GroundInt,
-  GroundString,
-  GroundUri
-}
+import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.errors.NormalizerError
 
-import scala.util.Try
-
 object GroundNormalizeMatcher {
-  def normalizeMatch[F[_]](g: Ground)(implicit M: MonadError[F, Throwable]): F[Expr] =
+  def normalizeMatch[F[_]: Sync](g: Ground): F[Expr] =
     g match {
       case gb: GroundBool => Expr(BoolNormalizeMatcher.normalizeMatch(gb.boolliteral_)).pure[F]
       case gi: GroundInt =>
-        M.fromTry(
-            Try(gi.longliteral_.toLong).adaptError {
-              case e: NumberFormatException => NormalizerError(e.getMessage)
-            }
-          )
-          .map { long =>
-            Expr(GInt(long))
-          }
+        Sync[F]
+          .delay(gi.longliteral_.toLong)
+          .adaptError { case e: NumberFormatException => NormalizerError(e.getMessage) }
+          .map(long => Expr(GInt(long)))
       case gbi: GroundBigInt =>
-        M.fromTry(
-            Try(BigInt(gbi.longliteral_)).adaptError {
-              case e: NumberFormatException => NormalizerError(e.getMessage)
-            }
-          )
-          .map { bigInt =>
-            Expr(GBigInt(bigInt))
-          }
+        Sync[F]
+          .delay(BigInt(gbi.longliteral_))
+          .adaptError { case e: NumberFormatException => NormalizerError(e.getMessage) }
+          .map(bigInt => Expr(GBigInt(bigInt)))
       case gs: GroundString => Expr(GString(stripString(gs.stringliteral_))).pure[F]
       case gu: GroundUri    => Expr(GUri(stripUri(gu.uriliteral_))).pure[F]
     }

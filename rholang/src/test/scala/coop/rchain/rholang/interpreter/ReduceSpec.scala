@@ -2344,7 +2344,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     )
   }
 
-  "BigInt" should "work correctly with arithmetic operations" in {
+  "Reducer" should "perform arithmetic operations with BigInt" in {
     val table = Table(
       ("clue", "input", "output"),
       (
@@ -2440,7 +2440,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     }
   }
 
-  "BigInt" should "work correctly with сomparison operations" in {
+  it should "perform comparison operations with BigInt" in {
     val table = Table(
       ("clue", "input", "output"),
       (
@@ -2547,7 +2547,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     }
   }
 
-  "Reducer" should "return report errors with failure BigInt operations" in {
+  it should "return report errors with failure BigInt operations" in {
     val table = Table(
       ("clue", "input", "output"),
       (
@@ -2569,7 +2569,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     }
   }
 
-  "Reducer" should "work correctly with toInt() method" in {
+  it should "perform toInt() method" in {
     val table = Table(
       ("clue", "input", "output"),
       (
@@ -2595,7 +2595,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     }
   }
 
-  "Reducer" should "work correctly with toBigInt() method" in {
+  it should "perform toBigInt() method" in {
     val table = Table(
       ("clue", "input", "output"),
       (
@@ -2622,20 +2622,20 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     }
   }
 
-  "Reducer" should "return report errors in failure cases with toInt() method" in {
+  it should "return report errors in failure cases with toInt() method" in {
     val table = Table(
       ("clue", "input", "output"),
       (
         """BigInt(9999999999999999999999999999999999999999).toInt() => ReduceError""",
         EMethod("toInt", GBigInt(BigInt("9999999999999999999999999999999999999999"))),
-        ReduceError("Error: input value out of range")
+        ReduceError(
+          s"Method toInt(): input BigInt value 9999999999999999999999999999999999999999 out of range"
+        )
       ),
       (
         """"WRONG".toInt() => ReduceError""",
         EMethod("toInt", GString("WRONG")),
-        ReduceError(
-          """Error: exception was thrown when decoding input String to Int: For input string: "WRONG""""
-        )
+        ReduceError(s"""Method toInt(): input string "WRONG" cannot be converted to Integer""")
       ),
       (
         """Set().toInt() => ReduceError""",
@@ -2649,14 +2649,14 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     }
   }
 
-  "Reducer" should "return report errors in failure cases with toBigInt() method" in {
+  it should "return report errors in failure cases with toBigInt() method" in {
     val table = Table(
       ("clue", "input", "output"),
       (
         """"WRONG".toBigInt() => ReduceError""",
         EMethod("toBigInt", GString("WRONG")),
         ReduceError(
-          """Error: exception was thrown when decoding input String to BigInt: For input string: "WRONG""""
+          """Method toBigInt(): input string "WRONG" cannot be converted to BigInt"""
         )
       ),
       (
@@ -2665,7 +2665,6 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         MethodNotDefined("toBigInt", "Set")
       )
     )
-
     forAll(table) { (clue, input, error) =>
       runReducer(input) should be(Left(error)) withClue clue
     }

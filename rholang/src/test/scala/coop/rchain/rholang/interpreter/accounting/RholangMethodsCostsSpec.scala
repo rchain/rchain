@@ -766,109 +766,111 @@ class RholangMethodsCostsSpec
     }
   }
 
-  "Reducer when it works with BigInt" should {
-    val table = Table(
-      ("left", "right"),
-      (gBigInt("225"), gBigInt("25")),
-      (
-        gBigInt("9999999999999999999999999999999999999999"),
-        gBigInt("-9999999999999999999999999999999999999999")
-      ),
-      (
-        gBigInt("0"),
-        gBigInt("9999999999999999999999999999999999999999")
-      ),
-      (
-        gBigInt("123"),
-        gBigInt("-9999999999999999999999999999999999999999")
+  "Reducer" when {
+    "it works with BigInt" should {
+      val table = Table(
+        ("left", "right"),
+        (gBigInt("225"), gBigInt("25")),
+        (
+          gBigInt("9999999999999999999999999999999999999999"),
+          gBigInt("-9999999999999999999999999999999999999999")
+        ),
+        (
+          gBigInt("0"),
+          gBigInt("9999999999999999999999999999999999999999")
+        ),
+        (
+          gBigInt("123"),
+          gBigInt("-9999999999999999999999999999999999999999")
+        )
       )
-    )
 
-    "charge expression `-x` as `size(x)`" in {
-      forAll(table) {
-        case (left, _) =>
-          val expr           = ENegBody(ENeg(left))
-          val expected: Long = size(left)
-          testExpr(expr, Cost(expected))
+      "charge expression `-x` as `size(x)`" in {
+        forAll(table) {
+          case (left, _) =>
+            val expr           = ENegBody(ENeg(left))
+            val expected: Long = size(left)
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 + x2` as `max(size(x1), size(x2)) + 1`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = EPlusBody(EPlus(left, right))
-          val expected: Long = scala.math.max(size(left), size(right)) + 1L
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 + x2` as `max(size(x1), size(x2)) + 1`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = EPlusBody(EPlus(left, right))
+            val expected: Long = scala.math.max(size(left), size(right)) + 1L
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 - x2` as `max(size(x1), size(x2)) + 1`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = EMinusBody(EMinus(left, right))
-          val expected: Long = scala.math.max(size(left), size(right)) + 1L
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 - x2` as `max(size(x1), size(x2)) + 1`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = EMinusBody(EMinus(left, right))
+            val expected: Long = scala.math.max(size(left), size(right)) + 1L
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 * x2` as `size(x1) * size(x2)`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = EMultBody(EMult(left, right))
-          val expected: Long = size(left) * size(right)
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 * x2` as `size(x1) * size(x2)`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = EMultBody(EMult(left, right))
+            val expected: Long = size(left) * size(right)
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 / x2` as `size(x1) * size(x2)`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = EDivBody(EDiv(left, right))
-          val expected: Long = size(left) * size(right)
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 / x2` as `size(x1) * size(x2)`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = EDivBody(EDiv(left, right))
+            val expected: Long = size(left) * size(right)
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 % x2` as `size(x1) * size(x2)`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = EModBody(EMod(left, right))
-          val expected: Long = size(left) * size(right)
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 % x2` as `size(x1) * size(x2)`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = EModBody(EMod(left, right))
+            val expected: Long = size(left) * size(right)
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 < x2` as `min(size(x1), size(x2))`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = ELtBody(ELt(left, right))
-          val expected: Long = scala.math.min(size(left), size(right))
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 < x2` as `min(size(x1), size(x2))`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = ELtBody(ELt(left, right))
+            val expected: Long = scala.math.min(size(left), size(right))
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 <= x2` as `min(size(x1), size(x2))`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = ELteBody(ELte(left, right))
-          val expected: Long = scala.math.min(size(left), size(right))
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 <= x2` as `min(size(x1), size(x2))`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = ELteBody(ELte(left, right))
+            val expected: Long = scala.math.min(size(left), size(right))
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 > x2` as `min(size(x1), size(x2))`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = EGtBody(EGt(left, right))
-          val expected: Long = scala.math.min(size(left), size(right))
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 > x2` as `min(size(x1), size(x2))`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = EGtBody(EGt(left, right))
+            val expected: Long = scala.math.min(size(left), size(right))
+            test(expr, Cost(expected))
+        }
       }
-    }
-    "charge expression `x1 >= x2` as `min(size(x1), size(x2))`" in {
-      forAll(table) {
-        case (left, right) =>
-          val expr           = EGteBody(EGte(left, right))
-          val expected: Long = scala.math.min(size(left), size(right))
-          testExpr(expr, Cost(expected))
+      "charge expression `x1 >= x2` as `min(size(x1), size(x2))`" in {
+        forAll(table) {
+          case (left, right) =>
+            val expr           = EGteBody(EGte(left, right))
+            val expected: Long = scala.math.min(size(left), size(right))
+            test(expr, Cost(expected))
+        }
       }
     }
   }
 
-  "toInt" when {
-    "called on Int" should {
-      "doesn't have additional cost" in {
+  "The toInt() method" when {
+    "working with Int value" should {
+      "not require additional costs" in {
         val table = Table(
           "par",
           GInt(123),
@@ -882,7 +884,7 @@ class RholangMethodsCostsSpec
         }
       }
     }
-    "called on BigInt" should {
+    "working with BigInt value" should {
       "charge `x.toInt()` as `size(x)`" in {
         val table = Table(
           "par",
@@ -897,7 +899,7 @@ class RholangMethodsCostsSpec
         }
       }
     }
-    "called on String" should {
+    "working with BigInt value" should {
       "charge `x.toInt()` as `length(x)`" in {
         val table = Table(
           "par",
@@ -914,8 +916,8 @@ class RholangMethodsCostsSpec
     }
   }
 
-  "toBigInt" when {
-    "called on BigInt" should {
+  "The toBigInt method" when {
+    "working with BigInt value" should {
       "doesn't have additional cost" in {
         val table = Table(
           "par",
@@ -930,7 +932,7 @@ class RholangMethodsCostsSpec
         }
       }
     }
-    "called on Int" should {
+    "working with Int value" should {
       "charge `x.toInt()` as `8`" in {
         val table = Table(
           "par",
@@ -945,7 +947,7 @@ class RholangMethodsCostsSpec
         }
       }
     }
-    "called on String" should {
+    "working with String value" should {
       "charge `x.toInt()` as `length(x)`" in {
         val table = Table(
           "par",
@@ -1005,24 +1007,17 @@ class RholangMethodsCostsSpec
 
   def emptyString: String = ""
 
-  def test(method: Expr, expectedCost: Cost): Assertion = {
+  def test(expr: Expr, expectedCost: Cost): Assertion = {
     implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
     implicit val env  = Env[Par]()
     withReducer[Assertion] { reducer =>
       for {
-        _    <- reducer.evalExprToPar(method)
-        cost <- methodCallCost(reducer)
-      } yield assert(cost.value === expectedCost.value)
-    }
-  }
+        _ <- reducer.evalExprToPar(expr)
+        cost <- expr.exprInstance match {
+                 case EMethodBody(_) => methodCallCost(reducer)
+                 case _              => exprCallCost(reducer)
+               }
 
-  def testExpr(expr: Expr, expectedCost: Cost): Assertion = {
-    implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
-    implicit val env  = Env[Par]()
-    withReducer[Assertion] { reducer =>
-      for {
-        _    <- reducer.evalExprToPar(expr)
-        cost <- exprCallCost(reducer)
       } yield assert(cost.value === expectedCost.value)
     }
   }
