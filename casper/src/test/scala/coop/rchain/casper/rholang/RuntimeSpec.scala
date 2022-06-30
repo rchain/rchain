@@ -2,6 +2,7 @@ package coop.rchain.casper.rholang
 
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter.RhoRuntime
@@ -44,8 +45,8 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
       hardCodedHash = RuntimeManager.emptyStateHashFixed
       emptyRootHash <- runtime.emptyStateHash
 
-      emptyHashHardCoded = Blake2b256Hash.fromByteString(hardCodedHash)
-      emptyHash          = Blake2b256Hash.fromByteString(emptyRootHash)
+      emptyHashHardCoded = hardCodedHash.toBlake2b256Hash
+      emptyHash          = emptyRootHash.toBlake2b256Hash
     } yield emptyHashHardCoded shouldEqual emptyHash
   }
 

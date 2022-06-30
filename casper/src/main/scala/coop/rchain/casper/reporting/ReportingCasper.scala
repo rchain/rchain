@@ -5,6 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.models.syntax._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.{BlockRandomSeed, PrettyPrinter}
@@ -106,7 +107,7 @@ object ReportingCasper {
           _         <- reportingRuntime.setBlockData(blockdata)
 
           // Reset runtime (in-memory) state
-          _ <- reportingRuntime.reset(Blake2b256Hash.fromByteString(preStateHash))
+          _ <- reportingRuntime.reset(preStateHash.toBlake2b256Hash)
 
           // Replay block deploys with reporting
           rand = BlockRandomSeed.fromBlock(block)

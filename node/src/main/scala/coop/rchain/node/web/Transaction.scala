@@ -249,7 +249,7 @@ object Transaction {
           shardId,
           Genesis.genesisRandomSeedBlockNumber,
           Genesis.genesisPubKey,
-          Blake2b256Hash.fromByteString(emptyStateHashFixed)
+          emptyStateHashFixed.toBlake2b256Hash
         ),
         RevVaultContractDeployIndex,
         BlockRandomSeed.UserDeploySplitIndex

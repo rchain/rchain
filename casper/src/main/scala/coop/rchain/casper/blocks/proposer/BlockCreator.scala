@@ -2,6 +2,7 @@ package coop.rchain.casper.blocks.proposer
 
 import cats.effect.Concurrent
 import cats.syntax.all._
+import coop.rchain.models.syntax._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
@@ -133,7 +134,7 @@ object BlockCreator {
                     shardId,
                     nextBlockNum,
                     validatorIdentity.publicKey,
-                    Blake2b256Hash.fromByteString(computedParentsInfo._1)
+                    computedParentsInfo._1.toBlake2b256Hash
                   )
                 )
                 slashingDeploys <- prepareSlashingDeploys(ilmFromBonded, rand, deploys.size)

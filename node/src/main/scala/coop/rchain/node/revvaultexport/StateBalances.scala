@@ -46,7 +46,7 @@ object StateBalances {
             shardId,
             Genesis.genesisRandomSeedBlockNumber,
             Genesis.genesisPubKey,
-            Blake2b256Hash.fromByteString(emptyStateHashFixed)
+            emptyStateHashFixed.toBlake2b256Hash
           ),
           RevVaultContractDeployIndex,
           BlockRandomSeed.UserDeploySplitIndex
@@ -90,9 +90,7 @@ object StateBalances {
       runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
       vaultChannel               <- getGenesisVaultMapPar(shardId, rhoRuntime)
-      _ <- rhoRuntime.reset(
-            Blake2b256Hash.fromByteString(block.postStateHash)
-          )
+      _                          <- rhoRuntime.reset(block.postStateHash.toBlake2b256Hash)
       balances <- VaultBalanceGetter.getAllVaultBalance(
                    vaultTreeHashMapDepth,
                    vaultChannel,

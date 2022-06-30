@@ -47,7 +47,7 @@ object Genesis {
           shardId,
           genesisRandomSeedBlockNumber,
           genesisPubKey, // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
-          Blake2b256Hash.fromByteString(emptyStateHashFixed)
+          emptyStateHashFixed.toBlake2b256Hash
         ),
         nonNegativeContractIndex,
         BlockRandomSeed.UserDeploySplitIndex
@@ -100,7 +100,7 @@ object Genesis {
         genesis.shardId,
         Genesis.genesisRandomSeedBlockNumber,
         Genesis.genesisPubKey,
-        Blake2b256Hash.fromByteString(emptyStateHashFixed)
+        emptyStateHashFixed.toBlake2b256Hash
       )
     )
     RuntimeManager[F]

@@ -11,6 +11,7 @@ import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.sysdeploys._
 import coop.rchain.casper.rholang.types._
+import coop.rchain.models.syntax._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.Catscontrib._
@@ -83,7 +84,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         genesis.shardId,
         genesisBlockNum,
         genesisContext.validatorPks.head,
-        Blake2b256Hash.fromByteString(stateHash)
+        stateHash.toBlake2b256Hash
       )
     )
     for {
@@ -110,7 +111,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         genesis.shardId,
         genesisBlockNum,
         genesisContext.validatorPks.head,
-        Blake2b256Hash.fromByteString(stateHash)
+        stateHash.toBlake2b256Hash
       )
     )
     runtimeManager.replayComputeState(stateHash)(
@@ -209,7 +210,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   ): EitherT[F, ReplayFailure, SystemDeployReplayResult[S#Result]] = {
     // Resets runtime to start state
     val resetRuntime =
-      runtime.reset(Blake2b256Hash.fromByteString(stateHash)).liftEitherT[ReplayFailure]
+      runtime.reset(stateHash.toBlake2b256Hash).liftEitherT[ReplayFailure]
 
     // Replays system deploy
     val expectedFailure = processedSystemDeploy.fold(_ => none, (_, errorMsg) => errorMsg.some)
@@ -346,7 +347,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             genesis.shardId,
             genesisBlockNum,
             genesisContext.validatorPks.head,
-            Blake2b256Hash.fromByteString(gps)
+            gps.toBlake2b256Hash
           )
         )
         playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(
@@ -375,7 +376,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             genesis.shardId,
             genesisBlockNum,
             genesisContext.validatorPks.head,
-            Blake2b256Hash.fromByteString(playStateHash0)
+            playStateHash0.toBlake2b256Hash
           )
         )
         playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(
@@ -578,7 +579,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             genesis.shardId,
             genesisBlockNum,
             genesisContext.validatorPks.head,
-            Blake2b256Hash.fromByteString(genPostState)
+            genPostState.toBlake2b256Hash
           )
         )
         deploys = deploy :: Nil
@@ -629,7 +630,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             genesis.shardId,
             genesisBlockNum,
             genesisContext.validatorPks.head,
-            Blake2b256Hash.fromByteString(genPostState)
+            genPostState.toBlake2b256Hash
           )
         )
         deploys = deploy0 :: Nil
@@ -780,7 +781,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             genesis.shardId,
             genesisBlockNum,
             genesisContext.validatorPks.head,
-            Blake2b256Hash.fromByteString(genPostState)
+            genPostState.toBlake2b256Hash
           )
         )
         deploys = Seq(deploy)
@@ -853,7 +854,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                      genesis.shardId,
                      1L,
                      genesisContext.validatorPks.head,
-                     Blake2b256Hash.fromByteString(genPostState)
+                     genPostState.toBlake2b256Hash
                    )
                  )
                  for {

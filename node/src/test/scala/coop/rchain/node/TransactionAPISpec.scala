@@ -8,10 +8,9 @@ import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, GenesisContext}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.models.Par
 import coop.rchain.node.web.{PreCharge, Refund, Transaction, UserDeploy}
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.models.syntax._
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -54,7 +53,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
         transferBlock <- validator.addBlock(deploy)
         _             <- readonly.addBlock(transferBlock)
         transactions <- transactionAPI
-                         .getTransaction(Blake2b256Hash.fromByteString(transferBlock.blockHash))
+                         .getTransaction(transferBlock.blockHash.toBlake2b256Hash)
 
       } yield (transactions, transferBlock)
     }

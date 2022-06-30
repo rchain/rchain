@@ -67,7 +67,7 @@ class InterpreterUtilTest
               genesis.shardId,
               blockNumber,
               genesisContext.validatorPks.head,
-              Blake2b256Hash.fromByteString(preState._1)
+              preState._1.toBlake2b256Hash
             )
           )
           InterpreterUtil

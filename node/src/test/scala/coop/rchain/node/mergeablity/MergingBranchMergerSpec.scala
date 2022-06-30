@@ -98,7 +98,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
           genesis.shardId,
           blockNum,
           validator,
-          Blake2b256Hash.fromByteString(baseState)
+          baseState.toBlake2b256Hash
         )
       )
       systemDeploys = CloseBlockDeploy(rand.splitByte(userDeploys.length.toByte)) :: Nil
@@ -442,7 +442,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             v <- DagMerger.merge[Task](
                   dag,
                   Seq(baseBlock.blockHash),
-                  Blake2b256Hash.fromByteString(baseState),
+                  baseState.toBlake2b256Hash,
                   indices(_).deployChains.pure,
                   runtimeManager.getHistoryRepo,
                   DagMerger.costOptimalRejectionAlg

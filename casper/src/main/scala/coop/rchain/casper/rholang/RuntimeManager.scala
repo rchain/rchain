@@ -228,14 +228,14 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
     spawnRuntime.flatMap { runtime =>
-      runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getDataPar(channel)
+      runtime.reset(hash.toBlake2b256Hash) >> runtime.getDataPar(channel)
     }
 
   def getContinuation(
       hash: StateHash
   )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
     spawnRuntime.flatMap { runtime =>
-      runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getContinuationPar(channels)
+      runtime.reset(hash.toBlake2b256Hash) >> runtime.getContinuationPar(channels)
     }
 
   def getHistoryRepo: RhoHistoryRepository[F] = historyRepo

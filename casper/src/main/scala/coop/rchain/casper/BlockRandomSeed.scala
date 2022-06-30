@@ -6,6 +6,7 @@ import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.models.syntax._
 import scodec.bits.ByteVector
 import scodec.codecs.{bytes, uint8, ulong, utf8, variableSizeBytes}
 import scodec.{Codec, TransformSyntax}
@@ -54,7 +55,7 @@ object BlockRandomSeed {
         block.shardId,
         block.blockNumber,
         PublicKey(block.sender),
-        Blake2b256Hash.fromByteString(block.preStateHash)
+        block.preStateHash.toBlake2b256Hash
       )
     )
 
@@ -63,7 +64,7 @@ object BlockRandomSeed {
       block.shardId,
       Genesis.genesisRandomSeedBlockNumber,
       Genesis.genesisPubKey,
-      Blake2b256Hash.fromByteString(emptyStateHashFixed)
+      emptyStateHashFixed.toBlake2b256Hash
     )
   )
   // When deploying the user deploy , the chain would execute prechargeDeploy, userDeploy and RefundDeploy in

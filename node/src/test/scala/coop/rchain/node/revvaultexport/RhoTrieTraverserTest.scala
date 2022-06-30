@@ -71,7 +71,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
       case (runtime, _, _) =>
         for {
           hash1 <- runtime.emptyStateHash
-          _     <- runtime.reset(Blake2b256Hash.fromByteString(hash1))
+          _     <- runtime.reset(hash1.toBlake2b256Hash)
           rand  = Blake2b512Random.defaultRandom
           storeToken = {
             val r      = rand.copy()

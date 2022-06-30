@@ -2,7 +2,7 @@ package coop.rchain.node.revvaultexport
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
-import coop.rchain.crypto.PublicKey
+import coop.rchain.models.syntax._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.node.revvaultexport.mainnet1.StateBalanceMain
 import coop.rchain.rholang.interpreter.util.RevAddress
@@ -25,7 +25,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
   "Get balance from VaultPar" should "return balance" in {
     val t = TestNode.standaloneEff(genesis).use { node =>
       val genesisPostStateHash =
-        Blake2b256Hash.fromByteString(genesis.genesisBlock.postStateHash)
+        genesis.genesisBlock.postStateHash.toBlake2b256Hash
       val genesisVaultAddr = RevAddress.fromPublicKey(genesis.genesisVaults.toList(0)._2).get
       val getVault =
         s"""new return, rl(`rho:registry:lookup`), RevVaultCh, vaultCh, balanceCh in {
@@ -55,7 +55,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
   "Get all vault" should "return all vault balance" in {
     val t = TestNode.standaloneEff(genesis).use { node =>
       val genesisPostStateHash =
-        Blake2b256Hash.fromByteString(genesis.genesisBlock.postStateHash)
+        genesis.genesisBlock.postStateHash.toBlake2b256Hash
       for {
         runtime               <- node.runtimeManager.spawnRuntime
         _                     <- runtime.reset(genesisPostStateHash)
