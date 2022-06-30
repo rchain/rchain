@@ -31,6 +31,7 @@ final case class Genesis(
 )
 
 object Genesis {
+  // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
   val genesisRandomSeedPubKey: PublicKey = PublicKey(Array[Byte]())
 
   // using fixed 0 to make sure unforgeable name is predictable without configuring blockNumber
@@ -41,17 +42,17 @@ object Genesis {
   ): Par = {
     // NonNegative contract is the 4th contract deployed in the genesis, start from 0. Index should be 3
     val nonNegativeContractIndex: Byte = 3
-    val rand = BlockRandomSeed
-      .generateSplitRandomNumber(
-        BlockRandomSeed(
-          shardId,
-          genesisRandomSeedBlockNumber,
-          genesisRandomSeedPubKey, // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
-          emptyStateHashFixed.toBlake2b256Hash
-        ),
-        nonNegativeContractIndex,
-        BlockRandomSeed.UserDeploySplitIndex
-      )
+    val seed = BlockRandomSeed(
+      shardId,
+      genesisRandomSeedBlockNumber,
+      genesisRandomSeedPubKey,
+      emptyStateHashFixed.toBlake2b256Hash
+    )
+    val rand = BlockRandomSeed.generateSplitRandomNumber(
+      seed,
+      nonNegativeContractIndex,
+      BlockRandomSeed.UserDeploySplitIndex
+    )
     val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
     Name(unforgeableByte)
   }
@@ -95,14 +96,13 @@ object Genesis {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
     val blockData = BlockData(genesis.blockNumber, Genesis.genesisRandomSeedPubKey, 0)
-    val rand = BlockRandomSeed.generateRandomNumber(
-      BlockRandomSeed(
-        genesis.shardId,
-        Genesis.genesisRandomSeedBlockNumber,
-        Genesis.genesisRandomSeedPubKey,
-        emptyStateHashFixed.toBlake2b256Hash
-      )
+    val seed = BlockRandomSeed(
+      genesis.shardId,
+      Genesis.genesisRandomSeedBlockNumber,
+      Genesis.genesisRandomSeedPubKey,
+      emptyStateHashFixed.toBlake2b256Hash
     )
+    val rand = BlockRandomSeed.generateRandomNumber(seed)
     RuntimeManager[F]
       .computeGenesis(blessedTerms, rand, blockData)
       .map {

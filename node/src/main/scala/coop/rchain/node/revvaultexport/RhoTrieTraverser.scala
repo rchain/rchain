@@ -84,17 +84,17 @@ object RhoTrieTraverser {
   def storeTokenUnforgeable(shardId: String): Par = {
     // TreeHashMap contract is the 1st contract deployed in the genesis, start from 0. Index should be 0
     val TreeHashMapContractDeployIndex: Byte = 0
-    val rand = BlockRandomSeed
-      .generateSplitRandomNumber(
-        BlockRandomSeed(
-          shardId,
-          Genesis.genesisRandomSeedBlockNumber,
-          Genesis.genesisRandomSeedPubKey,
-          emptyStateHashFixed.toBlake2b256Hash
-        ),
-        TreeHashMapContractDeployIndex,
-        BlockRandomSeed.UserDeploySplitIndex
-      )
+    val seed = BlockRandomSeed(
+      shardId,
+      Genesis.genesisRandomSeedBlockNumber,
+      Genesis.genesisRandomSeedPubKey,
+      emptyStateHashFixed.toBlake2b256Hash
+    )
+    val rand = BlockRandomSeed.generateSplitRandomNumber(
+      seed,
+      TreeHashMapContractDeployIndex,
+      BlockRandomSeed.UserDeploySplitIndex
+    )
     val target = LazyList.continually(rand.next()).drop(9).head
     Name(target)
   }

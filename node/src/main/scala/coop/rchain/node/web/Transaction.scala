@@ -243,17 +243,17 @@ object Transaction {
   def transferUnforgeable(shardId: String): Par = {
     // RevVault contract is the 7th contract deployed in the genesis, start from 0. Index should be 6
     val RevVaultContractDeployIndex: Byte = 6
-    val rand = BlockRandomSeed
-      .generateSplitRandomNumber(
-        BlockRandomSeed(
-          shardId,
-          Genesis.genesisRandomSeedBlockNumber,
-          Genesis.genesisRandomSeedPubKey,
-          emptyStateHashFixed.toBlake2b256Hash
-        ),
-        RevVaultContractDeployIndex,
-        BlockRandomSeed.UserDeploySplitIndex
-      )
+    val seed = BlockRandomSeed(
+      shardId,
+      Genesis.genesisRandomSeedBlockNumber,
+      Genesis.genesisRandomSeedPubKey,
+      emptyStateHashFixed.toBlake2b256Hash
+    )
+    val rand = BlockRandomSeed.generateSplitRandomNumber(
+      seed,
+      RevVaultContractDeployIndex,
+      BlockRandomSeed.UserDeploySplitIndex
+    )
     val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
     Name(unfogeableBytes)
   }

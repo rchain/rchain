@@ -62,14 +62,13 @@ class InterpreterUtilTest
     computeParentsPostState(parents, dummyParentsPreState)
       .flatMap(
         preState => {
-          val rand = BlockRandomSeed.generateRandomNumber(
-            BlockRandomSeed(
-              genesis.shardId,
-              blockNumber,
-              genesisContext.validatorPks.head,
-              preState._1.toBlake2b256Hash
-            )
+          val seed = BlockRandomSeed(
+            genesis.shardId,
+            blockNumber,
+            genesisContext.validatorPks.head,
+            preState._1.toBlake2b256Hash
           )
+          val rand = BlockRandomSeed.generateRandomNumber(seed)
           InterpreterUtil
             .computeDeploysCheckpoint[F](
               deploys,

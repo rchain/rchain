@@ -49,24 +49,26 @@ object BlockRandomSeed {
   ): Blake2b512Random =
     generateRandomNumber(blockRandomSeed).splitByte(index).splitByte(index2)
 
-  def fromBlock(block: BlockMessage): Blake2b512Random =
-    generateRandomNumber(
-      BlockRandomSeed(
-        block.shardId,
-        block.blockNumber,
-        PublicKey(block.sender),
-        block.preStateHash.toBlake2b256Hash
-      )
+  def fromBlock(block: BlockMessage): Blake2b512Random = {
+    val seed = BlockRandomSeed(
+      block.shardId,
+      block.blockNumber,
+      PublicKey(block.sender),
+      block.preStateHash.toBlake2b256Hash
     )
+    generateRandomNumber(seed)
+  }
 
-  def fromGenesis(block: BlockMessage): Blake2b512Random = generateRandomNumber(
-    BlockRandomSeed(
+  def fromGenesis(block: BlockMessage): Blake2b512Random = {
+    val seed = BlockRandomSeed(
       block.shardId,
       Genesis.genesisRandomSeedBlockNumber,
       Genesis.genesisRandomSeedPubKey,
       emptyStateHashFixed.toBlake2b256Hash
     )
-  )
+    generateRandomNumber(seed)
+  }
+
   // When deploying the user deploy , the chain would execute prechargeDeploy, userDeploy and RefundDeploy in
   // sequence. The split index for the random seed is based on the index of the executions.
   val PreChargeSplitIndex: Byte  = 0.toByte
