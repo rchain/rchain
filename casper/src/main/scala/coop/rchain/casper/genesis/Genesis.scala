@@ -11,7 +11,7 @@ import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
 import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
+import coop.rchain.casper.rholang.RuntimeManager.{StateHash, emptyStateHashFixed}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Par
@@ -20,6 +20,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.models.BlockVersion
 import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.rspace.hashing.Blake2b256Hash.EmptyByteStringBlakeHash
 
 final case class Genesis(
     sender: PublicKey,
@@ -32,10 +33,10 @@ final case class Genesis(
 
 object Genesis {
   // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
-  val genesisRandomSeedPubKey: PublicKey = PublicKey(Array[Byte]())
+  val GenesisRandomSeedPubKey: PublicKey = PublicKey(Array[Byte]())
 
   // using fixed 0 to make sure unforgeable name is predictable without configuring blockNumber
-  val genesisRandomSeedBlockNumber = 0L
+  val GenesisRandomSeedBlockNumber = 0L
 
   def nonNegativeMergeableTagName(
       shardId: String
@@ -44,9 +45,9 @@ object Genesis {
     val nonNegativeContractIndex: Byte = 3
     val seed = BlockRandomSeed(
       shardId,
-      genesisRandomSeedBlockNumber,
-      genesisRandomSeedPubKey,
-      emptyStateHashFixed.toBlake2b256Hash
+      GenesisRandomSeedBlockNumber,
+      GenesisRandomSeedPubKey,
+      EmptyByteStringBlakeHash
     )
     val rand = BlockRandomSeed.generateSplitRandomNumber(
       seed,
@@ -95,12 +96,12 @@ object Genesis {
   ): F[BlockMessage] = {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
-    val blockData = BlockData(genesis.blockNumber, Genesis.genesisRandomSeedPubKey, 0)
+    val blockData = BlockData(genesis.blockNumber, Genesis.GenesisRandomSeedPubKey, 0)
     val seed = BlockRandomSeed(
       genesis.shardId,
-      Genesis.genesisRandomSeedBlockNumber,
-      Genesis.genesisRandomSeedPubKey,
-      emptyStateHashFixed.toBlake2b256Hash
+      Genesis.GenesisRandomSeedBlockNumber,
+      Genesis.GenesisRandomSeedPubKey,
+      EmptyByteStringBlakeHash
     )
     val rand = BlockRandomSeed.generateRandomNumber(seed)
     RuntimeManager[F]

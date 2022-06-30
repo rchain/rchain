@@ -37,6 +37,8 @@ object Blake2b256Hash {
 
   val length: Int = 32
 
+  val EmptyByteStringBlakeHash: Blake2b256Hash = fromByteString(ByteString.EMPTY)
+
   /**
     * Constructs a [[Blake2b256Hash]]
     *

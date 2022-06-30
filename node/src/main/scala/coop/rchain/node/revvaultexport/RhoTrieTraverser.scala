@@ -18,6 +18,7 @@ import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.storage.serializePar
 import coop.rchain.rholang.interpreter.{RhoRuntime, RhoType}
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash.EmptyByteStringBlakeHash
 import coop.rchain.shared.Serialize
 
 import scala.annotation.tailrec
@@ -86,9 +87,9 @@ object RhoTrieTraverser {
     val TreeHashMapContractDeployIndex: Byte = 0
     val seed = BlockRandomSeed(
       shardId,
-      Genesis.genesisRandomSeedBlockNumber,
-      Genesis.genesisRandomSeedPubKey,
-      emptyStateHashFixed.toBlake2b256Hash
+      Genesis.GenesisRandomSeedBlockNumber,
+      Genesis.GenesisRandomSeedPubKey,
+      EmptyByteStringBlakeHash
     )
     val rand = BlockRandomSeed.generateSplitRandomNumber(
       seed,

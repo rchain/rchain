@@ -9,8 +9,6 @@ import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
@@ -19,7 +17,7 @@ import coop.rchain.models.{ETuple, Expr}
 import coop.rchain.node.revvaultexport.RhoTrieTraverser.storeTokenUnforgeable
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoType.Name
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash.EmptyByteStringBlakeHash
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
@@ -42,9 +40,9 @@ object StateBalances {
     val revVault = {
       val seed = BlockRandomSeed(
         shardId,
-        Genesis.genesisRandomSeedBlockNumber,
-        Genesis.genesisRandomSeedPubKey,
-        emptyStateHashFixed.toBlake2b256Hash
+        Genesis.GenesisRandomSeedBlockNumber,
+        Genesis.GenesisRandomSeedPubKey,
+        EmptyByteStringBlakeHash
       )
       val rand = BlockRandomSeed.generateSplitRandomNumber(
         seed,

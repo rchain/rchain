@@ -9,14 +9,7 @@ import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.models.GPrivate
 import coop.rchain.models.syntax._
-import coop.rchain.casper.protocol.{
-  CloseBlockSystemDeployDataProto,
-  DeployInfoWithEventData,
-  ReportCommProto,
-  ReportProduceProto,
-  SingleReport,
-  SlashSystemDeployDataProto
-}
+import coop.rchain.casper.protocol.{CloseBlockSystemDeployDataProto, DeployInfoWithEventData, ReportCommProto, ReportProduceProto, SingleReport, SlashSystemDeployDataProto}
 import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -24,6 +17,7 @@ import coop.rchain.models.Par
 import coop.rchain.node.web.Transaction.TransactionStore
 import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash.EmptyByteStringBlakeHash
 import coop.rchain.shared.Base16
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import coop.rchain.shared.syntax._
@@ -245,9 +239,9 @@ object Transaction {
     val RevVaultContractDeployIndex: Byte = 6
     val seed = BlockRandomSeed(
       shardId,
-      Genesis.genesisRandomSeedBlockNumber,
-      Genesis.genesisRandomSeedPubKey,
-      emptyStateHashFixed.toBlake2b256Hash
+      Genesis.GenesisRandomSeedBlockNumber,
+      Genesis.GenesisRandomSeedPubKey,
+      EmptyByteStringBlakeHash
     )
     val rand = BlockRandomSeed.generateSplitRandomNumber(
       seed,

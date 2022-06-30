@@ -6,14 +6,13 @@ import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.{BlockExecutionTracker, StatefulExecutionTracker}
+import coop.rchain.casper.BlockExecutionTracker
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
@@ -28,7 +27,6 @@ import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{
 import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
