@@ -76,7 +76,6 @@ case class TestNode[F[_]: Sync: Timer](
     transportLayerEffect: TransportLayerTestImpl[F],
     connectionsCellEffect: Ref[F, Connections],
     rpConfAskEffect: RPConfAsk[F],
-    eventPublisherEffect: EventPublisher[F],
     routingMessageQueue: Queue[F, RoutingMessage],
     shardName: String,
     minPhloPrice: Long
@@ -104,7 +103,6 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val transportLayerEff: TransportLayerTestImpl[F]  = transportLayerEffect
   implicit val connectionsCell: Ref[F, Connections]          = connectionsCellEffect
   implicit val rp: RPConfAsk[F]                              = rpConfAskEffect
-  implicit val ep: EventPublisher[F]                         = eventPublisherEffect
 
   val finalizedFringe = FinalizedFringe(Seq(genesis.blockHash), genesis.postStateHash)
 
@@ -437,7 +435,6 @@ object TestNode {
                implicit val connectionsCell       = Ref.unsafe[F, Connections](Connect.Connections.empty)
                implicit val transportLayerEff     = tle
                implicit val rpConfAsk             = createRPConfAsk[F](currentPeerNode)
-               implicit val eventBus              = EventPublisher.noop[F]
                implicit val commUtil: CommUtil[F] = CommUtil.of[F]
                implicit val requestedBlocks: RequestedBlocks[F] =
                  Ref.unsafe[F, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
@@ -508,7 +505,6 @@ object TestNode {
                    connectionsCellEffect = connectionsCell,
                    transportLayerEffect = transportLayerEff,
                    rpConfAskEffect = rpConfAsk,
-                   eventPublisherEffect = eventBus,
                    commUtilEffect = commUtil,
                    requestedBlocksEffect = requestedBlocks,
                    blockRetrieverEffect = blockRetriever,
