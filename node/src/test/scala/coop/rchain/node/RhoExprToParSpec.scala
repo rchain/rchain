@@ -27,14 +27,8 @@ class RhoExprToParSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks w
     // def genExprPar   = withList(ExprPar)
     def genExprTuple = withList(ExprTuple)
     def genExprList  = withList(ExprList)
-
-    // Generated data should not have duplicates and be sorted
-    // def genExprSet =
-    //   Gen
-    //     .listOfN(numOfElements, genRhoExpr)
-    //     .map(data => ExprSet(data.toSet.toList.sorted)) // withList(ExprSet)
-
-    def genExprMap = Gen.mapOfN(numOfElements, arbTuple2[String, RhoExpr].arbitrary).map(ExprMap)
+    def genExprSet   = Gen.listOfN(numOfElements, genRhoExpr).map(data => ExprSet(data.toSet))
+    def genExprMap   = Gen.mapOfN(numOfElements, arbTuple2[String, RhoExpr].arbitrary).map(ExprMap)
 
     def genExprBool   = arbBool.arbitrary.map(b => ExprBool(b))
     def genExprInt    = arbLong.arbitrary.map(l => ExprInt(l))
@@ -56,7 +50,7 @@ class RhoExprToParSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks w
           // genExprPar,
           genExprTuple,
           genExprList,
-          // genExprSet,
+          genExprSet,
           genExprMap,
           genExprBool,
           genExprInt,

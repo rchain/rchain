@@ -129,7 +129,7 @@ object WebApi {
   final case class ExprPar(data: List[RhoExpr])        extends RhoExpr
   final case class ExprTuple(data: List[RhoExpr])      extends RhoExpr
   final case class ExprList(data: List[RhoExpr])       extends RhoExpr
-  final case class ExprSet(data: List[RhoExpr])        extends RhoExpr
+  final case class ExprSet(data: Set[RhoExpr])         extends RhoExpr
   final case class ExprMap(data: Map[String, RhoExpr]) extends RhoExpr
   // Terminal expressions (here is the data)
   final case class ExprBool(data: Boolean)  extends RhoExpr
@@ -294,7 +294,7 @@ object WebApi {
       ExprList(exp.getEListBody.ps.flatMap(exprFromParProto).toList).some
     // Set
     else if (exp.exprInstance.isESetBody)
-      ExprSet(exp.getESetBody.ps.flatMap(exprFromParProto).toList).some
+      ExprSet(exp.getESetBody.ps.flatMap(exprFromParProto).toSet).some
     // Map
     else if (exp.exprInstance.isEMapBody) {
       val fields = for {
@@ -363,7 +363,7 @@ object WebApi {
     case ExprPar(data)   => data.map(rhoExprToParProto).combineAll
     case ExprTuple(data) => TupleN(data.map(rhoExprToParProto))
     case ExprList(data)  => List(data.map(rhoExprToParProto))
-    case ExprSet(data)   => Set(data.map(rhoExprToParProto))
+    case ExprSet(data)   => Set(data.map(rhoExprToParProto).toSeq)
     case ExprMap(data)   => Map(data.map { case (k, v) => (String(k), rhoExprToParProto(v)) })
     // Terminal expressions (here is the data)
     case ExprBool(data)   => Boolean(data)
