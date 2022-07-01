@@ -10,15 +10,14 @@ import org.scalatest.propspec.AnyPropSpec
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
 class RhoExprToParSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
-  property("WebAPI RhoExpr <-> Par conversion work correct") {
+  property("WebAPI RhoExpr => Par => RhoExpr conversion work correct") {
     forAll { rhoExpr: RhoExpr =>
-      // TODO: Remove after finishing debugging
-      // println(expected)
-      // println(s"  $actual")
-
-      exprFromParProto(rhoExprToParProto(rhoExpr)) shouldBe rhoExpr.some
+      rhoExprToRhoExpr(rhoExpr) shouldBe rhoExpr.some
     }
   }
+
+  // Converts RhoExpr to Par and then back to RhoExpr
+  private val rhoExprToRhoExpr = rhoExprToParProto _ andThen exprFromParProto
 
   implicit private def aArb: Arbitrary[RhoExpr] = {
 
@@ -62,8 +61,8 @@ class RhoExprToParSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks w
       )
 
     // Helpers
-    def withList[A <: RhoExpr](f: List[RhoExpr] => A): Gen[A] =
-      Gen.listOfN(numOfElements, genRhoExpr).map(data => f(data))
+    def withList[A <: RhoExpr](f: List[RhoExpr] => A) =
+      Gen.listOfN(numOfElements, genRhoExpr).map(f)
     def genHexString = Gen.listOf(arbByte.arbitrary).map(_.toArray.toHexString)
 
     Arbitrary(genRhoExpr)
