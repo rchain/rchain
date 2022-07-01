@@ -57,7 +57,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
   def createTransportLayerServer(env: TcpTlsEnvironment): Task[TransportLayerServer[Task]] =
     Task.delay {
       implicit val rPConfAsk: RPConfAsk[Task] = createRPConfAsk[Task](env.peer)
-      new GrpcTransportServer(
+      val server = new GrpcTransportServer(
         networkId,
         env.port,
         env.cert,
@@ -66,6 +66,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
         maxStreamMessageSize,
         4
       )
+      TransportLayerServer(server)
     }
 }
 

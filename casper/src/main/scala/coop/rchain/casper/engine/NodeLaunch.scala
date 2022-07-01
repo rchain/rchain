@@ -26,6 +26,8 @@ import coop.rchain.shared.syntax._
 import fs2.Stream
 import fs2.concurrent.Queue
 
+import scala.concurrent.duration.DurationInt
+
 final case class PeerMessage(peer: PeerNode, message: CasperMessage)
 
 object NodeLaunch {
@@ -33,11 +35,11 @@ object NodeLaunch {
   // format: off
   def apply[F[_]
     /* Execution */   : Concurrent: Parallel: ContextShift: Time: Timer
-    /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+    /* Transport */   : TransportLayer: CommUtil: BlockRetriever
     /* State */       : RPConfAsk: ConnectionsCell
     /* Rholang */     : RuntimeManager
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
-    /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+    /* Diagnostics */ : Log: Metrics: Span] // format: on
   (
       packets: Stream[F, PeerMessage],
       incomingBlocksQueue: Queue[F, BlockMessage],
@@ -105,8 +107,20 @@ object NodeLaunch {
           engine.handle(pm.peer, pm.message)
         }
         _ <- Log[F].info(s"Making a transition to Running state.")
+
+        // Wait for first connection before sending requests or handling incoming messages
+        // TODO: this is part of legacy logic, send FCT request to at least one node
+        //  - this should be part of network layer to ensure messages are sent to right peers
+        _ <- waitForFirstConnection
         _ <- CommUtil[F].sendForkChoiceTipRequest
+
         _ <- handleMessages.compile.drain
+      } yield ()
+
+    def waitForFirstConnection: F[Unit] =
+      for {
+        isEmpty <- ConnectionsCell[F].get.map(_.isEmpty)
+        _       <- (Timer[F].sleep(250.millis) *> waitForFirstConnection).whenA(isEmpty)
       } yield ()
 
     for {

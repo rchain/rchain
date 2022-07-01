@@ -1,5 +1,11 @@
 package coop.rchain.crypto.util
 
+import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.sdk.syntax.all._
+import coop.rchain.shared.Base16
+import org.bouncycastle.asn1._
+import org.bouncycastle.util.BigIntegers
+
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, FileInputStream}
 import java.math.BigInteger
 import java.security._
@@ -7,19 +13,9 @@ import java.security.cert._
 import java.security.interfaces.{ECPrivateKey, ECPublicKey}
 import java.security.spec._
 import java.util.Base64
-import coop.rchain.crypto.hash.Keccak256
-import coop.rchain.shared.Base16
-import org.bouncycastle.asn1.{
-  ASN1Encodable,
-  ASN1InputStream,
-  ASN1Integer,
-  ASN1Sequence,
-  DERSequenceGenerator
-}
-import org.bouncycastle.util.BigIntegers
-
 import scala.io.Source
-import scala.util.{Failure, Try}
+import scala.util.Using.Releasable
+import scala.util.{Failure, Try, Using}
 
 object CertificateHelper {
 
@@ -53,20 +49,19 @@ object CertificateHelper {
   def publicAddress(input: Array[Byte]): Array[Byte] =
     Keccak256.hash(input).drop(12)
 
-  def from(certFilePath: String): X509Certificate =
+  def from(certFilePath: String): Try[X509Certificate] =
     fromFile(new File(certFilePath))
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-  def fromFile(certFile: File): X509Certificate = {
-    val cf = CertificateFactory.getInstance("X.509")
-    val is = new FileInputStream(certFile)
-    cf.generateCertificate(is).asInstanceOf[X509Certificate]
-  }
+  def fromFile(certFile: File): Try[X509Certificate] =
+    Using(new FileInputStream(certFile)) { file =>
+      val cf = CertificateFactory.getInstance("X.509")
+      cf.generateCertificate(file).asInstanceOf[X509Certificate]
+    }
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def readKeyPair(keyFile: File): KeyPair = {
-    import coop.rchain.shared.Resources._
-    val str = withResource(Source.fromFile(keyFile)) {
+    val str = Using.resource(Source.fromFile(keyFile)) {
       _.getLines().filter(!_.contains("KEY")).mkString
     }
     val spec     = new PKCS8EncodedKeySpec(Base64.getDecoder.decode(str))
@@ -129,27 +124,28 @@ object CertificateHelper {
   def encodeSignatureRStoDER(signatureRS: Array[Byte]): Try[Array[Byte]] = {
     def toASN1Int(bytes: Array[Byte]) = new ASN1Integer(BigIntegers.fromUnsignedByteArray(bytes))
 
-    def convert = {
+    def convert: Try[Array[Byte]] = {
       val (r, s) = signatureRS.take(64).splitAt(32)
-      val bos    = new ByteArrayOutputStream(72)
-      val seq    = new DERSequenceGenerator(bos)
-      try {
-        seq.addObject(toASN1Int(r))
-        seq.addObject(toASN1Int(s))
-        // Close to write the sequence
-        seq.close
-        bos.toByteArray
-      } finally {
-        // > Closing a ByteArrayOutputStream has no effect.
-        // https://docs.oracle.com/javase/10/docs/api/java/io/ByteArrayOutputStream.html
-        bos.close
-      }
+
+      implicit val relSeq: Releasable[DERSequenceGenerator] = _.close()
+
+      Using
+        .Manager { use =>
+          val bos = use(new ByteArrayOutputStream(72))
+          val seq = use(new DERSequenceGenerator(bos))
+          seq.addObject(toASN1Int(r))
+          seq.addObject(toASN1Int(s))
+          bos
+        }
+        .map(_.toByteArray)
     }
 
     if (signatureRS.isEmpty)
       Failure(new IllegalArgumentException("Input array must not be empty"))
     else
-      Try(convert)
+      convert.mapFailure(
+        new IllegalArgumentException("Input array is not valid signature", _)
+      )
   }
 
   def decodeSignatureDERtoRS(signatureDER: Array[Byte]): Try[Array[Byte]] = {
@@ -160,28 +156,22 @@ object CertificateHelper {
       BigIntegers.asUnsignedByteArray(bytesLength, asn1.getValue)
     }
 
-    def convert: Array[Byte] = {
-      val bis = new ByteArrayInputStream(signatureDER)
-      val asn = new ASN1InputStream(bis)
-      try {
-        val asnSeq          = asn.readObject.asInstanceOf[ASN1Sequence]
-        val Array(r, s, _*) = asnSeq.toArray
-        toBytes(r) ++ toBytes(s)
-      } finally {
-        // Ensure `close` does not throw an exception
-        Try(asn.close).getOrElse(())
-        // > Closing a ByteArrayInputStream has no effect.
-        // https://docs.oracle.com/javase/10/docs/api/java/io/ByteArrayInputStream.html
-        bis.close
-      }
-    }
-
-    import coop.rchain.shared.TrySyntax._
+    def convert: Try[Array[Byte]] =
+      Using
+        .Manager { use =>
+          val bis = use(new ByteArrayInputStream(signatureDER))
+          val asn = use(new ASN1InputStream(bis))
+          asn.readObject.asInstanceOf[ASN1Sequence]
+        }
+        .map { asnSeq =>
+          val Array(r, s, _*) = asnSeq.toArray
+          toBytes(r) ++ toBytes(s)
+        }
 
     if (signatureDER.isEmpty)
       Failure(new IllegalArgumentException("Input array must not be empty"))
     else
-      Try(convert).mapFailure(
+      convert.mapFailure(
         new IllegalArgumentException("Input array is not valid DER message format", _)
       )
   }

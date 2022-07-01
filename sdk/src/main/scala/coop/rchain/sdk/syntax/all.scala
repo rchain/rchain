@@ -2,4 +2,4 @@ package coop.rchain.sdk.syntax
 
 import coop.rchain.sdk.primitive._
 
-trait AllSyntax extends ThrowableSyntax
+trait AllSyntax extends ThrowableSyntax with TrySyntax with VoidSyntax

@@ -1,43 +1,44 @@
 package coop.rchain.comm.discovery
 
-import java.net.ServerSocket
+import cats._
+import cats.effect.{Resource, Sync, Timer}
+import cats.syntax.all._
+import coop.rchain.comm._
+import io.grpc
 
+import java.net.ServerSocket
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.util.{Try, Using}
 
-import cats._
-import cats.effect.Timer
-import cats.syntax.all._
-
-import coop.rchain.comm._
-import coop.rchain.grpc.Server
-import coop.rchain.shared.Resources
-
-abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
+abstract class KademliaRPCRuntime[F[_]: Sync: Timer, E <: Environment] {
 
   def createEnvironment(port: Int): F[E]
 
   def createKademliaRPC(env: E): F[KademliaRPC[F]]
+
   def createKademliaRPCServer(
       env: E,
       pingHandler: PeerNode => F[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
-  ): F[Server[F]]
+  ): Resource[F, grpc.Server]
 
   def extract[A](fa: F[A]): A
 
-  private def getFreePort: Int =
-    Resources.withResource(new ServerSocket(0)) { s =>
-      s.setReuseAddress(true)
-      s.getLocalPort
+  private def getFreePort: Try[Int] =
+    Using(new ServerSocket(0)) { server =>
+      server.setReuseAddress(true)
+      server.getLocalPort
     }
 
-  def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
+  def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] = {
+    def freePort: F[Int] = Sync[F].fromTry(getFreePort)
     for {
-      e1 <- createEnvironment(getFreePort)
-      e2 <- createEnvironment(getFreePort)
+      e1 <- freePort >>= createEnvironment
+      e2 <- freePort >>= createEnvironment
       r  <- block(e1, e2)
     } yield r
+  }
 
   trait Runtime[A] {
     protected def pingHandler: PingHandler[F]
@@ -62,14 +63,12 @@ abstract class KademliaRPCRuntime[F[_]: Monad: Timer, E <: Environment] {
             local    <- e1.peer.pure[F]
             remote   = e2.peer
             localRpc <- createKademliaRPC(e1)
-            remoteRpc <- createKademliaRPCServer(
-                          e2,
-                          pingHandler.handle(remote),
-                          lookupHandler.handle(remote)
-                        )
-            _ <- remoteRpc.start
-            r <- execute(localRpc, local, remote)
-            _ <- remoteRpc.stop
+            remoteRpc = createKademliaRPCServer(
+              e2,
+              pingHandler.handle(remote),
+              lookupHandler.handle(remote)
+            )
+            r <- remoteRpc.use(_ => execute(localRpc, local, remote))
           } yield new TwoNodesResult {
             def localNode: PeerNode  = local
             def remoteNode: PeerNode = remote

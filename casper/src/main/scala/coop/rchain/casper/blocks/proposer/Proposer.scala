@@ -16,7 +16,7 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
-import coop.rchain.shared.{EventPublisher, Log, Time}
+import coop.rchain.shared.{Log, Time}
 
 sealed abstract class ProposerResult
 object ProposerEmpty                                                         extends ProposerResult
@@ -109,8 +109,9 @@ object Proposer {
   def apply[F[_]
     /* Execution */   : Concurrent: Timer: Time
     /* Storage */     : BlockStore: BlockDagStorage
-    /* Diagnostics */ : Log: Span: Metrics: EventPublisher
-    /* Comm */        : CommUtil: RuntimeManager
+    /* Rholang */     : RuntimeManager
+    /* Comm */        : CommUtil
+    /* Diagnostics */ : Log: Span: Metrics
   ] // format: on
   (
       validatorIdentity: ValidatorIdentity,
@@ -164,9 +165,7 @@ object Proposer {
         // TODO: temp this is done after validation
 //        MultiParentCasper.handleValidBlock(b) >>
         // broadcast hash to peers
-        CommUtil[F].sendBlockHash(b.blockHash, b.sender) >>
-        // Publish event
-        EventPublisher[F].publish(MultiParentCasper.createdEvent(b))
+        CommUtil[F].sendBlockHash(b.blockHash, b.sender)
 
     new Proposer(
       getLatestSeqNumber,

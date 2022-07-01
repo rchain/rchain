@@ -1,18 +1,18 @@
 package coop.rchain.node
 
-import cats.effect.{ConcurrentEffect, ExitCode, Sync, Timer}
+import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.diagnostics.NewPrometheusReporter
-import coop.rchain.node.effects.EventConsumer
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.https4s.RouterFix
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
 import org.http4s.HttpRoutes
 import org.http4s.implicits._
+import org.http4s.server.Server
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.CORS
 
@@ -24,7 +24,7 @@ package object web {
   def corsPolicy[F[_]: Sync](routes: HttpRoutes[F]) =
     CORS(routes, CORS.DefaultCORSConfig.copy(allowCredentials = false))
 
-  def aquireHttpServer[F[_]: ConcurrentEffect: Timer: RPConfAsk: NodeDiscovery: ConnectionsCell: EventConsumer: Log](
+  def acquireHttpServer[F[_]: ConcurrentEffect: Timer: RPConfAsk: NodeDiscovery: ConnectionsCell: Log](
       reporting: Boolean,
       host: String = "0.0.0.0",
       httpPort: Int,
@@ -32,51 +32,50 @@ package object web {
       connectionIdleTimeout: FiniteDuration,
       webApi: WebApi[F],
       reportingRoutes: ReportingHttpRoutes[F]
-  )(implicit scheduler: Scheduler): F[fs2.Stream[F, ExitCode]] =
-    for {
-      event              <- EventsInfo.service[F]
-      reportingRoutesOpt = if (reporting) reportingRoutes else HttpRoutes.empty
-      baseRoutes = Map(
-        "/metrics"   -> corsPolicy(NewPrometheusReporter.service[F](prometheusReporter)),
-        "/version"   -> corsPolicy(VersionInfo.service[F]),
-        "/status"    -> corsPolicy(StatusInfo.service[F]),
-        "/ws/events" -> corsPolicy(event),
-        "/api"       -> corsPolicy(WebApiRoutes.service[F](webApi) <+> reportingRoutesOpt),
-        // Web API v1 with OpenAPI schema
-        "/api/v1" -> corsPolicy(WebApiRoutesV1.create[F](webApi))
-      )
-      // Legacy reporting routes
-      extraRoutes = if (reporting)
+  )(implicit scheduler: Scheduler): Resource[F, Server[F]] = {
+    val reportingRoutesOpt = if (reporting) reportingRoutes else HttpRoutes.empty
+    val baseRoutes = Map(
+      "/metrics" -> corsPolicy(NewPrometheusReporter.service[F](prometheusReporter)),
+      "/version" -> corsPolicy(VersionInfo.service[F]),
+      "/status"  -> corsPolicy(StatusInfo.service[F]),
+      "/api"     -> corsPolicy(WebApiRoutes.service[F](webApi) <+> reportingRoutesOpt),
+      // Web API v1 with OpenAPI schema
+      "/api/v1" -> corsPolicy(WebApiRoutesV1.create[F](webApi))
+    )
+    // Legacy reporting routes
+    val extraRoutes =
+      if (reporting)
         Map("/reporting" -> corsPolicy(reportingRoutes))
       else
         Map.empty
-      allRoutes = baseRoutes ++ extraRoutes
-    } yield BlazeServerBuilder[F](scheduler)
+    val allRoutes = baseRoutes ++ extraRoutes
+
+    BlazeServerBuilder[F](scheduler)
       .bindHttp(httpPort, host)
       .withHttpApp(RouterFix(allRoutes.toList: _*).orNotFound)
       .withIdleTimeout(connectionIdleTimeout)
       .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)
-      .serve
+      .resource
+  }
 
-  def aquireAdminHttpServer[F[_]: ConcurrentEffect: Timer: EventConsumer: Log](
+  def acquireAdminHttpServer[F[_]: ConcurrentEffect: Timer: Log](
       host: String = "0.0.0.0",
       httpPort: Int,
       connectionIdleTimeout: FiniteDuration,
       webApi: WebApi[F],
       adminWebApiRoutes: AdminWebApi[F],
       reportingRoutes: ReportingHttpRoutes[F]
-  )(implicit scheduler: Scheduler): F[fs2.Stream[F, ExitCode]] =
-    for {
-      event <- EventsInfo.service[F]
-      baseRoutes = Map(
-        "/api" -> corsPolicy(AdminWebApiRoutes.service[F](adminWebApiRoutes) <+> reportingRoutes),
-        // Web API v1 (admin) with OpenAPI schema
-        "/api/v1" -> corsPolicy(WebApiRoutesV1.createAdmin[F](webApi, adminWebApiRoutes))
-      )
-    } yield BlazeServerBuilder[F](scheduler)
+  )(implicit scheduler: Scheduler): Resource[F, Server[F]] = {
+    val baseRoutes = Map(
+      "/api" -> corsPolicy(AdminWebApiRoutes.service[F](adminWebApiRoutes) <+> reportingRoutes),
+      // Web API v1 (admin) with OpenAPI schema
+      "/api/v1" -> corsPolicy(WebApiRoutesV1.createAdmin[F](webApi, adminWebApiRoutes))
+    )
+    BlazeServerBuilder[F](scheduler)
       .bindHttp(httpPort, host)
       .withHttpApp(RouterFix(baseRoutes.toList: _*).orNotFound)
       .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)
       .withIdleTimeout(connectionIdleTimeout)
-      .serve
+      .resource
+  }
 }

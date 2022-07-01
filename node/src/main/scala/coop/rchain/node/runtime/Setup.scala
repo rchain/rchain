@@ -17,7 +17,6 @@ import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMe
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.syntax._
 import coop.rchain.comm.RoutingMessage
 import coop.rchain.comm.discovery.NodeDiscovery
@@ -27,7 +26,7 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BlockVersion, Par}
+import coop.rchain.models.Par
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
@@ -35,6 +34,7 @@ import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.diagnostics
+import coop.rchain.node.instances.ProposerInstance
 import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
@@ -44,46 +44,43 @@ import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
+import coop.rchain.store.KeyValueStoreManager
 import fs2.Stream
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
 object Setup {
-  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
+  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Timer: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](
+      storeManager: KeyValueStoreManager[F],
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       commUtil: CommUtil[F],
       blockRetriever: BlockRetriever[F],
-      conf: NodeConf,
-      eventPublisher: EventPublisher[F]
+      conf: NodeConf
   )(implicit mainScheduler: Scheduler): F[
     (
+        Stream[F, Unit], // Node startup process (protocol messages handling)
         Queue[F, RoutingMessage],
-        APIServers,
-        CasperLoop[F],
-        F[Unit], // Node startup process (protocol messages handling)
-        ReportingHttpRoutes[F],
+        GrpcServices,
         WebApi[F],
         AdminWebApi[F],
-        Option[Proposer[F]],
-        Queue[F, (Boolean, Deferred[F, ProposerResult])],
-        Option[Ref[F, ProposerState[F]]],
-        Stream[F, Unit]
+        ReportingHttpRoutes[F]
     )
-  ] =
-    for {
-      // RNode key-value store manager / manages LMDB databases
-      rnodeStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
+  ] = {
+    // TODO: temporary until Time is removed completely
+    //  https://github.com/rchain/rchain/issues/3730
+    implicit val time = Time.fromTimer(Timer[F])
 
+    for {
       // Block execution tracker
       executionTracker <- StatefulExecutionTracker[F]
 
       // Block storage
-      blockStore    <- BlockStore(rnodeStoreManager)
-      approvedStore <- approvedStore.create(rnodeStoreManager)
+      blockStore    <- BlockStore(storeManager)
+      approvedStore <- approvedStore.create(storeManager)
 
       // Block DAG storage
-      blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
+      blockDagStorage <- BlockDagKeyValueStorage.create[F](storeManager)
 
       // Create metrics if enabled
       span = if (conf.metrics.zipkin)
@@ -94,15 +91,15 @@ object Setup {
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
+        storeManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
       }
 
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
         for {
-          rStores    <- rnodeStoreManager.rSpaceStores
-          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          rStores    <- storeManager.rSpaceStores
+          mergeStore <- RuntimeManager.mergeableStore(storeManager)
           rm <- RuntimeManager
                  .createWithHistory[F](
                    rStores,
@@ -119,7 +116,7 @@ object Setup {
         implicit val (bd, sp) = (blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
-          rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
+          storeManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
         } else
           ReportingCasper.noop.pure[F]
       }
@@ -144,7 +141,6 @@ object Setup {
       // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
-        implicit val ep           = eventPublisher
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
         val dummyDeployerKeyOpt   = conf.dev.deployerPrivateKey
         val dummyDeployerKey      = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
@@ -174,6 +170,8 @@ object Setup {
 
       // Queue of received blocks from gRPC API
       incomingBlocksQueue <- Queue.unbounded[F, BlockMessage]
+      // Stream of blocks received over the network
+      incomingBlockStream = incomingBlocksQueue.dequeue
       // Queue of validated blocks, result of block processor
       validatedBlocksQueue <- Queue.unbounded[F, BlockMessage]
       // Validated blocks stream with auto-propose trigger
@@ -181,43 +179,8 @@ object Setup {
         // If auto-propose is enabled, trigger propose immediately after block finished validation
         triggerProposeFOpt.traverse(_(true)) whenA conf.autopropose
       }
-
-      // Network packets handler (queue)
+      // Queue of network (protocol) messages
       routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
-      // Peer message stream
-      peerMessageStream = routingMessageQueue
-        .dequeueChunk(maxSize = 1)
-        .parEvalMapUnorderedProcBounded {
-          case RoutingMessage(peer, packet) =>
-            toCasperMessageProto(packet).toEither
-              .flatMap(CasperMessage.from)
-              .map(cm => PeerMessage(peer, cm).some.pure[F])
-              .leftMap { err =>
-                val msg = s"Could not extract casper message from packet sent by $peer: $err"
-                Log[F].warn(msg).as(none[PeerMessage])
-              }
-              .merge
-        }
-        .collect { case Some(m) => m }
-
-      // Node initialization process, sync LFS to running
-      incomingBlockStream = incomingBlocksQueue.dequeue
-      nodeLaunch = {
-        implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
-        implicit val (br, ep)     = (blockRetriever, eventPublisher)
-        implicit val (ra, rc)     = (rpConfAsk, rpConnections)
-        implicit val (rm, cu)     = (runtimeManager, commUtil)
-        implicit val (rsm, sp)    = (rspaceStateManager, span)
-        NodeLaunch[F](
-          peerMessageStream,
-          incomingBlocksQueue,
-          conf.casper,
-          !conf.protocolClient.disableLfs,
-          conf.protocolServer.disableStateExporter,
-          validatorIdentityOpt,
-          conf.standalone
-        )
-      }
 
       // Block receiver, process incoming blocks and order by validated dependencies
       blockReceiverState <- {
@@ -287,14 +250,14 @@ object Setup {
       }
 
       // Report API
-      reportingStore <- ReportStore.store[F](rnodeStoreManager)
+      reportingStore <- ReportStore.store[F](storeManager)
       blockReportApi = {
         implicit val bs = blockStore
         BlockReportApi[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
 
       // gRPC services (deploy, propose eval/repl)
-      apiServers = APIServers.build[F](blockApi, blockReportApi, evalRuntime)
+      grpcServices = GrpcServices.build[F](blockApi, blockReportApi, evalRuntime)
 
       // Reporting HTTP routes
       reportingRoutes = ReportingRoutes.service[F](blockReportApi)
@@ -304,36 +267,71 @@ object Setup {
         blockReportApi,
         Par(unforgeables = Seq(Transaction.transferUnforgeable))
       )
-      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
+      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, storeManager)
 
-      // Web API (public and admin)
-      webApi      = new WebApiImpl[F](blockApi, cacheTransactionAPI)
-      adminWebApi = new AdminWebApiImpl[F](blockApi)
+      // Peer message stream
+      peerMessageStream = routingMessageQueue
+        .dequeueChunk(maxSize = 1)
+        .parEvalMapUnorderedProcBounded {
+          case RoutingMessage(peer, packet) =>
+            toCasperMessageProto(packet).toEither
+              .flatMap(CasperMessage.from)
+              .map(cm => PeerMessage(peer, cm).some.pure[F])
+              .leftMap { err =>
+                val msg = s"Could not extract casper message from packet sent by $peer: $err"
+                Log[F].warn(msg).as(none[PeerMessage])
+              }
+              .merge
+        }
+        .collect { case Some(m) => m }
+
+      // Proposer process stream
+      proposerStream = proposer
+        .map(ProposerInstance.create[F](proposerQueue, _, proposerStateRefOpt.get))
+        .getOrElse(Stream.empty)
 
       // Infinite loop to trigger request missing dependencies
-      casperLoop = {
+      requestDependencies = {
         implicit val br = blockRetriever
         for {
-          // Maintain RequestedBlocks for Casper
           _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)
         } yield ()
       }
 
-      runtimeCleanup = NodeRuntime.cleanup(
-        rnodeStoreManager
-      )
+      // Node initialization process, sync LFS to running
+      nodeLaunch = {
+        implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
+        implicit val (br, ra, rc) = (blockRetriever, rpConfAsk, rpConnections)
+        implicit val (rm, cu)     = (runtimeManager, commUtil)
+        implicit val (rsm, sp)    = (rspaceStateManager, span)
+        NodeLaunch[F](
+          peerMessageStream,
+          incomingBlocksQueue,
+          conf.casper,
+          !conf.protocolClient.disableLfs,
+          conf.protocolServer.disableStateExporter,
+          validatorIdentityOpt,
+          conf.standalone
+        )
+      }
+
+      // Web API (public and admin)
+      webApi      = new WebApiImpl[F](blockApi, cacheTransactionAPI)
+      adminWebApi = new AdminWebApiImpl[F](blockApi)
+
+      // Stream represents the whole node process
+      nodeProgramStream = Stream.eval(nodeLaunch) concurrently
+        proposerStream concurrently
+        blockProcessorStream concurrently
+        Stream.eval(requestDependencies).repeat
     } yield (
+      nodeProgramStream,
       routingMessageQueue,
-      apiServers,
-      casperLoop,
-      nodeLaunch,
-      reportingRoutes,
+      grpcServices,
       webApi,
       adminWebApi,
-      proposer,
-      proposerQueue,
-      proposerStateRefOpt,
-      blockProcessorStream.as(())
+      reportingRoutes
     )
+  }
 }

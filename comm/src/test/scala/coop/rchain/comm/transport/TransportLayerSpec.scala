@@ -1,6 +1,7 @@
 package coop.rchain.comm.transport
 
-import cats._
+import cats.effect.Timer
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm._
@@ -11,7 +12,7 @@ import org.scalatest._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
-abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environment]
+abstract class TransportLayerSpec[F[_]: Sync: Timer, E <: Environment]
     extends TransportLayerRuntime[F, E]
     with AnyWordSpecLike
     with Matchers

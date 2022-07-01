@@ -11,22 +11,22 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
 
-final case class APIServers(
-    repl: ReplGrpcMonix.Repl,
+final case class GrpcServices(
+    deploy: DeployServiceV1GrpcMonix.DeployService,
     propose: ProposeServiceV1GrpcMonix.ProposeService,
-    deploy: DeployServiceV1GrpcMonix.DeployService
+    repl: ReplGrpcMonix.Repl
 )
 
-object APIServers {
+object GrpcServices {
   def build[F[_]: Monixable: Concurrent: Log](
       blockApi: BlockApi[F],
       blockReportAPI: BlockReportApi[F],
       runtime: RhoRuntime[F]
-  )(implicit mainScheduler: Scheduler): APIServers = {
+  )(implicit mainScheduler: Scheduler): GrpcServices = {
     val repl    = ReplGrpcService(runtime, mainScheduler)
     val deploy  = DeployGrpcServiceV1(blockApi, blockReportAPI)
     val propose = ProposeGrpcServiceV1(blockApi)
 
-    APIServers(repl, propose, deploy)
+    GrpcServices(deploy, propose, repl)
   }
 }

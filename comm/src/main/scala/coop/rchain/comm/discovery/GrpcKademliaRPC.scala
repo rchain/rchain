@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery.KademliaGrpcMonix.KademliaRPCServiceStub
+import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.grpc.implicits._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
@@ -18,7 +19,7 @@ import monix.execution.Scheduler
 
 import scala.concurrent.duration._
 
-class GrpcKademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
+class GrpcKademliaRPC[F[_]: Monixable: Sync: RPConfAsk: Metrics](
     networkId: String,
     timeout: FiniteDuration
 )(implicit scheduler: Scheduler)
@@ -30,17 +31,15 @@ class GrpcKademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
   def ping(peer: PeerNode): F[Boolean] =
     for {
       _       <- Metrics[F].incrementCounter("ping")
-      local   <- PeerNodeAsk[F].ask
+      local   <- RPConfAsk[F].ask.map(_.local)
       ping    = Ping().withSender(toNode(local)).withNetworkId(networkId)
       pongErr <- withClient(peer, timeout)(_.sendPing(ping).fromTask.timer("ping-time")).attempt
     } yield pongErr.fold(kp(false), _.networkId == networkId)
 
-  def lookup(key: Seq[Byte], peer: PeerNode): F[Seq[PeerNode]] = {
-    import cats.instances.list._
-
+  def lookup(key: Seq[Byte], peer: PeerNode): F[Seq[PeerNode]] =
     for {
       _     <- Metrics[F].incrementCounter("protocol-lookup-send")
-      local <- PeerNodeAsk[F].ask
+      local <- RPConfAsk[F].ask.map(_.local)
       lookup = Lookup()
         .withId(ByteString.copyFrom(key.toArray))
         .withSender(toNode(local))
@@ -52,7 +51,6 @@ class GrpcKademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
         case _ => Seq.empty[PeerNode]
       }
     } yield peers
-  }
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean = false)(
       f: KademliaRPCServiceStub => F[A]
