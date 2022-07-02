@@ -32,38 +32,6 @@ object MultiParentCasper {
   // Required to enable protection from re-submitting duplicate deploys
   val deployLifespan = 50
 
-  def addedEvent(block: BlockMessage): RChainEvent = {
-    val (blockHash, justifications, deployIds, creator, seqNum) = blockEvent(block)
-    RChainEvent.blockAdded(
-      blockHash,
-      justifications,
-      deployIds,
-      creator,
-      seqNum
-    )
-  }
-
-  def createdEvent(b: BlockMessage): RChainEvent = {
-    val (blockHash, justifications, deployIds, creator, seqNum) = blockEvent(b)
-    RChainEvent.blockCreated(
-      blockHash,
-      justifications,
-      deployIds,
-      creator,
-      seqNum
-    )
-  }
-
-  private def blockEvent(block: BlockMessage) = {
-    val blockHash           = block.blockHash.toHexString
-    val justificationHashes = block.justifications.map(_.toHexString)
-    val deployIds: List[String] =
-      block.state.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
-    val creator = block.sender.toHexString
-    val seqNum  = block.seqNum
-    (blockHash, justificationHashes, deployIds, creator, seqNum)
-  }
-
   def getPreStateForNewBlock[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log]
       : F[ParentsMergedState] =
     for {

@@ -1,53 +1,54 @@
 package coop.rchain.comm.transport
 
-import java.net.ServerSocket
-
-import scala.collection.mutable
-import scala.concurrent.duration._
-
 import cats._
-import cats.effect.Timer
 import cats.effect.concurrent.MVar2
+import cats.effect.{Sync, Timer}
 import cats.syntax.all._
-
 import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.shared.Resources
 
-abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
+import java.net.ServerSocket
+import scala.collection.mutable
+import scala.concurrent.duration._
+import scala.util.{Try, Using}
+
+abstract class TransportLayerRuntime[F[_]: Sync: Timer, E <: Environment] {
 
   val networkId = "test"
 
   def createEnvironment(port: Int): F[E]
 
   def createTransportLayer(env: E): F[TransportLayer[F]]
+
   def createTransportLayerServer(env: E): F[TransportLayerServer[F]]
 
   def createDispatcherCallback: F[DispatcherCallback[F]]
 
   def extract[A](fa: F[A]): A
 
-  private def getFreePort: Int =
-    Resources.withResource(new ServerSocket(0)) { s =>
+  private def getFreePort: Try[Int] =
+    Using(new ServerSocket(0)) { s =>
       s.setReuseAddress(true)
       s.getLocalPort
     }
 
+  private def getFreePortF: F[Int] = Sync[F].fromTry(getFreePort)
+
   def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
-      e1 <- createEnvironment(getFreePort)
-      e2 <- createEnvironment(getFreePort)
+      e1 <- getFreePortF >>= createEnvironment
+      e2 <- getFreePortF >>= createEnvironment
       r  <- block(e1, e2)
     } yield r
 
   def threeNodesEnvironment[A](block: (E, E, E) => F[A]): F[A] =
     for {
-      e1 <- createEnvironment(getFreePort)
-      e2 <- createEnvironment(getFreePort)
-      e3 <- createEnvironment(getFreePort)
+      e1 <- getFreePortF >>= createEnvironment
+      e2 <- getFreePortF >>= createEnvironment
+      e3 <- getFreePortF >>= createEnvironment
       r  <- block(e1, e2, e3)
     } yield r
 
@@ -82,14 +83,17 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             local     = e1.peer
             remote    = e2.peer
             cb        <- createDispatcherCallback
-            server <- remoteTls.handleReceive(
-                       protocolDispatcher.dispatch(remote, cb),
-                       streamDispatcher.dispatch(remote, cb)
-                     )
-            r <- execute(localTl, local, remote)
-            _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
-                else implicitly[Timer[F]].sleep(1.second)
-            _ = server.cancel()
+            server = remoteTls.resource(
+              protocolDispatcher.dispatch(remote, cb),
+              streamDispatcher.dispatch(remote, cb)
+            )
+            r <- server.use { _ =>
+                  for {
+                    r <- execute(localTl, local, remote)
+                    _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
+                        else implicitly[Timer[F]].sleep(1.second)
+                  } yield r
+                }
           } yield new TwoNodesResult {
             def localNode: PeerNode        = local
             def remoteNode: PeerNode       = remote
@@ -163,21 +167,23 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             cbl        <- createDispatcherCallback
             cb1        <- createDispatcherCallback
             cb2        <- createDispatcherCallback
-            server1 <- remoteTls1.handleReceive(
-                        protocolDispatcher.dispatch(remote1, cb1),
-                        streamDispatcher.dispatch(remote1, cb1)
-                      )
-            server2 <- remoteTls2.handleReceive(
-                        protocolDispatcher.dispatch(remote2, cb2),
-                        streamDispatcher.dispatch(remote2, cb2)
-                      )
-            r <- execute(localTl, local, remote1, remote2)
-            _ <- if (blockUntilDispatched) cb1.waitUntilDispatched()
-                else implicitly[Timer[F]].sleep(1.second)
-            _ <- if (blockUntilDispatched) cb2.waitUntilDispatched()
-                else implicitly[Timer[F]].sleep(1.second)
-            _ = server1.cancel()
-            _ = server2.cancel()
+            server1 = remoteTls1.resource(
+              protocolDispatcher.dispatch(remote1, cb1),
+              streamDispatcher.dispatch(remote1, cb1)
+            )
+            server2 = remoteTls2.resource(
+              protocolDispatcher.dispatch(remote2, cb2),
+              streamDispatcher.dispatch(remote2, cb2)
+            )
+            r <- (server1 *> server2).use { _ =>
+                  for {
+                    r <- execute(localTl, local, remote1, remote2)
+                    _ <- if (blockUntilDispatched) cb1.waitUntilDispatched()
+                        else implicitly[Timer[F]].sleep(1.second)
+                    _ <- if (blockUntilDispatched) cb2.waitUntilDispatched()
+                        else implicitly[Timer[F]].sleep(1.second)
+                  } yield r
+                }
           } yield new ThreeNodesResult {
             def localNode: PeerNode   = local
             def remoteNode1: PeerNode = remote1

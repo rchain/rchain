@@ -1,11 +1,11 @@
 package coop.rchain.rspace
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
-
-import cats.syntax.either._
-import coop.rchain.shared.Resources.withResource
+import coop.rchain.sdk.syntax.all._
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
+
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import scala.util.Using
 
 package object examples {
 
@@ -13,21 +13,19 @@ package object examples {
     new Serialize[T] {
 
       def encode(a: T): ByteVector =
-        withResource(new ByteArrayOutputStream()) { baos =>
-          withResource(new ObjectOutputStream(baos)) { (oos: ObjectOutputStream) =>
-            oos.writeObject(a)
-          }
+        Using.Manager { use =>
+          val baos = use(new ByteArrayOutputStream())
+          val oos  = use(new ObjectOutputStream(baos))
+          oos.writeObject(a)
           ByteVector.view(baos.toByteArray)
-        }
+        }.getUnsafe
 
       @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
       def decode(bytes: ByteVector): Either[Throwable, T] =
-        Either.catchNonFatal {
-          withResource(new ByteArrayInputStream(bytes.toArray)) { bais =>
-            withResource(new ObjectInputStream(bais)) { ois =>
-              ois.readObject.asInstanceOf[T]
-            }
-          }
-        }
+        Using.Manager { use =>
+          val bais = use(new ByteArrayInputStream(bytes.toArray))
+          val ois  = use(new ObjectInputStream(bais))
+          ois.readObject.asInstanceOf[T]
+        }.toEither
     }
 }

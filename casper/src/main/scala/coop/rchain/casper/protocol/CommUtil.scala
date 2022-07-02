@@ -49,7 +49,7 @@ object CommUtil {
 
   def apply[F[_]](implicit ev: CommUtil[F]): CommUtil[F] = ev
 
-  def of[F[_]: Concurrent: TransportLayer: RPConfAsk: ConnectionsCell: Log: Time]: CommUtil[F] =
+  def of[F[_]: Concurrent: Timer: TransportLayer: RPConfAsk: ConnectionsCell: Log]: CommUtil[F] =
     new CommUtil[F] {
 
       def sendToPeers(message: Packet, scopeSize: Option[Int]): F[Unit] =
@@ -86,7 +86,7 @@ object CommUtil {
               Log[F].warn(
                 s"Failed to send ${msgTypeName} to $peer because of ${CommError
                   .errorMessage(error)}. Retrying in $retryAfter..."
-              ) >> Time[F].sleep(retryAfter) >> keepOnRequestingTillRunning(peer, msg)
+              ) >> Timer[F].sleep(retryAfter) >> keepOnRequestingTillRunning(peer, msg)
           }
 
         RPConfAsk[F].ask >>= { conf =>

@@ -3,6 +3,7 @@ package coop.rchain.casper
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.RhoType.Name

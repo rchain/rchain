@@ -76,7 +76,6 @@ case class TestNode[F[_]: Sync: Timer](
     transportLayerEffect: TransportLayerTestImpl[F],
     connectionsCellEffect: Ref[F, Connections],
     rpConfAskEffect: RPConfAsk[F],
-    eventPublisherEffect: EventPublisher[F],
     routingMessageQueue: Queue[F, RoutingMessage],
     shardName: String,
     minPhloPrice: Long
@@ -104,7 +103,6 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val transportLayerEff: TransportLayerTestImpl[F]  = transportLayerEffect
   implicit val connectionsCell: Ref[F, Connections]          = connectionsCellEffect
   implicit val rp: RPConfAsk[F]                              = rpConfAskEffect
-  implicit val ep: EventPublisher[F]                         = eventPublisherEffect
 
   val finalizedFringe = FinalizedFringe(Seq(genesis.blockHash), genesis.postStateHash)
 
@@ -204,34 +202,34 @@ case class TestNode[F[_]: Sync: Timer](
               }
     } yield block
 
+  // TODO: this is legacy code, check is it used and how it should work with Resource
+  //  returned from TransportLayerServer. For now it's just empty _use_.
   def handleReceive(): F[Unit] =
     tls
-      .handleReceive(
-        (
-            p =>
-              p.message match {
-                case Protocol.Message.Packet(packet) => {
-                  toCasperMessageProto(packet).toEither
-                    .flatMap(proto => CasperMessage.from(proto))
-                    .fold(
-                      err =>
-                        Log[F]
-                          .warn(s"Could not extract casper message from packet")
-                          .as(CommunicationResponse.notHandled(UnknownCommError(""))),
-                      message =>
-                        message match {
-                          case b: BlockMessage =>
-                            addBlock(b).as(CommunicationResponse.handledWithoutMessage)
-                          case _ => handle[F](p, routingMessageQueue)
-                        }
-                    )
-                }
-                case _ => handle[F](p, routingMessageQueue)
-              }
-          ),
+      .resource(
+        p =>
+          p.message match {
+            case Protocol.Message.Packet(packet) => {
+              toCasperMessageProto(packet).toEither
+                .flatMap(proto => CasperMessage.from(proto))
+                .fold(
+                  err =>
+                    Log[F]
+                      .warn(s"Could not extract casper message from packet")
+                      .as(CommunicationResponse.notHandled(UnknownCommError(""))),
+                  message =>
+                    message match {
+                      case b: BlockMessage =>
+                        addBlock(b).as(CommunicationResponse.handledWithoutMessage)
+                      case _ => handle[F](p, routingMessageQueue)
+                    }
+                )
+            }
+            case _ => handle[F](p, routingMessageQueue)
+          },
         kp(().pure[F])
       )
-      .void
+      .use(_ => ().pure[F])
 
   val maxSyncAttempts = 10
   def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {
@@ -437,7 +435,6 @@ object TestNode {
                implicit val connectionsCell       = Ref.unsafe[F, Connections](Connect.Connections.empty)
                implicit val transportLayerEff     = tle
                implicit val rpConfAsk             = createRPConfAsk[F](currentPeerNode)
-               implicit val eventBus              = EventPublisher.noop[F]
                implicit val commUtil: CommUtil[F] = CommUtil.of[F]
                implicit val requestedBlocks: RequestedBlocks[F] =
                  Ref.unsafe[F, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
@@ -508,7 +505,6 @@ object TestNode {
                    connectionsCellEffect = connectionsCell,
                    transportLayerEffect = transportLayerEff,
                    rpConfAskEffect = rpConfAsk,
-                   eventPublisherEffect = eventBus,
                    commUtilEffect = commUtil,
                    requestedBlocksEffect = requestedBlocks,
                    blockRetrieverEffect = blockRetriever,

@@ -12,7 +12,6 @@ import coop.rchain.comm.transport._
 import coop.rchain.shared.Log.NOPLog
 import coop.rchain.shared._
 
-import scala.concurrent.SyncVar
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
@@ -127,15 +126,6 @@ object EffectsTestInstances {
       Sync[F].delay(errors = errors :+ msg) >> delegate.error(msg)
     def error(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] =
       Sync[F].delay(errors = errors :+ msg) >> delegate.error(msg, cause)
-  }
-
-  class EventLogStub[F[_]: Applicative] extends EventLog[F] {
-    var events: List[Event] = List.empty[Event]
-
-    def publish(event: Event): F[Unit] = {
-      events = events :+ event
-      ().pure[F]
-    }
   }
 
 }

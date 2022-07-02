@@ -33,11 +33,11 @@ object NodeSyncing {
   // format: off
   def apply[F[_]
   /* Execution */   : Concurrent: Time: Timer
-  /* Transport */   : TransportLayer: CommUtil: EventPublisher
+  /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
-  /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+  /* Diagnostics */ : Log: Metrics: Span] // format: on
   (
       finished: Deferred[F, Unit],
       validatorId: Option[ValidatorIdentity],
@@ -63,11 +63,11 @@ object NodeSyncing {
 // format: off
 class NodeSyncing[F[_]
   /* Execution */   : Concurrent: Time: Timer
-  /* Transport */   : TransportLayer: CommUtil: EventPublisher
+  /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
   /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
-  /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+  /* Diagnostics */ : Log: Metrics: Span] // format: on
 (
     finished: Deferred[F, Unit],
     incomingBlocksQueue: Queue[F, BlockMessage],
@@ -110,14 +110,6 @@ class NodeSyncing[F[_]
         // Approved block is saved after the whole state is received,
         //  to restart requesting if interrupted with incomplete state.
         _ <- ApprovedStore[F].putApprovedBlock(fringe)
-
-        // TODO: adjust for fringe event or remove completely until proper event solution is built
-//        _ <- EventLog[F].publish(
-//              NodeEvent.ApprovedBlockReceived(
-//                PrettyPrinter
-//                  .buildStringNoLimit(block.blockHash)
-//              )
-//            )
 
         _ <- Log[F].info(s"LFS state ($fringeStateHashStr) is successfully restored.")
       } yield ()

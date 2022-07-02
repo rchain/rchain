@@ -315,7 +315,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val apiMaxBlocksLimit = opt[Int](
-      descr = "The max block numbers you can aquire from api",
+      descr = "The max block numbers you can acquire from api",
       validate = _ >= 0
     )
 

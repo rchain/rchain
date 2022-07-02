@@ -95,15 +95,20 @@ object Connect {
   import Connections._
 
   type RPConfState[F[_]] = MonadState[F, RPConf]
-  type RPConfAsk[F[_]]   = ApplicativeAsk[F, RPConf]
+
+  object RPConfState {
+    def apply[F[_]](implicit instance: MonadState[F, RPConf]): instance.type = instance
+  }
+
+  type RPConfAsk[F[_]] = ApplicativeAsk[F, RPConf]
 
   object RPConfAsk {
-    def apply[F[_]](implicit ev: ApplicativeAsk[F, RPConf]): ApplicativeAsk[F, RPConf] = ev
+    def apply[F[_]](implicit instance: ApplicativeAsk[F, RPConf]): instance.type = instance
   }
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def clearConnections[F[_]: Sync: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
+  def clearConnections[F[_]: Sync: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
       : F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[Unit])] =

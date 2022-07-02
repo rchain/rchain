@@ -9,5 +9,5 @@ package object syntax {
   object all extends AllSyntax
 
   // Scala builtin/primitive types extensions
-  object primitive extends ThrowableSyntax
+  object primitive extends ThrowableSyntax with TrySyntax with VoidSyntax
 }
