@@ -58,16 +58,6 @@ object BlockRandomSeed {
   def generateRandomNumber(blockRandomSeed: BlockRandomSeed): Blake2b512Random =
     Blake2b512Random(encode(blockRandomSeed))
 
-  def generateSplitRandomNumber(blockRandomSeed: BlockRandomSeed, index: Byte): Blake2b512Random =
-    generateRandomNumber(blockRandomSeed).splitByte(index)
-
-  def generateSplitRandomNumber(
-      blockRandomSeed: BlockRandomSeed,
-      index: Byte,
-      index2: Byte
-  ): Blake2b512Random =
-    generateRandomNumber(blockRandomSeed).splitByte(index).splitByte(index2)
-
   def fromBlock(block: BlockMessage): Blake2b512Random = {
     val seed = BlockRandomSeed(
       block.shardId,
@@ -92,13 +82,8 @@ object BlockRandomSeed {
   }
 
   def splitRandomNumberFromGenesis(shardId: String, index: Byte, index2: Byte): Blake2b512Random = {
-    val seed = BlockRandomSeed(
-      shardId,
-      GenesisRandomSeedBlockNumber,
-      GenesisRandomSeedPubKey,
-      EmptyBytesBlakeHash
-    )
-    generateRandomNumber(seed).splitByte(index).splitByte(index2)
+    val seed = BlockRandomSeed.fromGenesis(shardId)
+    seed.splitByte(index).splitByte(index2)
   }
 
   def nonNegativeMergeableTagName(
