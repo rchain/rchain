@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import coop.rchain.casper.merging.DeployChainIndex
-import coop.rchain.rspace.merger.EventLogMergingLogic.computeRejectionOptions
+import coop.rchain.sdk.dag.merging.DagMergingLogic.computeRejectionOptions
 import coop.rchain.shared.Stopwatch
 import org.scalatest.flatspec.AnyFlatSpec
 

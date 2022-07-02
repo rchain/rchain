@@ -1,13 +1,14 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
+import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
-import coop.rchain.casper.merging.{BlockIndex, DagMerger}
+import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.syntax._
@@ -16,6 +17,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared._
 
 final case class ParsingError(details: String)
@@ -83,19 +85,20 @@ object MultiParentCasper {
 
       // If new fringe is finalized, merge it
       newFringeResult <- newFringeHashes.traverse { fringe =>
-                          val seenByPrevFringe = prevFringeHashes.map(msgMap).flatMap(_.seen)
-                          val seenByFringe     = fringe.map(msgMap).flatMap(_.seen)
-                          val fringeBlocks     = seenByFringe -- seenByPrevFringe
+                          // TODO where to get?
+                          val finallyAccepted = Set.empty[DeployChainIndex]
+                          val finallyRejected = Set.empty[DeployChainIndex]
                           for {
-                            // Get all blocks in the fringe to be merged
-                            result <- DagMerger.mergeFringe[F](
-                                       fringeBlocks,
-                                       prevFringeState,
-                                       InterpreterUtil.getBlockIndex(_).map(_.deployChains),
+                            result <- DagMerger.merge[F](
+                                       fringe,
+                                       prevFringeHashes,
+                                       prevFringeStateHash.toBlake2b256Hash,
+                                       dag.dagMessageState.msgMap,
+                                       finallyAccepted,
+                                       finallyRejected,
                                        RuntimeManager[F].getHistoryRepo,
-                                       DagMerger.costOptimalRejectionAlg
+                                       BlockIndex.getBlockIndex[F]
                                      )
-
                             (finalizedState, rejected) = result
                             finalizedStateStr = PrettyPrinter.buildString(
                               finalizedState.toByteString

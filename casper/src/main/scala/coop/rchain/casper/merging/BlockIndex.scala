@@ -144,8 +144,8 @@ object BlockIndex {
       /** Here deploys from a single block are examined. Atm deploys in block are executed sequentially,
         * so all conflicts are resolved according to order of sequential execution.
         * Therefore there won't be any conflicts between event logs. But there can be dependencies. */
-      deployChains = DagMergingLogic.computeBranches[DeployIndex](
-        deployIndices,
+      deployChains = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
+        deployIndices.toSet,
         (l, r) => EventLogMergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
       )
 

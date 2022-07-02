@@ -1,5 +1,6 @@
 package coop.rchain.casper.rholang
 
+import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -8,7 +9,7 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
-import coop.rchain.casper.merging.{BlockIndex, DagMerger}
+import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol.{
   BlockMessage,
   DeployData,
@@ -337,52 +338,29 @@ object InterpreterUtil {
         case Seq() =>
           (RuntimeManager.emptyStateHashFixed, Seq.empty[ByteString]).pure[F]
 
-        // For single parent, get itd post state hash
+        // For single parent, get its post state hash
         case Seq(parent) =>
           BlockStore[F].getUnsafe(parent).map(_.postStateHash).map((_, Seq.empty[ByteString]))
 
-        // Multi-parent merging on finalized fringe as a base state
+        // Multi-parent merging
         case _ =>
           for {
             dag <- BlockDagStorage[F].getRepresentation
+            // TODO where to get?
+            finallyAccepted = Set.empty[DeployChainIndex]
+            finallyRejected = Set.empty[DeployChainIndex]
             r <- DagMerger.merge[F](
-                  dag,
-                  preState.fringe.toSeq,
+                  dag.dagMessageState.latestMsgs.map(_.id),
+                  preState.fringe,
                   preState.fringeState,
-                  getBlockIndex(_).map(_.deployChains),
+                  dag.dagMessageState.msgMap,
+                  finallyAccepted,
+                  finallyRejected,
                   RuntimeManager[F].getHistoryRepo,
-                  DagMerger.costOptimalRejectionAlg
+                  BlockIndex.getBlockIndex[F]
                 )
             (state, rejected) = r
-          } yield (ByteString.copyFrom(state.bytes.toArray), rejected)
+          } yield (ByteString.copyFrom(state.bytes.toArray), rejected.toSeq)
       }
     }
-
-  def getBlockIndex[F[_]: Concurrent: RuntimeManager: BlockStore](
-      blockHash: BlockHash
-  ): F[BlockIndex] = {
-    val cached = BlockIndex.cache.get(blockHash).map(_.pure)
-    cached.getOrElse {
-      for {
-        b         <- BlockStore[F].getUnsafe(blockHash)
-        preState  = b.preStateHash
-        postState = b.postStateHash
-        sender    = b.sender.toByteArray
-        seqNum    = b.seqNum
-
-        mergeableChs <- RuntimeManager[F].loadMergeableChannels(postState, sender, seqNum)
-
-        blockIndex <- BlockIndex(
-                       b.blockHash,
-                       b.state.deploys,
-                       b.state.systemDeploys,
-                       preState.toBlake2b256Hash,
-                       postState.toBlake2b256Hash,
-                       RuntimeManager[F].getHistoryRepo,
-                       mergeableChs
-                     )
-      } yield blockIndex
-    }
-  }
-
 }
