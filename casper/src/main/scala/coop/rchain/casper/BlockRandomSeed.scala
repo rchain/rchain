@@ -91,23 +91,23 @@ object BlockRandomSeed {
     generateRandomNumber(seed)
   }
 
-  def nonNegativeMergeableTagName(
-      shardId: String
-  ): Par = {
-    // NonNegative contract is the 4th contract deployed in the genesis, start from 0. Index should be 3
-    val nonNegativeContractIndex: Byte = 3
+  def splitRandomNumberFromGenesis(shardId: String, index: Byte, index2: Byte): Blake2b512Random = {
     val seed = BlockRandomSeed(
       shardId,
       GenesisRandomSeedBlockNumber,
       GenesisRandomSeedPubKey,
       EmptyBytesBlakeHash
     )
-    val rand = BlockRandomSeed.generateSplitRandomNumber(
-      seed,
-      nonNegativeContractIndex,
-      BlockRandomSeed.UserDeploySplitIndex
-    )
-    val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
+    generateRandomNumber(seed).splitByte(index).splitByte(index2)
+  }
+
+  def nonNegativeMergeableTagName(
+      shardId: String
+  ): Par = {
+    // NonNegative contract is the 4th contract deployed in the genesis, start from 0. Index should be 3
+    val nonNegativeContractIndex: Byte = 3
+    val rand                           = splitRandomNumberFromGenesis(shardId, nonNegativeContractIndex, UserDeploySplitIndex)
+    val unforgeableByte                = Iterator.continually(rand.next()).drop(1).next()
     Name(unforgeableByte)
   }
 
@@ -116,17 +116,8 @@ object BlockRandomSeed {
   def transferUnforgeable(shardId: String): Par = {
     // RevVault contract is the 7th contract deployed in the genesis, start from 0. Index should be 6
     val RevVaultContractDeployIndex: Byte = 6
-    val seed = BlockRandomSeed(
-      shardId,
-      GenesisRandomSeedBlockNumber,
-      GenesisRandomSeedPubKey,
-      EmptyBytesBlakeHash
-    )
-    val rand = BlockRandomSeed.generateSplitRandomNumber(
-      seed,
-      RevVaultContractDeployIndex,
-      BlockRandomSeed.UserDeploySplitIndex
-    )
+    val rand =
+      splitRandomNumberFromGenesis(shardId, RevVaultContractDeployIndex, UserDeploySplitIndex)
     val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
     Name(unfogeableBytes)
   }
@@ -134,17 +125,8 @@ object BlockRandomSeed {
   def storeTokenUnforgeable(shardId: String): Par = {
     // TreeHashMap contract is the 1st contract deployed in the genesis, start from 0. Index should be 0
     val TreeHashMapContractDeployIndex: Byte = 0
-    val seed = BlockRandomSeed(
-      shardId,
-      GenesisRandomSeedBlockNumber,
-      GenesisRandomSeedPubKey,
-      EmptyBytesBlakeHash
-    )
-    val rand = BlockRandomSeed.generateSplitRandomNumber(
-      seed,
-      TreeHashMapContractDeployIndex,
-      BlockRandomSeed.UserDeploySplitIndex
-    )
+    val rand =
+      splitRandomNumberFromGenesis(shardId, TreeHashMapContractDeployIndex, UserDeploySplitIndex)
     val target = LazyList.continually(rand.next()).drop(9).head
     Name(target)
   }
@@ -152,17 +134,8 @@ object BlockRandomSeed {
   def revVaultUnforgeable(shardId: String): Par = {
     // RevVault contract is the 7th contract deployed in the genesis, start from 0. Index should be 6
     val RevVaultContractDeployIndex: Byte = 6
-    val seed = BlockRandomSeed(
-      shardId,
-      GenesisRandomSeedBlockNumber,
-      GenesisRandomSeedPubKey,
-      EmptyBytesBlakeHash
-    )
-    val rand = BlockRandomSeed.generateSplitRandomNumber(
-      seed,
-      RevVaultContractDeployIndex,
-      BlockRandomSeed.UserDeploySplitIndex
-    )
+    val rand =
+      splitRandomNumberFromGenesis(shardId, RevVaultContractDeployIndex, UserDeploySplitIndex)
     val unfogeableBytes = rand.next()
     Name(unfogeableBytes)
   }

@@ -92,7 +92,7 @@ object ReportingCasper {
           reportingRspace <- ReportingRuntime.createReportingRSpace(rspaceStore)
           reportingRuntime <- ReportingRuntime.createReportingRuntime(
                                reportingRspace,
-                               shardId = shardId
+                               shardId
                              )
           preStateHash = block.preStateHash
 
@@ -181,8 +181,8 @@ object ReportingRuntime {
 
   def createReportingRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       reporting: RhoReportingRspace[F],
-      extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
-      shardId: String
+      shardId: String,
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[ReportingRuntime[F]] =
     for {
       cost     <- CostAccounting.emptyCost[F]
