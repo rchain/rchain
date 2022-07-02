@@ -148,5 +148,23 @@ class DagMergingLogicSpec extends AnyFlatSpec with Matchers with Checkers {
       mergeableDiffs
     ) shouldBe Set(Set(1, 2, 3), Set(2, 3))
   }
+
+  "computeMergeableOverflowRejectionOptions" should "sort deploys by sum of absolute diffs to fold mergeable value" in {
+    val conflictSet         = Set(1, 2, 3, 4, 5)
+    val rejectOptions       = Set.empty[Set[Int]]
+    val initMergeableValues = Map("a" -> 0L)
+    val mergeableDiffs = Map(
+      1 -> Map("a" -> 10L),
+      2 -> Map("a" -> -5L), // this is applied first and immediately goes negative, so rejected
+      3 -> Map("a" -> 15L),
+      4 -> Map("a" -> 10L),
+      5 -> Map("a" -> -20L)
+    )
+    addMergeableOverflowRejections[Int, String](
+      conflictSet,
+      rejectOptions,
+      initMergeableValues,
+      mergeableDiffs
+    ) shouldBe Set(Set(2))
   }
 }

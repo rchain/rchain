@@ -347,8 +347,8 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         DeployTestInfo(rhoChange(10), 10L, "0x21"), // +10
         DeployTestInfo(rhoChange(-20), 10L, "0x22") // -20
       ),
-      expectedRejected = Set.empty,
-      expectedFinalResult = 10
+      expectedRejected = Set(makeSig("0x11")),
+      expectedFinalResult = 15
     )
   }
 
