@@ -21,13 +21,10 @@ class DagMergingLogicSpec extends AnyFlatSpec with Matchers with Checkers {
     r shouldBe Set(11, 12, 21, 22, 51, 52, 61, 62)
   }
 
-  "partitionScopeBiggestFirst" should
-    "output non intersecting partitions, greedily allocating intersecting chunks to bigger view. " +
-      "In case of equal sizes should sort by tip" in {
-    val viewMap =
-      Map(101 -> Set(1, 2, 3, 4), 102 -> Set(4, 5, 6, 7), 103 -> Set(7, 8, 9), 104 -> Set(9, 10))
-    val r = partitionScopeBiggestFirst(viewMap)
-    r shouldBe Seq((101, Set(1, 2, 3, 4)), (102, Set(5, 6, 7)), (103, Set(8, 9)), (104, Set(10)))
+  "partitionScope" should "output non intersecting partitions" in {
+    val views = Seq(Set(1, 2, 3, 4), Set(4, 5, 6, 7), Set(7, 8, 9), Set(9, 10))
+    val r     = partitionScope(views)
+    r shouldBe Seq(Set(1, 2, 3, 4), Set(5, 6, 7), Set(8, 9), Set(10))
   }
 
   "computeConflictsMap" should "compute correct map." in {
@@ -166,5 +163,31 @@ class DagMergingLogicSpec extends AnyFlatSpec with Matchers with Checkers {
       initMergeableValues,
       mergeableDiffs
     ) shouldBe Set(Set(2))
+  }
+
+  "computeAltered" should "partition input correctly" in {
+    val messages   = Set(1, 2, 3)
+    val seen       = Map(1 -> Set(5, 6), 2 -> Set(7, 8), 4 -> Set(9, 10))
+    val rejections = Set("a", "b")
+    val deploys    = Map(5 -> Set("a"), 7 -> Set("b"))
+    val r = computeAltered[Int, String](
+      messages,
+      seen.getOrElse(_, Set()),
+      rejections,
+      deploys.getOrElse(_, Set())
+    )
+    r shouldBe (Vector(3 -> Set()), Vector(1 -> Set("a"), 2 -> Set("b")))
+  }
+
+  "resolveBranchesInOrder" should " resolve conflicts through folding branches keeping head immutable " +
+    "and rejecting from tail. " in {
+    val branches = Seq(Set(1, 2, 3), Set(4, 5, 6), Set(7, 8, 9))
+    val conflicts = Map(3 -> Set(4), 6 -> Set(8)) |+| branches.flatten
+      .map(_ -> Set.empty[Int])
+      .toMap
+    val depends              = Map(4 -> Set(7)) |+| branches.flatten.map(_ -> Set.empty[Int]).toMap
+    val (resolved, rejected) = resolveBranchesInOrder(branches, depends, conflicts)
+    val r                    = (resolved.toSet, rejected.flatten.toSet)
+    r shouldBe (Set(Set(1, 2, 3), Set(5, 6), Set(9)), Set(4, 7, 8))
   }
 }

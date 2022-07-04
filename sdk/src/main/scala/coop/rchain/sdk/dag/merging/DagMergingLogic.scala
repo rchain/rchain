@@ -30,11 +30,10 @@ object DagMergingLogic {
     acceptedFinally.flatMap(conflictsMap) ++ rejectedFinally.flatMap(dependencyMap)
 
   /** Split the scope into non overlapping partitions, greedily allocating intersecting chunks to bigger view. */
-  def partitionScopeBiggestFirst[D: Ordering](views: Map[D, Set[D]]): Seq[(D, Set[D])] = {
-    val sorted = views.toList.sortBy { case (k, v) => (-v.size, k) }
-    val r = LazyList.unfold(sorted) {
-      case (head @ (_, seen)) +: tail => (head, tail.map { case (k, v) => (k, v -- seen) }).some
-      case Seq()                      => none[((D, Set[D]), List[(D, Set[D])])]
+  def partitionScope[D: Ordering](views: Seq[Set[D]]): Seq[Set[D]] = {
+    val r = LazyList.unfold(views) {
+      case (head @ seen) +: tail => (head, tail.map(_ -- seen)).some
+      case Seq()                 => none[(Set[D], List[Set[D]])]
     }
     r.toList
   }
@@ -98,9 +97,11 @@ object DagMergingLogic {
   def computeGreedyNonIntersectingBranches[D: Ordering](
       target: Set[D],
       depends: (D, D) => Boolean
-  ): Set[Set[D]] = {
+  ): Seq[Set[D]] = {
     val concurrentRoots = computeBranches(target, depends)
-    partitionScopeBiggestFirst(concurrentRoots).map { case (k, v) => v + k }.toSet
+    val sorted =
+      concurrentRoots.toList.sortBy { case (k, v) => (-v.size, k) }.map { case (k, v) => v + k }
+    partitionScope(sorted).toList
   }
 
   /** Lowest fringe across number of fringes. */
@@ -238,7 +239,7 @@ object DagMergingLogic {
   }
 
   /** Find deploys to reject from conflict set. */
-  def resolveConflictSet[D: Ordering, CH](
+  def resolveConflictSetFlat[D: Ordering, CH](
       conflictSet: Set[D],
       dependencyMap: Map[D, Set[D]],
       conflictsMap: Map[D, Set[D]],
@@ -261,6 +262,81 @@ object DagMergingLogic {
     computeOptimalRejection(mergeableOverflowRejectionOptions, cost)
   }
 
+  /** Across messages find which views are altered by rejections. */
+  def computeAltered[B, D](
+      messages: Set[B],
+      seen: B => Set[B],
+      rejections: Set[D],
+      deploys: B => Set[D]
+  ): (Vector[(B, Set[D])], Vector[(B, Set[D])]) = {
+    val (alteredI, notAlteredI) = messages.iterator
+      .map { case t => t -> (seen(t) + t).flatMap(deploys) }
+      .map { case v @ (_, view) => (v, view intersect rejections) }
+      .partition { case (_, x) => x.nonEmpty }
+    val (altered, _)    = alteredI.toVector.unzip
+    val (notAltered, _) = notAlteredI.toVector.unzip
+    (notAltered, altered)
+  }
+
+  /** Resolve conflicts through folding branches keeping head immutable and rejecting from tail. */
+  def resolveBranchesInOrder[D](
+      branches: Seq[Set[D]],
+      dependencyMap: Map[D, Set[D]],
+      conflictsMap: Map[D, Set[D]]
+  ): (LazyList[Set[D]], LazyList[Set[D]]) =
+    LazyList
+      .unfold(branches) {
+        case head +: tail =>
+          val (remainder, rejected) = tail.map { view =>
+            val inc     = incompatibleWithFinal(head, Set(), conflictsMap, dependencyMap)
+            val toClear = withDependencies(inc, dependencyMap)
+            (view -- toClear, toClear)
+          }.unzip
+          ((head, rejected.flatten.toSet), remainder).some
+        case Seq() => none[((Set[D], Set[D]), Seq[Set[D]])]
+      }
+      .unzip
+
+  /**
+    * Resolve conflict set by reusing merge done by one of the tips.
+    * If all tips states are altered by finalized rejections, None is returned.
+    */
+  def resolveConflictSetIntoTip[B: Ordering, D: Ordering, CH, S](
+      latestMessages: Map[B, S],
+      conflictScope: Set[B],
+      enforceRejected: Set[D], // required to find out which tip is not altered
+      seen: B => Set[B],
+      deploys: B => Set[D],
+      dependencyMap: Map[D, Set[D]],
+      conflictsMap: Map[D, Set[D]],
+      mergeableDiffs: Map[D, Map[CH, Long]],
+      initMergeableValues: Map[CH, Long]
+  ): Option[Merge[S, D]] = {
+    val (notAltered, altered) =
+      computeAltered(latestMessages.keySet, seen, enforceRejected, deploys)
+    if (notAltered.isEmpty) none[Merge[S, D]]
+    else {
+      val base +: rem = altered.sortBy { case (_, v) => -v.size }
+      val toMerge = (base +: (rem ++ notAltered).sortBy { case (_, v) => -v.size }).map {
+        case (k, v) => deploys(k) ++ v
+      }
+      val toResolve            = partitionScope(toMerge)
+      val (branches, rejected) = resolveBranchesInOrder(toResolve, dependencyMap, conflictsMap)
+      val rejectionsTotal      = enforceRejected ++ rejected.flatten
+      val rejectionsWithOverflow = addMergeableOverflowRejections(
+        conflictScope.flatMap(deploys),
+        Set(rejectionsTotal),
+        initMergeableValues,
+        mergeableDiffs
+      )
+      Merge(
+        latestMessages(base._1),
+        branches.drop(1).toSet.flatten,
+        rejectionsWithOverflow.flatten
+      ).some
+    }
+  }
+
   /** Compute merge for the DAG. */
   def mergeDag[B: Ordering, D: Ordering, CH, S](
       // DAG
@@ -281,14 +357,15 @@ object DagMergingLogic {
       mergeableDiffs: Map[D, Map[CH, Long]],
       initMergeableValues: Map[CH, Long]
   ): Merge[S, D] = {
-    val enforceRejected = {
-      val r = incompatibleWithFinal(acceptedFinally, rejectedFinally, conflictsMap, dependencyMap)
-      r ++ withDependencies[D](r, dependencyMap)
-    }
+    val enforceRejected = withDependencies(
+      incompatibleWithFinal(acceptedFinally, rejectedFinally, conflictsMap, dependencyMap),
+      dependencyMap
+    )
     // conflict set without deploys conflicting with finalization
     val conflictSet           = conflictScope(latestMessages, latestFringe, seen).flatMap(deploysIndex)
     val conflictSetCompatible = conflictSet -- enforceRejected
-    val resolved = resolveConflictSet(
+    // resolveConflictSetIntoTip can be used here instead
+    val resolved = resolveConflictSetFlat(
       conflictSetCompatible,
       dependencyMap,
       conflictsMap,

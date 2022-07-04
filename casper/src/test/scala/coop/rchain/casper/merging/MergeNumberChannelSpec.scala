@@ -252,7 +252,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
           .map(d => d -> d.eventLogIndex.numberChannelsData)
           .toMap
 
-        rejected = DagMergingLogic.resolveConflictSet[DeployChainIndex, Blake2b256Hash](
+        rejected = DagMergingLogic.resolveConflictSetFlat[DeployChainIndex, Blake2b256Hash](
           conflictSet = actualSet.toSet,
           dependencyMap = dependencyMap,
           conflictsMap = conflictsMap,
