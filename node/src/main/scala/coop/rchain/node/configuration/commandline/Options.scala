@@ -455,7 +455,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val systemContractPubKey = opt[String](
-      descr = "System contract public key"
+      descr = "Public key to manage updates of system contracts. " +
+        "It should be set when network is started (genesis block is created). " +
+        "Not setting this key will disable possibility to update system contracts."
     )
 
     val prometheus = opt[Flag](
