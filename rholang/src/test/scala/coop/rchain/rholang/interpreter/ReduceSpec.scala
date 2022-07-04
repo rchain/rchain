@@ -2635,7 +2635,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       (
         """"WRONG".toInt() => ReduceError""",
         EMethod("toInt", GString("WRONG")),
-        ReduceError(s"""Method toInt(): input string "WRONG" cannot be converted to Integer""")
+        ReduceError(s"""Method toInt(): input string "WRONG" cannot be converted to Int""")
       ),
       (
         """Set().toInt() => ReduceError""",
