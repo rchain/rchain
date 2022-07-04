@@ -487,15 +487,13 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           v2 <- evalSingleExpr(p2)
           result <- (v1.exprInstance, v2.exprInstance) match {
                      case (GBool(b1), GBool(b2)) =>
-                       charge[M](COMPARISON_COST) >> GBool(relopb(b1, b2)).pure[M]
+                       charge[M](COMPARISON_COST).as(GBool(relopb(b1, b2)))
                      case (GInt(i1), GInt(i2)) =>
-                       charge[M](COMPARISON_COST) >> GBool(relopi(i1, i2)).pure[M]
+                       charge[M](COMPARISON_COST).as(GBool(relopi(i1, i2)))
                      case (GBigInt(bi1), GBigInt(bi2)) =>
-                       charge[M](bigIntComparison(bi1, bi2)) >> GBool(
-                         relopbi(bi1, bi2)
-                       ).pure[M]
+                       charge[M](bigIntComparison(bi1, bi2)).as(GBool(relopbi(bi1, bi2)))
                      case (GString(s1), GString(s2)) =>
-                       charge[M](COMPARISON_COST) >> GBool(relops(s1, s2)).pure[M]
+                       charge[M](COMPARISON_COST).as(GBool(relops(s1, s2)))
                      case _ =>
                        ReduceError("Unexpected compare: " + v1 + " vs. " + v2).raiseError[M, GBool]
                    }
@@ -530,10 +528,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
-                         charge[M](MULTIPLICATION_COST) >> Expr(GInt(lhs * rhs)).pure[M]
+                         charge[M](MULTIPLICATION_COST).as(Expr(GInt(lhs * rhs)))
                        case (GBigInt(lhs), GBigInt(rhs)) =>
-                         charge[M](bigIntMultiplication(lhs, rhs)) >> Expr(GBigInt(lhs * rhs))
-                           .pure[M]
+                         charge[M](bigIntMultiplication(lhs, rhs)).as(Expr(GBigInt(lhs * rhs)))
                        case (_: GInt, other) =>
                          OperatorExpectedError("*", "Int", other.typ).raiseError[M, Expr]
                        case (_: GBigInt, other) =>
@@ -548,9 +545,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
-                         charge[M](DIVISION_COST) >> Expr(GInt(lhs / rhs)).pure[M]
+                         charge[M](DIVISION_COST).as(Expr(GInt(lhs / rhs)))
                        case (GBigInt(lhs), GBigInt(rhs)) =>
-                         charge[M](bigIntDivision(lhs, rhs)) >> Expr(GBigInt(lhs / rhs)).pure[M]
+                         charge[M](bigIntDivision(lhs, rhs)).as(Expr(GBigInt(lhs / rhs)))
                        case (_: GInt, other) =>
                          OperatorExpectedError("/", "Int", other.typ).raiseError[M, Expr]
                        case (_: GBigInt, other) =>
@@ -565,9 +562,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
-                         charge[M](MODULO_COST) >> Expr(GInt(lhs % rhs)).pure[M]
+                         charge[M](MODULO_COST).as(Expr(GInt(lhs % rhs)))
                        case (GBigInt(lhs), GBigInt(rhs)) =>
-                         charge[M](bigIntModulo(lhs, rhs)) >> Expr(GBigInt(lhs % rhs)).pure[M]
+                         charge[M](bigIntModulo(lhs, rhs)).as(Expr(GBigInt(lhs % rhs)))
                        case (_: GInt, other) =>
                          OperatorExpectedError("%", "Int", other.typ).raiseError[M, Expr]
                        case (_: GBigInt, other) =>
@@ -582,9 +579,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
-                         charge[M](SUM_COST) >> Expr(GInt(lhs + rhs)).pure[M]
+                         charge[M](SUM_COST).as(Expr(GInt(lhs + rhs)))
                        case (GBigInt(lhs), GBigInt(rhs)) =>
-                         charge[M](bigIntSum(lhs, rhs)) >> Expr(GBigInt(lhs + rhs)).pure[M]
+                         charge[M](bigIntSum(lhs, rhs)).as(Expr(GBigInt(lhs + rhs)))
                        case (lhs: ESetBody, rhs) =>
                          for {
                            _         <- charge[M](OP_CALL_COST)
@@ -605,9 +602,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GInt(lhs), GInt(rhs)) =>
-                         charge[M](SUBTRACTION_COST) >> Expr(GInt(lhs - rhs)).pure[M]
+                         charge[M](SUBTRACTION_COST).as(Expr(GInt(lhs - rhs)))
                        case (GBigInt(lhs), GBigInt(rhs)) =>
-                         charge[M](bigIntSubtraction(lhs, rhs)) >> Expr(GBigInt(lhs - rhs)).pure[M]
+                         charge[M](bigIntSubtraction(lhs, rhs)).as(Expr(GBigInt(lhs - rhs)))
                        case (lhs: EMapBody, rhs) =>
                          for {
                            _         <- charge[M](OP_CALL_COST)
@@ -966,7 +963,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             longVal <- Sync[M].delay(str.toLong).adaptError {
                         case _: Throwable =>
                           ReduceError(
-                            s"""Method toInt(): input string "$str" cannot be converted to Integer"""
+                            s"""Method toInt(): input string "$str" cannot be converted to Int"""
                           )
                       }
           } yield GInt(longVal)
@@ -992,10 +989,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         case e: GBigInt => e.pure
 
         case GInt(num) =>
-          for {
-            _      <- charge[M](INT_TO_BIGINT_COST)
-            bigInt <- Sync[M].delay(BigInt(num))
-          } yield GBigInt(bigInt)
+          charge[M](INT_TO_BIGINT_COST).as(GBigInt(BigInt(num)))
 
         case GString(str) =>
           for {

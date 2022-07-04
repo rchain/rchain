@@ -766,7 +766,7 @@ class RholangMethodsCostsSpec
     }
   }
 
-  "Reducer" when {
+  "reducer" when {
     "it works with BigInt" should {
       val table = Table(
         ("left", "right"),
@@ -868,7 +868,7 @@ class RholangMethodsCostsSpec
     }
   }
 
-  "The toInt() method" when {
+  "toInt() method" when {
     "working with Int value" should {
       "not require additional costs" in {
         val table = Table(
@@ -916,7 +916,7 @@ class RholangMethodsCostsSpec
     }
   }
 
-  "The toBigInt method" when {
+  "toBigInt method" when {
     "working with BigInt value" should {
       "doesn't have additional cost" in {
         val table = Table(

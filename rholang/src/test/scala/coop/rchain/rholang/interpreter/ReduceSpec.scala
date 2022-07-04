@@ -2344,19 +2344,19 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     )
   }
 
-  "Reducer" should "perform arithmetic operations with BigInt" in {
+  "reducer" should "perform arithmetic operations with BigInt" in {
     val table = Table(
       ("clue", "input", "output"),
       (
-        """-BigInt(9999999999999999999999999999999999999999) => 
-          |BigInt(-9999999999999999999999999999999999999999999999)""".stripMargin,
+        """-(BigInt(9999999999999999999999999999999999999999)) =>
+         | -BigInt(9999999999999999999999999999999999999999999999)""".stripMargin,
         ENegBody(ENeg(GBigInt(BigInt("9999999999999999999999999999999999999999")))),
         GBigInt(BigInt("-9999999999999999999999999999999999999999"))
       ),
       (
-        """BigInt(9999999999999999999999999999999999999999) * 
-          |BigInt(-9999999999999999999999999999999999999999) => 
-          |BigInt(-99999999999999999999999999999999999999980000000000000000000000000000000000000001)""".stripMargin,
+        """BigInt(9999999999999999999999999999999999999999) *
+          | (-BigInt(9999999999999999999999999999999999999999)) =>
+          | -BigInt(99999999999999999999999999999999999999980000000000000000000000000000000000000001)""".stripMargin,
         EMultBody(
           EMult(
             GBigInt(BigInt("9999999999999999999999999999999999999999")),
@@ -2370,9 +2370,9 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         )
       ),
       (
-        """BigInt(-99999999999999999999999999999999999999980000000000000000000000000000000000000001) / 
-          |BigInt(9999999999999999999999999999999999999999) => 
-          |BigInt(-9999999999999999999999999999999999999999)""".stripMargin,
+        """(-BigInt(99999999999999999999999999999999999999980000000000000000000000000000000000000001)) /
+          | BigInt(9999999999999999999999999999999999999999) =>
+          | -BigInt(9999999999999999999999999999999999999999)""".stripMargin,
         EDivBody(
           EDiv(
             GBigInt(
@@ -2388,9 +2388,9 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         )
       ),
       (
-        """BigInt(99999999999999999999999999999999999999980000000000000000000000000000000000000002) % 
-          |BigInt(9999999999999999999999999999999999999999) => 
-          |BigInt(1)""".stripMargin,
+        """BigInt(99999999999999999999999999999999999999980000000000000000000000000000000000000002) %
+          | BigInt(9999999999999999999999999999999999999999) =>
+          | BigInt(1)""".stripMargin,
         EModBody(
           EMod(
             GBigInt(
@@ -2406,9 +2406,9 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         )
       ),
       (
-        """BigInt(-9999999999999999999999999999999999999999) + 
-          |BigInt(-9999999999999999999999999999999999999999) => 
-          |BigInt(-19999999999999999999999999999999999999998)""".stripMargin,
+        """(-BigInt(9999999999999999999999999999999999999999)) +
+          | (-BigInt(9999999999999999999999999999999999999999)) =>
+          | -BigInt(19999999999999999999999999999999999999998)""".stripMargin,
         EPlusBody(
           EPlus(
             GBigInt(BigInt("-9999999999999999999999999999999999999999")),
@@ -2420,8 +2420,8 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         )
       ),
       (
-        """BigInt(-9999999999999999999999999999999999999999) - 
-          |BigInt(-9999999999999999999999999999999999999999) => 
+        """(-BigInt(9999999999999999999999999999999999999999)) -
+          | (-BigInt(-9999999999999999999999999999999999999999)) =>
           |BigInt(0)""".stripMargin,
         EMinusBody(
           EMinus(
@@ -2444,9 +2444,9 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     val table = Table(
       ("clue", "input", "output"),
       (
-        """BigInt(-9999999999999999999999999999999999999999) < 
-          |BigInt(9999999999999999999999999999999999999999) => 
-          |true""".stripMargin,
+        """-BigInt(9999999999999999999999999999999999999999) <
+          | BigInt(9999999999999999999999999999999999999999) =>
+          | true""".stripMargin,
         ELtBody(
           ELt(
             GBigInt(BigInt("-9999999999999999999999999999999999999999")),
@@ -2456,9 +2456,9 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         GBool(true)
       ),
       (
-        """BigInt(-9999999999999999999999999999999999999999) < 
-          |BigInt(-9999999999999999999999999999999999999999) => 
-          |false""".stripMargin,
+        """ -BigInt(9999999999999999999999999999999999999999) <
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          | false""".stripMargin,
         ELtBody(
           ELt(
             GBigInt(BigInt("-9999999999999999999999999999999999999999")),
@@ -2468,8 +2468,8 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         GBool(false)
       ),
       (
-        """BigInt(-9999999999999999999999999999999999999999) <= 
-          |BigInt(-9999999999999999999999999999999999999999) => 
+        """-BigInt(9999999999999999999999999999999999999999) <=
+          | -BigInt(9999999999999999999999999999999999999999) =>
           |true""".stripMargin,
         ELteBody(
           ELte(
@@ -2480,8 +2480,8 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         GBool(true)
       ),
       (
-        """BigInt(-9999999999999999999999999999999999999998) <= 
-          |BigInt(-9999999999999999999999999999999999999999) => 
+        """-BigInt(9999999999999999999999999999999999999998) <=
+          | -BigInt(9999999999999999999999999999999999999999) =>
           |false""".stripMargin,
         ELteBody(
           ELte(
@@ -2492,9 +2492,9 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         GBool(false)
       ),
       (
-        """BigInt(9999999999999999999999999999999999999999) > 
-          |BigInt(-9999999999999999999999999999999999999999) => 
-          |true""".stripMargin,
+        """BigInt(9999999999999999999999999999999999999999) >
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          | true""".stripMargin,
         EGtBody(
           EGt(
             GBigInt(BigInt("9999999999999999999999999999999999999999")),
@@ -2504,8 +2504,8 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         GBool(true)
       ),
       (
-        """BigInt(-9999999999999999999999999999999999999999) > 
-          |BigInt(-9999999999999999999999999999999999999999) => 
+        """-BigInt(9999999999999999999999999999999999999999) >
+          | -BigInt(9999999999999999999999999999999999999999) =>
           |false""".stripMargin,
         EGtBody(
           EGt(
@@ -2516,9 +2516,9 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         GBool(false)
       ),
       (
-        """BigInt(-9999999999999999999999999999999999999999) >= 
-          |BigInt(-9999999999999999999999999999999999999999) => 
-          |true""".stripMargin,
+        """-BigInt(9999999999999999999999999999999999999999) >=
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          | true""".stripMargin,
         EGteBody(
           EGte(
             GBigInt(BigInt("-9999999999999999999999999999999999999999")),
@@ -2528,9 +2528,9 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         GBool(true)
       ),
       (
-        """BigInt(9999999999999999999999999999999999999998) >= 
-          |BigInt(9999999999999999999999999999999999999999) => 
-          |false""".stripMargin,
+        """BigInt(9999999999999999999999999999999999999998) >=
+          | BigInt(9999999999999999999999999999999999999999) =>
+          | false""".stripMargin,
         EGteBody(
           EGte(
             GBigInt(BigInt("9999999999999999999999999999999999999998")),
@@ -2609,8 +2609,8 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         GBigInt(BigInt("-1"))
       ),
       (
-        """"-9999999999999999999999999999999999999999".toBigInt() => 
-          |BigInt(-9999999999999999999999999999999999999999)""".stripMargin,
+        """"-9999999999999999999999999999999999999999".toBigInt() =>
+          | -BigInt(9999999999999999999999999999999999999999)""".stripMargin,
         EMethod("toBigInt", GString("-9999999999999999999999999999999999999999")),
         GBigInt(BigInt("-9999999999999999999999999999999999999999"))
       )
@@ -2669,5 +2669,4 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       runReducer(input) should be(Left(error)) withClue clue
     }
   }
-
 }

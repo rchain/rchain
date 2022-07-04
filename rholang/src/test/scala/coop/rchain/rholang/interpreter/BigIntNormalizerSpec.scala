@@ -111,7 +111,7 @@ class BigIntNormalizerSpec extends AsyncFlatSpec with MonixTaskTest with Matcher
     }
   }
 
-  it should "return throw error if input data isn't number string" in {
+  it should "return throw error if input data isn't number string or it is negative number" in {
     val term1 =
       s"""
          # @"$outcomeCh"!(BigInt(NOTNUMBER))
@@ -124,14 +124,20 @@ class BigIntNormalizerSpec extends AsyncFlatSpec with MonixTaskTest with Matcher
       s"""
          # @"$outcomeCh"!(BigInt(9999999999999999999999999999999999999999999999 NOTNUMBER))
          # """.stripMargin('#')
+    val term4 =
+      s"""
+         # @"$outcomeCh"!(BigInt(-9999999999999999999999999999999999999999999999))
+         # """.stripMargin('#')
     for {
       r1 <- execute[Task](term1)
       r2 <- execute[Task](term2)
       r3 <- execute[Task](term3)
+      r4 <- execute[Task](term4)
     } yield {
       r1 should equal(Left(SyntaxError("syntax error(): NOTNUMBER at 2:17-2:26")))
       r2 should equal(Left(SyntaxError("syntax error(): NOTNUMBER at 2:63-2:72")))
       r3 should equal(Left(SyntaxError("syntax error(): NOTNUMBER at 2:64-2:73")))
+      r4 should equal(Left(SyntaxError("syntax error(): - at 2:17-2:18")))
     }
   }
 }
