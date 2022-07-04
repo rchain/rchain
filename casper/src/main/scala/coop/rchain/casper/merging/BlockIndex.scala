@@ -30,8 +30,8 @@ object BlockIndex {
 
   def getBlockIndex[F[_]: Concurrent: RuntimeManager: BlockStore](
       blockHash: BlockHash
-  ): F[BlockIndex] = {
-    val cached = BlockIndex.cache.get(blockHash).map(_.pure)
+  ): F[Option[BlockIndex]] = {
+    val cached = BlockIndex.cache.get(blockHash).map(_.some.pure)
     cached.getOrElse {
       for {
         b            <- BlockStore[F].getUnsafe(blockHash)
@@ -49,7 +49,7 @@ object BlockIndex {
                        RuntimeManager[F].getHistoryRepo,
                        mergeableChs
                      )
-      } yield blockIndex
+      } yield blockIndex.some // TODO make proper indexing for bootstrap case
     }
   }
 

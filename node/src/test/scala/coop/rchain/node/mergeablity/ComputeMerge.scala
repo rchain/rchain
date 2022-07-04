@@ -5,10 +5,9 @@ import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.sdk.dag.merging.data.Merge
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
-import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.rholang.RuntimeDeployResult.UserDeployRuntimeResult
 import coop.rchain.casper.rholang.RuntimeManager
@@ -169,15 +168,14 @@ trait ComputeMerge {
                     s"${rejectRight}, ${deployIds}, ${rightDeployIds}, ${leftDeployIds}"
                 )
             }
-            r <- DagMerger.merge[F](
+            r <- BlockHashDagMerger.merge[F](
                   Set(lBlock, rBlock).map(_.blockHash),
                   Set(bBlock.blockHash),
                   baseCheckpoint.root,
-                  dag.dagMessageState.msgMap,
-                  baseIndex.deployChains.toSet,
-                  Set.empty[DeployChainIndex],
+                  BlockHashDagMerger(dag.dagMessageState.msgMap),
+                  dag.fringeStates,
                   historyRepo,
-                  indices(_: BlockHash).pure,
+                  indices(_: BlockHash).some.pure,
                   rejectionCost = rejectAlg
                 )
             (mergedState, toReject) = r

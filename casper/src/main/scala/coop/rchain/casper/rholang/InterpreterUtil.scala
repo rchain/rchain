@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
-import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
 import coop.rchain.casper.protocol.{
   BlockMessage,
   DeployData,
@@ -346,16 +346,12 @@ object InterpreterUtil {
         case _ =>
           for {
             dag <- BlockDagStorage[F].getRepresentation
-            // TODO where to get?
-            finallyAccepted = Set.empty[DeployChainIndex]
-            finallyRejected = Set.empty[DeployChainIndex]
-            r <- DagMerger.merge[F](
+            r <- BlockHashDagMerger.merge[F](
                   dag.dagMessageState.latestMsgs.map(_.id),
                   preState.fringe,
                   preState.fringeState,
-                  dag.dagMessageState.msgMap,
-                  finallyAccepted,
-                  finallyRejected,
+                  BlockHashDagMerger(dag.dagMessageState.msgMap),
+                  dag.fringeStates,
                   RuntimeManager[F].getHistoryRepo,
                   BlockIndex.getBlockIndex[F]
                 )

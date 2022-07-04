@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
 import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
@@ -431,15 +431,14 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             dag             <- dagStore.getRepresentation
             acceptedFinally = indices(baseBlock.blockHash).deployChains.toSet
             rejectedFinally = Set.empty[DeployChainIndex]
-            v <- DagMerger.merge[Task](
+            v <- BlockHashDagMerger.merge[Task](
                   mergingBlocks.map(b => b.blockHash).toSet,
                   Set(baseBlock.blockHash),
                   baseBlock.postStateHash.toBlake2b256Hash,
-                  dag.dagMessageState.msgMap,
-                  acceptedFinally,
-                  rejectedFinally,
+                  BlockHashDagMerger(dag.dagMessageState.msgMap),
+                  dag.fringeStates,
                   runtimeManager.getHistoryRepo,
-                  (b: BlockHash) => indices(b).pure
+                  (b: BlockHash) => indices(b).some.pure
                 )
             (postState, rejectedDeploys) = v
             mergedState                  = ByteString.copyFrom(postState.bytes.toArray)
