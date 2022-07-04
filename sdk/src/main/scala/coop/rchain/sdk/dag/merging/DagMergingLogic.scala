@@ -2,7 +2,6 @@ package coop.rchain.sdk.dag.merging
 
 import cats.Order
 import cats.syntax.all._
-import coop.rchain.sdk.dag.merging.data.Merge
 
 import scala.collection.compat.immutable.LazyList
 import scala.collection.immutable.Map
@@ -27,23 +26,22 @@ object DagMergingLogic {
       conflictsMap: Map[D, Set[D]],
       dependencyMap: Map[D, Set[D]]
   ): Set[D] =
-    acceptedFinally.flatMap(conflictsMap) ++ rejectedFinally.flatMap(dependencyMap)
+    acceptedFinally.flatMap(conflictsMap.getOrElse(_, Set())) ++
+      rejectedFinally.flatMap(dependencyMap.getOrElse(_, Set()))
 
   /** Split the scope into non overlapping partitions, greedily allocating intersecting chunks to bigger view. */
-  def partitionScopeBiggestFirst[D: Ordering](views: Map[D, Set[D]]): Seq[(D, Set[D])] = {
-    val sorted = views.toList.sortBy { case (k, v) => (-v.size, k) }
-    val r = LazyList.unfold(sorted) {
-      case (head @ (_, seen)) +: tail => (head, tail.map { case (k, v) => (k, v -- seen) }).some
-      case Seq()                      => none[((D, Set[D]), List[(D, Set[D])])]
+  def partitionScope[D](views: Seq[Set[D]]): Seq[Set[D]] = {
+    val r = LazyList.unfold(views) {
+      case (head @ seen) +: tail => (head, tail.map(_ -- seen)).some
+      case Seq()                 => none[(Set[D], List[Set[D]])]
     }
     r.toList
   }
 
-  def computeRelationMap[D](
+  def computeRelationMap[D](directed: Boolean)(
       targetSet: Set[D],
       sourceSet: Set[D],
-      relation: (D, D) => Boolean,
-      directed: Boolean
+      relation: (D, D) => Boolean
   ): Map[D, Set[D]] =
     targetSet.iterator
       .flatMap(t => sourceSet.map((t, _)))
@@ -59,28 +57,13 @@ object DagMergingLogic {
       .toMap
 
   /** Build conflicts map. */
-  def computeConflictsMap[D](
-      setA: Set[D],
-      setB: Set[D],
-      conflicts: (D, D) => Boolean
-  ): Map[D, Set[D]] =
-    computeRelationMap(setA, setB, conflicts, false)
+  def computeConflictsMap[D] = computeRelationMap[D](directed = false) _
 
-  /**
-    * Build dependency map.
-    * @param targetSet items that might depend on source set
-    * @param sourceSet items that target set might depend on
-    * @param depends dependency predicate
-    */
-  def computeDependencyMap[D](
-      targetSet: Set[D],
-      sourceSet: Set[D],
-      depends: (D, D) => Boolean
-  ): Map[D, Set[D]] =
-    computeRelationMap(targetSet, sourceSet, depends, true)
+  /** Build dependency map. */
+  def computeDependencyMap[D] = computeRelationMap[D](directed = true) _
 
   /** Compute branches of depending items. */
-  def computeBranches[D: Ordering](target: Set[D], depends: (D, D) => Boolean): Map[D, Set[D]] = {
+  def computeBranches[D](target: Set[D], depends: (D, D) => Boolean): Map[D, Set[D]] = {
     val dependencyMap = computeDependencyMap(target, target, depends)
     dependencyMap.foldLeft(dependencyMap) {
       case (acc, (root, depending)) =>
@@ -98,19 +81,20 @@ object DagMergingLogic {
   def computeGreedyNonIntersectingBranches[D: Ordering](
       target: Set[D],
       depends: (D, D) => Boolean
-  ): Set[Set[D]] = {
+  ): Seq[Set[D]] = {
     val concurrentRoots = computeBranches(target, depends)
-    partitionScopeBiggestFirst(concurrentRoots).map { case (k, v) => v + k }.toSet
+    val sorted =
+      concurrentRoots.toList.sortBy { case (k, v) => (-v.size, k) }.map { case (k, v) => v + k }
+    partitionScope(sorted)
   }
 
   /** Lowest fringe across number of fringes. */
   def lowestFringe[B: Ordering](fringes: Set[Set[B]], height: B => Long): Set[B] = {
-    require(fringes.forall(_.nonEmpty), "Fringe has to have at least 1 element.")
     require(fringes.nonEmpty, "Cannot compute lowest fringe on empty set.")
-    fringes.minBy { f =>
+    if (fringes.size > 1) fringes.minBy { f =>
       val minBlock = f.minBy(b => (height(b), b))
       (height(minBlock), minBlock)
-    }
+    } else fringes.head
   }
 
   /** All items in the conflict scope. */
@@ -175,7 +159,7 @@ object DagMergingLogic {
     implicit val ordD = Order.fromOrdering[D]
     options.toList
       .minimumByOption { rj =>
-        (rj.map(targetF).sum, rj.size, rj.toList.min)
+        (rj.map(targetF).sum, rj.size, rj.toList)
       }
       .getOrElse(Set.empty[D])
   }
@@ -262,13 +246,12 @@ object DagMergingLogic {
   }
 
   /** Compute merge for the DAG. */
-  def mergeDag[B: Ordering, D: Ordering, CH, S](
+  def resolveDag[B: Ordering, D: Ordering, CH, S](
       // DAG
       latestMessages: Set[B],
       seen: B => Set[B],
       // finalization
       latestFringe: Set[B],
-      fringeState: S,
       acceptedFinally: Set[D],
       rejectedFinally: Set[D],
       // deploys
@@ -280,11 +263,11 @@ object DagMergingLogic {
       // support for mergeable
       mergeableDiffs: Map[D, Map[CH, Long]],
       initMergeableValues: Map[CH, Long]
-  ): Merge[S, D] = {
-    val enforceRejected = {
-      val r = incompatibleWithFinal(acceptedFinally, rejectedFinally, conflictsMap, dependencyMap)
-      r ++ withDependencies[D](r, dependencyMap)
-    }
+  ): (Set[D], Set[D]) = {
+    val enforceRejected = withDependencies(
+      incompatibleWithFinal(acceptedFinally, rejectedFinally, conflictsMap, dependencyMap),
+      dependencyMap
+    )
     // conflict set without deploys conflicting with finalization
     val conflictSet           = conflictScope(latestMessages, latestFringe, seen).flatMap(deploysIndex)
     val conflictSetCompatible = conflictSet -- enforceRejected
@@ -296,6 +279,6 @@ object DagMergingLogic {
       mergeableDiffs,
       initMergeableValues
     )
-    Merge(fringeState, conflictSetCompatible -- resolved, resolved ++ enforceRejected)
+    (conflictSetCompatible -- resolved, resolved ++ enforceRejected)
   }
 }
