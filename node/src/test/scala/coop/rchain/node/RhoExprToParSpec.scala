@@ -9,7 +9,12 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
+import scala.util.chaining._
+
 class RhoExprToParSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks with Matchers {
+
+  implicit val aArb: Arbitrary[RhoExpr] = Arbitrary(genRhoExpr)
+
   property("WebAPI RhoExpr => Par => RhoExpr conversion work correct") {
     forAll { rhoExpr: RhoExpr =>
       rhoExprToRhoExpr(rhoExpr) shouldBe rhoExpr.some
@@ -17,54 +22,48 @@ class RhoExprToParSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks w
   }
 
   // Converts RhoExpr to Par and then back to RhoExpr
-  private val rhoExprToRhoExpr = rhoExprToParProto _ andThen exprFromParProto
+  val rhoExprToRhoExpr = rhoExprToParProto _ andThen exprFromParProto
 
-  implicit private def aArb: Arbitrary[RhoExpr] = {
+  val genHexString = Gen.listOf(arbByte.arbitrary).map(_.toArray.toHexString)
 
-    val numOfElements = 2 // StackOverflowError with n >= 3
+  val numOfElements = 2 // StackOverflowError with n >= 3
 
-    // def genExprPar   = withList(ExprPar)
-    def genExprTuple = withList(ExprTuple)
-    def genExprList  = withList(ExprList)
-    def genExprSet   = Gen.listOfN(numOfElements, genRhoExpr).map(data => ExprSet(data.toSet))
-    def genExprMap   = Gen.mapOfN(numOfElements, arbTuple2[String, RhoExpr].arbitrary).map(ExprMap)
-
-    def genExprBool   = arbBool.arbitrary.map(b => ExprBool(b))
-    def genExprInt    = arbLong.arbitrary.map(l => ExprInt(l))
-    def genExprString = arbString.arbitrary.map(s => ExprString(s))
-    def genExprUri    = arbString.arbitrary.map(uri => ExprUri(uri))
-    def genExprBytes  = genHexString.map(ExprBytes)
-    def genExprUnforg =
-      Gen
-        .oneOf(
-          genHexString.map(UnforgPrivate),
-          genHexString.map(UnforgDeploy),
-          genHexString.map(UnforgDeployer)
-        )
-        .map(ExprUnforg)
-
-    def genRhoExpr: Gen[RhoExpr] =
-      Gen.lzy(
-        Gen.oneOf(
-          // genExprPar,
-          genExprTuple,
-          genExprList,
-          genExprSet,
-          genExprMap,
-          genExprBool,
-          genExprInt,
-          genExprString,
-          genExprUri,
-          genExprBytes,
-          genExprUnforg
-        )
+  // def genExprPar   = listOf2(genRhoExpr).map(ExprPar)
+  val genExprTuple  = listOf2(genRhoExpr).map(ExprTuple)
+  val genExprList   = listOf2(genRhoExpr).map(ExprList)
+  val genExprSet    = listOf2(genRhoExpr).map(_.toSet pipe ExprSet)
+  val genExprMap    = Gen.mapOfN(numOfElements, Gen.zip(Gen.alphaNumStr, genRhoExpr)).map(ExprMap)
+  val genExprBool   = Gen.resultOf(ExprBool)
+  val genExprInt    = Gen.resultOf(ExprInt)
+  val genExprString = Gen.resultOf(ExprString)
+  val genExprUri    = Gen.resultOf(ExprUri)
+  val genExprBytes  = genHexString.map(ExprBytes)
+  val genExprUnforg =
+    Gen
+      .oneOf(
+        genHexString.map(UnforgPrivate),
+        genHexString.map(UnforgDeploy),
+        genHexString.map(UnforgDeployer)
       )
+      .map(ExprUnforg)
 
-    // Helpers
-    def withList[A <: RhoExpr](f: List[RhoExpr] => A) =
-      Gen.listOfN(numOfElements, genRhoExpr).map(f)
-    def genHexString = Gen.listOf(arbByte.arbitrary).map(_.toArray.toHexString)
+  lazy val genRhoExpr: Gen[RhoExpr] =
+    Gen.lzy(
+      Gen.oneOf(
+        // genExprPar,
+        genExprTuple,
+        genExprList,
+        genExprSet,
+        genExprMap,
+        genExprBool,
+        genExprInt,
+        genExprString,
+        genExprUri,
+        genExprBytes,
+        genExprUnforg
+      )
+    )
 
-    Arbitrary(genRhoExpr)
-  }
+  // Helpers
+  def listOf2[A](genA: => Gen[A]) = Gen.listOfN(numOfElements, genA)
 }
