@@ -1,9 +1,8 @@
 package coop.rchain.comm.rp
 
-import cats._
-import cats.effect._
+import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.catscontrib.ski._
+import cats.{Functor, Monad}
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
@@ -14,9 +13,9 @@ import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
 import fs2.concurrent.Queue
-import monix.eval.Task
 
 import java.net.InetAddress
+import scala.Function.const
 import scala.util.Try
 
 object HandleMessages {
@@ -74,51 +73,47 @@ object HandleMessages {
       _ <- ConnectionsCell[F].addConnAndReport(peer)
     } yield handledWithoutMessage
 
+  // TODO: investigate what's with unused parameter - protocolHandshake
   def handleProtocolHandshake[F[_]: Monad: TransportLayer: Log: ConnectionsCell: RPConfAsk: Metrics](
       peer: PeerNode,
       protocolHandshake: ProtocolHandshake
   ): F[CommunicationResponse] = {
-    def isValidPublicInetAddress(host: String): Boolean =
+    def isLocalAddress(host: String): Boolean =
       Try(InetAddress.getByName(host))
-        .map { addr =>
-          !(addr.isAnyLocalAddress ||
-            addr.isLinkLocalAddress ||
-            addr.isLoopbackAddress ||
-            addr.isMulticastAddress ||
-            addr.isSiteLocalAddress)
+        .map { a =>
+          a.isAnyLocalAddress || a.isLinkLocalAddress || a.isLoopbackAddress || a.isMulticastAddress || a.isSiteLocalAddress
         }
         .getOrElse(false)
 
-    def canAddNewHost(conf: RPConf): F[Boolean] = {
-      val isCurrentPeerLocal  = isValidPublicInetAddress(conf.local.endpoint.host)
-      val isIncomingPeerLocal = isValidPublicInetAddress(peer.endpoint.host)
-      val bothPeersAreLocal   = isCurrentPeerLocal && isIncomingPeerLocal
-      val bothPeersArePublic  = !isCurrentPeerLocal && !isIncomingPeerLocal
+    def checkPeerOnSameNetwork(conf: RPConf): Boolean = {
+      val isCurrentPeerLocal  = isLocalAddress(conf.local.endpoint.host)
+      val isIncomingPeerLocal = isLocalAddress(peer.endpoint.host)
 
-      (bothPeersAreLocal || bothPeersArePublic).pure[F]
+      // Peer must be in the same subnetwork (in this case public or local) to accept connections
+      isCurrentPeerLocal == isIncomingPeerLocal
     }
 
     def acceptConnection(conf: RPConf): F[CommunicationResponse] = {
       val response = ProtocolHelper.protocolHandshakeResponse(conf.local, conf.networkId)
       for {
         resErr <- TransportLayer[F].send(peer, response)
-        _ <- resErr.fold(
-              kp(().pure[F]),
-              kp(
-                Log[F].info(s"Responded to protocol handshake request from $peer") >>
-                  ConnectionsCell[F].addConnAndReport(peer)
-              )
-            )
+        _ <- resErr.traverse_ { _ =>
+              Log[F].info(s"Responded to protocol handshake request from $peer") *>
+                ConnectionsCell[F].addConnAndReport(peer)
+            }
       } yield handledWithoutMessage
     }
 
+    // TODO: investigate if response should be with an error instead of HandledWitoutMessage
     def declineConnection: F[CommunicationResponse] =
       Log[F]
-        .info(s"Unable to add connection: incoming address ${peer.toAddress}")
+        .info(s"Peer connection rejected, IP not on the same subnetwork, peer: ${peer.toAddress}.")
         .as(handledWithoutMessage)
 
     RPConfAsk[F].ask
-      .flatMap(conf => canAddNewHost(conf).ifM(acceptConnection(conf), declineConnection))
+      .flatMap(
+        conf => if (checkPeerOnSameNetwork(conf)) acceptConnection(conf) else declineConnection
+      )
   }
 
   def handleHeartbeat[F[_]: Monad: ConnectionsCell](
@@ -127,5 +122,5 @@ object HandleMessages {
   ): F[CommunicationResponse] =
     ConnectionsCell[F]
       .update(_.refreshConn(peer))
-      .map(kp(handledWithoutMessage))
+      .map(const(handledWithoutMessage))
 }
