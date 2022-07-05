@@ -70,7 +70,7 @@ object Genesis {
   ): F[BlockMessage] = {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
-    val blockData = BlockData(genesis.blockNumber, BlockRandomSeed.GenesisRandomSeedPubKey, 0)
+    val blockData = BlockData(genesis.blockNumber, genesis.sender, 0)
     val rand      = BlockRandomSeed.fromGenesis(genesis.shardId)
     RuntimeManager[F]
       .computeGenesis(blessedTerms, rand, blockData)
