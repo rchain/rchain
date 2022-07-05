@@ -100,36 +100,6 @@ trait ComputeMerge {
                   )
                   .whenA(rightDeploys.exists(_.isFailed))
             rightCheckpoint @ _ <- runtime.createCheckpoint
-
-            leftIndex <- BlockIndex(
-                          ByteString.copyFromUtf8("l"),
-                          leftDeploys,
-                          List.empty,
-                          baseCheckpoint.root,
-                          leftCheckpoint.root,
-                          historyRepo,
-                          leftMergeChs
-                        )
-            rightIndex <- BlockIndex(
-                           ByteString.copyFromUtf8("r"),
-                           rightDeploys,
-                           List.empty,
-                           baseCheckpoint.root,
-                           rightCheckpoint.root,
-                           historyRepo,
-                           rightMergeChs
-                         )
-            baseIndex <- BlockIndex(
-                          ByteString.EMPTY,
-                          List.empty,
-                          List.empty,
-                          baseCheckpoint.root, // this does not matter
-                          baseCheckpoint.root,
-                          historyRepo,
-                          Seq.empty
-                        )
-            kvm      = new InMemoryStoreManager
-            dagStore <- BlockDagKeyValueStorage.create[F](kvm)
             bBlock = getRandomBlock(
               setPreStateHash = RuntimeManager.emptyStateHashFixed.some,
               setPostStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
@@ -145,10 +115,39 @@ trait ComputeMerge {
               setPostStateHash = ByteString.copyFrom(leftCheckpoint.root.bytes.toArray).some,
               setJustifications = List(bBlock.blockHash).some
             )
-            _   <- dagStore.insert(bBlock, false, approved = true)
-            _   <- dagStore.insert(lBlock, false)
-            _   <- dagStore.insert(rBlock, false)
-            dag <- dagStore.getRepresentation
+            leftIndex <- BlockIndex(
+                          lBlock.blockHash,
+                          leftDeploys,
+                          List.empty,
+                          baseCheckpoint.root,
+                          leftCheckpoint.root,
+                          historyRepo,
+                          leftMergeChs
+                        )
+            rightIndex <- BlockIndex(
+                           rBlock.blockHash,
+                           rightDeploys,
+                           List.empty,
+                           baseCheckpoint.root,
+                           rightCheckpoint.root,
+                           historyRepo,
+                           rightMergeChs
+                         )
+            baseIndex <- BlockIndex(
+                          bBlock.blockHash,
+                          List.empty,
+                          List.empty,
+                          baseCheckpoint.root, // this does not matter
+                          baseCheckpoint.root,
+                          historyRepo,
+                          Seq.empty
+                        )
+            kvm      = new InMemoryStoreManager
+            dagStore <- BlockDagKeyValueStorage.create[F](kvm)
+            _        <- dagStore.insert(bBlock, false, approved = true)
+            _        <- dagStore.insert(lBlock, false)
+            _        <- dagStore.insert(rBlock, false)
+            dag      <- dagStore.getRepresentation
             indices = Map(
               bBlock.blockHash -> baseIndex,
               rBlock.blockHash -> rightIndex,
