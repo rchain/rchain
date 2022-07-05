@@ -1,9 +1,7 @@
-package coop.rchain.casper.blocks.proposer
+package coop.rchain.casper.batch2
 
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
@@ -11,7 +9,6 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -64,17 +61,10 @@ class BlockReceiverSpec
       justifications: List[BlockHash] = List()
   ): Task[BlockMessage] =
     for {
-      deploy <- makeDeploy
-      block <- node
-                .createBlockUnsafe(deploy)
-                .map(
-                  _.copy(
-                    justifications = justifications
-                  )
-                )
-      (sk, _)     = Secp256k1.newKeyPair
-      validatorId = ValidatorIdentity(sk)
-    } yield validatorId.signBlock(block)
+      deploy      <- makeDeploy
+      block       <- node.createBlockUnsafe(deploy).map(_.copy(justifications = justifications))
+      signedBlock = node.validatorIdOpt.map(_.signBlock(block)).getOrElse(block)
+    } yield signedBlock
 
   private def addBlock(node: TestNode[Task]): Task[BlockMessage] = makeDeploy >>= (node.addBlock(_))
 
