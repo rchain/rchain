@@ -159,7 +159,7 @@ object DagMergingLogic {
     implicit val ordD = Order.fromOrdering[D]
     options.toList
       .minimumByOption { rj =>
-        (rj.map(targetF).sum, rj.size, rj.toList)
+        (rj.map(targetF).sum, rj.size, rj.toList.sorted)
       }
       .getOrElse(Set.empty[D])
   }
