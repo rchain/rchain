@@ -174,7 +174,7 @@ trait ComputeMerge {
                   BlockHashDagMerger(dag.dagMessageState.msgMap),
                   dag.fringeStates,
                   historyRepo,
-                  indices(_: BlockHash).some.pure,
+                  indices(_: BlockHash).pure,
                   rejectionCost = rejectAlg
                 )
             (mergedState, toReject) = r

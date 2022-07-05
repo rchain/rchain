@@ -22,9 +22,6 @@ import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.syntax._
 
 object BlockHashDagMerger {
-
-  final case object UnableToMergeInBootstrapMode extends Exception("Node is in bootstrap mode.")
-
   def merge[F[_]: Concurrent: Log](
       tips: Set[BlockHash],
       finalFringe: Set[BlockHash],
@@ -32,13 +29,11 @@ object BlockHashDagMerger {
       merger: BlockHashDagMerger,
       fringeStates: Map[Set[BlockHash], (Blake2b256Hash, Set[ByteString])],
       historyRepository: RhoHistoryRepository[F],
-      blockIndex: BlockHash => F[Option[BlockIndex]],
+      blockIndex: BlockHash => F[BlockIndex],
       rejectionCost: DeployChainIndex => Long = DeployChainIndex.deployChainCost
   ): F[(Blake2b256Hash, Set[ByteString])] = {
     val (conflictScope, finalScope) = merger.computeMergingScope(tips, finalFringe)
-    val loadIndices = List(conflictScope, finalScope).traverse(
-      _.toList.traverse(blockIndex(_).flatMap(_.liftTo[F](UnableToMergeInBootstrapMode)))
-    )
+    val loadIndices                 = List(conflictScope, finalScope).traverse(_.toList.traverse(blockIndex))
     loadIndices
       .flatMap {
         case List(conflictScopeIndices, finalScopeIndices) =>

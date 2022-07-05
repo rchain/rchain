@@ -438,7 +438,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
                   BlockHashDagMerger(dag.dagMessageState.msgMap),
                   dag.fringeStates,
                   runtimeManager.getHistoryRepo,
-                  (b: BlockHash) => indices(b).some.pure
+                  (b: BlockHash) => indices(b).pure
                 )
             (postState, rejectedDeploys) = v
             mergedState                  = ByteString.copyFrom(postState.bytes.toArray)
