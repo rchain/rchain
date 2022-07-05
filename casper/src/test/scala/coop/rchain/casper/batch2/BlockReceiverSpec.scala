@@ -1,15 +1,20 @@
 package coop.rchain.casper.batch2
 
+import cats.Applicative
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation}
 import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Log
@@ -19,6 +24,8 @@ import monix.testing.scalatest.MonixTaskTest
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import scala.collection.immutable.SortedMap
 
 class BlockReceiverSpec
     extends AsyncFlatSpec
@@ -31,6 +38,25 @@ class BlockReceiverSpec
 
   import fs2._
 
+  final class BdsMock[F[_]: Applicative] extends BlockDagStorage[F] {
+    override def getRepresentation: F[DagRepresentation] =
+      DagRepresentation(Set(), Map(), SortedMap(), DagMessageState(), Map()).pure[F]
+    override def insertNew(
+        blockMetadata: BlockMetadata,
+        block: BlockMessage
+    ): F[DagRepresentation] = ???
+    override def insert(
+        block: BlockMessage,
+        invalid: Boolean,
+        approved: Boolean
+    ): F[DagRepresentation]                                                  = ???
+    override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]      = ???
+    override def lookupByDeployId(blockHash: DeployId): F[Option[BlockHash]] = ???
+    override def addDeploy(d: Signed[DeployData]): F[Unit]                   = ???
+    override def pooledDeploys: F[Map[DeployId, Signed[DeployData]]]         = ???
+    override def containsDeployInPool(deployId: DeployId): F[Boolean]        = ???
+  }
+
   private def withBlockReceiverEnv(shardId: String)(
       f: (
           Queue[Task, BlockMessage],
@@ -39,8 +65,9 @@ class BlockReceiverSpec
           TestNode[Task]
       ) => Task[Assertion]
   ): Task[Assertion] = TestNode.standaloneEff(genesis).use { node =>
-    implicit val (bds, br, bs) =
+    implicit val (_, br, bs) =
       (node.blockDagStorage, node.blockRetrieverEffect, node.blockStore)
+    implicit val bds: BdsMock[Task] = new BdsMock[Task]
 
     for {
       state                 <- Ref[Task].of(BlockReceiverState[BlockHash])
