@@ -28,7 +28,6 @@ class RhoExprToParSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks w
 
   val numOfElements = 2 // StackOverflowError with n >= 3
 
-  // def genExprPar   = listOf2(genRhoExpr).map(ExprPar)
   val genExprTuple  = listOf2(genRhoExpr).map(ExprTuple)
   val genExprList   = listOf2(genRhoExpr).map(ExprList)
   val genExprSet    = listOf2(genRhoExpr).map(_.toSet pipe ExprSet)
@@ -47,10 +46,23 @@ class RhoExprToParSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks w
       )
       .map(ExprUnforg)
 
+  // For ExprPar, a generator without nesting is used. The reason is that after the reverse
+  // conversion from Par to RhoExpr, the order of the elements may be violated
+  // For example, ExprPar(List(x, y)) vs ExprPar(List(y, x)), and the comparison will not work
+  // More details in https://github.com/rchain/rchain/pull/3718#issuecomment-1174850961
+  val genExprPar = for {
+    b   <- genExprBool
+    i   <- genExprInt
+    s   <- genExprString
+    u   <- genExprUri
+    bt  <- genExprBytes
+    unf <- genExprUnforg
+  } yield ExprPar(List(b, i, s, u, bt, unf))
+
   lazy val genRhoExpr: Gen[RhoExpr] =
     Gen.lzy(
       Gen.oneOf(
-        // genExprPar,
+        genExprPar,
         genExprTuple,
         genExprList,
         genExprSet,
