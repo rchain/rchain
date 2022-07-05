@@ -85,8 +85,7 @@ object InterpreterUtil {
                      maxSeqNums = Map[Validator, Long](block.sender -> 0L)
                    ).pure[F]
                  }
-      rand = if (parentsSet.nonEmpty) BlockRandomSeed.fromBlock(block)
-      else BlockRandomSeed.fromGenesis(block)
+      rand                = BlockRandomSeed.fromBlock(block)
       computedParentsInfo <- computeParentsPostState(parents, preState)
       _ <- Log[F].info(
             s"Computed parents post state for ${PrettyPrinter.buildString(block, short = true)}."
@@ -167,8 +166,7 @@ object InterpreterUtil {
                      maxSeqNums = Map[Validator, Long](block.sender -> 0L)
                    ).pure[F]
                  }
-      rand = if (parentsSet.nonEmpty) BlockRandomSeed.fromBlock(block)
-      else BlockRandomSeed.fromGenesis(block)
+      rand                = BlockRandomSeed.fromBlock(block)
       computedParentsInfo <- computeParentsPostState(parents, preState)
       _ <- Log[F].info(
             s"Computed parents post state for ${PrettyPrinter.buildString(block, short = true)}."

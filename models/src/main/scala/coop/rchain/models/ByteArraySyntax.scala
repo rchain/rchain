@@ -13,6 +13,4 @@ trait ByteArraySyntax {
 class ByteArrayOps(private val ba: Array[Byte]) extends AnyVal {
   def toByteString: ByteString = ByteString.copyFrom(ba)
   def toHexString: String      = Base16.encode(ba)
-  def toParUnforgeableName: Par =
-    Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(ba))))))
 }

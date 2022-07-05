@@ -24,16 +24,9 @@ final case class BlockRandomSeed private (
 object BlockRandomSeed {
   // When deploying the user deploy , the chain would execute prechargeDeploy, userDeploy and RefundDeploy in
   // sequence. The split index for the random seed is based on the index of the executions.
-  val PreChargeSplitIndex: Byte           = 0.toByte
-  val UserDeploySplitIndex: Byte          = 1.toByte
-  val RefundSplitIndex: Byte              = 2.toByte
-  val EmptyBytesBlakeHash: Blake2b256Hash = Blake2b256Hash.create(Array[Byte]())
-
-  // using fixed pubkey to make sure unforgeable name is predictable without configuring sender
-  val GenesisRandomSeedPubKey: PublicKey = PublicKey(Array[Byte]())
-
-  // using fixed 0 to make sure unforgeable name is predictable without configuring blockNumber
-  val GenesisRandomSeedBlockNumber = 0L
+  val PreChargeSplitIndex: Byte  = 0.toByte
+  val UserDeploySplitIndex: Byte = 1.toByte
+  val RefundSplitIndex: Byte     = 2.toByte
 
   def apply(
       shardId: String,
@@ -58,25 +51,26 @@ object BlockRandomSeed {
   def generateRandomNumber(blockRandomSeed: BlockRandomSeed): Blake2b512Random =
     Blake2b512Random(encode(blockRandomSeed))
 
-  def fromBlock(block: BlockMessage): Blake2b512Random = {
-    val seed = BlockRandomSeed(
-      block.shardId,
-      block.blockNumber,
-      PublicKey(block.sender),
-      block.preStateHash.toBlake2b256Hash
-    )
-    generateRandomNumber(seed)
-  }
-
-  def fromGenesis(block: BlockMessage): Blake2b512Random =
-    fromGenesis(block.shardId)
+  def fromBlock(block: BlockMessage): Blake2b512Random =
+    if (block.justifications.nonEmpty) {
+      val seed = BlockRandomSeed(
+        block.shardId,
+        block.blockNumber,
+        PublicKey(block.sender),
+        block.preStateHash.toBlake2b256Hash
+      )
+      generateRandomNumber(seed)
+    } else {
+      fromGenesis(block.shardId)
+    }
 
   def fromGenesis(shardId: String): Blake2b512Random = {
+    // using fixed values to make sure unforgeable name can be easily predicted with only shardId
     val seed = BlockRandomSeed(
       shardId,
-      GenesisRandomSeedBlockNumber,
-      GenesisRandomSeedPubKey,
-      EmptyBytesBlakeHash
+      0L,
+      PublicKey(Array[Byte]()),
+      Blake2b256Hash.create(Array[Byte]())
     )
     generateRandomNumber(seed)
   }

@@ -63,8 +63,8 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
 
   val genesisContext  = GenesisBuilder.buildGenesis()
   val genesis         = genesisContext.genesisBlock
-  val genesisBlockNum = 0L
-  val genesisSeqNum   = 0L
+  val genesisBlockNum = genesis.blockNumber
+  val genesisSeqNum   = genesis.seqNum
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     Resources
