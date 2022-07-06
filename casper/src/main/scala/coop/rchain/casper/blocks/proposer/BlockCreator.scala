@@ -129,13 +129,12 @@ object BlockCreator {
 
                 // Merge justifications and get pre-state for the new block
                 computedParentsInfo <- InterpreterUtil.computeParentsPostState(parents, preState)
-                seed = BlockRandomSeed(
+                rand = BlockRandomSeed.randomGenerator(
                   shardId,
                   nextBlockNum,
                   validatorIdentity.publicKey,
                   computedParentsInfo._1.toBlake2b256Hash
                 )
-                rand            = BlockRandomSeed.randomGenerator(seed)
                 slashingDeploys <- prepareSlashingDeploys(ilmFromBonded, rand, deploys.size)
                 // make sure closeBlock is the last system Deploy
                 systemDeploys = slashingDeploys :+ CloseBlockDeploy(

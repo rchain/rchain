@@ -83,19 +83,30 @@ object BlockRandomSeed {
   /* Helper functions to create a random generator using different seed */
 
   /**
-    * Creates random generator from [[BlockRandomSeed]].
+    * Creates random generator from the seed data.
+    */
+  def randomGenerator(
+      shardId: String,
+      blockNumber: Long,
+      sender: PublicKey,
+      preStateHash: Blake2b256Hash
+  ): Blake2b512Random =
+    randomGenerator(BlockRandomSeed(shardId, blockNumber, sender, preStateHash))
+
+  /**
+    * Creates a random generator from [[BlockRandomSeed]].
     */
   def randomGenerator(blockRandomSeed: BlockRandomSeed): Blake2b512Random =
     Blake2b512Random(encode(blockRandomSeed))
 
   /**
-    * Creates random generator just from shard ID, used for genesis block.
+    * Creates a random generator just from shard ID, used for genesis block.
     */
   def randomGenerator(shardId: String): Blake2b512Random =
     randomGenerator(BlockRandomSeed(shardId))
 
   /**
-    * Creates random generator from data in the block. Valid for genesis block also.
+    * Creates a random generator from data in the block. Valid for genesis block also.
     */
   def randomGenerator(block: BlockMessage): Blake2b512Random =
     randomGenerator(BlockRandomSeed(block))

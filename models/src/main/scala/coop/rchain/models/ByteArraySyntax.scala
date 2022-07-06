@@ -1,7 +1,6 @@
 package coop.rchain.models
 
 import com.google.protobuf.ByteString
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.shared.Base16
 
 trait ByteArraySyntax {
