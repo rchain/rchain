@@ -1,10 +1,14 @@
 package coop.rchain.casper.batch2
 
 import cats.Applicative
+import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation}
 import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
+import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.BlockMessage
@@ -36,7 +40,12 @@ class BlockReceiverSpec
     with ArgumentMatchersSugar {
   implicit val logEff: Log[Task]            = Log.log[Task]
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
-  private val genesis                       = buildGenesis()
+
+  implicit val blockDagStorageEff: BlockDagStorage[Task] = blockDagStorageMock[Task]()
+  implicit val blockRetrieverEff: BlockRetriever[Task]   = blockRetrieverMock[Task]()
+  implicit val blockStoreEff: BlockStore[Task]           = blockStoreMock[Task]()
+
+  private val genesis = buildGenesis()
 
   import fs2._
 
@@ -48,6 +57,18 @@ class BlockReceiverSpec
   private def blockRetrieverMock[F[_]: Applicative](): BlockRetriever[F] =
     mock[BlockRetriever[F]].ackReceived(*) returns ().pure[F]
 
+  private def blockStoreMock[F[_]: Sync: Applicative](): BlockStore[F] = {
+    val state  = Ref.unsafe[F, Map[BlockHash, BlockMessage]](Map())
+    val bsMock = mock[BlockStore[F]]
+    bsMock.contains(*) answers { keys: Seq[BlockHash] =>
+      state.get.map(s => Seq(s.contains(keys.head)))
+    }
+    bsMock.put(*) answers { kvPairs: Seq[(BlockHash, BlockMessage)] =>
+      state.update(s => kvPairs.foldLeft(s) { case (acc, item) => acc + item })
+    }
+    bsMock
+  }
+
   private def withBlockReceiverEnv(shardId: String)(
       f: (
           Queue[Task, BlockMessage],
@@ -56,10 +77,6 @@ class BlockReceiverSpec
           TestNode[Task]
       ) => Task[Assertion]
   ): Task[Assertion] = TestNode.standaloneEff(genesis).use { node =>
-    implicit val bds = blockDagStorageMock[Task]()
-    implicit val br  = blockRetrieverMock[Task]()
-    implicit val bs  = node.blockStore
-
     for {
       state                 <- Ref[Task].of(BlockReceiverState[BlockHash])
       incomingBlockQueue    <- Queue.unbounded[Task, BlockMessage]
@@ -84,7 +101,11 @@ class BlockReceiverSpec
       signedBlock = node.validatorIdOpt.map(_.signBlock(block)).getOrElse(block)
     } yield signedBlock
 
-  private def addBlock(node: TestNode[Task]): Task[BlockMessage] = makeDeploy >>= (node.addBlock(_))
+  private def addBlock(node: TestNode[Task]): Task[BlockMessage] =
+    for {
+      block <- makeBlock(node)
+      _     <- BlockStore[Task].put(Seq((block.blockHash, block)))
+    } yield block
 
   it should "pass correct block to output stream" in {
     withBlockReceiverEnv("root") {
