@@ -1,16 +1,15 @@
 package coop.rchain.casper.rholang.syntax
 
-import cats.{Applicative, Functor, Monad}
 import cats.data.{EitherT, OptionT}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, Event, ProcessedDeploy, SystemDeployData}
 import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
-import coop.rchain.models.syntax._
+import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.casper.rholang.syntax.RuntimeSyntax._
 import coop.rchain.casper.rholang.sysdeploys.{
   CloseBlockDeploy,
@@ -27,7 +26,7 @@ import coop.rchain.casper.rholang.types.SystemDeployPlatformFailure.{
 import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource, PrettyPrinter}
-import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
@@ -38,6 +37,7 @@ import coop.rchain.models._
 import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.rholang.interpreter.RhoRuntime.bootstrapRegistry
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.BugFoundError
@@ -47,9 +47,6 @@ import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.shared.{Base16, Log}
-import coop.rchain.casper.rholang.RuntimeDeployResult._
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.rholang.interpreter.RhoType.Name
 
 trait RuntimeSyntax {
   implicit final def casperSyntaxRholangRuntime[F[_]](
@@ -506,7 +503,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   )(
       implicit s: Sync[F]
   ): F[Seq[Par]] =
-    captureResultsWithErrors(start, rand, deploy, name)
+    captureResultsWithErrors(start, deploy, rand, name)
       .handleErrorWith(
         ex =>
           BugFoundError(s"Unexpected error while capturing results from Rholang: $ex")
@@ -515,8 +512,8 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
 
   def captureResultsWithErrors(
       start: StateHash,
-      rand: Blake2b512Random,
       deploy: Signed[DeployData],
+      rand: Blake2b512Random,
       name: Par
   )(implicit s: Sync[F]): F[Seq[Par]] =
     runtime.reset(start.toBlake2b256Hash) >>
