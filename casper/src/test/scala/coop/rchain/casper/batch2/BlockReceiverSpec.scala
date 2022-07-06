@@ -7,14 +7,14 @@ import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation}
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.engine.BlockRetriever
-import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
-import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -45,8 +45,6 @@ class BlockReceiverSpec
   implicit val blockRetrieverEff: BlockRetriever[Task]   = blockRetrieverMock[Task]()
   implicit val blockStoreEff: BlockStore[Task]           = blockStoreMock[Task]()
 
-  private val genesis = buildGenesis()
-
   import fs2._
 
   private def blockDagStorageMock[F[_]: Applicative](): BlockDagStorage[F] = {
@@ -73,10 +71,9 @@ class BlockReceiverSpec
       f: (
           Queue[Task, BlockMessage],
           Queue[Task, BlockMessage],
-          Stream[Task, BlockHash],
-          TestNode[Task]
+          Stream[Task, BlockHash]
       ) => Task[Assertion]
-  ): Task[Assertion] = TestNode.standaloneEff(genesis).use { node =>
+  ): Task[Assertion] =
     for {
       state                 <- Ref[Task].of(BlockReceiverState[BlockHash])
       incomingBlockQueue    <- Queue.unbounded[Task, BlockMessage]
@@ -84,34 +81,45 @@ class BlockReceiverSpec
       validatedBlocksQueue  <- Queue.unbounded[Task, BlockMessage]
       validatedBlocksStream = validatedBlocksQueue.dequeue
       br                    <- BlockReceiver(state, incomingBlockStream, validatedBlocksStream, shardId)
-      res                   <- f(incomingBlockQueue, validatedBlocksQueue, br, node)
+      res                   <- f(incomingBlockQueue, validatedBlocksQueue, br)
     } yield res
-  }
 
-  private def makeDeploy =
-    ConstructDeploy.sourceDeployNowF("new x in { x!(0) }", shardId = genesis.genesisBlock.shardId)
+  private def makeDefaultBlock =
+    BlockMessage
+      .from(
+        BlockMessageProto(
+          shardId = "root",
+          postStateHash = "abc".unsafeHexToByteString,
+          sigAlgorithm = Secp256k1.name
+        )
+      )
+      .right
+      .get
 
   private def makeBlock(
-      node: TestNode[Task],
       justifications: List[BlockHash] = List()
-  ): Task[BlockMessage] =
+  ): Task[BlockMessage] = {
+    val (privateKey, pubKey) = Secp256k1.newKeyPair
     for {
-      deploy      <- makeDeploy
-      block       <- node.createBlockUnsafe(deploy).map(_.copy(justifications = justifications))
-      signedBlock = node.validatorIdOpt.map(_.signBlock(block)).getOrElse(block)
+      block <- makeDefaultBlock
+                .copy(sender = pubKey.bytes.toByteString, justifications = justifications)
+                .pure[Task]
+      validatorId = ValidatorIdentity(privateKey)
+      signedBlock = validatorId.signBlock(block)
     } yield signedBlock
+  }
 
-  private def addBlock(node: TestNode[Task]): Task[BlockMessage] =
+  private def addBlock(): Task[BlockMessage] =
     for {
-      block <- makeBlock(node)
+      block <- makeBlock()
       _     <- BlockStore[Task].put(Seq((block.blockHash, block)))
     } yield block
 
   it should "pass correct block to output stream" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream, node) =>
+      case (incomingQueue, _, outStream) =>
         for {
-          block   <- makeBlock(node)
+          block   <- makeBlock()
           _       <- incomingQueue.enqueue1(block)
           outList <- outStream.take(1).compile.toList
         } yield outList.length shouldBe 1
@@ -122,9 +130,9 @@ class BlockReceiverSpec
     // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
     // So block should be rejected and output stream should never take block
     withBlockReceiverEnv("test") {
-      case (incomingQueue, _, outStream, node) =>
+      case (incomingQueue, _, outStream) =>
         for {
-          block <- makeBlock(node)
+          block <- makeBlock()
           _     <- incomingQueue.enqueue1(block)
         } yield outStream should notEmit
     }
@@ -132,9 +140,9 @@ class BlockReceiverSpec
 
   it should "discard block with invalid block hash" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream, node) =>
+      case (incomingQueue, _, outStream) =>
         for {
-          block <- makeBlock(node).map(_.copy(blockHash = "abc".unsafeHexToByteString))
+          block <- makeBlock().map(_.copy(blockHash = "abc".unsafeHexToByteString))
           _     <- incomingQueue.enqueue1(block)
         } yield outStream should notEmit
     }
@@ -142,9 +150,9 @@ class BlockReceiverSpec
 
   it should "discard block with invalid signature" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream, node) =>
+      case (incomingQueue, _, outStream) =>
         for {
-          block <- makeBlock(node).map(_.copy(sig = "abc".unsafeHexToByteString))
+          block <- makeBlock().map(_.copy(sig = "abc".unsafeHexToByteString))
           _     <- incomingQueue.enqueue1(block)
         } yield outStream should notEmit
     }
@@ -152,9 +160,9 @@ class BlockReceiverSpec
 
   it should "discard known block" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream, node) =>
+      case (incomingQueue, _, outStream) =>
         for {
-          block <- addBlock(node)
+          block <- addBlock
           _     <- incomingQueue.enqueue1(block)
         } yield outStream should notEmit
     }
@@ -162,11 +170,11 @@ class BlockReceiverSpec
 
   "BlockReceiver" should "pass to output blocks with resolved dependencies" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, validatedQueue, outStream, node) =>
+      case (incomingQueue, validatedQueue, outStream) =>
         for {
           // Received a parent with an empty list of justifications and its child
-          a1 <- makeBlock(node)
-          a2 <- makeBlock(node, List(a1.blockHash))
+          a1 <- makeBlock()
+          a2 <- makeBlock(List(a1.blockHash))
 
           // Put the parent and child in the input queue
           _ <- incomingQueue.enqueue1(a2)
