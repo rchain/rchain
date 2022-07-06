@@ -45,6 +45,9 @@ class BlockReceiverSpec
     mock[BlockDagStorage[F]].getRepresentation returnsF emptyDag
   }
 
+  private def blockRetrieverMock[F[_]: Applicative](): BlockRetriever[F] =
+    mock[BlockRetriever[F]].ackReceived(*) returns ().pure[F]
+
   private def withBlockReceiverEnv(shardId: String)(
       f: (
           Queue[Task, BlockMessage],
@@ -53,9 +56,9 @@ class BlockReceiverSpec
           TestNode[Task]
       ) => Task[Assertion]
   ): Task[Assertion] = TestNode.standaloneEff(genesis).use { node =>
-    implicit val (_, br, bs) =
-      (node.blockDagStorage, node.blockRetrieverEffect, node.blockStore)
     implicit val bds = blockDagStorageMock[Task]()
+    implicit val br  = blockRetrieverMock[Task]()
+    implicit val bs  = node.blockStore
 
     for {
       state                 <- Ref[Task].of(BlockReceiverState[BlockHash])
