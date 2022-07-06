@@ -98,7 +98,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
         validator,
         baseState.toBlake2b256Hash
       )
-      rand          = BlockRandomSeed.generateRandomNumber(seed)
+      rand          = BlockRandomSeed.randomGenerator(seed)
       systemDeploys = CloseBlockDeploy(rand.splitByte(userDeploys.length.toByte)) :: Nil
       r             <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, rand, blockData)
     } yield r

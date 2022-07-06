@@ -68,7 +68,7 @@ class InterpreterUtilTest
             genesisContext.validatorPks.head,
             preState._1.toBlake2b256Hash
           )
-          val rand = BlockRandomSeed.generateRandomNumber(seed)
+          val rand = BlockRandomSeed.randomGenerator(seed)
           InterpreterUtil
             .computeDeploysCheckpoint[F](
               deploys,

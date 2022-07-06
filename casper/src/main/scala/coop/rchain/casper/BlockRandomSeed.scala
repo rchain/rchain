@@ -3,14 +3,13 @@ package coop.rchain.casper
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.syntax._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.models.Par
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.RhoType.Name
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
-import scodec.codecs.{bytes, uint8, ulong, utf8, variableSizeBytes}
+import scodec.codecs.{bytes, uint8, utf8, variableSizeBytes, vlong}
 import scodec.{Codec, TransformSyntax}
-import coop.rchain.models.Par
 
 import scala.collection.compat.immutable.LazyList
 
@@ -28,6 +27,9 @@ object BlockRandomSeed {
   val UserDeploySplitIndex: Byte = 1.toByte
   val RefundSplitIndex: Byte     = 2.toByte
 
+  /**
+    * Creates a random seed for the random generator used to execute deploys in the block.
+    */
   def apply(
       shardId: String,
       blockNumber: Long,
@@ -38,47 +40,72 @@ object BlockRandomSeed {
     new BlockRandomSeed(shardId, blockNumber, sender, preStateHash)
   }
 
-  private val codecPublicKey: Codec[PublicKey] = variableSizeBytes(uint8, bytes)
-    .xmap[PublicKey](bv => PublicKey(bv.toArray), pk => ByteVector(pk.bytes))
+  /**
+    * Special constructor which requires only shard ID. Used for genesis block so we are able to predict
+    * unforgeable names in system contracts like mergeable tag in NonNegativeNumber contract.
+    */
+  def apply(shardId: String): BlockRandomSeed =
+    apply(
+      shardId,
+      blockNumber = 0L,
+      sender = PublicKey(Array[Byte]()),
+      Blake2b256Hash.create(Array[Byte]())
+    )
 
-  val codecBlockRandomSeed: Codec[BlockRandomSeed] =
-    (variableSizeBytes(uint8, utf8) :: ulong(bits = 63) ::
-      codecPublicKey :: Blake2b256Hash.codecBlake2b256Hash).as[BlockRandomSeed]
-
-  private def encode(blockRandomSeed: BlockRandomSeed): Array[Byte] =
-    codecBlockRandomSeed.encode(blockRandomSeed).require.toByteArray
-
-  def generateRandomNumber(blockRandomSeed: BlockRandomSeed): Blake2b512Random =
-    Blake2b512Random(encode(blockRandomSeed))
-
-  def fromBlock(block: BlockMessage): Blake2b512Random =
-    if (block.justifications.nonEmpty) {
-      val seed = BlockRandomSeed(
+  /**
+    * Special constructor which creates a random seed from the block data.
+    */
+  def apply(block: BlockMessage): BlockRandomSeed =
+    if (block.justifications.isEmpty) {
+      // Genesis block has no justifications
+      apply(block.shardId)
+    } else {
+      apply(
         block.shardId,
         block.blockNumber,
         PublicKey(block.sender),
         block.preStateHash.toBlake2b256Hash
       )
-      generateRandomNumber(seed)
-    } else {
-      fromGenesis(block.shardId)
     }
 
-  def fromGenesis(shardId: String): Blake2b512Random = {
-    // using fixed values to make sure unforgeable name can be easily predicted with only shardId
-    val seed = BlockRandomSeed(
-      shardId,
-      0L,
-      PublicKey(Array[Byte]()),
-      Blake2b256Hash.create(Array[Byte]())
-    )
-    generateRandomNumber(seed)
-  }
+  /* Scodec definition used to get binary representation for the random seed */
+
+  private val codecPublicKey: Codec[PublicKey] = variableSizeBytes(uint8, bytes)
+    .xmap[PublicKey](bv => PublicKey(bv.toArray), pk => ByteVector(pk.bytes))
+
+  val codecBlockRandomSeed: Codec[BlockRandomSeed] =
+    (variableSizeBytes(uint8, utf8) :: vlong :: codecPublicKey :: Blake2b256Hash.codecBlake2b256Hash)
+      .as[BlockRandomSeed]
+
+  private def encode(blockRandomSeed: BlockRandomSeed): Array[Byte] =
+    codecBlockRandomSeed.encode(blockRandomSeed).require.toByteArray
+
+  /* Helper functions to create a random generator using different seed */
+
+  /**
+    * Creates random generator from [[BlockRandomSeed]].
+    */
+  def randomGenerator(blockRandomSeed: BlockRandomSeed): Blake2b512Random =
+    Blake2b512Random(encode(blockRandomSeed))
+
+  /**
+    * Creates random generator just from shard ID, used for genesis block.
+    */
+  def randomGenerator(shardId: String): Blake2b512Random =
+    randomGenerator(BlockRandomSeed(shardId))
+
+  /**
+    * Creates random generator from data in the block. Valid for genesis block also.
+    */
+  def randomGenerator(block: BlockMessage): Blake2b512Random =
+    randomGenerator(BlockRandomSeed(block))
 
   def splitRandomNumberFromGenesis(shardId: String, index: Byte, index2: Byte): Blake2b512Random = {
-    val seed = BlockRandomSeed.fromGenesis(shardId)
+    val seed = randomGenerator(BlockRandomSeed(shardId))
     seed.splitByte(index).splitByte(index2)
   }
+
+  /* Helper functions to create unforgeable names with random generator using specific seed */
 
   def nonNegativeMergeableTagName(
       shardId: String

@@ -3,22 +3,15 @@ package coop.rchain.casper.genesis
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
-import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.{BlockRandomSeed, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
-import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.models.Par
-import coop.rchain.models.syntax._
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.models.BlockVersion
-import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 
 final case class Genesis(
@@ -71,7 +64,7 @@ object Genesis {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
     val blockData = BlockData(genesis.blockNumber, genesis.sender, 0)
-    val rand      = BlockRandomSeed.fromGenesis(genesis.shardId)
+    val rand      = BlockRandomSeed.randomGenerator(genesis.shardId)
     RuntimeManager[F]
       .computeGenesis(blessedTerms, rand, blockData)
       .map {

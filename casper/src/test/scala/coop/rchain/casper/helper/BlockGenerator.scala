@@ -65,7 +65,7 @@ object BlockGenerator {
     val deploys = block.state.deploys.map(_.deploy)
     for {
       computedParentsInfo <- computeParentsPostState(block.justifications, preState)
-      rand                = BlockRandomSeed.fromBlock(block)
+      rand                = BlockRandomSeed.randomGenerator(block)
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],

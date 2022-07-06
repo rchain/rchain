@@ -107,7 +107,7 @@ object ReportingCasper {
           _ <- reportingRuntime.reset(preStateHash.toBlake2b256Hash)
 
           // Replay block deploys with reporting
-          rand = BlockRandomSeed.fromBlock(block)
+          rand = BlockRandomSeed.randomGenerator(block)
           res <- replayDeploys(
                   reportingRuntime,
                   block.state.deploys,

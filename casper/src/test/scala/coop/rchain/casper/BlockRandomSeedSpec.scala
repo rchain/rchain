@@ -71,7 +71,7 @@ class BlockRandomSeedSpec extends AnyFlatSpec with Checkers {
       val serialized =
         BlockRandomSeed.codecBlockRandomSeed.encode(constantBlockRandomSeed).require.toByteVector
       val randomNumber =
-        ByteVector(BlockRandomSeed.generateRandomNumber(constantBlockRandomSeed).next())
+        ByteVector(BlockRandomSeed.randomGenerator(constantBlockRandomSeed).next())
       (serialized, randomNumber)
     }
 
