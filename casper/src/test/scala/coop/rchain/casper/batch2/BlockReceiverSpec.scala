@@ -12,7 +12,6 @@ import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
-import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
@@ -45,7 +44,86 @@ class BlockReceiverSpec
   implicit val blockRetrieverEff: BlockRetriever[Task]   = blockRetrieverMock[Task]()
   implicit val blockStoreEff: BlockStore[Task]           = blockStoreMock[Task]()
 
-  import fs2._
+  it should "pass correct block to output stream" in {
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, _, outStream) =>
+        for {
+          block   <- makeBlock()
+          _       <- incomingQueue.enqueue1(block)
+          outList <- outStream.take(1).compile.toList
+        } yield outList.length shouldBe 1
+    }
+  }
+
+  it should "discard block with invalid shard name" in {
+    // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
+    // So block should be rejected and output stream should never take block
+    withBlockReceiverEnv("test") {
+      case (incomingQueue, _, outStream) =>
+        for {
+          block <- makeBlock()
+          _     <- incomingQueue.enqueue1(block)
+        } yield outStream should notEmit
+    }
+  }
+
+  it should "discard block with invalid block hash" in {
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, _, outStream) =>
+        for {
+          block <- makeBlock().map(_.copy(blockHash = "abc".unsafeHexToByteString))
+          _     <- incomingQueue.enqueue1(block)
+        } yield outStream should notEmit
+    }
+  }
+
+  it should "discard block with invalid signature" in {
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, _, outStream) =>
+        for {
+          block <- makeBlock().map(_.copy(sig = "abc".unsafeHexToByteString))
+          _     <- incomingQueue.enqueue1(block)
+        } yield outStream should notEmit
+    }
+  }
+
+  it should "discard known block" in {
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, _, outStream) =>
+        for {
+          block <- addBlock()
+          _     <- incomingQueue.enqueue1(block)
+        } yield outStream should notEmit
+    }
+  }
+
+  it should "pass to output blocks with resolved dependencies" in {
+    withBlockReceiverEnv("root") {
+      case (incomingQueue, validatedQueue, outStream) =>
+        for {
+          // Received a parent with an empty list of justifications and its child
+          a1 <- makeBlock()
+          a2 <- makeBlock(List(a1.blockHash))
+
+          // Put the parent and child in the input queue
+          _ <- incomingQueue.enqueue1(a2)
+          _ <- incomingQueue.enqueue1(a1)
+
+          // Dependencies of the child (its parent) have not yet been resolved,
+          // so only the parent goes to the output queue, since it has no dependencies
+          a1InOutQueue <- outStream.take(1).compile.toList.map(_.head)
+
+          // A1 is now validated (e.g. in BlockProcessor)
+          _ <- validatedQueue.enqueue1(a1)
+
+          // All dependencies of child A2 are resolved, so it also goes to the output queue
+          a2InOutQueue <- outStream.take(1).compile.toList.map(_.head)
+        } yield {
+          a1InOutQueue shouldBe a1.blockHash
+          a2InOutQueue shouldBe a2.blockHash
+        }
+    }
+  }
 
   private def blockDagStorageMock[F[_]: Applicative](): BlockDagStorage[F] = {
     val emptyDag = DagRepresentation(Set(), Map(), SortedMap(), DagMessageState(), Map())
@@ -66,6 +144,8 @@ class BlockReceiverSpec
     }
     bsMock
   }
+
+  import fs2._
 
   private def withBlockReceiverEnv(shardId: String)(
       f: (
@@ -115,84 +195,4 @@ class BlockReceiverSpec
       _     <- BlockStore[Task].put(Seq((block.blockHash, block)))
     } yield block
 
-  it should "pass correct block to output stream" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream) =>
-        for {
-          block   <- makeBlock()
-          _       <- incomingQueue.enqueue1(block)
-          outList <- outStream.take(1).compile.toList
-        } yield outList.length shouldBe 1
-    }
-  }
-
-  it should "discard block with invalid shard name" in {
-    // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
-    // So block should be rejected and output stream should never take block
-    withBlockReceiverEnv("test") {
-      case (incomingQueue, _, outStream) =>
-        for {
-          block <- makeBlock()
-          _     <- incomingQueue.enqueue1(block)
-        } yield outStream should notEmit
-    }
-  }
-
-  it should "discard block with invalid block hash" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream) =>
-        for {
-          block <- makeBlock().map(_.copy(blockHash = "abc".unsafeHexToByteString))
-          _     <- incomingQueue.enqueue1(block)
-        } yield outStream should notEmit
-    }
-  }
-
-  it should "discard block with invalid signature" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream) =>
-        for {
-          block <- makeBlock().map(_.copy(sig = "abc".unsafeHexToByteString))
-          _     <- incomingQueue.enqueue1(block)
-        } yield outStream should notEmit
-    }
-  }
-
-  it should "discard known block" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream) =>
-        for {
-          block <- addBlock
-          _     <- incomingQueue.enqueue1(block)
-        } yield outStream should notEmit
-    }
-  }
-
-  "BlockReceiver" should "pass to output blocks with resolved dependencies" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, validatedQueue, outStream) =>
-        for {
-          // Received a parent with an empty list of justifications and its child
-          a1 <- makeBlock()
-          a2 <- makeBlock(List(a1.blockHash))
-
-          // Put the parent and child in the input queue
-          _ <- incomingQueue.enqueue1(a2)
-          _ <- incomingQueue.enqueue1(a1)
-
-          // Dependencies of the child (its parent) have not yet been resolved,
-          // so only the parent goes to the output queue, since it has no dependencies
-          a1InOutQueue <- outStream.take(1).compile.toList.map(_.head)
-
-          // A1 is now validated (e.g. in BlockProcessor)
-          _ <- validatedQueue.enqueue1(a1)
-
-          // All dependencies of child A2 are resolved, so it also goes to the output queue
-          a2InOutQueue <- outStream.take(1).compile.toList.map(_.head)
-        } yield {
-          a1InOutQueue shouldBe a1.blockHash
-          a2InOutQueue shouldBe a2.blockHash
-        }
-    }
-  }
 }
