@@ -154,7 +154,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
                                  sigBS = makeSig(deploy.sig)
                                } yield DeployIndex(sigBS, deploy.cost, evLogIndex)
                            }
-          } yield (evLogIndices.toSet, endCheckpoint.root)
+          } yield (evLogIndices, endCheckpoint.root)
 
         historyRepo = rm.getHistoryRepo
 
@@ -173,19 +173,27 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         leftResult                     <- runRholang(leftTerms, baseCp.root)
         (leftEvIndices, leftPostState) = leftResult
 
-        leftDeployIndices = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
-          leftEvIndices,
-          (x, y) => EventLogMergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
-        )
+        leftDeployIndices = {
+          val dependencyMap =
+            (0 to (leftEvIndices.size - 2))
+              .map(idx => leftEvIndices(idx) -> Set(leftEvIndices(idx + 1)))
+              .toMap
+          DagMergingLogic
+            .computeGreedyNonIntersectingBranches[DeployIndex](leftEvIndices.toSet, dependencyMap)
+        }
 
         // Branch 2 change
         rightResult                      <- runRholang(rightTerms, baseCp.root)
         (rightEvIndices, rightPostState) = rightResult
 
-        rightDeployIndices = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
-          rightEvIndices,
-          (x, y) => EventLogMergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
-        )
+        rightDeployIndices = {
+          val dependencyMap =
+            (0 to (rightEvIndices.size - 2))
+              .map(idx => rightEvIndices(idx) -> Set(rightEvIndices(idx + 1)))
+              .toMap
+          DagMergingLogic
+            .computeGreedyNonIntersectingBranches[DeployIndex](rightEvIndices.toSet, dependencyMap)
+        }
 
         // Calculate deploy chains / deploy dependency
 
@@ -346,8 +354,8 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         DeployTestInfo(rhoChange(10), 10L, "0x21"), // +10
         DeployTestInfo(rhoChange(-20), 10L, "0x22") // -20
       ),
-      expectedRejected = Set(makeSig("0x11")), // TODO make mergeable deploys depending, this should be empty
-      expectedFinalResult = 15
+      expectedRejected = Set(),
+      expectedFinalResult = 10
     )
   }
 

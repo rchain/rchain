@@ -47,9 +47,7 @@ class DagMergingLogicSpec extends AnyFlatSpec with Matchers with Checkers {
   "computeBranches" should "compute branches that cover all target and all tips/roots are concurrent." in {
     val set           = Set(1, 2, 3, 4, 5, 6, 7, 100, 101)
     val dependencyMap = Map(1 -> Set(4, 5), 4 -> Set(5, 6), 2 -> Set(4, 5, 6), 3 -> Set(6, 7))
-    def depends(target: Int, maybeDependency: Int) =
-      dependencyMap.get(maybeDependency).exists(_.contains(target))
-    computeBranches(set, depends) shouldBe Map(
+    computeBranches(set, dependencyMap) shouldBe Map(
       1   -> Set(4, 5, 6),
       2   -> Set(4, 5, 6),
       3   -> Set(6, 7),
@@ -131,37 +129,63 @@ class DagMergingLogicSpec extends AnyFlatSpec with Matchers with Checkers {
     computeOptimalRejection(rejectionOptions, cost(_: Int)) shouldBe Set(1)
   }
 
-  "computeMergeableOverflowRejectionOptions" should "add to rejection options items leading to overflow." in {
-    val conflictSet         = Set(1, 2, 3, 4)
-    val rejectOptions       = Set(Set(1), Set(2))
-    val initMergeableValues = Map("a" -> 0L, "b" -> 2L)
-    // 2 should be added to rejection options as it goes negative on channel "a", 3 does it on channel "b"
-    // 4 passes in as on channel "b" it does 2 - 1
-    val mergeableDiffs = Map(2 -> Map("a" -> -1L), 3 -> Map("b" -> -3L), 4 -> Map("b" -> -1L))
-    addMergeableOverflowRejections[Int, String](
-      conflictSet,
-      rejectOptions,
-      initMergeableValues,
-      mergeableDiffs
-    ) shouldBe Set(Set(1, 2, 3), Set(2, 3))
-  }
-
-  "computeMergeableOverflowRejectionOptions" should "sort deploys by sum of absolute diffs to fold mergeable value." in {
-    val conflictSet         = Set(1, 2, 3, 4, 5)
+  "addMergeableOverflowRejections" should "fold mergeable values by branches" in {
+    val conflictSet         = Set(1, 2, 3, 4, 5, 6, 7)
+    val dependencyMap       = Map(1 -> Set(2), 3 -> Set(4), 4 -> Set(5))
     val rejectOptions       = Set.empty[Set[Int]]
     val initMergeableValues = Map("a" -> 0L)
     val mergeableDiffs = Map(
-      1 -> Map("a" -> 10L),
-      2 -> Map("a" -> -5L), // this is applied first and immediately goes negative, so rejected
-      3 -> Map("a" -> 15L),
-      4 -> Map("a" -> 10L),
-      5 -> Map("a" -> -20L)
+      // branch 1
+      1 -> Map("a" -> 10L), // 10
+      2 -> Map("a" -> -5L), // 5
+      // branch 2
+      3 -> Map("a" -> 15L),  // 20
+      4 -> Map("a" -> 10L),  // 30
+      5 -> Map("a" -> -20L), // 10
+      // branch 3
+      6 -> Map("a" -> -10L), // 0
+      // branch 4
+      7 -> Map("a" -> -10L) // overflow
     )
     addMergeableOverflowRejections[Int, String](
       conflictSet,
+      dependencyMap,
       rejectOptions,
       initMergeableValues,
       mergeableDiffs
-    ) shouldBe Set(Set(2))
+    ) shouldBe Set(Set(7))
+  }
+
+  "addMergeableOverflowRejections" should "reject dependent tree" in {
+    val conflictSet         = Set(1, 2, 3, 4, 5, 6, 7, 12)
+    val dependencyMap       = Map(1 -> Set(2), 2 -> Set(12), 3 -> Set(4, 12), 4 -> Set(5))
+    val rejectOptions       = Set.empty[Set[Int]]
+    val initMergeableValues = Map("a" -> 5L)
+    val mergeableDiffs = Map(
+      // branch 1 - branch should be rejected fully
+      1 -> Map("a" -> -10L), // -5
+      2 -> Map("a" -> -5L),
+      // branch 2
+      3 -> Map("a" -> 15L),  // 20;
+      4 -> Map("a" -> 10L),  // 30
+      5 -> Map("a" -> -20L), // 10
+      // branch 3
+      6 -> Map("a" -> -10L), // 0
+      // branch 4
+      7 -> Map("a" -> -10L), // overflow
+      // branch 1 and 2
+      // 8 depends on 3 and 1.
+      // In branch 3 it does not lead to overflow.
+      // But since 8 leads to overflow in branch 1 which is processed before (due to sorting of branch roots),
+      // secondary attempt to fold this into result should not happen.
+      12 -> Map("a" -> 10L)
+    )
+    addMergeableOverflowRejections[Int, String](
+      conflictSet,
+      dependencyMap,
+      rejectOptions,
+      initMergeableValues,
+      mergeableDiffs
+    ) shouldBe Set(Set(1, 2, 12, 7))
   }
 }

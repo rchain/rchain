@@ -93,9 +93,15 @@ class MergingCases extends AnyFlatSpec with Matchers {
                   y: EventLogIndex
               ): Int = 1
             }
+            val dependencyMap =
+              DagMergingLogic.computeDependencyMap(
+                idxs.toSet,
+                idxs.toSet,
+                EventLogMergingLogic.depends
+              )
             DagMergingLogic.computeGreedyNonIntersectingBranches[EventLogIndex](
               idxs.toSet,
-              EventLogMergingLogic.depends
+              dependencyMap
             )
           }
           // deploys inside one state transition never conflict, as executed in a sequence (for now)
