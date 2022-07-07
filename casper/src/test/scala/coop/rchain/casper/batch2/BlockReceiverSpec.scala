@@ -4,7 +4,6 @@ import cats.Applicative
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation}
 import coop.rchain.casper.ValidatorIdentity
@@ -40,18 +39,20 @@ class BlockReceiverSpec
   implicit val logEff: Log[Task]            = Log.log[Task]
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  implicit val blockDagStorageEff: BlockDagStorage[Task] = blockDagStorageMock[Task]()
-  implicit val blockRetrieverEff: BlockRetriever[Task]   = blockRetrieverMock[Task]()
-  implicit val blockStoreEff: BlockStore[Task]           = blockStoreMock[Task]()
-
   it should "pass correct block to output stream" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream) =>
+      case (incomingQueue, _, outStream, bs, br, bds) =>
         for {
           block   <- makeBlock()
           _       <- incomingQueue.enqueue1(block)
           outList <- outStream.take(1).compile.toList
-        } yield outList.length shouldBe 1
+        } yield {
+          bs.put(*) wasCalled once
+          bs.contains(*) wasCalled once
+          br.ackReceived(*) wasCalled once
+          bds.getRepresentation wasCalled twice
+          outList.length shouldBe 1
+        }
     }
   }
 
@@ -59,47 +60,71 @@ class BlockReceiverSpec
     // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
     // So block should be rejected and output stream should never take block
     withBlockReceiverEnv("test") {
-      case (incomingQueue, _, outStream) =>
+      case (incomingQueue, _, outStream, bs, br, bds) =>
         for {
           block <- makeBlock()
           _     <- incomingQueue.enqueue1(block)
-        } yield outStream should notEmit
+        } yield {
+          bs.put(*) wasNever called
+          bs.contains(*) wasNever called
+          br.ackReceived(*) wasNever called
+          bds.getRepresentation wasNever called
+          outStream should notEmit
+        }
     }
   }
 
   it should "discard block with invalid block hash" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream) =>
+      case (incomingQueue, _, outStream, bs, br, bds) =>
         for {
           block <- makeBlock().map(_.copy(blockHash = "abc".unsafeHexToByteString))
           _     <- incomingQueue.enqueue1(block)
-        } yield outStream should notEmit
+        } yield {
+          bs.put(*) wasNever called
+          bs.contains(*) wasNever called
+          br.ackReceived(*) wasNever called
+          bds.getRepresentation wasNever called
+          outStream should notEmit
+        }
     }
   }
 
   it should "discard block with invalid signature" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream) =>
+      case (incomingQueue, _, outStream, bs, br, bds) =>
         for {
           block <- makeBlock().map(_.copy(sig = "abc".unsafeHexToByteString))
           _     <- incomingQueue.enqueue1(block)
-        } yield outStream should notEmit
+        } yield {
+          bs.put(*) wasNever called
+          bs.contains(*) wasNever called
+          br.ackReceived(*) wasNever called
+          bds.getRepresentation wasNever called
+          outStream should notEmit
+        }
     }
   }
 
   it should "discard known block" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream) =>
+      case (incomingQueue, _, outStream, bs, br, bds) =>
         for {
-          block <- addBlock()
+          block <- addBlock(bs)
           _     <- incomingQueue.enqueue1(block)
-        } yield outStream should notEmit
+        } yield {
+          bs.put(*) wasCalled once
+          bs.contains(*) wasNever called
+          br.ackReceived(*) wasNever called
+          bds.getRepresentation wasNever called
+          outStream should notEmit
+        }
     }
   }
 
   it should "pass to output blocks with resolved dependencies" in {
     withBlockReceiverEnv("root") {
-      case (incomingQueue, validatedQueue, outStream) =>
+      case (incomingQueue, validatedQueue, outStream, bs, br, bds) =>
         for {
           // Received a parent with an empty list of justifications and its child
           a1 <- makeBlock()
@@ -119,6 +144,10 @@ class BlockReceiverSpec
           // All dependencies of child A2 are resolved, so it also goes to the output queue
           a2InOutQueue <- outStream.take(1).compile.toList.map(_.head)
         } yield {
+          bs.put(*) wasCalled twice
+          bs.contains(*) wasCalled 3.times
+          br.ackReceived(*) wasCalled twice
+          bds.getRepresentation wasCalled 4.times
           a1InOutQueue shouldBe a1.blockHash
           a2InOutQueue shouldBe a2.blockHash
         }
@@ -151,7 +180,10 @@ class BlockReceiverSpec
       f: (
           Queue[Task, BlockMessage],
           Queue[Task, BlockMessage],
-          Stream[Task, BlockHash]
+          Stream[Task, BlockHash],
+          BlockStore[Task],
+          BlockRetriever[Task],
+          BlockDagStorage[Task]
       ) => Task[Assertion]
   ): Task[Assertion] =
     for {
@@ -160,8 +192,17 @@ class BlockReceiverSpec
       incomingBlockStream   = incomingBlockQueue.dequeue
       validatedBlocksQueue  <- Queue.unbounded[Task, BlockMessage]
       validatedBlocksStream = validatedBlocksQueue.dequeue
-      br                    <- BlockReceiver(state, incomingBlockStream, validatedBlocksStream, shardId)
-      res                   <- f(incomingBlockQueue, validatedBlocksQueue, br)
+
+      // Create mock separately for each test
+      bs  = blockStoreMock[Task]()
+      br  = blockRetrieverMock[Task]()
+      bds = blockDagStorageMock[Task]()
+
+      blockReceiver <- {
+        implicit val (bsImp, brImp, bdsImp) = (bs, br, bds)
+        BlockReceiver(state, incomingBlockStream, validatedBlocksStream, shardId)
+      }
+      res <- f(incomingBlockQueue, validatedBlocksQueue, blockReceiver, bs, br, bds)
     } yield res
 
   private def makeDefaultBlock =
@@ -189,10 +230,9 @@ class BlockReceiverSpec
     } yield signedBlock
   }
 
-  private def addBlock(): Task[BlockMessage] =
+  private def addBlock(bs: BlockStore[Task]): Task[BlockMessage] =
     for {
       block <- makeBlock()
-      _     <- BlockStore[Task].put(Seq((block.blockHash, block)))
+      _     <- bs.put(Seq((block.blockHash, block)))
     } yield block
-
 }
