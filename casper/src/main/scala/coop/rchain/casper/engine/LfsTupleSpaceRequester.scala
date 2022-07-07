@@ -4,6 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
+import coop.rchain.models.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceImporter
@@ -227,7 +228,7 @@ object LfsTupleSpaceRequester {
         .terminateAfter(_.isFinished) concurrently responseStream
     }
 
-    val stateHash                   = Blake2b256Hash.fromByteString(fringe.stateHash)
+    val stateHash                   = fringe.stateHash.toBlake2b256Hash
     val startRequest: StatePartPath = Seq((stateHash, None))
     for {
       // Write last finalized state root

@@ -345,7 +345,7 @@ object ChargingRSpaceTest {
 
   def continuation(
       par: Par = Par().withExprs(Seq(GInt(1))),
-      r: Blake2b512Random = Blake2b512Random(128)
+      r: Blake2b512Random = Blake2b512Random.defaultRandom
   ): TaggedContinuation =
     TaggedContinuation(ParBody(ParWithRandom(par, r)))
 

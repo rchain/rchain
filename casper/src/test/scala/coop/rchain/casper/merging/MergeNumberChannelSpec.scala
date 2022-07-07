@@ -11,12 +11,13 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.RhoType.Number
+import coop.rchain.rholang.interpreter.RhoType.{Name, Number}
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.convertToReadNumber
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.HotStoreTrieAction
+import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger.{
@@ -96,8 +97,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   val unforgeableNameSeed: Par = {
-    import coop.rchain.models.rholang.implicits._
-    GPrivate(ByteString.copyFrom(baseRhoSeed.next()))
+    Name(baseRhoSeed.next())
   }
 
   def testCase[F[_]: Concurrent: ContextShift: Parallel: Span: Log](
@@ -161,10 +161,9 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         // Base state
         _ <- baseTerms.zipWithIndex.toList.traverse {
               case (term, i) =>
-                implicit val r = baseRhoSeed
                 for {
                   baseRes <- runtime
-                              .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par])
+                              .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par], baseRhoSeed)
                   _ = assert(baseRes.errors.isEmpty, s"BASE $i: ${baseRes.errors}")
                 } yield ()
             }
@@ -353,7 +352,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   "TEMP encode multiple values" should "show stored binary size" in {
-    val rnd = Blake2b512Random(128)
+    val rnd = Blake2b512Random.defaultRandom
 
     val (res, _) = (1L to 10L).foldLeft((Vector[ByteVector](), rnd)) {
       case ((acc, r), n) =>

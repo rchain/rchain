@@ -5,9 +5,9 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.models.syntax._
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.{BlockRandomSeed, PrettyPrinter}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{
   BlockMessage,
@@ -17,7 +17,7 @@ import coop.rchain.casper.protocol.{
 }
 import coop.rchain.casper.reporting.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
@@ -28,7 +28,6 @@ import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
 
@@ -84,14 +83,18 @@ object ReportingCasper {
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   def rhoReporter[F[_]: Concurrent: ContextShift: Parallel: BlockDagStorage: Log: Metrics: Span](
-      rspaceStore: RSpaceStore[F]
+      rspaceStore: RSpaceStore[F],
+      shardId: String
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       override def trace(block: BlockMessage): F[ReplayResult] =
         for {
-          reportingRspace  <- ReportingRuntime.createReportingRSpace(rspaceStore)
-          reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
-          preStateHash     = block.preStateHash
+          reportingRspace <- ReportingRuntime.createReportingRSpace(rspaceStore)
+          reportingRuntime <- ReportingRuntime.createReportingRuntime(
+                               reportingRspace,
+                               shardId
+                             )
+          preStateHash = block.preStateHash
 
           // Block with empty justifications is genesis which is build with turned off cost accounting
           withCostAccounting = block.justifications.nonEmpty
@@ -101,14 +104,15 @@ object ReportingCasper {
           _         <- reportingRuntime.setBlockData(blockdata)
 
           // Reset runtime (in-memory) state
-          _ <- reportingRuntime.reset(Blake2b256Hash.fromByteString(preStateHash))
+          _ <- reportingRuntime.reset(preStateHash.toBlake2b256Hash)
 
           // Replay block deploys with reporting
+          rand = BlockRandomSeed.randomGenerator(block)
           res <- replayDeploys(
                   reportingRuntime,
                   block.state.deploys,
                   block.state.systemDeploys,
-                  blockdata,
+                  rand,
                   withCostAccounting
                 )
         } yield res
@@ -117,26 +121,31 @@ object ReportingCasper {
           runtime: ReportingRuntime[F],
           terms: Seq[ProcessedDeploy],
           systemDeploys: Seq[ProcessedSystemDeploy],
-          blockData: BlockData,
+          rand: Blake2b512Random,
           withCostAccounting: Boolean
       ): F[ReplayResult] =
         for {
-          res <- terms.toList.traverse { term =>
-                  Log[F].info(s"Replay user deploy ${PrettyPrinter.buildString(term.deploy.sig)}") *>
-                    runtime
-                      .replayDeployE(withCostAccounting)(term)
-                      .semiflatMap(_ => runtime.getReport)
-                      .getOrElse(Seq.empty)
-                      .map(DeployReportResult(term, _))
+          res <- terms.zipWithIndex.toList.traverse {
+                  case (term, i) =>
+                    Log[F].info(s"Replay user deploy ${PrettyPrinter.buildString(term.deploy.sig)}") *>
+                      runtime
+                        .replayDeployE(withCostAccounting)(term, rand.splitByte(i.toByte))
+                        .semiflatMap(_ => runtime.getReport)
+                        .getOrElse(Seq.empty)
+                        .map(DeployReportResult(term, _))
                 }
-
-          sysRes <- systemDeploys.toList.traverse { term =>
-                     Log[F].info(s"Replay system deploy ${term.systemDeploy}") *>
-                       runtime
-                         .replayBlockSystemDeploy(blockData)(term)
-                         .semiflatMap(_ => runtime.getReport)
-                         .getOrElse(Seq.empty)
-                         .map(SystemDeployReportResult(term.systemDeploy, _))
+          termsLength = terms.size
+          sysRes <- systemDeploys.zipWithIndex.toList.traverse {
+                     case (term, i) =>
+                       Log[F].info(s"Replay system deploy ${term.systemDeploy}") *>
+                         runtime
+                           .replayBlockSystemDeploy(
+                             term,
+                             rand.splitByte((i + termsLength).toByte)
+                           )
+                           .semiflatMap(_ => runtime.getReport)
+                           .getOrElse(Seq.empty)
+                           .map(SystemDeployReportResult(term.systemDeploy, _))
                    }
 
           checkPoint <- runtime.createCheckpoint
@@ -172,6 +181,7 @@ object ReportingRuntime {
 
   def createReportingRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       reporting: RhoReportingRspace[F],
+      shardId: String,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[ReportingRuntime[F]] =
     for {
@@ -179,7 +189,12 @@ object ReportingRuntime {
       mergeChs <- Ref.of(Set[Par]())
       rhoEnv <- {
         implicit val c = cost
-        createRhoEnv(reporting, mergeChs, Genesis.NonNegativeMergeableTagName, extraSystemProcesses)
+        createRhoEnv(
+          reporting,
+          mergeChs,
+          BlockRandomSeed.nonNegativeMergeableTagName(shardId),
+          extraSystemProcesses
+        )
       }
       (reducer, blockRef) = rhoEnv
       runtime             = new ReportingRuntime[F](reducer, reporting, cost, blockRef, mergeChs)

@@ -2,12 +2,13 @@ package coop.rchain.casper.helper
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.rholang.Resources.{copyStorage, mkTestRNodeStoreManager}
-import coop.rchain.casper.rholang.Tools
+import coop.rchain.casper.rholang.{Resources, Tools}
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.util.GenesisBuilder.GenesisParameters
 import coop.rchain.crypto.PrivateKey
@@ -132,7 +133,8 @@ class RhoSpec(
   private def getResults(
       testObject: CompiledRholangSource[_],
       otherLibs: Seq[Signed[DeployData]],
-      timeout: FiniteDuration
+      timeout: FiniteDuration,
+      shardId: String
   ): Task[TestResult] =
     TestResultCollector[Task].flatMap { testResultCollector =>
       val genesis = GenesisBuilder.buildGenesis(genesisParameters)
@@ -143,7 +145,7 @@ class RhoSpec(
         .evalMap(
           RhoRuntime.createRuntime(
             _,
-            Genesis.NonNegativeMergeableTagName,
+            BlockRandomSeed.nonNegativeMergeableTagName(shardId),
             additionalSystemProcesses = testFrameworkContracts(testResultCollector)
           )
         )
@@ -155,7 +157,7 @@ class RhoSpec(
                 runtime,
                 otherLibs
               )
-          rand = Blake2b512Random(128)
+          rand = Blake2b512Random.defaultRandom
           _ <- TestUtil
                 .eval(testObject, runtime)(
                   implicitly,
@@ -206,7 +208,8 @@ class RhoSpec(
   }
 
   val result =
-    getResults(testObject, extraNonGenesisDeploys, executionTimeout).runSyncUnsafe(Duration.Inf)
+    getResults(testObject, extraNonGenesisDeploys, executionTimeout, genesisParameters._3.shardId)
+      .runSyncUnsafe(Duration.Inf)
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")

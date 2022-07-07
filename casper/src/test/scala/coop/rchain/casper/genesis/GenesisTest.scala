@@ -4,7 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.ValidatorIdentity
+import coop.rchain.casper.{BlockRandomSeed, ValidatorIdentity}
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
@@ -286,14 +286,19 @@ object GenesisTest {
     implicit val log                     = new LogStub[F]
 
     for {
-      kvsManager     <- Resources.mkTestRNodeStoreManager[F](storePath)
-      rStore         <- kvsManager.rSpaceStores
-      mStore         <- RuntimeManager.mergeableStore(kvsManager)
-      t              = RuntimeManager.noOpExecutionTracker
-      runtimeManager <- RuntimeManager[F](rStore, mStore, Genesis.NonNegativeMergeableTagName, t)
-      result         <- body(runtimeManager, genesisPath, log)
-      _              <- Sync[F].delay { storePath.recursivelyDelete() }
-      _              <- Sync[F].delay { gp.recursivelyDelete() }
+      kvsManager <- Resources.mkTestRNodeStoreManager[F](storePath)
+      rStore     <- kvsManager.rSpaceStores
+      mStore     <- RuntimeManager.mergeableStore(kvsManager)
+      t          = RuntimeManager.noOpExecutionTracker
+      runtimeManager <- RuntimeManager[F](
+                         rStore,
+                         mStore,
+                         BlockRandomSeed.nonNegativeMergeableTagName(rchainShardId),
+                         t
+                       )
+      result <- body(runtimeManager, genesisPath, log)
+      _      <- Sync[F].delay { storePath.recursivelyDelete() }
+      _      <- Sync[F].delay { gp.recursivelyDelete() }
     } yield result
   }
 

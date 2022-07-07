@@ -318,7 +318,7 @@ class Blake2b512RandomTest extends AnyFlatSpec with Matchers with Checkers with 
   /* Performance tests */
 
   "Performance test" should "show performance of random splitter" in {
-    val baseRnd = Blake2b512Random(128)
+    val baseRnd = Blake2b512Random.defaultRandom
 
     def run(size: Int) =
       (0 until size).foldLeft(baseRnd) {
@@ -339,7 +339,7 @@ class Blake2b512RandomTest extends AnyFlatSpec with Matchers with Checkers with 
   }
 
   it should "show performance of generating next random value" in {
-    val baseRnd = Blake2b512Random(128)
+    val baseRnd = Blake2b512Random.defaultRandom
 
     def run(size: Int) =
       (0 until size).foldLeft((List[Array[Byte]](), baseRnd)) {
@@ -363,7 +363,7 @@ class Blake2b512RandomTest extends AnyFlatSpec with Matchers with Checkers with 
 
   it should "show performance of random serializer" in {
     def generate(size: Int) = {
-      val baseRnd = Blake2b512Random(128)
+      val baseRnd = Blake2b512Random.defaultRandom
 
       (0 until size).foldLeft((List[Blake2b512Random](), baseRnd)) {
         case ((acc, rnd), _) =>

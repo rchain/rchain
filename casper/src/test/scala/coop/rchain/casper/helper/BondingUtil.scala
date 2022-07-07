@@ -20,10 +20,11 @@ object BondingUtil {
          |new retCh, PosCh, rl(`rho:registry:lookup`), stdout(`rho:io:stdout`), deployerId(`rho:rchain:deployerId`) in {
          |  rl!(`rho:rchain:pos`, *PosCh) |
          |  for(@(_, Pos) <- PosCh) {
-         |    @Pos!("bond", *deployerId, 1000, *retCh)
+         |    @Pos!("bond", *deployerId, $amount, *retCh)
          |  }
          |}
          |""".stripMargin,
-        shardId = shardId
+        shardId = shardId,
+        sec = privateKey
       )
 }

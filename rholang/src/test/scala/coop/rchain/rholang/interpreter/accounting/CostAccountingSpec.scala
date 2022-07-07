@@ -113,19 +113,11 @@ class CostAccountingSpec
       (runtime, replayRuntime, _) = spaces
       result <- {
         implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-        runtime.evaluate(
-          term,
-          initialPhlo,
-          Map.empty
-        )(rand) >>= { playResult =>
+        runtime.evaluate(term, initialPhlo, Map.empty, rand) >>= { playResult =>
           runtime.createCheckpoint >>= {
             case Checkpoint(root, log) =>
               replayRuntime.reset(root) >> replayRuntime.rig(log) >>
-                replayRuntime.evaluate(
-                  term,
-                  initialPhlo,
-                  Map.empty
-                )(rand) >>= { replayResult =>
+                replayRuntime.evaluate(term, initialPhlo, Map.empty, rand) >>= { replayResult =>
                 replayRuntime.checkReplayData.as((playResult, replayResult))
               }
           }

@@ -5,12 +5,14 @@ import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
-import coop.rchain.casper.rholang.{Resources, RuntimeManager, SystemDeployUtil}
+import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Secp256k1
@@ -23,7 +25,6 @@ import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.store.InMemoryStoreManager
@@ -43,7 +44,10 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
     kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
-    rm  <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm))
+    mergeableTag = BlockRandomSeed.nonNegativeMergeableTagName(
+      genesis.shardId
+    )
+    rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
   } yield rm
 
   def txRho(payer: String, payee: String) =
@@ -89,11 +93,15 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
     for {
       txDeploy    <- ConstructDeploy.sourceDeployNowF(txRho(payerAddr, payeeAddr), sec = payerKey)
       userDeploys = txDeploy :: Nil
-      systemDeploys = CloseBlockDeploy(
-        SystemDeployUtil.generateCloseDeployRandomSeed(validator, seqNum)
-      ) :: Nil
-      blockData = BlockData(blockNum, validator, seqNum)
-      r         <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, blockData)
+      blockData   = BlockData(blockNum, validator, seqNum)
+      rand = BlockRandomSeed.randomGenerator(
+        genesis.shardId,
+        blockNum,
+        validator,
+        baseState.toBlake2b256Hash
+      )
+      systemDeploys = CloseBlockDeploy(rand.splitByte(userDeploys.length.toByte)) :: Nil
+      r             <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, rand, blockData)
     } yield r
   }
 
@@ -428,9 +436,7 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
                           } yield blockIndex
                         }
                         .map(_.toMap)
-            dag             <- dagStore.getRepresentation
-            acceptedFinally = indices(baseBlock.blockHash).deployChains.toSet
-            rejectedFinally = Set.empty[DeployChainIndex]
+            dag <- dagStore.getRepresentation
             v <- BlockHashDagMerger.merge[Task](
                   mergingBlocks.map(b => b.blockHash).toSet,
                   Set(baseBlock.blockHash),

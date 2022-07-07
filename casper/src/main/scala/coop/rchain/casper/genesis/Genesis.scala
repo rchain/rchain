@@ -5,13 +5,14 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
-import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.{BlockRandomSeed, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.models.{BlockVersion, GPrivate, Par}
+import coop.rchain.models.BlockVersion
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 
 final case class Genesis(
     sender: PublicKey,
@@ -23,16 +24,6 @@ final case class Genesis(
 )
 
 object Genesis {
-
-  val NonNegativeMergeableTagName: Par = {
-    val rand = Tools.unforgeableNameRng(
-      StandardDeploys.nonNegativeNumberPubKey,
-      StandardDeploys.nonNegativeNumberTimestamp
-    )
-    import coop.rchain.models.rholang.implicits._
-    val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
-    GPrivate(ByteString.copyFrom(unforgeableByte))
-  }
 
   def defaultBlessedTerms(
       posParams: ProofOfStake,
@@ -72,9 +63,10 @@ object Genesis {
   ): F[BlockMessage] = {
     val blessedTerms =
       defaultBlessedTerms(genesis.proofOfStake, genesis.registry, genesis.vaults, genesis.shardId)
-
+    val blockData = BlockData(genesis.blockNumber, genesis.sender, 0)
+    val rand      = BlockRandomSeed.randomGenerator(genesis.shardId)
     RuntimeManager[F]
-      .computeGenesis(blessedTerms, genesis.blockNumber, genesis.sender)
+      .computeGenesis(blessedTerms, rand, blockData)
       .map {
         case (startHash, stateHash, processedDeploys) =>
           val unsignedBlock =

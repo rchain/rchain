@@ -7,6 +7,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
+import coop.rchain.models.syntax._
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -147,10 +148,6 @@ object BlockMessage {
     )
 
   def toProto(bm: BlockMessage): BlockMessageProto = {
-    // To guarantee the same hash lists and maps must be sorted
-    // - can be defined on common place
-    implicit val byteStringOrdering: Ordering[ByteString] =
-      Ordering.by[ByteString, Iterable[Byte]](_.toByteArray)(Ordering.Iterable[Byte])
     // Sorted justifications
     val sortedJustifications = bm.justifications.sorted
     // Sorted bonds map
@@ -472,7 +469,7 @@ object StoreNodeKey {
 
   def from(s: StoreNodeKeyProto): (Blake2b256Hash, Option[Byte]) = {
     // Key hash
-    val hashBytes = Blake2b256Hash.fromByteString(s.hash)
+    val hashBytes = s.hash.toBlake2b256Hash
     // Relative branch index / max 8-bit
     val idx = if (s.index == noneIndex) none[Byte] else s.index.toByte.some
     (hashBytes, idx)
@@ -520,8 +517,8 @@ object StoreItemsMessage {
     StoreItemsMessage(
       x.startPath.map(StoreNodeKey.from),
       x.lastPath.map(StoreNodeKey.from),
-      x.historyItems.map(y => (Blake2b256Hash.fromByteString(y.key), y.value)),
-      x.dataItems.map(y => (Blake2b256Hash.fromByteString(y.key), y.value))
+      x.historyItems.map(y => (y.key.toBlake2b256Hash, y.value)),
+      x.dataItems.map(y => (y.key.toBlake2b256Hash, y.value))
     )
 
   def toProto(x: StoreItemsMessage): StoreItemsMessageProto =

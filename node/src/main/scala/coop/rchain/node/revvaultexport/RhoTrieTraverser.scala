@@ -3,15 +3,21 @@ package coop.rchain.node.revvaultexport
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.casper.rholang.Tools
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models._
 import coop.rchain.models.syntax._
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.storage.serializePar
 import coop.rchain.rholang.interpreter.{RhoRuntime, RhoType}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Serialize
 
 import scala.annotation.tailrec
@@ -68,27 +74,21 @@ object RhoTrieTraverser {
         Seq(Expr(EListBody(EList(ps = nybList.map(n => Par(exprs = Seq(Expr(GInt(n.toLong)))))))))
     )
 
-  private def nodeMapList(map: Par, nybList: Vector[Int]) = {
+  private def nodeMapList(map: Par, storeTokenPar: Par, nybList: Vector[Int]) = {
     val mapWithNyb = Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(map, nodeList(nybList)))))))
-    nodeMapStore(mapWithNyb)
+    nodeMapStore(mapWithNyb, storeTokenPar)
   }
-  private def nodeMapStore(mapWithNyb: Par) =
-    Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenUnforgeable))))))
-
-  private val storeTokenUnforgeable: Par = {
-    val rand =
-      Tools.unforgeableNameRng(StandardDeploys.registryPubKey, StandardDeploys.registryTimestamp)
-    val target = LazyList.continually(rand.next()).drop(9).head
-    Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target))))))
-  }
+  private def nodeMapStore(mapWithNyb: Par, storeTokenPar: Par) =
+    Par(exprs = Seq(Expr(EListBody(EList(ps = Seq(mapWithNyb, storeTokenPar))))))
 
   private def TreeHashMapGetter[F[_]: Sync](
       mapPar: Par,
+      storeTokenPar: Par,
       nybList: Vector[Int],
       runtime: RhoRuntime[F]
   ) =
     for {
-      result <- runtime.getData(nodeMapList(mapPar, nybList))
+      result <- runtime.getData(nodeMapList(mapPar, storeTokenPar, nybList))
       r = result match {
         case head +: _ =>
           head.a.pars match {
@@ -111,8 +111,6 @@ object RhoTrieTraverser {
   type ReadParams[F[_]] = (
       Vector[Vector[Int]],
       Int,
-      Par,
-      RhoRuntime[F],
       Vector[ParMap]
   )
 
@@ -126,47 +124,48 @@ object RhoTrieTraverser {
   def traverseTrie[F[_]: Sync](
       depth: Int,
       mapPar: Par,
+      storeTokenPar: Par,
       runtime: RhoRuntime[F]
   ): F[Vector[ParMap]] = {
     val startParams: ReadParams[F] =
-      (Vector(Vector.empty), depth * 2, mapPar, runtime, Vector.empty)
-    startParams.tailRecM(traverseTrieRec[F])
+      (Vector(Vector.empty), depth * 2, Vector.empty)
+    startParams.tailRecM(traverseTrieRec[F](mapPar, storeTokenPar, runtime))
   }
 
   private def extendKey(head: Vector[Int], value: Long) =
     depthEach.filter(i => (value / powers(i)) % 2 != 0).map(i => head ++ Vector(i))
 
   private def traverseTrieRec[F[_]: Sync](
+      mapPar: Par,
+      storeTokenPar: Par,
+      runtime: RhoRuntime[F]
+  )(
       readParams: ReadParams[F]
   ): F[Either[ReadParams[F], Vector[ParMap]]] = {
-    val (keys, depth, mapPar, runtime, collectedResults) = readParams
+    val (keys, depth, collectedResults) = readParams
     keys match {
       case key +: keyRests =>
         for {
-          currentNode <- TreeHashMapGetter(mapPar, key, runtime)
+          currentNode <- TreeHashMapGetter(mapPar, storeTokenPar, key, runtime)
           result <- currentNode match {
                      case Some(Left(i)) =>
                        if (key.isEmpty)
                          Left(
                            keyRests ++ extendKey(key, i),
                            depth,
-                           mapPar,
-                           runtime,
                            collectedResults
                          ).pure[F]
                        else if (depth == key.length)
-                         Left(keyRests, depth, mapPar, runtime, collectedResults).pure[F]
+                         Left(keyRests, depth, collectedResults).pure[F]
                        else
                          Left(
                            keyRests ++ extendKey(key, i),
                            depth,
-                           mapPar,
-                           runtime,
                            collectedResults
                          ).pure[F]
                      case Some(Right(map)) =>
-                       Left(keyRests, depth, mapPar, runtime, map +: collectedResults).pure[F]
-                     case _ => Left(keyRests, depth, mapPar, runtime, collectedResults).pure[F]
+                       Left(keyRests, depth, map +: collectedResults).pure[F]
+                     case _ => Left(keyRests, depth, collectedResults).pure[F]
                    }
         } yield result
       case _ => collectedResults.asRight[ReadParams[F]].pure[F]

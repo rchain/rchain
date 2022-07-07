@@ -104,7 +104,7 @@ object Setup {
                  .createWithHistory[F](
                    rStores,
                    mergeStore,
-                   Genesis.NonNegativeMergeableTagName,
+                   BlockRandomSeed.nonNegativeMergeableTagName(conf.casper.shardName),
                    executionTracker
                  )
         } yield rm
@@ -116,7 +116,7 @@ object Setup {
         implicit val (bd, sp) = (blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
-          storeManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
+          storeManager.rSpaceStores.map(ReportingCasper.rhoReporter(_, conf.casper.shardName))
         } else
           ReportingCasper.noop.pure[F]
       }
@@ -265,7 +265,7 @@ object Setup {
       // Transaction API
       transactionAPI = Transaction[F](
         blockReportApi,
-        Par(unforgeables = Seq(Transaction.transferUnforgeable))
+        BlockRandomSeed.transferUnforgeable(conf.casper.shardName)
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, storeManager)
 

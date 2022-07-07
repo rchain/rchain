@@ -6,13 +6,13 @@ import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.{BlockExecutionTracker, StatefulExecutionTracker}
+import coop.rchain.casper.BlockExecutionTracker
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.casper.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.casper.rholang.types.{ReplayFailure, SystemDeploy}
 import coop.rchain.casper.syntax._
-import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
@@ -27,7 +27,6 @@ import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{
 import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
@@ -40,25 +39,23 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 trait RuntimeManager[F[_]] {
-  def captureResults(
-      startHash: StateHash,
-      deploy: Signed[DeployData]
-  ): F[Seq[Par]]
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
       withCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockNumber: Long,
-      sender: PublicKey
+      rand: Blake2b512Random,
+      blockData: BlockData
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Map[Validator, Long]]
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]]
@@ -110,12 +107,13 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   def computeState(startHash: StateHash)(
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     for {
       runtime  <- spawnRuntime
       _        <- terms.map(_.sig).toList.traverse(executionTracker.execStarted)
-      computed <- runtime.computeState(startHash, terms, systemDeploys, blockData)
+      computed <- runtime.computeState(startHash, terms, systemDeploys, rand, blockData)
       _ <- {
         val v = computed._2.map(tx => (tx.deploy.deploy.sig, tx.evalResult))
         v.toList.traverse((executionTracker.execComplete _).tupled)
@@ -142,11 +140,11 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockNumber: Long,
-      sender: PublicKey
+      rand: Blake2b512Random,
+      blockData: BlockData
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
     spawnRuntime
-      .flatMap(_.computeGenesis(terms, blockNumber))
+      .flatMap(_.computeGenesis(terms, rand, blockData))
       .flatMap {
         case (preState, stateHash, processed) =>
           val (processedDeploys, mergeableChs, _) =
@@ -158,7 +156,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
           this
             .saveMergeableChannels(
               postStateHash,
-              sender.bytes,
+              blockData.sender.bytes,
               seqNum = 0,
               mergeableChs,
               preStateHash
@@ -169,12 +167,14 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
       withCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
       val replayOp = replayRuntime
         .replayComputeState(startHash)(
+          rand,
           terms,
           systemDeploys,
           blockData,
@@ -191,11 +191,6 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
             .as(stateHash.toByteString)
       }.value
     }
-
-  def captureResults(
-      start: StateHash,
-      deploy: Signed[DeployData]
-  ): F[Seq[Par]] = spawnRuntime.flatMap(_.captureResults(start, deploy))
 
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
     spawnRuntime.flatMap(_.getActiveValidators(startHash))
@@ -231,14 +226,14 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
     spawnRuntime.flatMap { runtime =>
-      runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getDataPar(channel)
+      runtime.reset(hash.toBlake2b256Hash) >> runtime.getDataPar(channel)
     }
 
   def getContinuation(
       hash: StateHash
   )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
     spawnRuntime.flatMap { runtime =>
-      runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getContinuationPar(channels)
+      runtime.reset(hash.toBlake2b256Hash) >> runtime.getContinuationPar(channels)
     }
 
   def getHistoryRepo: RhoHistoryRepository[F] = historyRepo

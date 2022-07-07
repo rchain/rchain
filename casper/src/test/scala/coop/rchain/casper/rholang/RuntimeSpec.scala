@@ -1,7 +1,9 @@
 package coop.rchain.casper.rholang
 
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter.RhoRuntime
@@ -24,9 +26,13 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
 
     val kvm = InMemoryStoreManager[Task]()
 
+    val dummyShardId = "dummy"
     for {
-      store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
+      store <- kvm.rSpaceStores
+      runtime <- RhoRuntime.createRuntime(
+                  store,
+                  BlockRandomSeed.nonNegativeMergeableTagName(dummyShardId)
+                )
 
       /**
         * Root hashes compatible with RChain main net network
@@ -43,8 +49,8 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
       hardCodedHash = RuntimeManager.emptyStateHashFixed
       emptyRootHash <- runtime.emptyStateHash
 
-      emptyHashHardCoded = Blake2b256Hash.fromByteString(hardCodedHash)
-      emptyHash          = Blake2b256Hash.fromByteString(emptyRootHash)
+      emptyHashHardCoded = hardCodedHash.toBlake2b256Hash
+      emptyHash          = emptyRootHash.toBlake2b256Hash
     } yield emptyHashHardCoded shouldEqual emptyHash
   }
 
@@ -53,6 +59,7 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val logger: Log[Task]         = Log.log[Task]
     val kvm                                = InMemoryStoreManager[Task]()
+    val dummyShardId                       = "dummy"
 
     // fixed term , if the term changed, it is possible that the stateHash also changed.
     val contract =
@@ -72,13 +79,16 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
         |""".stripMargin
 
     // random seed should be always to the same to make sure everything is the same
-    implicit val random =
+    val random =
       Tools.rng(Blake2b256Hash.create(Array[Byte](1)).toByteString.toByteArray)
 
     for {
-      store      <- kvm.rSpaceStores
-      runtime    <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
-      r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
+      store <- kvm.rSpaceStores
+      runtime <- RhoRuntime.createRuntime(
+                  store,
+                  BlockRandomSeed.nonNegativeMergeableTagName(dummyShardId)
+                )
+      r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty, random)
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
       expectedHash = Blake2b256Hash.fromHex(

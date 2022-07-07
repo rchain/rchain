@@ -42,8 +42,11 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     * @param rand random seed for rholang execution
     * @return
     */
-  def evaluate(term: String, initialPhlo: Cost, normalizerEnv: Map[String, Par])(
-      implicit rand: Blake2b512Random
+  def evaluate(
+      term: String,
+      initialPhlo: Cost,
+      normalizerEnv: Map[String, Par],
+      rand: Blake2b512Random
   ): F[EvaluateResult]
 
   /**
@@ -159,8 +162,11 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
   ): F[Option[(TaggedContinuation, Seq[ListParWithRandom])]] =
     space.consume(channel, pattern, emptyContinuation, persist = false).map(unpackOption)
 
-  override def evaluate(term: String, initialPhlo: Cost, normalizerEnv: Map[String, Name])(
-      implicit rand: Blake2b512Random
+  override def evaluate(
+      term: String,
+      initialPhlo: Cost,
+      normalizerEnv: Map[String, Name],
+      rand: Blake2b512Random
   ): F[EvaluateResult] = {
     implicit val c: _cost[F]       = cost
     implicit val m                 = mergeChs
@@ -170,7 +176,7 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
       term,
       initialPhlo,
       normalizerEnv
-    )
+    )(rand)
   }
 
   override def reset(root: Blake2b256Hash): F[Unit] = space.reset(root)

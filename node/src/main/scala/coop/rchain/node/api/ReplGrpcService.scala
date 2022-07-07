@@ -36,8 +36,8 @@ object ReplGrpcService {
               for {
                 _ <- Sync[F].delay(printNormalizedTerm(term))
                 res <- {
-                  implicit val rand = Blake2b512Random(10)
-                  runtime.evaluate(source, Cost.UNSAFE_MAX, Map.empty[String, Par])
+                  val rand = Blake2b512Random.defaultRandom
+                  runtime.evaluate(source, Cost.UNSAFE_MAX, Map.empty[String, Par], rand)
                 }
                 prettyStorage <- if (printUnmatchedSendsOnly)
                                   StoragePrinter.prettyPrintUnmatchedSends(runtime)

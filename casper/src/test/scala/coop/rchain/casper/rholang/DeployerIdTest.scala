@@ -1,13 +1,17 @@
 package coop.rchain.casper.rholang
 
 import cats.effect.Resource
+import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.Resources._
-import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
-import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
+import coop.rchain.casper.util.GenesisBuilder.buildGenesis
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.casper.syntax._
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerId, Par}
@@ -20,11 +24,12 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class DeployerIdTest extends AnyFlatSpec with Matchers {
-  implicit val time           = new LogicalTime[Task]
-  implicit val log: Log[Task] = new Log.NOPLog[Task]()
+  implicit val time              = new LogicalTime[Task]
+  implicit val log: Log[Task]    = new Log.NOPLog[Task]()
+  private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
 
   val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deployer-id-runtime-manager-test")
+    mkRuntimeManager[Task]("deployer-id-runtime-manager-test", dummyMergeableName)
 
   "Deployer id" should "be equal to the deployer's public key" in effectTest {
     val sk = PrivateKey(
@@ -38,7 +43,7 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
                    sec = sk
                  )
         emptyStateHash = RuntimeManager.emptyStateHashFixed
-        result         <- mgr.captureResults(emptyStateHash, deploy)
+        result         <- mgr.spawnRuntime >>= { _.captureResults(emptyStateHash, deploy) }
         _              = result.size should be(1)
         _              = result.head should be(GDeployerId(pk): Par)
       } yield ()
@@ -86,9 +91,11 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
         block           <- node.addBlock(contract)
         stateHash       = block.postStateHash
         checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)
-        result          <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy)
-        _               = assert(result.size == 1)
-        _               = assert(result.head == (GBool(isAccessGranted): Par))
+        result <- node.runtimeManager.spawnRuntime >>= {
+                   _.captureResults(stateHash, checkAuthDeploy)
+                 }
+        _ = assert(result.size == 1)
+        _ = assert(result.head == (GBool(isAccessGranted): Par))
       } yield ()
     }
   }

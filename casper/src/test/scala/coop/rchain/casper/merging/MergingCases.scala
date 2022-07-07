@@ -2,12 +2,12 @@ package coop.rchain.casper.merging
 
 import cats.effect.Resource
 import cats.syntax.all._
+import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
-import coop.rchain.casper.rholang.{Resources, RuntimeManager, SystemDeployUtil}
+import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
@@ -30,7 +30,10 @@ class MergingCases extends AnyFlatSpec with Matchers {
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
     kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
-    rm  <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm))
+    mergeableTag = BlockRandomSeed.nonNegativeMergeableTagName(
+      genesis.shardId
+    )
+    rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
   } yield rm
 
   /**
@@ -52,23 +55,15 @@ class MergingCases extends AnyFlatSpec with Matchers {
           d1          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer1Key)
           d2          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer2Key)
           userDeploys = Seq(d1, d2)
-          systemDeploys = CloseBlockDeploy(
-            SystemDeployUtil
-              .generateCloseDeployRandomSeed(
-                stateTransitionCreator,
-                seqNum
-              )
-          ) :: Nil
           blockData = BlockData(
             blockNum,
             stateTransitionCreator,
             seqNum
           )
-          r <- runtimeManager.computeState(baseState)(
-                userDeploys,
-                systemDeploys,
-                blockData
-              )
+          rand                                 = BlockRandomSeed.randomGenerator(genesis)
+          clodeBlockDeployIndex                = 3
+          systemDeploys                        = CloseBlockDeploy(rand.splitByte(clodeBlockDeployIndex.toByte)) :: Nil
+          r                                    <- runtimeManager.computeState(baseState)(userDeploys, systemDeploys, rand, blockData)
           (postStateHash, processedDeploys, _) = r
           _                                    = processedDeploys.size shouldBe 2
 

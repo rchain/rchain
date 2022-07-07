@@ -5,6 +5,8 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil._
@@ -22,6 +24,7 @@ import coop.rchain.models.PCost
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
@@ -58,14 +61,22 @@ class InterpreterUtilTest
   ] =
     computeParentsPostState(parents, dummyParentsPreState)
       .flatMap(
-        preState =>
+        preState => {
+          val rand = BlockRandomSeed.randomGenerator(
+            genesis.shardId,
+            blockNumber,
+            genesisContext.validatorPks.head,
+            preState._1.toBlake2b256Hash
+          )
           InterpreterUtil
             .computeDeploysCheckpoint[F](
               deploys,
               List.empty[SystemDeploy],
+              rand,
               BlockData(blockNumber, genesisContext.validatorPks.head, seqNum),
               preState
             )
+        }
       )
       .attempt
 
@@ -334,7 +345,10 @@ class InterpreterUtilTest
       val processedDeploys =
         deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, false))
       val invalidHash = ByteString.EMPTY
-      mkRuntimeManager[Task]("interpreter-util-test").use { implicit runtimeManager =>
+      mkRuntimeManager[Task](
+        "interpreter-util-test",
+        BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId)
+      ).use { implicit runtimeManager =>
         for {
           block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
           validateResult   <- validateBlockCheckpoint[Task](block)
@@ -360,7 +374,8 @@ class InterpreterUtilTest
     for {
       deploysCheckpoint <- computeDeploysCheckpoint[Task](
                             Seq(genesis.blockHash),
-                            deploys
+                            deploys,
+                            blockNumber = 1L
                           )
       Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
       block <- createBlock[Task](
@@ -406,7 +421,8 @@ class InterpreterUtilTest
       for {
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
                               Seq(genesis.blockHash),
-                              deploys
+                              deploys,
+                              1L
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
@@ -456,7 +472,8 @@ class InterpreterUtilTest
       for {
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
                               Seq(genesis.blockHash),
-                              deploys
+                              deploys,
+                              1L
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
@@ -503,7 +520,8 @@ class InterpreterUtilTest
       for {
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
                               Seq(genesis.blockHash),
-                              deploys
+                              deploys,
+                              1L
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
@@ -543,7 +561,7 @@ class InterpreterUtilTest
           deploysCheckpoint <- computeDeploysCheckpoint[Task](
                                 Seq(genesis.blockHash),
                                 deploys,
-                                i + 1L,
+                                1L,
                                 i + 1L
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
@@ -570,7 +588,8 @@ class InterpreterUtilTest
       for {
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
                               Seq(genesis.blockHash),
-                              deploys
+                              deploys,
+                              1L
                             )
         Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         //create single deploy with log that includes excess comm events
@@ -616,7 +635,7 @@ class InterpreterUtilTest
           deploysCheckpoint <- computeDeploysCheckpoint[Task](
                                 Seq(genesis.blockHash),
                                 deploys,
-                                i + 1L,
+                                1L,
                                 i + 1L
                               )
           Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint

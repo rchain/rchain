@@ -6,6 +6,7 @@ import cats.syntax.all._
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
@@ -257,7 +258,9 @@ trait BasicMergeabilityRules extends ComputeMerge {
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val logger: Log[Task]         = Log.log[Task]
+    val baseDeployRand                     = Blake2b512Random.defaultRandom
     computeMergeCase[Task](
+      baseDeployRand,
       Seq(baseDeploy),
       Seq(leftDeploy),
       Seq(rightDeploy),
