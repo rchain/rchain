@@ -33,9 +33,10 @@ class MultiParentCasperReportingSpec extends AnyFlatSpec with Matchers with Insp
       import coop.rchain.rholang.interpreter.storage._
 
       for {
-        kvm             <- Resources.mkTestRNodeStoreManager[Effect](node.dataDir)
-        rspaceStore     <- kvm.rSpaceStores
-        reportingCasper = ReportingCasper.rhoReporter[Effect](rspaceStore)
+        kvm         <- Resources.mkTestRNodeStoreManager[Effect](node.dataDir)
+        rspaceStore <- kvm.rSpaceStores
+        reportingCasper = ReportingCasper
+          .rhoReporter[Effect](rspaceStore, this.genesis.genesisBlock.shardId)
         deploy = ConstructDeploy
           .sourceDeployNow(correctRholang, shardId = this.genesis.genesisBlock.shardId)
         signedBlock <- node.addBlock(deploy)

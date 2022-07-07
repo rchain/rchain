@@ -3,16 +3,16 @@ package coop.rchain.rholang.interpreter
 import cats.Parallel
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoTuplespace}
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.{ISpaceStub, _}
@@ -42,9 +42,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       urnMap: Map[String, Par]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
     val emptyMergeableRef = Ref.unsafe[M, Set[Par]](Set.empty)
-    val dummyMergeableTag = Par(
-      unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.EMPTY))))
-    )
+    val dummyMergeableTag = Name(Array[Byte]())
     RholangAndScalaDispatcher(
       tuplespace,
       dispatchTable,
@@ -113,7 +111,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
           (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
         ]](OutOfPhlogistonsError)
     }
-    implicit val rand        = Blake2b512Random(128)
+    implicit val rand        = Blake2b512Random.defaultRandom
     implicit val cost        = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
     val (_, chargingReducer) = createDispatcher(iSpace, Map.empty, Map.empty)
     val send                 = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))

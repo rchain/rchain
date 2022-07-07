@@ -30,7 +30,7 @@ trait EvalBenchStateBase {
   lazy val spaces                 = Resources.createRuntimes[Task](store).unsafeRunSync
   val (runtime, replayRuntime, _) = spaces
 
-  val rand: Blake2b512Random = Blake2b512Random(128)
+  val rand: Blake2b512Random = Blake2b512Random.defaultRandom
   var term: Option[Par]      = None
 
   @Setup

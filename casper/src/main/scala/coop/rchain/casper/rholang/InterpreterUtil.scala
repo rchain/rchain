@@ -18,6 +18,8 @@ import coop.rchain.casper.protocol.{
 import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
 import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -83,6 +85,7 @@ object InterpreterUtil {
                      maxSeqNums = Map[Validator, Long](block.sender -> 0L)
                    ).pure[F]
                  }
+      rand                = BlockRandomSeed.randomGenerator(block)
       computedParentsInfo <- computeParentsPostState(parents, preState)
       _ <- Log[F].info(
             s"Computed parents post state for ${PrettyPrinter.buildString(block, short = true)}."
@@ -110,7 +113,7 @@ object InterpreterUtil {
             .as(InvalidRejectedDeploy.asLeft)
         } else {
           for {
-            replayResult <- replayBlock(incomingPreStateHash, block)
+            replayResult <- replayBlock(incomingPreStateHash, block, rand)
             result       <- handleErrors(block.postStateHash, replayResult)
           } yield result
         }
@@ -163,6 +166,7 @@ object InterpreterUtil {
                      maxSeqNums = Map[Validator, Long](block.sender -> 0L)
                    ).pure[F]
                  }
+      rand                = BlockRandomSeed.randomGenerator(block)
       computedParentsInfo <- computeParentsPostState(parents, preState)
       _ <- Log[F].info(
             s"Computed parents post state for ${PrettyPrinter.buildString(block, short = true)}."
@@ -190,7 +194,7 @@ object InterpreterUtil {
             .as(InvalidRejectedDeploy.asLeft)
         } else {
           for {
-            replayResult <- replayBlock(incomingPreStateHash, block)
+            replayResult <- replayBlock(incomingPreStateHash, block, rand)
             result       <- handleErrors(block.postStateHash, replayResult)
           } yield result
         }
@@ -200,7 +204,8 @@ object InterpreterUtil {
 
   private def replayBlock[F[_]: Sync: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
       initialStateHash: StateHash,
-      block: BlockMessage
+      block: BlockMessage,
+      rand: Blake2b512Random
   ): F[Either[ReplayFailure, StateHash]] =
     Span[F].trace(ReplayBlockMetricsSource) {
       val internalDeploys       = block.state.deploys
@@ -213,6 +218,7 @@ object InterpreterUtil {
           .replayComputeState(initialStateHash)(
             internalDeploys,
             internalSystemDeploys,
+            rand,
             blockData,
             withCostAccounting
           )
@@ -309,14 +315,19 @@ object InterpreterUtil {
   def computeDeploysCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
+      rand: Blake2b512Random,
       blockData: BlockData,
       computedParentsInfo: (StateHash, Seq[ByteString])
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])] =
     Span[F].trace(ComputeDeploysCheckpointMetricsSource) {
       val (preStateHash, rejectedDeploys) = computedParentsInfo
       for {
-        result <- RuntimeManager[F].computeState(preStateHash)(deploys, systemDeploys, blockData)
-
+        result <- RuntimeManager[F].computeState(preStateHash)(
+                   deploys,
+                   systemDeploys,
+                   rand,
+                   blockData
+                 )
         (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (
         preStateHash,

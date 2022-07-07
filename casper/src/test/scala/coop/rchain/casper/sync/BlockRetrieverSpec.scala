@@ -6,9 +6,9 @@ import coop.rchain.casper.engine
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.protocol._
+import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper._
-import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{createRPConfAsk, LogStub, TransportLayerStub}

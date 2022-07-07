@@ -1,9 +1,13 @@
 package coop.rchain.casper.rholang
 
 import cats.effect.Resource
+import cats.syntax.all._
 import cats.implicits.catsSyntaxApplicativeId
+import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.rholang.Resources._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
@@ -22,10 +26,11 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.duration._
 
 class DeployIdTest extends AnyFlatSpec with Matchers {
-  implicit val log: Log[Task] = new Log.NOPLog[Task]()
+  implicit val log: Log[Task]    = new Log.NOPLog[Task]()
+  private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
 
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deploy-id-runtime-manager-test")
+    mkRuntimeManager[Task]("deploy-id-runtime-manager-test", dummyMergeableName)
 
   private val sk = ConstructDeploy.defaultSec
 
@@ -53,7 +58,7 @@ class DeployIdTest extends AnyFlatSpec with Matchers {
           mgr =>
             for {
               hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, d)
+              res  <- mgr.spawnRuntime >>= { _.captureResults(hash, d) }
             } yield res
         )
         .runSyncUnsafe(10.seconds)
@@ -79,8 +84,9 @@ class DeployIdTest extends AnyFlatSpec with Matchers {
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         block <- node.addBlock(contract)
-        result <- node.runtimeManager
-                   .captureResults(block.postStateHash, contractCall)
+        result <- node.runtimeManager.spawnRuntime >>= {
+                   _.captureResults(block.postStateHash, contractCall)
+                 }
         _ = assert(result.size == 1)
         _ = assert(result.head == (GBool(false): Par))
       } yield ()

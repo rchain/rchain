@@ -4,28 +4,18 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.casper.rholang.Tools
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GString}
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
-import coop.rchain.models.{
-  BindPattern,
-  Bundle,
-  ETuple,
-  Expr,
-  GPrivate,
-  GUnforgeable,
-  ListParWithRandom,
-  Par,
-  TaggedContinuation
-}
+import coop.rchain.models.{ETuple, Expr}
 import coop.rchain.rholang.interpreter.RhoRuntime
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
@@ -39,18 +29,13 @@ object StateBalances {
   // the genesis vaultMap unforgeable name is no longer fixed for every chain.
   // It is undetermined and it depends on the genesis ceremony.
   // But we could try to get it from the extractState we added.
-  def getGenesisVaultMapPar[F[_]: Sync](runtime: RhoRuntime[F]): F[Par] = {
-    val revVault = {
-      val seedForRevVault = Tools.unforgeableNameRng(
-        StandardDeploys.revVaultPubKey,
-        StandardDeploys.revVaultTimestamp
-      )
-      val unfogeableBytes = seedForRevVault.next()
-      Par(unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(unfogeableBytes.toByteString)))))
-    }
-
+  def getGenesisVaultMapPar[F[_]: Sync](
+      shardId: String,
+      runtime: RhoRuntime[F]
+  ): F[Par] = {
+    val revVaultUnf        = BlockRandomSeed.revVaultUnforgeable(shardId)
     val extractStateString = Par(exprs = Seq(Expr(GString("extractState"))))
-    val e                  = Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(revVault, extractStateString))))))
+    val e                  = Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(revVaultUnf, extractStateString))))))
     for {
       c <- runtime.getContinuation(Seq(e))
       unf = c.head.continuation.taggedCont.parBody.get.body.sends.head.data.head.exprs.head.getEMapBody.ps
@@ -60,6 +45,7 @@ object StateBalances {
   }
 
   def read[F[_]: Concurrent: Parallel: ContextShift](
+      shardId: String,
       blockHash: String,
       vaultTreeHashMapDepth: Int,
       dataDir: Path
@@ -82,13 +68,12 @@ object StateBalances {
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
-      vaultChannel               <- getGenesisVaultMapPar(rhoRuntime)
-      _ <- rhoRuntime.reset(
-            Blake2b256Hash.fromByteString(block.postStateHash)
-          )
+      vaultChannel               <- getGenesisVaultMapPar(shardId, rhoRuntime)
+      _                          <- rhoRuntime.reset(block.postStateHash.toBlake2b256Hash)
       balances <- VaultBalanceGetter.getAllVaultBalance(
                    vaultTreeHashMapDepth,
                    vaultChannel,
+                   BlockRandomSeed.storeTokenUnforgeable(shardId),
                    rhoRuntime
                  )
     } yield balances

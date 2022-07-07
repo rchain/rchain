@@ -1,11 +1,15 @@
 package coop.rchain.casper.batch1
 
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.models.syntax._
 import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
@@ -66,10 +70,15 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
            |}
          """.stripMargin
 
-      def calculateUnforgeableName(timeStamp: Long): String =
-        Base16.encode(
-          Tools.unforgeableNameRng(Secp256k1.toPublic(ConstructDeploy.defaultSec), timeStamp).next()
-        )
+      def calculateDeployUnforgeableName(block: BlockMessage): String = {
+        val rand              = BlockRandomSeed.randomGenerator(block)
+        val deployIndex: Byte = 0
+        rand
+          .splitByte(deployIndex)
+          .splitByte(BlockRandomSeed.UserDeploySplitIndex)
+          .next()
+          .toHexString
+      }
 
       for {
         registerDeploy <- ConstructDeploy
@@ -77,7 +86,7 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
         block0 <- node.addBlock(registerDeploy)
         registryId <- getDataAtPrivateChannel[Effect](
                        block0,
-                       calculateUnforgeableName(registerDeploy.data.timestamp)
+                       calculateDeployUnforgeableName(block0)
                      )
         callDeploy <- ConstructDeploy.sourceDeployNowF(
                        callSource(registryId.head),
@@ -86,7 +95,7 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
         block1 <- node.addBlock(callDeploy)
         data <- getDataAtPrivateChannel[Effect](
                  block1,
-                 calculateUnforgeableName(callDeploy.data.timestamp)
+                 calculateDeployUnforgeableName(block1)
                )
         _ = data shouldBe Seq("\"Hello, World!\"")
       } yield ()

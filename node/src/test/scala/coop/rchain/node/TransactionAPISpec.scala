@@ -1,17 +1,17 @@
 package coop.rchain.node
 
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.Resources
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, GenesisContext}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.models.Par
 import coop.rchain.node.web.{PreCharge, Refund, Transaction, UserDeploy}
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.models.syntax._
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -28,10 +28,11 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
       val readonly  = nodes(1)
       import readonly._
       for {
-        kvm             <- Resources.mkTestRNodeStoreManager[Task](readonly.dataDir)
-        rspaceStore     <- kvm.rSpaceStores
-        reportingCasper = ReportingCasper.rhoReporter[Task](rspaceStore)
-        reportingStore  <- ReportStore.store[Task](kvm)
+        kvm         <- Resources.mkTestRNodeStoreManager[Task](readonly.dataDir)
+        rspaceStore <- kvm.rSpaceStores
+        reportingCasper = ReportingCasper
+          .rhoReporter[Task](rspaceStore, this.genesis.genesisBlock.shardId)
+        reportingStore <- ReportStore.store[Task](kvm)
         blockReportAPI = BlockReportApi[Task](
           reportingCasper,
           reportingStore,
@@ -46,12 +47,14 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
                  )
         transactionAPI = Transaction[Task](
           blockReportAPI,
-          Par(unforgeables = Seq(Transaction.transferUnforgeable))
+          BlockRandomSeed.transferUnforgeable(
+            this.genesis.genesisBlock.shardId
+          )
         )
         transferBlock <- validator.addBlock(deploy)
         _             <- readonly.addBlock(transferBlock)
         transactions <- transactionAPI
-                         .getTransaction(Blake2b256Hash.fromByteString(transferBlock.blockHash))
+                         .getTransaction(transferBlock.blockHash.toBlake2b256Hash)
 
       } yield (transactions, transferBlock)
     }

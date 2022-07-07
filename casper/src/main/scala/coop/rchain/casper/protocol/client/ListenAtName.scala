@@ -7,6 +7,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.rholang.InterpreterUtil
 import coop.rchain.models.{GPrivate, NormalizerEnv, Par}
 import coop.rchain.shared.Time
+import coop.rchain.models.syntax._
+import coop.rchain.rholang.interpreter.RhoType.Name
 
 object ListenAtName {
   sealed trait Name
@@ -41,8 +43,7 @@ object ListenAtName {
         InterpreterUtil.mkTerm(content, NormalizerEnv.Empty)
       case PrivName(content) =>
         Sync[F].delay {
-          val par: Par = GPrivate(ByteString.copyFrom(content.getBytes))
-          par
+          Name(content.getBytes)
         }
     }
   }

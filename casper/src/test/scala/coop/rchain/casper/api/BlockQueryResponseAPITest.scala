@@ -7,6 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkRuntimeManager
@@ -34,8 +35,9 @@ class BlockQueryResponseAPITest
   implicit val spanEff = NoopSpan[Task]()
   implicit val log     = Log.log[Task]
 
+  private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("block-query-response-api-test")
+    mkRuntimeManager[Task]("block-query-response-api-test", dummyMergeableName)
 
   implicit val metricsEff           = new Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task] = NoopSpan[Task]()

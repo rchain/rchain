@@ -39,9 +39,9 @@ final class RhoRuntimeOps[F[_]: Sync](
       initialPhlo: Cost,
       normalizerEnv: Map[String, Par]
   ): F[EvaluateResult] = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(128)
+    val rand: Blake2b512Random = Blake2b512Random.defaultRandom
     runtime.createSoftCheckpoint >>= { checkpoint =>
-      runtime.evaluate(term, initialPhlo, normalizerEnv).attempt >>= {
+      runtime.evaluate(term, initialPhlo, normalizerEnv, rand).attempt >>= {
         case Right(evaluateResult) =>
           if (evaluateResult.errors.nonEmpty)
             runtime.revertToSoftCheckpoint(checkpoint).as(evaluateResult)

@@ -1,13 +1,17 @@
 package coop.rchain.node.mergeablity
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import cats.implicits.catsSyntaxApplicative
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
+import coop.rchain.models.{GPrivate, GUnforgeable, Par}
 import coop.rchain.node.revvaultexport.RhoTrieTraverser
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -19,6 +23,8 @@ import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
+
+import scala.collection.compat.immutable.LazyList
 
 final case class KeyValue(key: String, value: String)
 final case class UpdatingKeyValue(key: String, oriValue: String, updatingValue: String) {
@@ -429,6 +435,7 @@ class TreeHashMapMergeabilitySpec
 
   def getAllKeyValueFromTree[F[_]: Sync: Span: Log](
       runtime: RhoRuntime[F],
+      storeTokenPar: Par,
       depth: Int,
       stateHash: Blake2b256Hash
   ): F[Map[ByteString, String]] =
@@ -438,7 +445,7 @@ class TreeHashMapMergeabilitySpec
                          stateHash.toByteString
                        )
       treeMapHandle = treeMapHandleR.head
-      maps          <- RhoTrieTraverser.traverseTrie(depth, treeMapHandle, runtime)
+      maps          <- RhoTrieTraverser.traverseTrie(depth, treeMapHandle, storeTokenPar, runtime)
       result = RhoTrieTraverser.vecParMapToMap(
         maps,
         p => p.exprs.head.getGByteArray,
@@ -485,14 +492,29 @@ class TreeHashMapMergeabilitySpec
       phloLimit = Cost.UNSAFE_MAX.value,
       sec = ConstructDeploy.defaultSec2
     )
-    val registry = Registry(GenesisBuilder.defaultSystemContractPubKey)
+    val registry       = Registry(GenesisBuilder.defaultSystemContractPubKey)
+    val baseDeployRand = Blake2b512Random.defaultRandom
+    val registryRand   = baseDeployRand.splitByte(BlockRandomSeed.UserDeploySplitIndex)
+    val storeTokenPar = {
+      val target = LazyList.continually(registryRand.next()).drop(9).head
+      Par(
+        unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.copyFrom(target)))))
+      )
+
+    }
     computeMergeCase[Task](
+      baseDeployRand,
       Seq(StandardDeploys.registryGenerator(registry, SHARD_ID), baseDeploy),
       Seq(leftDeploy),
       Seq(rightDeploy),
       (runtime, _, mergedState) =>
         for {
-          mergedTreeMap <- getAllKeyValueFromTree(runtime, depth = treeHashMapDepth, mergedState._1)
+          mergedTreeMap <- getAllKeyValueFromTree(
+                            runtime,
+                            storeTokenPar,
+                            depth = treeHashMapDepth,
+                            mergedState._1
+                          )
           _ <- Sync[Task]
                 .raiseError(new Exception(s"Mergeable case failed with :${mergedState}"))
                 .whenA(mergedState._2.nonEmpty && !isConflict)

@@ -3,13 +3,15 @@ package coop.rchain.casper.rholang
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
-import coop.rchain.casper.genesis.Genesis
+import coop.rchain.models.syntax._
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
+import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.mb
@@ -40,7 +42,7 @@ object Resources {
 
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
       prefix: String,
-      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
+      mergeableTagName: Par
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
     mkTempDir[F](prefix)
       .evalMap(mkTestRNodeStoreManager[F])
@@ -50,7 +52,7 @@ object Resources {
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
   def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
       kvm: KeyValueStoreManager[F],
-      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
+      mergeableTagName: Par
   )(
       implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
@@ -68,27 +70,6 @@ object Resources {
                          RuntimeManager.noOpExecutionTracker[F]
                        )
     } yield runtimeManager
-  }
-
-  def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: Parallel: ContextShift](
-      kvm: KeyValueStoreManager[F]
-  )(
-      implicit scheduler: Scheduler
-  ): F[(RuntimeManager[F], RhoHistoryRepository[F])] = {
-    implicit val log               = Log.log[F]
-    implicit val metricsEff        = new metrics.Metrics.MetricsNOP[F]
-    implicit val noopSpan: Span[F] = NoopSpan[F]()
-
-    for {
-      rStore <- kvm.rSpaceStores
-      mStore <- RuntimeManager.mergeableStore(kvm)
-      runtimeManagerWithHistory <- RuntimeManager.createWithHistory(
-                                    rStore,
-                                    mStore,
-                                    Genesis.NonNegativeMergeableTagName,
-                                    RuntimeManager.noOpExecutionTracker[F]
-                                  )
-    } yield runtimeManagerWithHistory
   }
 
   def copyStorage[F[_]: Sync](

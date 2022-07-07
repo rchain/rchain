@@ -2,13 +2,14 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.ValidatorIdentity
+import coop.rchain.casper.{BlockRandomSeed, ValidatorIdentity}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
@@ -170,11 +171,16 @@ object GenesisBuilder {
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
     (for {
-      kvsManager     <- mkTestRNodeStoreManager[Task](storageDirectory)
-      rStore         <- kvsManager.rSpaceStores
-      mStore         <- RuntimeManager.mergeableStore(kvsManager)
-      t              = RuntimeManager.noOpExecutionTracker[Task]
-      runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName, t)
+      kvsManager <- mkTestRNodeStoreManager[Task](storageDirectory)
+      rStore     <- kvsManager.rSpaceStores
+      mStore     <- RuntimeManager.mergeableStore(kvsManager)
+      t          = RuntimeManager.noOpExecutionTracker[Task]
+      runtimeManager <- RuntimeManager(
+                         rStore,
+                         mStore,
+                         BlockRandomSeed.nonNegativeMergeableTagName(parameters._3.shardId),
+                         t
+                       )
       // First bonded validator is the creator
       creator = ValidatorIdentity(parameters._1.head._1)
       genesis <- {

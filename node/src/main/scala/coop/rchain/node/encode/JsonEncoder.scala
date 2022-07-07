@@ -149,5 +149,5 @@ object JsonEncoder {
 
   // FIXME blake2b512Random decode. Question Is that really neccessary?
   implicit val decodeDummyBlake2b512Random: Decoder[Blake2b512Random] =
-    Decoder.decodeUnit.map[Blake2b512Random](_ => Blake2b512Random(1))
+    Decoder.decodeUnit.map[Blake2b512Random](_ => Blake2b512Random.defaultRandom)
 }

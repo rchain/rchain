@@ -64,15 +64,8 @@ class BondedStatusAPITest
 
   "bondStatus" should "return true for newly bonded validator" in effectTest {
     TestNode.networkEff(genesisContext, networkSize = 4).use {
-      case nodes @ n1 +: n2 +: n3 +: n4 +: _ =>
+      case nodes @ n1 +: _ +: _ +: n4 +: _ =>
         for {
-          produceDeploys <- (0 until 3).toList.traverse(
-                             i =>
-                               basicDeployData[Task](
-                                 i,
-                                 shardId = genesisContext.genesisBlock.shardId
-                               )
-                           )
           bondDeploy <- BondingUtil.bondingDeploy[Task](
                          1000,
                          n4.validatorIdOpt.get.privateKey,
@@ -81,14 +74,6 @@ class BondedStatusAPITest
 
           _  <- bondedStatus(n1)(n4.validatorIdOpt.get.publicKey, genesisContext.genesisBlock) shouldBeF false
           b1 <- n1.propagateBlock(bondDeploy)(nodes: _*)
-          b2 <- n2.propagateBlock(produceDeploys(0))(nodes: _*)
-
-          // n4 is still not bonded since b1 is not finalized yet
-          // TODO relying on finalization here is not a good thing, consider adjusting test to just test bonding
-          _ <- bondedStatus(n1)(n4.validatorIdOpt.get.publicKey, genesisContext.genesisBlock) shouldBeF false
-
-          b3 <- n3.propagateBlock(produceDeploys(1))(nodes: _*)
-          b4 <- n1.propagateBlock(produceDeploys(2))(nodes: _*)
 
           // b1 is now finalized, hence n4 is now bonded
           _ <- bondedStatus(n1)(n4.validatorIdOpt.get.publicKey, b1) shouldBeF true

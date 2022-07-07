@@ -1,18 +1,25 @@
 package coop.rchain.node.revvaultexport
 
 import cats.effect.Concurrent
+import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.syntax._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
+import coop.rchain.models.{GPrivate, GUnforgeable, Par}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import monix.eval.Task
+import coop.rchain.models.syntax._
+import coop.rchain.rholang.interpreter.RhoType.Name
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 
+import scala.collection.compat.immutable.LazyList
 import scala.util.Random
 
 class RhoTrieTraverserTest extends AnyFlatSpec {
@@ -64,8 +71,17 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
       case (runtime, _, _) =>
         for {
           hash1 <- runtime.emptyStateHash
-          _     <- runtime.reset(Blake2b256Hash.fromByteString(hash1))
-          rd    <- runtime.processDeploy(StandardDeploys.registryGenerator(registry, SHARD_ID))
+          _     <- runtime.reset(hash1.toBlake2b256Hash)
+          rand  = Blake2b512Random.defaultRandom
+          storeToken = {
+            val r      = rand.copy()
+            val target = LazyList.continually(r.next()).drop(9).head
+            Name(target)
+          }
+          rd <- runtime.processDeploy(
+                 StandardDeploys.registryGenerator(registry, SHARD_ID),
+                 rand
+               )
           check <- runtime.createCheckpoint
           _     <- runtime.reset(check.root)
           initialTrieRes <- runtime.processDeploy(
@@ -74,7 +90,8 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
                                  trieInitializedRho,
                                  1L,
                                  phloLimit = 50000000
-                               )
+                               ),
+                             Blake2b512Random.defaultRandom
                            )
           (initialTrie, _) = initialTrieRes
           _                = assert(!initialTrie.isFailed)
@@ -85,7 +102,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
                            )
           _             <- runtime.reset(check2.root)
           trieMapHandle = trieMapHandleR.head
-          maps          <- RhoTrieTraverser.traverseTrie(trieDepth, trieMapHandle, runtime)
+          maps          <- RhoTrieTraverser.traverseTrie(trieDepth, trieMapHandle, storeToken, runtime)
           goodMap = RhoTrieTraverser.vecParMapToMap(
             maps,
             p => p.exprs.head.getGByteArray,

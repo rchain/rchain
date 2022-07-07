@@ -5,10 +5,13 @@ import cats.effect.{Resource, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Functor, Id}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.sysdeploys._
 import coop.rchain.casper.rholang.types._
+import coop.rchain.models.syntax._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.Catscontrib._
@@ -58,39 +61,69 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
-  val genesisContext = GenesisBuilder.buildGenesis()
-  val genesis        = genesisContext.genesisBlock
+  val genesisContext  = GenesisBuilder.buildGenesis()
+  val genesis         = genesisContext.genesisBlock
+  val genesisBlockNum = genesis.blockNumber
+  val genesisSeqNum   = genesis.seqNum
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     Resources
       .copyStorage[Task](genesisContext.storageDirectory)
       .evalMap(Resources.mkTestRNodeStoreManager[Task])
-      .evalMap(Resources.mkRuntimeManagerAt[Task](_))
+      .evalMap(
+        Resources
+          .mkRuntimeManagerAt[Task](_, BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId))
+      )
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
       deploy: Signed[DeployData],
       stateHash: StateHash
-  ): F[(StateHash, ProcessedDeploy)] =
+  ): F[(StateHash, ProcessedDeploy)] = {
+    val rand = BlockRandomSeed.randomGenerator(
+      genesis.shardId,
+      genesisBlockNum,
+      genesisContext.validatorPks.head,
+      stateHash.toBlake2b256Hash
+    )
     for {
       res <- runtimeManager.computeState(stateHash)(
               deploy :: Nil,
               Nil,
-              BlockData(0, genesisContext.validatorPks.head, 0)
+              rand,
+              BlockData(
+                genesisBlockNum,
+                genesisContext.validatorPks.head,
+                genesisSeqNum
+              )
             )
       (hash, Seq(result), _) = res
     } yield (hash, result)
+  }
 
   private def replayComputeState[F[_]: Applicative](runtimeManager: RuntimeManager[F])(
       stateHash: StateHash,
       processedDeploy: ProcessedDeploy
-  ): F[Either[ReplayFailure, StateHash]] =
+  ): F[Either[ReplayFailure, StateHash]] = {
+    val rand = BlockRandomSeed.randomGenerator(
+      genesis.shardId,
+      genesisBlockNum,
+      genesisContext.validatorPks.head,
+      stateHash.toBlake2b256Hash
+    )
     runtimeManager.replayComputeState(stateHash)(
       processedDeploy :: Nil,
       Nil,
-      BlockData(0, genesisContext.validatorPks.head, 0),
+      rand,
+      BlockData(
+        genesisBlockNum,
+        genesisContext.validatorPks.head,
+        genesisSeqNum
+      ),
       withCostAccounting = true
     )
+  }
+
   "computeState" should "charge for deploys" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       val genPostState = genesis.postStateHash
@@ -123,7 +156,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
     for {
       runtime   <- runtimeManager.spawnRuntime
-      blockData = BlockData(0, genesisContext.validatorPks.head, 0)
+      blockData = BlockData.fromBlock(genesis)
       _         <- runtime.setBlockData(blockData)
       r <- runtime.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
             case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, _, playResult)) =>
@@ -174,7 +207,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   ): EitherT[F, ReplayFailure, SystemDeployReplayResult[S#Result]] = {
     // Resets runtime to start state
     val resetRuntime =
-      runtime.reset(Blake2b256Hash.fromByteString(stateHash)).liftEitherT[ReplayFailure]
+      runtime.reset(stateHash.toBlake2b256Hash).liftEitherT[ReplayFailure]
 
     // Replays system deploy
     val expectedFailure = processedSystemDeploy.fold(_ => none, (_, errorMsg) => errorMsg.some)
@@ -301,46 +334,59 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
       for {
         deploys0 <- deploys0F
         deploys1 <- deploys1F
+        blockData = BlockData(
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genesisSeqNum
+        )
+        rand = BlockRandomSeed.randomGenerator(
+          genesis.shardId,
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          gps.toBlake2b256Hash
+        )
         playStateHash0AndProcessedDeploys0 <- runtimeManager.computeState(gps)(
                                                deploys0.toList,
                                                CloseBlockDeploy(
-                                                 SystemDeployUtil
-                                                   .generateCloseDeployRandomSeed(
-                                                     genesisContext.validatorPks.head,
-                                                     0
-                                                   )
+                                                 rand.splitByte(deploys0.length.toByte)
                                                ) :: Nil,
-                                               BlockData(0L, genesisContext.validatorPks.head, 0)
+                                               rand,
+                                               blockData
                                              )
         (playStateHash0, processedDeploys0, processedSysDeploys0) = playStateHash0AndProcessedDeploys0
         bonds0                                                    <- runtimeManager.computeBonds(playStateHash0)
         replayError0OrReplayStateHash0 <- runtimeManager.replayComputeState(gps)(
                                            processedDeploys0,
                                            processedSysDeploys0,
-                                           BlockData(0L, genesisContext.validatorPks.head, 0),
+                                           rand,
+                                           blockData,
                                            withCostAccounting = true
                                          )
         Right(replayStateHash0) = replayError0OrReplayStateHash0
         _                       = assert(playStateHash0 == replayStateHash0)
         bonds1                  <- runtimeManager.computeBonds(playStateHash0)
         _                       = assert(bonds0 == bonds1)
+        rand2 = BlockRandomSeed.randomGenerator(
+          genesis.shardId,
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          playStateHash0.toBlake2b256Hash
+        )
         playStateHash1AndProcessedDeploys1 <- runtimeManager.computeState(playStateHash0)(
                                                deploys1.toList,
                                                CloseBlockDeploy(
-                                                 SystemDeployUtil
-                                                   .generateCloseDeployRandomSeed(
-                                                     genesisContext.validatorPks.head,
-                                                     0
-                                                   )
+                                                 rand2.splitByte(deploys1.length.toByte)
                                                ) :: Nil,
-                                               BlockData(0L, genesisContext.validatorPks.head, 0)
+                                               rand2,
+                                               blockData
                                              )
         (playStateHash1, processedDeploys1, processedSysDeploys1) = playStateHash1AndProcessedDeploys1
         bonds2                                                    <- runtimeManager.computeBonds(playStateHash1)
         replayError1OrReplayStateHash1 <- runtimeManager.replayComputeState(playStateHash0)(
                                            processedDeploys1,
                                            processedSysDeploys1,
-                                           BlockData(0L, genesisContext.validatorPks.head, 0),
+                                           rand2,
+                                           blockData,
                                            withCostAccounting = true
                                          )
         Right(replayStateHash1) = replayError1OrReplayStateHash1
@@ -410,7 +456,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         deploy1 <- ConstructDeploy.sourceDeployNowF(
                     s"""new return in { for(nn <- @"nn"){ nn!("value", *return) } } """
                   )
-        result1 <- mgr.captureResults(hash, deploy1)
+        result1 <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy1) }
 
         _ = result1.size should be(1)
         _ = result1.head should be(ParBuilderUtil.mkTerm(purseValue).right.get)
@@ -431,7 +477,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
           mgr =>
             for {
               hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deploy)
+              res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy) }
             } yield res
         )
         .runSyncUnsafe(10.seconds)
@@ -441,7 +487,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
           mgr =>
             for {
               hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deployNoRes)
+              res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deployNoRes) }
             } yield res
         )
         .runSyncUnsafe(10.seconds)
@@ -463,7 +509,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
           mgr =>
             for {
               hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deploy)
+              res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy) }
             } yield res
         )
 
@@ -516,21 +562,31 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                                                             #""".stripMargin('#')
                  )
         genPostState = genesis.postStateHash
-        blockData    = BlockData(0L, genesisContext.validatorPks.head, 0)
+        blockData = BlockData(
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genesisSeqNum
+        )
+        rand = BlockRandomSeed.randomGenerator(
+          genesis.shardId,
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genPostState.toBlake2b256Hash
+        )
+        deploys = deploy :: Nil
         computeStateResult <- runtimeManager.computeState(genPostState)(
-                               deploy :: Nil,
+                               deploys,
                                CloseBlockDeploy(
-                                 SystemDeployUtil.generateCloseDeployRandomSeed(
-                                   blockData.sender,
-                                   blockData.seqNum
-                                 )
+                                 rand.splitByte(deploys.length.toByte)
                                ) :: Nil,
+                               rand,
                                blockData
                              )
         (playPostState, processedDeploys, processedSystemDeploys) = computeStateResult
         replayComputeStateResult <- runtimeManager.replayComputeState(genPostState)(
                                      processedDeploys,
                                      processedSystemDeploys,
+                                     rand,
                                      blockData,
                                      withCostAccounting = true
                                    )
@@ -555,34 +611,39 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                     """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """
                   )
         genPostState = genesis.postStateHash
-        blockData    = BlockData(0L, genesisContext.validatorPks.head, 0)
+        blockData = BlockData(
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genesisSeqNum
+        )
+        rand = BlockRandomSeed.randomGenerator(
+          genesis.shardId,
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genPostState.toBlake2b256Hash
+        )
+        deploys = deploy0 :: Nil
         firstDeploy <- mgr
                         .computeState(genPostState)(
-                          deploy0 :: Nil,
-                          CloseBlockDeploy(
-                            SystemDeployUtil
-                              .generateCloseDeployRandomSeed(blockData.sender, blockData.seqNum)
-                          ) :: Nil,
+                          deploys,
+                          CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
+                          rand,
                           blockData
                         )
                         .map(_._2)
         secondDeploy <- mgr
                          .computeState(genPostState)(
                            deploy1 :: Nil,
-                           CloseBlockDeploy(
-                             SystemDeployUtil
-                               .generateCloseDeployRandomSeed(blockData.sender, blockData.seqNum)
-                           ) :: Nil,
+                           CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
+                           rand,
                            blockData
                          )
                          .map(_._2)
         compoundDeploy <- mgr
                            .computeState(genPostState)(
                              deploy0 :: deploy1 :: Nil,
-                             CloseBlockDeploy(
-                               SystemDeployUtil
-                                 .generateCloseDeployRandomSeed(blockData.sender, blockData.seqNum)
-                             ) :: Nil,
+                             CloseBlockDeploy(rand.splitByte(deploys.length.toByte)) :: Nil,
+                             rand,
                              blockData
                            )
                            .map(_._2)
@@ -699,16 +760,25 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
       for {
         deploy       <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
         genPostState = genesis.postStateHash
-        blockData    = BlockData(0L, genesisContext.validatorPks.head, 0)
+        blockData = BlockData(
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genesisSeqNum
+        )
+        rand = BlockRandomSeed.randomGenerator(
+          genesis.shardId,
+          genesisBlockNum,
+          genesisContext.validatorPks.head,
+          genPostState.toBlake2b256Hash
+        )
+        deploys = Seq(deploy)
         newState <- runtimeManager
                      .computeState(genPostState)(
                        Seq(deploy),
                        Seq(
-                         CloseBlockDeploy(
-                           SystemDeployUtil
-                             .generateCloseDeployRandomSeed(blockData.sender, blockData.seqNum)
-                         )
+                         CloseBlockDeploy(rand.splitByte(deploys.length.toByte))
                        ),
+                       rand,
                        blockData
                      )
         (_, processedDeploys, processedSystemDeploys) = newState
@@ -720,6 +790,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         result <- runtimeManager.replayComputeState(genPostState)(
                    Seq(invalidProcessedDeploy),
                    processedSystemDeploys,
+                   rand,
                    blockData,
                    withCostAccounting = true
                  )
@@ -760,17 +831,25 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(term)
       result <- runtimeManagerResource.use { rm =>
-                 val blockData = BlockData(1L, genesisContext.validatorPks.head, 1)
+                 val blockData = BlockData(
+                   1L,
+                   genesisContext.validatorPks.head,
+                   1
+                 )
+                 val rand = BlockRandomSeed.randomGenerator(
+                   genesis.shardId,
+                   1L,
+                   genesisContext.validatorPks.head,
+                   genPostState.toBlake2b256Hash
+                 )
                  for {
-                   newState <- rm.computeState(genPostState)(
-                                Seq(deploy),
-                                Seq(),
-                                blockData
-                              )
+
+                   newState                                           <- rm.computeState(genPostState)(Seq(deploy), Seq(), rand, blockData)
                    (stateHash, processedDeploys, processedSysDeploys) = newState
                    result <- rm.replayComputeState(genPostState)(
                               processedDeploys,
                               processedSysDeploys,
+                              rand,
                               blockData,
                               withCostAccounting = true
                             )

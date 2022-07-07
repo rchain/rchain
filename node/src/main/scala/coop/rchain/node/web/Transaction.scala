@@ -3,11 +3,7 @@ package coop.rchain.node.web
 import cats.effect.concurrent.Deferred
 import cats.effect.Concurrent
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockReportApi
-import coop.rchain.casper.genesis.contracts.StandardDeploys
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
-import coop.rchain.models.{GPrivate, GUnforgeable}
 import coop.rchain.casper.protocol.{
   CloseBlockSystemDeployDataProto,
   DeployInfoWithEventData,
@@ -16,7 +12,6 @@ import coop.rchain.casper.protocol.{
   SingleReport,
   SlashSystemDeployDataProto
 }
-import coop.rchain.casper.rholang.Tools
 import coop.rchain.models.Par
 import coop.rchain.node.web.Transaction.TransactionStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -232,26 +227,6 @@ object Transaction {
       (transactionCodec :: transactionType).as[TransactionInfo]
     val transactionResponseCodec: Codec[TransactionResponse] = listOfN(int32, transactionInfo)
       .as[TransactionResponse]
-  }
-
-  // This is the hard-coded unforgeable name for
-  // https://github.com/rchain/rchain/blob/43257ddb7b2b53cffb59a5fe1d4c8296c18b8292/casper/src/main/resources/RevVault.rho#L25
-  // This hard-coded value is only useful with current(above link version) `RevVault.rho` implementation but it is
-  // useful for all the networks(testnet, custom network and mainnet) starting with this `RevVault.rho`.
-  //
-  // This hard-coded value needs to be changed when
-  // 1. `RevVault.rho` is changed
-  // 2. [[coop.rchain.casper.genesis.contracts.StandardDeploys.revVault]] is changed
-  // 3. The random seed algorithm for unforgeable name of the deploy is changed
-  //
-  // This is not needed when onChain transfer history is implemented and deployed to new network in the future.
-  val transferUnforgeable = {
-    val seedForRevVault = Tools.unforgeableNameRng(
-      StandardDeploys.revVaultPubKey,
-      StandardDeploys.revVaultTimestamp
-    )
-    val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(10).next()
-    GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(unfogeableBytes))))
   }
 
   def apply[F[_]: Concurrent](

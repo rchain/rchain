@@ -1,11 +1,14 @@
 package coop.rchain.node.revvaultexport.mainnet1
 
 import cats.effect._
-import com.google.protobuf.ByteString
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.crypto.PublicKey
+import coop.rchain.models.syntax._
 import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.node.revvaultexport.StateBalances
 import coop.rchain.shared.Base16
 import coop.rchain.models.syntax._
+import coop.rchain.rholang.interpreter.RhoType.Name
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
@@ -42,6 +45,10 @@ final case class StateOptions(arguments: Seq[String]) extends ScallopConf(argume
     descr = s"Target block for generate the balances.",
     required = true
   )
+  val shardId = opt[String](
+    descr = "ShardId of the node",
+    required = true
+  )
   val outputDir = opt[Path](
     descr = s"The output dir for generating the results. There are 3 files would be generated->" +
       s"tupleSpaceBalance.csv, transactionBalance.csv and PosBalance.csv.",
@@ -58,14 +65,15 @@ object StateBalanceMain {
   val genesisVaultMapDepth = 2
 
   // TODO support mainnet1 and mainnetx
-  val mainnet1VaultMapPar: Par = GPrivate(
-    "af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeHexToByteString
-  )
+  val mainnet1VaultMapPar: Par =
+    Name("af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeDecodeHex)
+
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
     val options   = StateOptions(args)
     val dataDir   = options.dataDir()
     val blockHash = options.blockHash()
+    val shardId   = options.shardId()
     val outputDir = options.outputDir()
     if (!Files.exists(outputDir)) {
       Files.createDirectory(outputDir)
@@ -76,6 +84,7 @@ object StateBalanceMain {
 
     val task: Task[Unit] = for {
       stateBalances <- StateBalances.read(
+                        shardId,
                         blockHash,
                         genesisVaultMapDepth,
                         dataDir

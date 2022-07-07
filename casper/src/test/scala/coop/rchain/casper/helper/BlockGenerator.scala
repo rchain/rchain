@@ -17,6 +17,8 @@ import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.{CasperMetricsSource, ParentsMergedState}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
+import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -63,9 +65,11 @@ object BlockGenerator {
     val deploys = block.state.deploys.map(_.deploy)
     for {
       computedParentsInfo <- computeParentsPostState(block.justifications, preState)
+      rand                = BlockRandomSeed.randomGenerator(block)
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],
+                 rand,
                  BlockData.fromBlock(block),
                  computedParentsInfo
                )
