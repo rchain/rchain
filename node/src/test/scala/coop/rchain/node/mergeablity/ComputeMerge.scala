@@ -1,12 +1,13 @@
 package coop.rchain.node.mergeablity
 
 import cats.Parallel
+import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
-import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.rholang.RuntimeDeployResult.UserDeployRuntimeResult
 import coop.rchain.casper.rholang.RuntimeManager
@@ -14,12 +15,15 @@ import coop.rchain.casper.syntax._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
+import coop.rchain.models.syntax._
+import coop.rchain.sdk.dag.merging.DagMergingLogic
 
 trait ComputeMerge {
 
@@ -100,36 +104,6 @@ trait ComputeMerge {
                   )
                   .whenA(rightDeploys.exists(_.isFailed))
             rightCheckpoint @ _ <- runtime.createCheckpoint
-
-            leftIndex <- BlockIndex(
-                          ByteString.copyFromUtf8("l"),
-                          leftDeploys,
-                          List.empty,
-                          baseCheckpoint.root,
-                          leftCheckpoint.root,
-                          historyRepo,
-                          leftMergeChs
-                        )
-            rightIndex <- BlockIndex(
-                           ByteString.copyFromUtf8("r"),
-                           rightDeploys,
-                           List.empty,
-                           baseCheckpoint.root,
-                           rightCheckpoint.root,
-                           historyRepo,
-                           rightMergeChs
-                         )
-            baseIndex <- BlockIndex(
-                          ByteString.EMPTY,
-                          List.empty,
-                          List.empty,
-                          baseCheckpoint.root, // this does not matter
-                          baseCheckpoint.root,
-                          historyRepo,
-                          Seq.empty
-                        )
-            kvm      = new InMemoryStoreManager
-            dagStore <- BlockDagKeyValueStorage.create[F](kvm)
             bBlock = getRandomBlock(
               setPreStateHash = RuntimeManager.emptyStateHashFixed.some,
               setPostStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
@@ -145,10 +119,39 @@ trait ComputeMerge {
               setPostStateHash = ByteString.copyFrom(leftCheckpoint.root.bytes.toArray).some,
               setJustifications = List(bBlock.blockHash).some
             )
-            _   <- dagStore.insert(bBlock, false, approved = true)
-            _   <- dagStore.insert(lBlock, false)
-            _   <- dagStore.insert(rBlock, false)
-            dag <- dagStore.getRepresentation
+            leftIndex <- BlockIndex(
+                          lBlock.blockHash,
+                          leftDeploys,
+                          List.empty,
+                          baseCheckpoint.root,
+                          leftCheckpoint.root,
+                          historyRepo,
+                          leftMergeChs
+                        )
+            rightIndex <- BlockIndex(
+                           rBlock.blockHash,
+                           rightDeploys,
+                           List.empty,
+                           baseCheckpoint.root,
+                           rightCheckpoint.root,
+                           historyRepo,
+                           rightMergeChs
+                         )
+            baseIndex <- BlockIndex(
+                          bBlock.blockHash,
+                          List.empty,
+                          List.empty,
+                          baseCheckpoint.root, // this does not matter
+                          baseCheckpoint.root,
+                          historyRepo,
+                          Seq.empty
+                        )
+            kvm      = new InMemoryStoreManager
+            dagStore <- BlockDagKeyValueStorage.create[F](kvm)
+            _        <- dagStore.insert(bBlock, false, approved = true)
+            _        <- dagStore.insert(lBlock, false)
+            _        <- dagStore.insert(rBlock, false)
+            dag      <- dagStore.getRepresentation
             indices = Map(
               bBlock.blockHash -> baseIndex,
               rBlock.blockHash -> rightIndex,
@@ -168,20 +171,23 @@ trait ComputeMerge {
                     s"${rejectRight}, ${deployIds}, ${rightDeployIds}, ${leftDeployIds}"
                 )
             }
-            mergedState <- {
-              implicit val bds = dagStore
-              DagMerger.merge[F](
-                dag,
-                Seq(bBlock.blockHash),
-                baseCheckpoint.root,
-                indices(_).deployChains.pure[F],
-                historyRepo,
-                rejectAlg
-              )
-            }
-            result <- checkFunction(runtime, historyRepo, mergedState)
+            r <- BlockHashDagMerger.merge[F](
+                  Set(lBlock, rBlock).map(_.blockHash),
+                  Set(bBlock.blockHash),
+                  baseCheckpoint.root,
+                  BlockHashDagMerger(dag.dagMessageState.msgMap),
+                  dag.fringeStates,
+                  historyRepo,
+                  indices(_: BlockHash).pure,
+                  rejectionCost = rejectAlg
+                )
+            (mergedState, toReject) = r
+            result <- checkFunction(
+                       runtime,
+                       historyRepo,
+                       (mergedState, toReject.toSeq)
+                     )
           } yield result
       }
-
   }
 }

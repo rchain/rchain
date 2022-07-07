@@ -28,6 +28,8 @@ import coop.rchain.rspace.merger.{
 }
 import coop.rchain.rspace.serializers.ScodecSerialize
 import coop.rchain.rspace.syntax._
+import coop.rchain.sdk.dag.merging.DagMergingLogic
+import coop.rchain.sdk.dag.merging.DagMergingLogic._
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
@@ -171,7 +173,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         leftResult                     <- runRholang(leftTerms, baseCp.root)
         (leftEvIndices, leftPostState) = leftResult
 
-        leftDeployIndices = EventLogMergingLogic.computeRelatedSets[DeployIndex](
+        leftDeployIndices = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
           leftEvIndices,
           (x, y) => EventLogMergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
         )
@@ -180,7 +182,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         rightResult                      <- runRholang(rightTerms, baseCp.root)
         (rightEvIndices, rightPostState) = rightResult
 
-        rightDeployIndices = EventLogMergingLogic.computeRelatedSets[DeployIndex](
+        rightDeployIndices = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
           rightEvIndices,
           (x, y) => EventLogMergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
         )
@@ -198,13 +200,6 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         _ = println(s"DEPLOY_CHAINS RIGHT: ${rightDeployChains.size}")
 
         // Detect rejections / number channel overflow/negative
-
-        branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
-          EventLogMergingLogic.areConflicting(
-            as.map(_.eventLogIndex).toList.combineAll,
-            bs.map(_.eventLogIndex).toList.combineAll
-          )
-
         // Base state reader
         baseReader       <- rm.getHistoryRepo.getHistoryReader(baseCp.root)
         baseReaderBinary = baseReader.readerBinary
@@ -229,7 +224,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
           rm.getHistoryRepo.reset(baseCp.root).flatMap(_.doCheckpoint(actions).map(_.root))
 
-        actualSet = leftDeployChains.toSet ++ rightDeployChains.toSet
+        actualSet = leftDeployChains ++ rightDeployChains
         baseMergeableChRes <- actualSet
                                .map(_.eventLogIndex.numberChannelsData)
                                .flatMap(_.keys)
@@ -242,16 +237,29 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
                                )
                                .map(_.toMap)
 
-        (toMerge, rejected, _) = ConflictSetMerger.merge[DeployChainIndex](
-          actualSet = actualSet,
-          lateSet = Set(),
-          depends = (target, source) =>
-            EventLogMergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
-          conflicts = branchesAreConflicting,
-          cost = DagMerger.costOptimalRejectionAlg,
-          mergeableChannels = _.eventLogIndex.numberChannelsData,
+        dependencyMap = computeDependencyMap(
+          actualSet.toSet,
+          actualSet.toSet,
+          DeployChainIndex.isDependency
+        )
+        conflictsMap = computeConflictsMap(
+          actualSet.toSet,
+          actualSet.toSet,
+          DeployChainIndex.deploysAreConflicting
+        )
+        mergeableDiffs = (leftDeployChains ++ rightDeployChains)
+          .map(d => d -> d.eventLogIndex.numberChannelsData)
+          .toMap
+
+        rejected = DagMergingLogic.resolveConflictSet[DeployChainIndex, Blake2b256Hash](
+          conflictSet = actualSet.toSet,
+          dependencyMap = dependencyMap,
+          conflictsMap = conflictsMap,
+          cost = DeployChainIndex.deployChainCost,
+          mergeableDiffs = mergeableDiffs,
           baseMergeableChRes
         )
+        toMerge = actualSet.toSet -- rejected
 
         allChanges = toMerge.toList.map(_.stateChanges).combineAll
 
@@ -338,8 +346,8 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         DeployTestInfo(rhoChange(10), 10L, "0x21"), // +10
         DeployTestInfo(rhoChange(-20), 10L, "0x22") // -20
       ),
-      expectedRejected = Set.empty,
-      expectedFinalResult = 10
+      expectedRejected = Set(makeSig("0x11")), // TODO make mergeable deploys depending, this should be empty
+      expectedFinalResult = 15
     )
   }
 

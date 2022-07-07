@@ -3,10 +3,16 @@ package coop.rchain.casper.merging
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
+import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.syntax._
+import coop.rchain.shared.{Log, Stopwatch}
+import scodec.bits.ByteVector
 
 import java.util.Objects
 import scala.util.Random
@@ -83,4 +89,18 @@ object DeployChainIndex {
         Objects.hash(deployIds.map(id => DeployIdWithCost(id, 0)).map(_.id): _*)
       )
     }
+
+  def deployChainCost(r: DeployChainIndex) = r.deploysWithCost.map(_.cost).sum
+  def isDependency(a: DeployChainIndex, dependencyFor: DeployChainIndex) =
+    EventLogMergingLogic.depends(dependencyFor.eventLogIndex, a.eventLogIndex)
+  def branchesAreConflicting(as: Set[DeployChainIndex], bs: Set[DeployChainIndex]): Boolean =
+    (as.flatMap(_.deploysWithCost.map(_.id)) intersect bs.flatMap(_.deploysWithCost.map(_.id))).nonEmpty ||
+      EventLogMergingLogic.areConflicting(
+        as.map(_.eventLogIndex).toList.combineAll,
+        bs.map(_.eventLogIndex).toList.combineAll
+      )
+  // TODO make this a map compute on replay
+  def deploysAreConflicting(as: DeployChainIndex, bs: DeployChainIndex): Boolean =
+    (as.deploysWithCost.map(_.id) intersect bs.deploysWithCost.map(_.id)).nonEmpty ||
+      EventLogMergingLogic.areConflicting(as.eventLogIndex, bs.eventLogIndex)
 }

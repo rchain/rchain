@@ -1,13 +1,14 @@
 package coop.rchain.node.mergeablity
 
+import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
@@ -17,6 +18,7 @@ import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
@@ -395,7 +397,6 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
             dagStore: BlockDagStorage[Task]
         ): Task[BlockMessage] = {
 
-          implicit val bds     = dagStore
           val baseState        = baseBlock.postStateHash
           val seqNum           = baseBlock.seqNum + 1
           val mergingBlocksNum = (baseBlock.seqNum * 2 + 1).toLong
@@ -436,13 +437,14 @@ class MergingBranchMergerSpec extends AnyFlatSpec with Matchers {
                         }
                         .map(_.toMap)
             dag <- dagStore.getRepresentation
-            v <- DagMerger.merge[Task](
-                  dag,
-                  Seq(baseBlock.blockHash),
-                  baseState.toBlake2b256Hash,
-                  indices(_).deployChains.pure,
+            v <- BlockHashDagMerger.merge[Task](
+                  mergingBlocks.map(b => b.blockHash).toSet,
+                  Set(baseBlock.blockHash),
+                  baseBlock.postStateHash.toBlake2b256Hash,
+                  BlockHashDagMerger(dag.dagMessageState.msgMap),
+                  dag.fringeStates,
                   runtimeManager.getHistoryRepo,
-                  DagMerger.costOptimalRejectionAlg
+                  (b: BlockHash) => indices(b).pure
                 )
             (postState, rejectedDeploys) = v
             mergedState                  = ByteString.copyFrom(postState.bytes.toArray)

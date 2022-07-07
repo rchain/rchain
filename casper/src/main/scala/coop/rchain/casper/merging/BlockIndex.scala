@@ -2,16 +2,22 @@ package coop.rchain.casper.merging
 
 import cats.effect.Concurrent
 import cats.syntax.all._
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper.merging.DeployIndex._
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Succeeded
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.merger.EventLogMergingLogic.{computeRelatedSets, NumberChannelsDiff}
+import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.trace.Produce
+import coop.rchain.sdk.dag.merging.DagMergingLogic
 
 import scala.collection.concurrent.TrieMap
 
@@ -21,6 +27,31 @@ object BlockIndex {
 
   // TODO make proper storage for block indices
   val cache = TrieMap.empty[BlockHash, BlockIndex]
+
+  def getBlockIndex[F[_]: Concurrent: RuntimeManager: BlockStore](
+      blockHash: BlockHash
+  ): F[BlockIndex] = {
+    val cached = BlockIndex.cache.get(blockHash).map(_.pure)
+    cached.getOrElse {
+      for {
+        b            <- BlockStore[F].getUnsafe(blockHash)
+        preState     = b.preStateHash
+        postState    = b.postStateHash
+        sender       = b.sender.toByteArray
+        seqNum       = b.seqNum
+        mergeableChs <- RuntimeManager[F].loadMergeableChannels(postState, sender, seqNum)
+        blockIndex <- BlockIndex(
+                       b.blockHash,
+                       b.state.deploys,
+                       b.state.systemDeploys,
+                       preState.toBlake2b256Hash,
+                       postState.toBlake2b256Hash,
+                       RuntimeManager[F].getHistoryRepo,
+                       mergeableChs
+                     )
+      } yield blockIndex
+    }
+  }
 
   def createEventLogIndex[F[_]: Concurrent, C, P, A, K](
       events: List[Event],
@@ -113,10 +144,11 @@ object BlockIndex {
       /** Here deploys from a single block are examined. Atm deploys in block are executed sequentially,
         * so all conflicts are resolved according to order of sequential execution.
         * Therefore there won't be any conflicts between event logs. But there can be dependencies. */
-      deployChains = computeRelatedSets[DeployIndex](
+      deployChains = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
         deployIndices.toSet,
         (l, r) => EventLogMergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
       )
+
       index <- deployChains.toVector
                 .traverse(
                   DeployChainIndex(

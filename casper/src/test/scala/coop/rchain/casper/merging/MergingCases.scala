@@ -11,8 +11,8 @@ import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.merger.EventLogMergingLogic.computeRelatedSets
 import coop.rchain.rspace.merger.{EventLogIndex, EventLogMergingLogic}
+import coop.rchain.sdk.dag.merging.DagMergingLogic
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
@@ -85,10 +85,19 @@ class MergingCases extends AnyFlatSpec with Matchers {
           firstDepends  = EventLogMergingLogic.depends(idxs.head, idxs(1))
           secondDepends = EventLogMergingLogic.depends(idxs(1), idxs.head)
           conflicts     = EventLogMergingLogic.areConflicting(idxs.head, idxs(1))
-          deployChains = computeRelatedSets[EventLogIndex](
-            idxs.toSet,
-            EventLogMergingLogic.depends
-          )
+          deployChains = {
+            // ordering here no important
+            implicit val ord = new Ordering[EventLogIndex] {
+              override def compare(
+                  x: EventLogIndex,
+                  y: EventLogIndex
+              ): Int = 1
+            }
+            DagMergingLogic.computeGreedyNonIntersectingBranches[EventLogIndex](
+              idxs.toSet,
+              EventLogMergingLogic.depends
+            )
+          }
           // deploys inside one state transition never conflict, as executed in a sequence (for now)
           _ = conflicts shouldBe false
           // first deploy does not depend on the second
