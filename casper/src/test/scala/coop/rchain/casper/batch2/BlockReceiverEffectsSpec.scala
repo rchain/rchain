@@ -39,119 +39,107 @@ class BlockReceiverEffectsSpec
   implicit val logEff: Log[Task]            = Log.log[Task]
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  it should "pass correct block to output stream" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream, bs, br, bds) =>
-        for {
-          block   <- makeBlock()
-          _       <- incomingQueue.enqueue1(block)
-          outList <- outStream.take(1).compile.toList
-        } yield {
-          bs.put(*) wasCalled once
-          bs.contains(*) wasCalled once
-          br.ackReceived(*) wasCalled once
-          bds.getRepresentation wasCalled twice
-          outList.length shouldBe 1
-        }
-    }
+  it should "pass correct block to output stream" in withEnv("root") {
+    case (incomingQueue, _, outStream, bs, br, bds) =>
+      for {
+        block   <- makeBlock()
+        _       <- incomingQueue.enqueue1(block)
+        outList <- outStream.take(1).compile.toList
+      } yield {
+        bs.put(*) wasCalled once
+        bs.contains(*) wasCalled once
+        br.ackReceived(*) wasCalled once
+        bds.getRepresentation wasCalled twice
+        outList.length shouldBe 1
+      }
   }
 
-  it should "discard block with invalid shard name" in {
-    // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
-    // So block should be rejected and output stream should never take block
-    withBlockReceiverEnv("test") {
-      case (incomingQueue, _, outStream, bs, br, bds) =>
-        for {
-          block <- makeBlock()
-          _     <- incomingQueue.enqueue1(block)
-        } yield {
-          bs.put(*) wasNever called
-          bs.contains(*) wasNever called
-          br.ackReceived(*) wasNever called
-          bds.getRepresentation wasNever called
-          outStream should notEmit
-        }
-    }
+  // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
+  // So block should be rejected and output stream should never take block
+  it should "discard block with invalid shard name" in withEnv("test") {
+    case (incomingQueue, _, outStream, bs, br, bds) =>
+      for {
+        block <- makeBlock()
+        _     <- incomingQueue.enqueue1(block)
+      } yield {
+        bs.put(*) wasNever called
+        bs.contains(*) wasNever called
+        br.ackReceived(*) wasNever called
+        bds.getRepresentation wasNever called
+        outStream should notEmit
+      }
   }
 
-  it should "discard block with invalid block hash" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream, bs, br, bds) =>
-        for {
-          block <- makeBlock().map(_.copy(blockHash = "abc".unsafeHexToByteString))
-          _     <- incomingQueue.enqueue1(block)
-        } yield {
-          bs.put(*) wasNever called
-          bs.contains(*) wasNever called
-          br.ackReceived(*) wasNever called
-          bds.getRepresentation wasNever called
-          outStream should notEmit
-        }
-    }
+  it should "discard block with invalid block hash" in withEnv("root") {
+    case (incomingQueue, _, outStream, bs, br, bds) =>
+      for {
+        block <- makeBlock().map(_.copy(blockHash = "abc".unsafeHexToByteString))
+        _     <- incomingQueue.enqueue1(block)
+      } yield {
+        bs.put(*) wasNever called
+        bs.contains(*) wasNever called
+        br.ackReceived(*) wasNever called
+        bds.getRepresentation wasNever called
+        outStream should notEmit
+      }
   }
 
-  it should "discard block with invalid signature" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream, bs, br, bds) =>
-        for {
-          block <- makeBlock().map(_.copy(sig = "abc".unsafeHexToByteString))
-          _     <- incomingQueue.enqueue1(block)
-        } yield {
-          bs.put(*) wasNever called
-          bs.contains(*) wasNever called
-          br.ackReceived(*) wasNever called
-          bds.getRepresentation wasNever called
-          outStream should notEmit
-        }
-    }
+  it should "discard block with invalid signature" in withEnv("root") {
+    case (incomingQueue, _, outStream, bs, br, bds) =>
+      for {
+        block <- makeBlock().map(_.copy(sig = "abc".unsafeHexToByteString))
+        _     <- incomingQueue.enqueue1(block)
+      } yield {
+        bs.put(*) wasNever called
+        bs.contains(*) wasNever called
+        br.ackReceived(*) wasNever called
+        bds.getRepresentation wasNever called
+        outStream should notEmit
+      }
   }
 
-  it should "discard known block" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, _, outStream, bs, br, bds) =>
-        for {
-          block <- addBlock(bs)
-          _     <- incomingQueue.enqueue1(block)
-        } yield {
-          bs.put(*) wasCalled once
-          bs.contains(*) wasNever called
-          br.ackReceived(*) wasNever called
-          bds.getRepresentation wasNever called
-          outStream should notEmit
-        }
-    }
+  it should "discard known block" in withEnv("root") {
+    case (incomingQueue, _, outStream, bs, br, bds) =>
+      for {
+        block <- addBlock(bs)
+        _     <- incomingQueue.enqueue1(block)
+      } yield {
+        bs.put(*) wasCalled once
+        bs.contains(*) wasNever called
+        br.ackReceived(*) wasNever called
+        bds.getRepresentation wasNever called
+        outStream should notEmit
+      }
   }
 
-  it should "pass to output blocks with resolved dependencies" in {
-    withBlockReceiverEnv("root") {
-      case (incomingQueue, validatedQueue, outStream, bs, br, bds) =>
-        for {
-          // Received a parent with an empty list of justifications and its child
-          a1 <- makeBlock()
-          a2 <- makeBlock(List(a1.blockHash))
+  it should "pass to output blocks with resolved dependencies" in withEnv("root") {
+    case (incomingQueue, validatedQueue, outStream, bs, br, bds) =>
+      for {
+        // Received a parent with an empty list of justifications and its child
+        a1 <- makeBlock()
+        a2 <- makeBlock(List(a1.blockHash))
 
-          // Put the parent and child in the input queue
-          _ <- incomingQueue.enqueue1(a2)
-          _ <- incomingQueue.enqueue1(a1)
+        // Put the parent and child in the input queue
+        _ <- incomingQueue.enqueue1(a2)
+        _ <- incomingQueue.enqueue1(a1)
 
-          // Dependencies of the child (its parent) have not yet been resolved,
-          // so only the parent goes to the output queue, since it has no dependencies
-          a1InOutQueue <- outStream.take(1).compile.toList.map(_.head)
+        // Dependencies of the child (its parent) have not yet been resolved,
+        // so only the parent goes to the output queue, since it has no dependencies
+        a1InOutQueue <- outStream.take(1).compile.toList.map(_.head)
 
-          // A1 is now validated (e.g. in BlockProcessor)
-          _ <- validatedQueue.enqueue1(a1)
+        // A1 is now validated (e.g. in BlockProcessor)
+        _ <- validatedQueue.enqueue1(a1)
 
-          // All dependencies of child A2 are resolved, so it also goes to the output queue
-          a2InOutQueue <- outStream.take(1).compile.toList.map(_.head)
-        } yield {
-          bs.put(*) wasCalled twice
-          bs.contains(*) wasCalled 3.times
-          br.ackReceived(*) wasCalled twice
-          bds.getRepresentation wasCalled 4.times
-          a1InOutQueue shouldBe a1.blockHash
-          a2InOutQueue shouldBe a2.blockHash
-        }
-    }
+        // All dependencies of child A2 are resolved, so it also goes to the output queue
+        a2InOutQueue <- outStream.take(1).compile.toList.map(_.head)
+      } yield {
+        bs.put(*) wasCalled twice
+        bs.contains(*) wasCalled 3.times
+        br.ackReceived(*) wasCalled twice
+        bds.getRepresentation wasCalled 4.times
+        a1InOutQueue shouldBe a1.blockHash
+        a2InOutQueue shouldBe a2.blockHash
+      }
   }
 
   private def blockDagStorageMock[F[_]: Applicative](): BlockDagStorage[F] = {
@@ -176,7 +164,7 @@ class BlockReceiverEffectsSpec
 
   import fs2._
 
-  private def withBlockReceiverEnv(shardId: String)(
+  private def withEnv(shardId: String)(
       f: (
           Queue[Task, BlockMessage],
           Queue[Task, BlockMessage],
