@@ -40,20 +40,21 @@ class BlockReceiverEffectsSpec
   implicit val logEff: Log[Task]            = Log.log[Task]
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  it should "pass correct block to output stream" in withEnv("root") {
-    case (incomingQueue, _, outStream, bs, br, bds) =>
-      for {
-        block   <- makeBlock()
-        _       <- incomingQueue.enqueue1(block)
-        outList <- outStream.take(1).compile.toList
-      } yield {
-        bs.put(Seq((block.blockHash, block))) wasCalled once
-        bs.contains(Seq(block.blockHash)) wasCalled once
-        br.ackReceived(block.blockHash) wasCalled once
-        dagStorageWasNotModified(bds)
-        outList.length shouldBe 1
-      }
-  }
+  it should "pass correct block to output stream with calling effectful components" in
+    withEnv("root") {
+      case (incomingQueue, _, outStream, bs, br, bds) =>
+        for {
+          block   <- makeBlock()
+          _       <- incomingQueue.enqueue1(block)
+          outList <- outStream.take(1).compile.toList
+        } yield {
+          bs.put(Seq((block.blockHash, block))) wasCalled once
+          bs.contains(Seq(block.blockHash)) wasCalled once
+          br.ackReceived(block.blockHash) wasCalled once
+          dagStorageWasNotModified(bds)
+          outList shouldBe List(block.blockHash)
+        }
+    }
 
   // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
   // So block should be rejected and output stream should never take block
