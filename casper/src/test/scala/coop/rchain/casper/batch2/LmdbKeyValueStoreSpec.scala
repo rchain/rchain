@@ -1,27 +1,30 @@
 package coop.rchain.casper.batch2
 
-import java.nio.file.Files
-
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.shared.Log
+import coop.rchain.shared.ScalaCheckOps.forAllF
 import coop.rchain.store.{KeyValueStoreSut, LmdbStoreManager}
 import monix.eval.Task
+import monix.execution.Scheduler
+import monix.testing.scalatest.MonixTaskTest
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.BeforeAndAfterAll
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 
+import java.nio.file.Files
 import scala.reflect.io.{Directory, Path}
 import scala.util.Random
 
 class LmdbKeyValueStoreSpec
-    extends AnyFlatSpec
+    extends AsyncFlatSpec
+    with MonixTaskTest
     with Matchers
     with ScalaCheckDrivenPropertyChecks
     with BeforeAndAfterAll {
-  implicit val scheduler = monix.execution.Scheduler.global
+  implicit override def scheduler: Scheduler = Scheduler.io("monix-task-support-spec")
 
   val tempPath = Files.createTempDirectory(s"lmdb-test-")
   val tempDir  = Directory(Path(tempPath.toFile))
@@ -49,32 +52,28 @@ class LmdbKeyValueStoreSpec
   implicit val log: Log[Task] = new Log.NOPLog[Task]()
 
   it should "put and get data from the store" in {
-    forAll(genData) { expected =>
-      val test = withSut[Task] { sut =>
+    forAllF(genData) { expected =>
+      withSut[Task] { sut =>
         for {
           result <- sut.testPutGet(expected)
         } yield result shouldBe expected
       }
-
-      test.runSyncUnsafe()
     }
   }
 
   it should "put and get all data from the store" in {
-    forAll(genData) { expected =>
-      val test = withSut[Task] { sut =>
+    forAllF(genData) { expected =>
+      withSut[Task] { sut =>
         for {
           result <- sut.testPutIterate(expected)
         } yield result shouldBe expected
       }
-
-      test.runSyncUnsafe()
     }
   }
 
   it should "not have deleted keys in the store" in {
-    forAll(genData) { input =>
-      val test = withSut[Task] { sut =>
+    forAllF(genData) { input =>
+      withSut[Task] { sut =>
         val allKeys = input.keysIterator.toVector
         // Take some keys for deletion
         val (getKeys, deleteKeys) = allKeys.splitAt(allKeys.size / 2)
@@ -86,8 +85,6 @@ class LmdbKeyValueStoreSpec
           result <- sut.testPutDeleteGet(input, deleteKeys)
         } yield result shouldBe expected
       }
-
-      test.runSyncUnsafe()
     }
   }
 

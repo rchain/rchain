@@ -2,10 +2,13 @@ package coop.rchain.store
 
 import cats.effect.Sync
 import cats.syntax.all._
+import coop.rchain.shared.ScalaCheckOps.forAllF
 import coop.rchain.shared.syntax._
 import monix.eval.Task
+import monix.execution.Scheduler
+import monix.testing.scalatest.MonixTaskTest
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import scodec.codecs.{int64, utf8}
@@ -48,10 +51,11 @@ class KeyValueStoreSut[F[_]: Sync: KeyValueStoreManager] {
 }
 
 class InMemoryKeyValueStoreSpec
-    extends AnyFlatSpec
+    extends AsyncFlatSpec
+    with MonixTaskTest
     with Matchers
     with ScalaCheckDrivenPropertyChecks {
-  implicit val scheduler = monix.execution.Scheduler.global
+  implicit override def scheduler: Scheduler = Scheduler.io("monix-task-support-spec")
 
   def genData: Gen[Map[Long, String]] = {
     val arbKV = Arbitrary.arbitrary[(Long, String)]
@@ -59,31 +63,27 @@ class InMemoryKeyValueStoreSpec
   }
 
   it should "put and get data from the store" in {
-    forAll(genData) { expected =>
+    forAllF(genData) { expected =>
       implicit val kvm = InMemoryStoreManager[Task]
       val sut          = new KeyValueStoreSut[Task]
-      val test = for {
+      for {
         result <- sut.testPutGet(expected)
       } yield result shouldBe expected
-
-      test.runSyncUnsafe()
     }
   }
 
   it should "put and get all data from the store" in {
-    forAll(genData) { expected =>
+    forAllF(genData) { expected =>
       implicit val kvm = InMemoryStoreManager[Task]
       val sut          = new KeyValueStoreSut[Task]
-      val test = for {
+      for {
         result <- sut.testPutIterate(expected)
       } yield result shouldBe expected
-
-      test.runSyncUnsafe()
     }
   }
 
   it should "put and collect partial data from the store" in {
-    forAll(genData) { expected =>
+    forAllF(genData) { expected =>
       implicit val kvm = InMemoryStoreManager[Task]
       val sut          = new KeyValueStoreSut[Task]
 
@@ -96,19 +96,17 @@ class InMemoryKeyValueStoreSpec
         case (k, _) => k >= kAvg
       }
 
-      val test = for {
+      for {
         // Filter using partial function
         result <- sut.testPutCollect(expected) {
                    case (k, fv) if k >= kAvg => (k, fv())
                  }
       } yield result shouldBe expectedFiltered
-
-      test.runSyncUnsafe()
     }
   }
 
   it should "not have deleted keys in the store" in {
-    forAll(genData) { input =>
+    forAllF(genData) { input =>
       implicit val kvm = InMemoryStoreManager[Task]
       val sut          = new KeyValueStoreSut[Task]
       val allKeys      = input.keysIterator.toVector
@@ -118,11 +116,9 @@ class InMemoryKeyValueStoreSpec
       // Expected input without deleted keys
       val expected =
         getKeys.zip(values).filter(_._2.nonEmpty).map { case (k, v) => (k, v.get) }.toMap
-      val test = for {
+      for {
         result <- sut.testPutDeleteGet(input, deleteKeys)
       } yield result shouldBe expected
-
-      test.runSyncUnsafe()
     }
   }
 

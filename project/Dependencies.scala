@@ -74,6 +74,7 @@ object Dependencies {
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.4"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "3.0.0"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.15.0"
+  val scalacheckEffect    = "org.typelevel"              %% "scalacheck-effect"         % "1.0.4"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.15" % "1.3.0"  % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.2.9" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
@@ -140,7 +141,8 @@ object Dependencies {
     "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
   )
 
-  private val testing = Seq(scalactic, scalatest, scalacheck, scalatestPlus, monixTesting)
+  private val testing =
+    Seq(monixTesting, scalacheck, scalacheckEffect, scalactic, scalatest, scalatestPlus)
 
   private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
 
