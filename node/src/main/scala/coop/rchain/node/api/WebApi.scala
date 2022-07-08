@@ -1,19 +1,19 @@
 package coop.rchain.node.api
 
 import cats.effect.Sync
+import cats.kernel.Monoid
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockApi
-import coop.rchain.casper.api.BlockApiImpl.LatestBlockMessageError
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
-import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
-import coop.rchain.models._
+import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.syntax._
+import coop.rchain.models.{Bundle, ETuple, Expr, GUnforgeable, Par}
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
-import coop.rchain.shared.Base16
+import coop.rchain.rholang.interpreter.RhoType._
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -129,7 +129,7 @@ object WebApi {
   final case class ExprPar(data: List[RhoExpr])        extends RhoExpr
   final case class ExprTuple(data: List[RhoExpr])      extends RhoExpr
   final case class ExprList(data: List[RhoExpr])       extends RhoExpr
-  final case class ExprSet(data: List[RhoExpr])        extends RhoExpr
+  final case class ExprSet(data: Set[RhoExpr])         extends RhoExpr
   final case class ExprMap(data: Map[String, RhoExpr]) extends RhoExpr
   // Terminal expressions (here is the data)
   final case class ExprBool(data: Boolean)  extends RhoExpr
@@ -170,7 +170,7 @@ object WebApi {
   )
 
   final case class DataAtNameByBlockHashRequest(
-      name: RhoUnforg,
+      name: RhoExpr,
       blockHash: String,
       usePreStateHash: Boolean
   )
@@ -260,13 +260,9 @@ object WebApi {
                   .liftToSigErr[F]("Invalid signature.")
     } yield sigData
 
-  // Binary converters - protobuf uses ByteString and in JSON is base16 string
-
-  private def toHex(bs: ByteString) = Base16.encode(bs.toByteArray)
-
   // RhoExpr from protobuf
 
-  private def exprFromParProto(par: Par): Option[RhoExpr] = {
+  def exprFromParProto(par: Par): Option[RhoExpr] = {
     val exprs =
       par.exprs.flatMap(exprFromExprProto) ++
         par.unforgeables.flatMap(unforgFromProto) ++
@@ -289,7 +285,7 @@ object WebApi {
       ExprUri(exp.getGUri).some
     else if (exp.exprInstance.isGByteArray)
       // Binary data as base16 string
-      ExprBytes(toHex(exp.getGByteArray)).some
+      ExprBytes(exp.getGByteArray.toHexString).some
     // Tuple
     else if (exp.exprInstance.isETupleBody)
       ExprTuple(exp.getETupleBody.ps.flatMap(exprFromParProto).toList).some
@@ -298,7 +294,7 @@ object WebApi {
       ExprList(exp.getEListBody.ps.flatMap(exprFromParProto).toList).some
     // Set
     else if (exp.exprInstance.isESetBody)
-      ExprSet(exp.getESetBody.ps.flatMap(exprFromParProto).toList).some
+      ExprSet(exp.getESetBody.ps.flatMap(exprFromParProto).toSet).some
     // Map
     else if (exp.exprInstance.isEMapBody) {
       val fields = for {
@@ -335,32 +331,71 @@ object WebApi {
   private def exprFromBundleProto(b: Bundle): Option[RhoExpr] = exprFromParProto(b.body)
 
   private def mkUnforgExpr(f: String => RhoUnforg, bs: ByteString): ExprUnforg =
-    ExprUnforg(f(toHex(bs)))
+    ExprUnforg(f(bs.toHexString))
 
   // RhoExpr to protobuf
 
-  private def unforgToUnforgProto(unforg: RhoUnforg): GUnforgeable.UnfInstance = unforg match {
-    case UnforgPrivate(name)  => GPrivateBody(GPrivate(name.unsafeHexToByteString))
-    case UnforgDeploy(name)   => GDeployIdBody(GDeployId(name.unsafeHexToByteString))
-    case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(name.unsafeHexToByteString))
+  /**
+    * Private definition of [[Monoid]] for [[Par]] with the implementation of
+    * combining fields used by WebApi representation of Par [[RhoExpr]].
+    */
+  implicit private object ParMonoid extends Monoid[Par] {
+    override def empty: Par = VectorPar()
+
+    override def combine(x: Par, y: Par): Par =
+      x.copy(
+        x.sends ++ y.sends,
+        x.receives ++ y.receives,
+        x.news ++ y.news,
+        x.exprs ++ y.exprs,
+        x.matches ++ y.matches,
+        x.unforgeables ++ y.unforgeables,
+        x.bundles ++ y.bundles,
+        x.connectives ++ y.connectives
+      )
+  }
+
+  /**
+    * Converts [[RhoExpr]] WebApi representation to protobuf [[Par]] type.
+    */
+  def rhoExprToParProto(exp: RhoExpr): Par = exp match {
+    // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
+    case ExprPar(data)   => data.map(rhoExprToParProto).combineAll
+    case ExprTuple(data) => TupleN(data.map(rhoExprToParProto))
+    case ExprList(data)  => List(data.map(rhoExprToParProto))
+    case ExprSet(data)   => Set(data.map(rhoExprToParProto).toSeq)
+    case ExprMap(data)   => Map(data.map { case (k, v) => (String(k), rhoExprToParProto(v)) })
+    // Terminal expressions (here is the data)
+    case ExprBool(data)   => Boolean(data)
+    case ExprInt(data)    => Number(data)
+    case ExprString(data) => String(data)
+    case ExprUri(data)    => Uri(data)
+    // Binary data is decoded from base16 string
+    case ExprBytes(data)  => ByteArray(data.unsafeHexToByteString.toByteArray)
+    case ExprUnforg(data) => unforgToParProto(data)
+  }
+
+  private def unforgToParProto(unforg: RhoUnforg): Par = unforg match {
+    case UnforgPrivate(name)  => Name(name.unsafeHexToByteString)
+    case UnforgDeploy(name)   => DeployId(name.unsafeDecodeHex)
+    case UnforgDeployer(name) => DeployerId(name.unsafeDecodeHex)
   }
 
   // Data request/response protobuf wrappers
 
-  private def toPar(req: DataAtNameRequest): Par =
-    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
+  private def toPar(req: DataAtNameRequest): Par = unforgToParProto(req.name)
 
-  private def toPar(req: DataAtNameByBlockHashRequest): Par =
-    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
+  private def toPar(req: DataAtNameByBlockHashRequest): Par = rhoExprToParProto(req.name)
 
   private def toDataAtNameResponse(req: (Seq[DataWithBlockInfo], Int)): DataAtNameResponse = {
     val (dbs, length) = req
-    val exprsWithBlock = dbs.foldLeft(List[RhoExprWithBlock]()) { (acc, data) =>
-      val exprs = data.postBlockData.flatMap(exprFromParProto)
-      // Implements semantic of Par with Unit: P | Nil ==> P
-      val expr  = if (exprs.size == 1) exprs.head else ExprPar(exprs.toList)
-      val block = data.block
-      RhoExprWithBlock(expr, block) +: acc
+    val exprsWithBlock = dbs.foldLeft(collection.immutable.List[RhoExprWithBlock]()) {
+      (acc, data) =>
+        val exprs = data.postBlockData.flatMap(exprFromParProto)
+        // Implements semantic of Par with Unit: P | Nil ==> P
+        val expr  = if (exprs.size == 1) exprs.head else ExprPar(exprs.toList)
+        val block = data.block
+        RhoExprWithBlock(expr, block) +: acc
     }
     DataAtNameResponse(exprsWithBlock, length)
   }

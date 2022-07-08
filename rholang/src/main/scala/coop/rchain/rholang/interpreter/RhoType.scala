@@ -1,4 +1,5 @@
 package coop.rchain.rholang.interpreter
+
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance.{
@@ -7,8 +8,8 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{
   GPrivateBody,
   GSysAuthTokenBody
 }
-import coop.rchain.models.syntax._
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 
 object RhoType {
   import coop.rchain.models.rholang.implicits._
@@ -41,7 +42,7 @@ object RhoType {
 
   type RhoBoolean = Boolean.type
   object Boolean {
-    def apply(b: Boolean) = Expr(GBool(b))
+    def apply(b: Boolean): Par = Expr(GBool(b))
 
     def unapply(p: Par): Option[Boolean] =
       p.singleExpr().collect {
@@ -59,14 +60,37 @@ object RhoType {
     def apply(i: Long): Par = Expr(GInt(i))
   }
 
+  type RhoTupleN = TupleN.type
+  object TupleN {
+    def apply(tuple: Seq[Par]): Par = ETuple(tuple)
+
+    def unapply(p: Par): Option[Seq[Par]] =
+      p.singleExpr().collect { case Expr(ETupleBody(ETuple(tuple, _, _))) => tuple }
+  }
+
   type RhoTuple2 = Tuple2.type
   object Tuple2 {
-    def apply(tuple: (Par, Par)): Par = Expr(ETupleBody(ETuple(Seq(tuple._1, tuple._2))))
+    def apply(tuple: (Par, Par)): Par = ETuple(Seq(tuple._1, tuple._2))
 
     def unapply(p: Par): Option[(Par, Par)] =
-      p.singleExpr().collect {
-        case Expr(ETupleBody(ETuple(Seq(a, b), _, _))) => (a, b)
-      }
+      TupleN.unapply(p).collect { case Seq(a, b) => (a, b) }
+  }
+
+  type RhoTuple3 = Tuple3.type
+  object Tuple3 {
+    def apply(tuple: (Par, Par, Par)): Par = ETuple(Seq(tuple._1, tuple._2, tuple._3))
+
+    def unapply(p: Par): Option[(Par, Par, Par)] =
+      TupleN.unapply(p).collect { case Seq(a, b, c) => (a, b, c) }
+  }
+
+  type RhoTuple4 = Tuple4.type
+  object Tuple4 {
+    def apply(tuple: (Par, Par, Par, Par)): Par =
+      ETuple(Seq(tuple._1, tuple._2, tuple._3, tuple._4))
+
+    def unapply(p: Par): Option[(Par, Par, Par, Par)] =
+      TupleN.unapply(p).collect { case Seq(a, b, c, d) => (a, b, c, d) }
   }
 
   type RhoUri = Uri.type
@@ -77,6 +101,36 @@ object RhoType {
       }
 
     def apply(s: String): Par = GUri(s)
+  }
+
+  type RhoList = List.type
+  object List {
+    def unapply(p: Par): Option[List[Par]] =
+      p.singleExpr().collect {
+        case Expr(EListBody(EList(s, _, _, _))) => s.toList
+      }
+
+    def apply(s: List[Par]): Par = EListBody(EList(s))
+  }
+
+  type RhoSet = Set.type
+  object Set {
+    def unapply(p: Par): Option[Set[Par]] =
+      p.singleExpr().collect {
+        case Expr(ESetBody(ParSet(s, _, _, _))) => s.toSet
+      }
+
+    def apply(s: Seq[Par]): Par = ESetBody(ParSet(s))
+  }
+
+  type RhoMap = Map.type
+  object Map {
+    def unapply(p: Par): Option[Map[Par, Par]] =
+      p.singleExpr().collect {
+        case Expr(EMapBody(ParMap(s, _, _, _))) => s.toMap
+      }
+
+    def apply(s: Map[Par, Par]): Par = EMapBody(ParMap(s.toSeq))
   }
 
   type RhoDeployerId = DeployerId.type
@@ -107,7 +161,8 @@ object RhoType {
       }
 
     def apply(gprivate: GPrivate): Par         = GUnforgeable(GPrivateBody(gprivate))
-    def apply(gprivateBytes: Array[Byte]): Par = apply(GPrivate(ByteString.copyFrom(gprivateBytes)))
+    def apply(gprivateBytes: Array[Byte]): Par = apply(ByteString.copyFrom(gprivateBytes))
+    def apply(gprivateBytes: ByteString): Par  = apply(GPrivate(gprivateBytes))
   }
 
   type RhoUnforgeable = Unforgeable.type

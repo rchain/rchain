@@ -52,3 +52,5 @@ def test_web_api(node_with_blocks: Tuple[Node, List[str], List[str]]) -> None :
     ret = client.deploy("@2!(1)", 100000, 1, 5, STANDALONE_KEY, shard_id='test')
     assert ret is not None
 
+    data_at_name_by_block_hash = client.data_at_name_by_block_hash('ExprString', 'test', block_hash[0], False)
+    assert len(data_at_name_by_block_hash['expr']) == 0
