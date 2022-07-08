@@ -94,12 +94,11 @@ trait Costs {
   def toByteArrayCost[T <: StacksafeMessage[_]](a: T): Cost =
     Cost(ProtoM.serializedSize(a).value, "to byte array")
 
-  // Converting rholang BigInt, String or ByteArray into a GInt.
+  // Converting rholang BigInt, String into a GInt.
   // The cost is estimated as the number of bytes in converted data.
   def toIntCost(bi: BigInt): Cost  = Cost(bigIntSize(bi), "bigint to int")
   def toIntCost(str: String): Cost = Cost(str.length, "string to int")
 
-  // TODO: Adjust the BigInt operation cost
   // Converting rholang Int, String or ByteArray into a GBigInt.
   // The cost is estimated as the number of bytes in converted data.
   final val INT_TO_BIGINT_COST: Cost  = Cost(8, "int to bigint")
