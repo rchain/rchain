@@ -161,9 +161,7 @@ object RhoType {
       }
 
     def apply(gprivate: GPrivate): Par         = GUnforgeable(GPrivateBody(gprivate))
-
-    def apply(gprivateBytes: Array[Byte]): Par = apply(GPrivate(ByteString.copyFrom(gprivateBytes)))
-
+    def apply(gprivateBytes: Array[Byte]): Par = apply(ByteString.copyFrom(gprivateBytes))
     def apply(gprivateBytes: ByteString): Par  = apply(GPrivate(gprivateBytes))
   }
 
