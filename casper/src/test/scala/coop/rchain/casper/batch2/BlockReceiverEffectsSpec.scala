@@ -28,7 +28,7 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.SortedMap
 
-class BlockReceiverSpec
+class BlockReceiverEffectsSpec
     extends AsyncFlatSpec
     with MonixTaskTest
     with Matchers
