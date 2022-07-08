@@ -49,7 +49,7 @@ class BlockReceiverEffectsSpec
         bs.put(*) wasCalled once
         bs.contains(*) wasCalled once
         br.ackReceived(*) wasCalled once
-        bds.getRepresentation wasCalled twice
+        dagStorageWasNotModified(bds)
         outList.length shouldBe 1
       }
   }
@@ -65,7 +65,7 @@ class BlockReceiverEffectsSpec
         bs.put(*) wasNever called
         bs.contains(*) wasNever called
         br.ackReceived(*) wasNever called
-        bds.getRepresentation wasNever called
+        dagStorageWasNotModified(bds)
         outStream should notEmit
       }
   }
@@ -79,7 +79,7 @@ class BlockReceiverEffectsSpec
         bs.put(*) wasNever called
         bs.contains(*) wasNever called
         br.ackReceived(*) wasNever called
-        bds.getRepresentation wasNever called
+        dagStorageWasNotModified(bds)
         outStream should notEmit
       }
   }
@@ -93,7 +93,7 @@ class BlockReceiverEffectsSpec
         bs.put(*) wasNever called
         bs.contains(*) wasNever called
         br.ackReceived(*) wasNever called
-        bds.getRepresentation wasNever called
+        dagStorageWasNotModified(bds)
         outStream should notEmit
       }
   }
@@ -107,7 +107,7 @@ class BlockReceiverEffectsSpec
         bs.put(*) wasCalled once
         bs.contains(*) wasNever called
         br.ackReceived(*) wasNever called
-        bds.getRepresentation wasNever called
+        dagStorageWasNotModified(bds)
         outStream should notEmit
       }
   }
@@ -136,7 +136,7 @@ class BlockReceiverEffectsSpec
         bs.put(*) wasCalled twice
         bs.contains(*) wasCalled 3.times
         br.ackReceived(*) wasCalled twice
-        bds.getRepresentation wasCalled 4.times
+        dagStorageWasNotModified(bds)
         a1InOutQueue shouldBe a1.blockHash
         a2InOutQueue shouldBe a2.blockHash
       }
@@ -223,4 +223,10 @@ class BlockReceiverEffectsSpec
       block <- makeBlock()
       _     <- bs.put(Seq((block.blockHash, block)))
     } yield block
+
+  private def dagStorageWasNotModified[F[_]](bds: BlockDagStorage[F]) = {
+    bds.insert(*, *, *) wasNever called
+    bds.insertNew(*, *) wasNever called
+    bds.addDeploy(*) wasNever called
+  }
 }
