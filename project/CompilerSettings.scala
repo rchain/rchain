@@ -19,9 +19,7 @@ object CompilerSettings {
     Seq(
       "-Xfuture",
       "-Ypartial-unification",
-      // To prevent "dead code following this construct" error when using * mockito-scala library
-      // https://github.com/mockito/mockito-scala/issues/29
-      // "-Ywarn-dead-code",
+      "-Ywarn-dead-code",
       "-Ywarn-numeric-widen",
       "-deprecation",
       "-encoding", "UTF-8",
@@ -68,6 +66,9 @@ object CompilerSettings {
         )
       )
     },
-    scalacOptions in (Test, console) := (scalacOptions in (Compile, console)).value
+    scalacOptions in (Test, console) := (scalacOptions in (Compile, console)).value,
+    // To prevent "dead code following this construct" error when using * mockito-scala library
+    // https://github.com/mockito/mockito-scala/issues/29
+    scalacOptions in Test -= "-Ywarn-dead-code"
   )
 }
