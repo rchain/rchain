@@ -20,6 +20,7 @@ import coop.rchain.shared.Log
 import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.testing.scalatest.MonixTaskTest
+import org.mockito.captor.ArgCaptor
 import org.mockito.cats.IdiomaticMockitoCats
 import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.scalatest.Assertion
@@ -46,9 +47,9 @@ class BlockReceiverEffectsSpec
         _       <- incomingQueue.enqueue1(block)
         outList <- outStream.take(1).compile.toList
       } yield {
-        bs.put(*) wasCalled once
-        bs.contains(*) wasCalled once
-        br.ackReceived(*) wasCalled once
+        bs.put(Seq((block.blockHash, block))) wasCalled once
+        bs.contains(Seq(block.blockHash)) wasCalled once
+        br.ackReceived(block.blockHash) wasCalled once
         dagStorageWasNotModified(bds)
         outList.length shouldBe 1
       }
@@ -104,7 +105,7 @@ class BlockReceiverEffectsSpec
         block <- addBlock(bs)
         _     <- incomingQueue.enqueue1(block)
       } yield {
-        bs.put(*) wasCalled once
+        bs.put(Seq((block.blockHash, block))) wasCalled once
         bs.contains(*) wasNever called
         br.ackReceived(*) wasNever called
         dagStorageWasNotModified(bds)
@@ -133,9 +134,18 @@ class BlockReceiverEffectsSpec
         // All dependencies of child A2 are resolved, so it also goes to the output queue
         a2InOutQueue <- outStream.take(1).compile.toList.map(_.head)
       } yield {
-        bs.put(*) wasCalled twice
-        bs.contains(*) wasCalled 3.times
-        br.ackReceived(*) wasCalled twice
+        val bsPutCaptor = ArgCaptor[Seq[(BlockHash, BlockMessage)]]
+        bs.put(bsPutCaptor) wasCalled twice
+        bsPutCaptor.values should contain allOf (Seq((a1.blockHash, a1)), Seq((a2.blockHash, a2)))
+
+        val bsContainsCaptor = ArgCaptor[Seq[BlockHash]]
+        bs.contains(bsContainsCaptor) wasCalled 3.times
+        bsContainsCaptor.values should contain allOf (Seq(a1.blockHash), Seq(a2.blockHash))
+
+        val brAckReceivedCaptor = ArgCaptor[BlockHash]
+        br.ackReceived(brAckReceivedCaptor) wasCalled twice
+        brAckReceivedCaptor.values should contain allOf (a1.blockHash, a2.blockHash)
+
         dagStorageWasNotModified(bds)
         a1InOutQueue shouldBe a1.blockHash
         a2InOutQueue shouldBe a2.blockHash
