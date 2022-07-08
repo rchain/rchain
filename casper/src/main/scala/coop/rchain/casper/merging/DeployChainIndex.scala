@@ -11,6 +11,7 @@ import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Log, Stopwatch}
 import scodec.bits.ByteVector
 
@@ -21,6 +22,7 @@ final case class DeployIdWithCost(id: ByteString, cost: Long)
 
 /** index of deploys depending on each other inside a single block (state transition) */
 final case class DeployChainIndex(
+    hostBlock: ByteString,
     deploysWithCost: Set[DeployIdWithCost],
     preStateHash: Blake2b256Hash,
     postStateHash: Blake2b256Hash,
@@ -40,9 +42,10 @@ final case class DeployChainIndex(
 
 object DeployChainIndex {
 
-  implicit val ord = Ordering.by((_: DeployChainIndex).postStateHash)
+  implicit val ord = Ordering.by((x: DeployChainIndex) => (x.hostBlock, x.postStateHash))
 
   def apply[F[_]: Concurrent, C, P, A, K](
+      hostBlock: ByteString,
       deploys: Set[DeployIndex],
       preStateHash: Blake2b256Hash,
       postStateHash: Blake2b256Hash,
@@ -65,6 +68,7 @@ object DeployChainIndex {
                        historyRepository.getSerializeC
                      )
     } yield DeployChainIndex(
+      hostBlock,
       deploysWithCost,
       preStateHash,
       postStateHash,
@@ -81,6 +85,7 @@ object DeployChainIndex {
           _ => ByteString.copyFrom(Array.fill(64)((scala.util.Random.nextInt(256) - 128).toByte))
         )
       DeployChainIndex(
+        ByteString.copyFrom(new Array[Byte](32)),
         deployIds.map(id => DeployIdWithCost(id, 0)).toSet,
         Blake2b256Hash.fromByteArray(new Array[Byte](32)),
         Blake2b256Hash.fromByteArray(new Array[Byte](32)),

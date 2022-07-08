@@ -198,10 +198,22 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         // Calculate deploy chains / deploy dependency
 
         leftDeployChains <- leftDeployIndices.toList.traverse(
-                             DeployChainIndex(_, baseCp.root, leftPostState, historyRepo)
+                             DeployChainIndex(
+                               ByteString.copyFromUtf8("a"),
+                               _,
+                               baseCp.root,
+                               leftPostState,
+                               historyRepo
+                             )
                            )
         rightDeployChains <- rightDeployIndices.toList.traverse(
-                              DeployChainIndex(_, baseCp.root, rightPostState, historyRepo)
+                              DeployChainIndex(
+                                ByteString.copyFromUtf8("b"),
+                                _,
+                                baseCp.root,
+                                rightPostState,
+                                historyRepo
+                              )
                             )
 
         _ = println(s"DEPLOY_CHAINS LEFT : ${leftDeployChains.size}")
@@ -337,8 +349,8 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         DeployTestInfo(rhoChange(-60), 10L, "0x22"),
         DeployTestInfo(parRho(rhoChange(-20), "for(_ <- @\"X\") {Nil}"), 11L, "0x21")
       ),
-      expectedRejected = Set(makeSig("0x11")),
-      expectedFinalResult = 10
+      expectedRejected = Set(makeSig("0x11"), makeSig("0x12")),
+      expectedFinalResult = 20
     )
   }
 

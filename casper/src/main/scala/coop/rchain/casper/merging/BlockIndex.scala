@@ -152,12 +152,7 @@ object BlockIndex {
 
       index <- deployChains.toVector
                 .traverse(
-                  DeployChainIndex(
-                    _,
-                    preStateHash,
-                    postStateHash,
-                    historyRepository
-                  )
+                  DeployChainIndex(blockHash, _, preStateHash, postStateHash, historyRepository)
                 )
     } yield BlockIndex(blockHash, index)
   }
