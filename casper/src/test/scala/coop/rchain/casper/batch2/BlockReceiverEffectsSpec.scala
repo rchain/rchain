@@ -37,8 +37,7 @@ class BlockReceiverEffectsSpec
     with IdiomaticMockito
     with IdiomaticMockitoCats
     with ArgumentMatchersSugar {
-  implicit val logEff: Log[Task]            = Log.log[Task]
-  implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
+  implicit val logEff: Log[Task] = Log.log[Task]
 
   it should "pass correct block to output stream with calling effectful components" in
     withEnv[Task]("root") {
