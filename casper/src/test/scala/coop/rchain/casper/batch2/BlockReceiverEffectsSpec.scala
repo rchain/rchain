@@ -126,13 +126,13 @@ class BlockReceiverEffectsSpec
 
         // Dependencies of the child (its parent) have not yet been resolved,
         // so only the parent goes to the output queue, since it has no dependencies
-        a1InOutQueue <- outStream.take(1).compile.toList.map(_.head)
+        a1InOutQueue <- outStream.take(1).compile.lastOrError
 
         // A1 is now validated (e.g. in BlockProcessor)
         _ <- validatedQueue.enqueue1(a1)
 
         // All dependencies of child A2 are resolved, so it also goes to the output queue
-        a2InOutQueue <- outStream.take(1).compile.toList.map(_.head)
+        a2InOutQueue <- outStream.take(1).compile.lastOrError
       } yield {
         val bsPutCaptor = ArgCaptor[Seq[(BlockHash, BlockMessage)]]
         bs.put(bsPutCaptor) wasCalled twice
