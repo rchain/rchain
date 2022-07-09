@@ -1,7 +1,7 @@
 package coop.rchain.casper.batch2
 
 import cats.Applicative
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -41,7 +41,7 @@ class BlockReceiverEffectsSpec
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
   it should "pass correct block to output stream with calling effectful components" in
-    withEnv("root") {
+    withEnv[Task]("root") {
       case (incomingQueue, _, outStream, bs, br, bds) =>
         for {
           block   <- makeBlock()
@@ -58,7 +58,7 @@ class BlockReceiverEffectsSpec
 
   // Provided to BlockReceiver shard name ("test") is differ from block's shard name ("root" by default)
   // So block should be rejected and output stream should never take block
-  it should "discard block with invalid shard name" in withEnv("test") {
+  it should "discard block with invalid shard name" in withEnv[Task]("test") {
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
         block <- makeBlock()
@@ -72,7 +72,7 @@ class BlockReceiverEffectsSpec
       }
   }
 
-  it should "discard block with invalid block hash" in withEnv("root") {
+  it should "discard block with invalid block hash" in withEnv[Task]("root") {
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
         block <- makeBlock().map(_.copy(blockHash = "abc".unsafeHexToByteString))
@@ -86,7 +86,7 @@ class BlockReceiverEffectsSpec
       }
   }
 
-  it should "discard block with invalid signature" in withEnv("root") {
+  it should "discard block with invalid signature" in withEnv[Task]("root") {
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
         block <- makeBlock().map(_.copy(sig = "abc".unsafeHexToByteString))
@@ -175,27 +175,27 @@ class BlockReceiverEffectsSpec
 
   import fs2._
 
-  private def withEnv(shardId: String)(
+  private def withEnv[F[_]: Concurrent: Sync: Log](shardId: String)(
       f: (
-          Queue[Task, BlockMessage],
-          Queue[Task, BlockMessage],
-          Stream[Task, BlockHash],
-          BlockStore[Task],
-          BlockRetriever[Task],
-          BlockDagStorage[Task]
-      ) => Task[Assertion]
-  ): Task[Assertion] =
+          Queue[F, BlockMessage],
+          Queue[F, BlockMessage],
+          Stream[F, BlockHash],
+          BlockStore[F],
+          BlockRetriever[F],
+          BlockDagStorage[F]
+      ) => F[Assertion]
+  ): F[Assertion] =
     for {
-      state                 <- Ref[Task].of(BlockReceiverState[BlockHash])
-      incomingBlockQueue    <- Queue.unbounded[Task, BlockMessage]
+      state                 <- Ref[F].of(BlockReceiverState[BlockHash])
+      incomingBlockQueue    <- Queue.unbounded[F, BlockMessage]
       incomingBlockStream   = incomingBlockQueue.dequeue
-      validatedBlocksQueue  <- Queue.unbounded[Task, BlockMessage]
+      validatedBlocksQueue  <- Queue.unbounded[F, BlockMessage]
       validatedBlocksStream = validatedBlocksQueue.dequeue
 
       // Create mock separately for each test
-      bs  = blockStoreMock[Task]()
-      br  = blockRetrieverMock[Task]()
-      bds = blockDagStorageMock[Task]()
+      bs  = blockStoreMock[F]()
+      br  = blockRetrieverMock[F]()
+      bds = blockDagStorageMock[F]()
 
       blockReceiver <- {
         implicit val (bsImp, brImp, bdsImp) = (bs, br, bds)
