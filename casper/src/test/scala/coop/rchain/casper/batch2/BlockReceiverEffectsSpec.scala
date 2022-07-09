@@ -153,15 +153,15 @@ class BlockReceiverEffectsSpec
       }
   }
 
-  private def blockDagStorageMock[F[_]: Applicative](): BlockDagStorage[F] = {
+  private def blockDagStorageMock[F[_]: Applicative]: BlockDagStorage[F] = {
     val emptyDag = DagRepresentation(Set(), Map(), SortedMap(), DagMessageState(), Map())
     mock[BlockDagStorage[F]].getRepresentation returnsF emptyDag
   }
 
-  private def blockRetrieverMock[F[_]: Applicative](): BlockRetriever[F] =
+  private def blockRetrieverMock[F[_]: Applicative]: BlockRetriever[F] =
     mock[BlockRetriever[F]].ackReceived(*) returns ().pure[F]
 
-  private def blockStoreMock[F[_]: Sync: Applicative](): BlockStore[F] = {
+  private def blockStoreMock[F[_]: Sync]: BlockStore[F] = {
     val state  = Ref.unsafe[F, Map[BlockHash, BlockMessage]](Map())
     val bsMock = mock[BlockStore[F]]
     bsMock.contains(*) answers { keys: Seq[BlockHash] =>
@@ -193,9 +193,9 @@ class BlockReceiverEffectsSpec
       validatedBlocksStream = validatedBlocksQueue.dequeue
 
       // Create mock separately for each test
-      bs  = blockStoreMock[F]()
-      br  = blockRetrieverMock[F]()
-      bds = blockDagStorageMock[F]()
+      bs  = blockStoreMock[F]
+      br  = blockRetrieverMock[F]
+      bds = blockDagStorageMock[F]
 
       blockReceiver <- {
         implicit val (bsImp, brImp, bdsImp) = (bs, br, bds)
