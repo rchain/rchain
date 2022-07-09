@@ -43,7 +43,7 @@ class BlockReceiverEffectsSpec
     withEnv[Task]("root") {
       case (incomingQueue, _, outStream, bs, br, bds) =>
         for {
-          block   <- makeBlock()
+          block   <- Sync[Task].delay(makeBlock())
           _       <- incomingQueue.enqueue1(block)
           outList <- outStream.take(1).compile.toList
         } yield {
@@ -60,7 +60,7 @@ class BlockReceiverEffectsSpec
   it should "discard block with invalid shard name" in withEnv[Task]("test") {
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
-        block <- makeBlock()
+        block <- Sync[Task].delay(makeBlock())
         _     <- incomingQueue.enqueue1(block)
       } yield {
         bs.put(*) wasNever called
@@ -74,7 +74,7 @@ class BlockReceiverEffectsSpec
   it should "discard block with invalid block hash" in withEnv[Task]("root") {
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
-        block <- makeBlock().map(_.copy(blockHash = "abc".unsafeHexToByteString))
+        block <- Sync[Task].delay(makeBlock().copy(blockHash = "abc".unsafeHexToByteString))
         _     <- incomingQueue.enqueue1(block)
       } yield {
         bs.put(*) wasNever called
@@ -88,7 +88,7 @@ class BlockReceiverEffectsSpec
   it should "discard block with invalid signature" in withEnv[Task]("root") {
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
-        block <- makeBlock().map(_.copy(sig = "abc".unsafeHexToByteString))
+        block <- Sync[Task].delay(makeBlock().copy(sig = "abc".unsafeHexToByteString))
         _     <- incomingQueue.enqueue1(block)
       } yield {
         bs.put(*) wasNever called
@@ -117,8 +117,8 @@ class BlockReceiverEffectsSpec
     case (incomingQueue, validatedQueue, outStream, bs, br, bds) =>
       for {
         // Received a parent with an empty list of justifications and its child
-        a1 <- makeBlock()
-        a2 <- makeBlock(List(a1.blockHash))
+        a1 <- Sync[Task].delay(makeBlock())
+        a2 = makeBlock(List(a1.blockHash))
 
         // Put the parent and child in the input queue
         _ <- incomingQueue.enqueue1(a2)
@@ -215,17 +215,11 @@ class BlockReceiverEffectsSpec
       .right
       .get
 
-  private def makeBlock(
-      justifications: List[BlockHash] = List()
-  ): Task[BlockMessage] = {
+  private def makeBlock(justifications: List[BlockHash] = List()): BlockMessage = {
     val (privateKey, pubKey) = Secp256k1.newKeyPair
-    for {
-      block <- makeDefaultBlock
-                .copy(sender = pubKey.bytes.toByteString, justifications = justifications)
-                .pure[Task]
-      validatorId = ValidatorIdentity(privateKey)
-      signedBlock = validatorId.signBlock(block)
-    } yield signedBlock
+    val block =
+      makeDefaultBlock.copy(sender = pubKey.bytes.toByteString, justifications = justifications)
+    ValidatorIdentity(privateKey).signBlock(block)
   }
 
   /*private def addBlock(bs: BlockStore[Task]): Task[BlockMessage] =
