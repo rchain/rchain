@@ -1,21 +1,19 @@
 package coop.rchain.casper.batch2
 
 import cats.Applicative
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation}
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.engine.BlockRetriever
-import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Log
 import fs2.concurrent.Queue
 import monix.eval.Task
@@ -99,10 +97,10 @@ class BlockReceiverEffectsSpec
       }
   }
 
-  /*it should "discard known block" in withEnv[Task]("root") {
+  it should "discard known block" in withEnv[Task]("root") {
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
-        block <- addBlock(bs)
+        block <- addBlock[Task](bs)
         _     <- incomingQueue.enqueue1(block)
       } yield {
         bs.put(Seq((block.blockHash, block))) wasCalled once
@@ -111,7 +109,7 @@ class BlockReceiverEffectsSpec
         dagStorageWasNotModified(bds)
         outStream should notEmit
       }
-  }*/
+  }
 
   it should "pass to output blocks with resolved dependencies" in withEnv[Task]("root") {
     case (incomingQueue, validatedQueue, outStream, bs, br, bds) =>
@@ -222,11 +220,11 @@ class BlockReceiverEffectsSpec
     ValidatorIdentity(privateKey).signBlock(block)
   }
 
-  /*private def addBlock(bs: BlockStore[Task]): Task[BlockMessage] =
+  private def addBlock[F[_]: Sync](bs: BlockStore[F]): F[BlockMessage] =
     for {
-      block <- makeBlock()
+      block <- Sync[F].delay(makeBlock())
       _     <- bs.put(Seq((block.blockHash, block)))
-    } yield block*/
+    } yield block
 
   private def dagStorageWasNotModified[F[_]](bds: BlockDagStorage[F]) = {
     bds.insert(*, *, *) wasNever called
