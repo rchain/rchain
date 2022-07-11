@@ -383,8 +383,7 @@ in {
                         "state"     : state,
                         "coopVault" : (coopMultiVault, coopMultiVaultAddr, coopVaultHd),
                         "posVault"  : (posVaultUnf, posVaultAddr, posVault, humanControlHandle),
-                        "currentDeployerData"   : *currentDeployerData,
-                        "epochBlockNumber"      : *epochBlockNumberCh
+                        "currentDeployerData"   : *currentDeployerData
                       })
                     }
                   } |
