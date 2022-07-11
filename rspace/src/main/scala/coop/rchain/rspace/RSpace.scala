@@ -185,10 +185,10 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       comm: COMM,
       label: String
   ): F[COMM] =
-    Metrics[F].incrementCounter(label).map { _ =>
-      eventLog.update(comm +: _)
-      comm
-    }
+    for {
+      _ <- Metrics[F].incrementCounter(label)
+      _ <- eventLog.update(comm +: _)
+    } yield comm
 
   protected override def logConsume(
       consumeRef: Consume,
@@ -197,22 +197,20 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       continuation: K,
       persist: Boolean,
       peeks: SortedSet[Int]
-  ): F[Consume] = syncF.delay {
-    eventLog.update(consumeRef +: _)
-    consumeRef
-  }
+  ): F[Consume] = eventLog.update(consumeRef +: _).as(consumeRef)
 
   protected override def logProduce(
       produceRef: Produce,
       channel: C,
       data: A,
       persist: Boolean
-  ): F[Produce] = syncF.delay {
-    eventLog.update(produceRef +: _)
-    if (!persist)
-      produceCounter.update(_.putAndIncrementCounter(produceRef))
-    produceRef
-  }
+  ): F[Produce] =
+    eventLog
+      .update(produceRef +: _)
+      .as {
+        if (!persist) produceCounter.update(_.putAndIncrementCounter(produceRef))
+        produceRef
+      }
 
   override def createCheckpoint(): F[Checkpoint] = spanF.withMarks("create-checkpoint") {
     for {
@@ -221,8 +219,7 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
                       historyRepositoryAtom.get().checkpoint(changes.toList)
                     }
       _             = historyRepositoryAtom.set(nextHistory)
-      log           = eventLog.take()
-      _             = eventLog.put(Seq.empty)
+      log           <- eventLog.getAndSet(Seq.empty)
       _             = produceCounter.take()
       _             = produceCounter.put(Map.empty.withDefaultValue(0))
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)

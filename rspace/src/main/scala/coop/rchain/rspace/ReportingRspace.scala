@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import cats.Parallel
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -111,25 +112,16 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
     * Seq(Seq[ReportingEvent](Precharge), Seq[ReportingEvent](userDeploy), Seq[ReportingEvent](Refund))
     * It would be seperated by the softcheckpoint creation.
     */
-  val report: SyncVar[Seq[Seq[ReportingEvent]]] = create[Seq[Seq[ReportingEvent]]](Seq.empty)
-  val softReport: SyncVar[Seq[ReportingEvent]]  = create[Seq[ReportingEvent]](Seq.empty)
+  val report: Ref[F, Seq[Seq[ReportingEvent]]] = Ref.unsafe(Seq.empty[Seq[ReportingEvent]])
+  val softReport: Ref[F, Seq[ReportingEvent]]  = Ref.unsafe(Seq.empty[ReportingEvent])
 
-  private def collectReport =
-    for {
-      sReport <- getSoftReport
-      _ = if (sReport.nonEmpty) {
-        report.update(s => s :+ sReport)
-        softReport.update(_ => Seq.empty[ReportingEvent])
-      }
-    } yield ()
+  private def collectReport: F[Unit] =
+    softReport.get.flatMap { sReport =>
+      (report.update(_ :+ sReport) *> softReport.set(Seq())).whenA(sReport.nonEmpty)
+    }
 
   def getReport: F[Seq[Seq[ReportingEvent]]] =
-    for {
-      _      <- collectReport
-      result = report.get
-      _      = report.update(_ => Seq.empty[Seq[ReportingEvent]])
-    } yield result
-  private def getSoftReport: F[Seq[ReportingEvent]] = Sync[F].delay(softReport.get)
+    collectReport *> report.modify((Seq.empty[Seq[ReportingEvent]], _))
 
   protected override def logComm(
       dataCandidates: Seq[ConsumeCandidate[C, A]],
@@ -142,9 +134,7 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
       commRef           <- super.logComm(dataCandidates, channels, wk, comm, label)
       reportingConsume  = ReportingConsume(channels, wk.patterns, wk.continuation, wk.peeks.toSeq)
       reportingProduces = dataCandidates.map(dc => ReportingProduce(dc.channel, dc.datum.a))
-      _ <- Sync[F].delay(
-            softReport.update(s => s :+ ReportingComm(reportingConsume, reportingProduces))
-          )
+      _                 <- softReport.update(_ :+ ReportingComm(reportingConsume, reportingProduces))
     } yield commRef
 
   protected override def logConsume(
@@ -165,7 +155,7 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
             peeks
           )
       reportingConsume = ReportingConsume(channels, patterns, continuation, peeks.toSeq)
-      _                <- Sync[F].delay(softReport.update(s => s :+ reportingConsume))
+      _                <- softReport.update(_ :+ reportingConsume)
     } yield consumeRef
 
   protected override def logProduce(
@@ -176,7 +166,7 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
   ): F[Produce] =
     for {
       _ <- super.logProduce(produceRef, channel, data, persist)
-      _ <- Sync[F].delay(softReport.update(s => s :+ ReportingProduce(channel, data)))
+      _ <- softReport.update(_ :+ ReportingProduce(channel, data))
     } yield produceRef
 
   /** ReportingCasper would reset(empty) the report data in every createCheckpoint.
@@ -185,8 +175,8 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
   override def createCheckpoint(): F[Checkpoint] = syncF.defer {
     for {
       checkpoint <- super.createCheckpoint()
-      _          = softReport.update(_ => Seq.empty[ReportingEvent])
-      _          = report.update(_ => Seq.empty[Seq[ReportingEvent]])
+      _          <- softReport.set(Seq.empty[ReportingEvent])
+      _          <- report.set(Seq.empty[Seq[ReportingEvent]])
     } yield checkpoint
   }
 
