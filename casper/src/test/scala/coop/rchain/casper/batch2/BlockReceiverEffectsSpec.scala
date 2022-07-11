@@ -172,7 +172,7 @@ class BlockReceiverEffectsSpec
 
   import fs2._
 
-  private def withEnv[F[_]: Concurrent: Sync: Log](shardId: String)(
+  private def withEnv[F[_]: Concurrent: Log](shardId: String)(
       f: (
           Queue[F, BlockMessage],
           Queue[F, BlockMessage],
