@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepres
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.engine.BlockRetriever.{AdmitHashResult, Ignore}
 import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
 import coop.rchain.crypto.signatures.Secp256k1
@@ -155,8 +156,16 @@ class BlockReceiverEffectsSpec
     mock[BlockDagStorage[F]].getRepresentation returnsF emptyDag
   }
 
-  private def blockRetrieverMock[F[_]: Applicative]: BlockRetriever[F] =
-    mock[BlockRetriever[F]].ackReceived(*) returns ().pure[F]
+  private def blockRetrieverMock[F[_]: Applicative]: BlockRetriever[F] = {
+    val brMock = mock[BlockRetriever[F]]
+    brMock.ackReceived(*) returns ().pure[F]
+    brMock.admitHash(*, *, *) returnsF AdmitHashResult(
+      Ignore,
+      broadcastRequest = false,
+      requestBlock = false
+    )
+    brMock
+  }
 
   private def blockStoreMock[F[_]: Sync]: BlockStore[F] = {
     val state  = Ref.unsafe[F, Map[BlockHash, BlockMessage]](Map())
