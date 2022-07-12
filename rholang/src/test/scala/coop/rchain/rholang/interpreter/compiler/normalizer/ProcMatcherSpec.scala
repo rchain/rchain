@@ -2,35 +2,24 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
-import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
-  Bundle => AbsynBundle,
-  Ground => AbsynGround,
-  KeyValuePair => AbsynKeyValuePair,
-  Send => AbsynSend,
+  Bundle => _,
+  Ground => _,
+  KeyValuePair => _,
+  Send => _,
   _
 }
-import coop.rchain.rholang.interpreter.compiler.{
-  BoundMapChain,
-  Compiler,
-  FreeMap,
-  NameSort,
-  ProcNormalizeMatcher,
-  ProcSort,
-  ProcVisitInputs,
-  SourcePosition,
-  VarSort
-}
+import coop.rchain.rholang.interpreter.compiler._
 import coop.rchain.rholang.interpreter.errors._
 import monix.eval.Coeval
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import java.io.StringReader
 import scala.collection.immutable.BitSet
 
 class ProcMatcherSpec extends AnyFlatSpec with Matchers {
@@ -1345,12 +1334,14 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   "PSimpleType" should "result in a connective of the correct type" in {
     val procBool      = new PSimpleType(new SimpleTypeBool())
     val procInt       = new PSimpleType(new SimpleTypeInt())
+    val procBigInt    = new PSimpleType(new SimpleTypeBigInt())
     val procString    = new PSimpleType(new SimpleTypeString())
     val procUri       = new PSimpleType(new SimpleTypeUri())
     val procByteArray = new PSimpleType(new SimpleTypeByteArray())
 
     val resultBool      = ProcNormalizeMatcher.normalizeMatch[Coeval](procBool, inputs).value
     val resultInt       = ProcNormalizeMatcher.normalizeMatch[Coeval](procInt, inputs).value
+    val resultBigInt    = ProcNormalizeMatcher.normalizeMatch[Coeval](procBigInt, inputs).value
     val resultString    = ProcNormalizeMatcher.normalizeMatch[Coeval](procString, inputs).value
     val resultUri       = ProcNormalizeMatcher.normalizeMatch[Coeval](procUri, inputs).value
     val resultByteArray = ProcNormalizeMatcher.normalizeMatch[Coeval](procByteArray, inputs).value
@@ -1360,6 +1351,9 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     )
     resultInt.par should be(
       Par(connectives = Seq(Connective(ConnInt(true))), connectiveUsed = true)
+    )
+    resultBigInt.par should be(
+      Par(connectives = Seq(Connective(ConnBigInt(true))), connectiveUsed = true)
     )
     resultString.par should be(
       Par(connectives = Seq(Connective(ConnString(true))), connectiveUsed = true)

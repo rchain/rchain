@@ -2343,4 +2343,330 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       ReduceError("The number of terms in the Par is 32768, which exceeds the limit of 32767.")
     )
   }
+
+  "reducer" should "perform arithmetic operations with BigInt" in {
+    val table = Table(
+      ("clue", "input", "output"),
+      (
+        """-(BigInt(9999999999999999999999999999999999999999)) =>
+         | -BigInt(9999999999999999999999999999999999999999999999)""".stripMargin,
+        ENegBody(ENeg(GBigInt(BigInt("9999999999999999999999999999999999999999")))),
+        GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+      ),
+      (
+        """BigInt(9999999999999999999999999999999999999999) *
+          | (-BigInt(9999999999999999999999999999999999999999)) =>
+          | -BigInt(99999999999999999999999999999999999999980000000000000000000000000000000000000001)""".stripMargin,
+        EMultBody(
+          EMult(
+            GBigInt(BigInt("9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBigInt(
+          BigInt(
+            "-99999999999999999999999999999999999999980000000000000000000000000000000000000001"
+          )
+        )
+      ),
+      (
+        """(-BigInt(99999999999999999999999999999999999999980000000000000000000000000000000000000001)) /
+          | BigInt(9999999999999999999999999999999999999999) =>
+          | -BigInt(9999999999999999999999999999999999999999)""".stripMargin,
+        EDivBody(
+          EDiv(
+            GBigInt(
+              BigInt(
+                "-99999999999999999999999999999999999999980000000000000000000000000000000000000001"
+              )
+            ),
+            GBigInt(BigInt("9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBigInt(
+          BigInt("-9999999999999999999999999999999999999999")
+        )
+      ),
+      (
+        """BigInt(99999999999999999999999999999999999999980000000000000000000000000000000000000002) %
+          | BigInt(9999999999999999999999999999999999999999) =>
+          | BigInt(1)""".stripMargin,
+        EModBody(
+          EMod(
+            GBigInt(
+              BigInt(
+                "99999999999999999999999999999999999999980000000000000000000000000000000000000002"
+              )
+            ),
+            GBigInt(BigInt("9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBigInt(
+          BigInt("1")
+        )
+      ),
+      (
+        """(-BigInt(9999999999999999999999999999999999999999)) +
+          | (-BigInt(9999999999999999999999999999999999999999)) =>
+          | -BigInt(19999999999999999999999999999999999999998)""".stripMargin,
+        EPlusBody(
+          EPlus(
+            GBigInt(BigInt("-9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBigInt(
+          BigInt("-19999999999999999999999999999999999999998")
+        )
+      ),
+      (
+        """(-BigInt(9999999999999999999999999999999999999999)) -
+          | (-BigInt(-9999999999999999999999999999999999999999)) =>
+          |BigInt(0)""".stripMargin,
+        EMinusBody(
+          EMinus(
+            GBigInt(BigInt("-9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBigInt(
+          BigInt("0")
+        )
+      )
+    )
+    forAll(table) { (clue, input, output) =>
+      val result = runReducer(input).map(_.exprs)
+      result should be(Right(Seq(Expr(output)))) withClue clue
+    }
+  }
+
+  it should "perform comparison operations with BigInt" in {
+    val table = Table(
+      ("clue", "input", "output"),
+      (
+        """-BigInt(9999999999999999999999999999999999999999) <
+          | BigInt(9999999999999999999999999999999999999999) =>
+          | true""".stripMargin,
+        ELtBody(
+          ELt(
+            GBigInt(BigInt("-9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBool(true)
+      ),
+      (
+        """ -BigInt(9999999999999999999999999999999999999999) <
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          | false""".stripMargin,
+        ELtBody(
+          ELt(
+            GBigInt(BigInt("-9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBool(false)
+      ),
+      (
+        """-BigInt(9999999999999999999999999999999999999999) <=
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          |true""".stripMargin,
+        ELteBody(
+          ELte(
+            GBigInt(BigInt("-9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBool(true)
+      ),
+      (
+        """-BigInt(9999999999999999999999999999999999999998) <=
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          |false""".stripMargin,
+        ELteBody(
+          ELte(
+            GBigInt(BigInt("-9999999999999999999999999999999999999998")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBool(false)
+      ),
+      (
+        """BigInt(9999999999999999999999999999999999999999) >
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          | true""".stripMargin,
+        EGtBody(
+          EGt(
+            GBigInt(BigInt("9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBool(true)
+      ),
+      (
+        """-BigInt(9999999999999999999999999999999999999999) >
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          |false""".stripMargin,
+        EGtBody(
+          EGt(
+            GBigInt(BigInt("-9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBool(false)
+      ),
+      (
+        """-BigInt(9999999999999999999999999999999999999999) >=
+          | -BigInt(9999999999999999999999999999999999999999) =>
+          | true""".stripMargin,
+        EGteBody(
+          EGte(
+            GBigInt(BigInt("-9999999999999999999999999999999999999999")),
+            GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBool(true)
+      ),
+      (
+        """BigInt(9999999999999999999999999999999999999998) >=
+          | BigInt(9999999999999999999999999999999999999999) =>
+          | false""".stripMargin,
+        EGteBody(
+          EGte(
+            GBigInt(BigInt("9999999999999999999999999999999999999998")),
+            GBigInt(BigInt("9999999999999999999999999999999999999999"))
+          )
+        ),
+        GBool(false)
+      )
+    )
+
+    forAll(table) { (clue, input, output) =>
+      val result = runReducer(input).map(_.exprs)
+      result should be(Right(Seq(Expr(output)))) withClue clue
+    }
+  }
+
+  it should "return report errors with failure BigInt operations" in {
+    val table = Table(
+      ("clue", "input", "output"),
+      (
+        """BigInt(1) * 1 => OperatorExpectedError""",
+        EMultBody(EMult(GBigInt(BigInt("1")), GInt(1))),
+        OperatorExpectedError("*", "BigInt", GInt(1).typ)
+      ),
+      (
+        """BigInt(1) >= 1 => ReduceError""",
+        EGteBody(EGte(GBigInt(BigInt("1")), GInt(1))),
+        ReduceError(
+          "Unexpected compare: " + GBigInt(BigInt("1")).exprs.head + " vs. " + GInt(1).exprs.head
+        )
+      )
+    )
+
+    forAll(table) { (clue, input, error) =>
+      runReducer(input) should be(Left(error)) withClue clue
+    }
+  }
+
+  it should "perform toInt() method" in {
+    val table = Table(
+      ("clue", "input", "output"),
+      (
+        """(-1).toInt() => -1""",
+        EMethod("toInt", GInt(-1)),
+        GInt(-1)
+      ),
+      (
+        """BigInt(9223372036854775807).toInt() => 9223372036854775807""",
+        EMethod("toInt", GBigInt(BigInt("9223372036854775807"))),
+        GInt(9223372036854775807L)
+      ),
+      (
+        """"-9223372036854775808".toInt() => -9223372036854775808""",
+        EMethod("toInt", GString("-9223372036854775808")),
+        GInt(-9223372036854775808L)
+      )
+    )
+
+    forAll(table) { (clue, input, output) =>
+      val result = runReducer(input).map(_.exprs)
+      result should be(Right(Seq(Expr(output)))) withClue clue
+    }
+  }
+
+  it should "perform toBigInt() method" in {
+    val table = Table(
+      ("clue", "input", "output"),
+      (
+        """BigInt(-1).toBigInt() => BigInt(-1)""",
+        EMethod("toBigInt", GBigInt(BigInt("-1"))),
+        GBigInt(BigInt("-1"))
+      ),
+      (
+        """(-1).toBigInt() => BigInt(-1)""",
+        EMethod("toBigInt", GInt(-1)),
+        GBigInt(BigInt("-1"))
+      ),
+      (
+        """"-9999999999999999999999999999999999999999".toBigInt() =>
+          | -BigInt(9999999999999999999999999999999999999999)""".stripMargin,
+        EMethod("toBigInt", GString("-9999999999999999999999999999999999999999")),
+        GBigInt(BigInt("-9999999999999999999999999999999999999999"))
+      )
+    )
+
+    forAll(table) { (clue, input, output) =>
+      val result = runReducer(input).map(_.exprs)
+      result should be(Right(Seq(Expr(output)))) withClue clue
+    }
+  }
+
+  it should "return report errors in failure cases with toInt() method" in {
+    val table = Table(
+      ("clue", "input", "output"),
+      (
+        """BigInt(9999999999999999999999999999999999999999).toInt() => ReduceError""",
+        EMethod("toInt", GBigInt(BigInt("9999999999999999999999999999999999999999"))),
+        ReduceError(
+          s"Method toInt(): input BigInt value 9999999999999999999999999999999999999999 out of range"
+        )
+      ),
+      (
+        """"WRONG".toInt() => ReduceError""",
+        EMethod("toInt", GString("WRONG")),
+        ReduceError(s"""Method toInt(): input string "WRONG" cannot be converted to Int""")
+      ),
+      (
+        """Set().toInt() => ReduceError""",
+        EMethod("toInt", ESetBody(ParSet(List()))),
+        MethodNotDefined("toInt", "Set")
+      )
+    )
+
+    forAll(table) { (clue, input, error) =>
+      runReducer(input) should be(Left(error)) withClue clue
+    }
+  }
+
+  it should "return report errors in failure cases with toBigInt() method" in {
+    val table = Table(
+      ("clue", "input", "output"),
+      (
+        """"WRONG".toBigInt() => ReduceError""",
+        EMethod("toBigInt", GString("WRONG")),
+        ReduceError(
+          """Method toBigInt(): input string "WRONG" cannot be converted to BigInt"""
+        )
+      ),
+      (
+        """Set().toBigInt() => ReduceError""",
+        EMethod("toBigInt", ESetBody(ParSet(List()))),
+        MethodNotDefined("toBigInt", "Set")
+      )
+    )
+    forAll(table) { (clue, input, error) =>
+      runReducer(input) should be(Left(error)) withClue clue
+    }
+  }
 }

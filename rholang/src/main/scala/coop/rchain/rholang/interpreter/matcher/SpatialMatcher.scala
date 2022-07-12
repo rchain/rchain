@@ -317,6 +317,13 @@ trait SpatialMatcherInstances {
             case _ => MonoidK[F].empty[Unit]
           }
 
+        case _: ConnBigInt =>
+          target.singleExpr match {
+            case Some(Expr(GBigInt(_))) =>
+              ().pure[F]
+            case _ => MonoidK[F].empty[Unit]
+          }
+
         case _: ConnString =>
           target.singleExpr match {
             case Some(Expr(GString(_))) =>

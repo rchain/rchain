@@ -27,6 +27,7 @@ trait ScoreTree {
 
   sealed trait TaggedAtom
   case class IntAtom(i: Long)         extends TaggedAtom
+  case class BigIntAtom(bi: BigInt)   extends TaggedAtom
   case class StringAtom(s: String)    extends TaggedAtom
   case class BytesAtom(b: ByteString) extends TaggedAtom
 
@@ -54,24 +55,29 @@ trait ScoreTree {
     }
     def compare(that: ScoreAtom): Int =
       (this.value, that.value) match {
-        case (IntAtom(i1), IntAtom(i2))       => i1.compare(i2)
-        case (IntAtom(_), _)                  => -1
-        case (_, IntAtom(_))                  => 1
-        case (StringAtom(s1), StringAtom(s2)) => s1.compare(s2)
-        case (StringAtom(_), _)               => -1
-        case (_, StringAtom(_))               => 1
-        case (BytesAtom(b1), BytesAtom(b2))   => bsCompare(b1, b2)
+        case (IntAtom(i1), IntAtom(i2))         => i1.compare(i2)
+        case (IntAtom(_), _)                    => -1
+        case (_, IntAtom(_))                    => 1
+        case (BigIntAtom(bi1), BigIntAtom(bi2)) => bi1.compare(bi2)
+        case (BigIntAtom(_), _)                 => -1
+        case (_, BigIntAtom(_))                 => 1
+        case (StringAtom(s1), StringAtom(s2))   => s1.compare(s2)
+        case (StringAtom(_), _)                 => -1
+        case (_, StringAtom(_))                 => 1
+        case (BytesAtom(b1), BytesAtom(b2))     => bsCompare(b1, b2)
       }
   }
 
   object ScoreAtom {
     def apply(value: Long): ScoreAtom       = new ScoreAtom(IntAtom(value))
+    def apply(value: BigInt): ScoreAtom     = new ScoreAtom(BigIntAtom(value))
     def apply(value: String): ScoreAtom     = new ScoreAtom(StringAtom(value))
     def apply(value: ByteString): ScoreAtom = new ScoreAtom(BytesAtom(value))
   }
 
   object Leaf {
     def apply(item: Long)       = new Leaf(ScoreAtom(item))
+    def apply(item: BigInt)     = new Leaf(ScoreAtom(item))
     def apply(item: String)     = new Leaf(ScoreAtom(item))
     def apply(item: ByteString) = new Leaf(ScoreAtom(item))
   }
@@ -140,6 +146,7 @@ trait ScoreTree {
     final val DEPLOYER_AUTH  = 10
     final val DEPLOY_ID      = 11
     final val SYS_AUTH_TOKEN = 12
+    final val BIG_INT        = 13
 
     // Vars
     final val BOUND_VAR = 50
@@ -196,6 +203,7 @@ trait ScoreTree {
     final val CONNECTIVE_STRING    = 406
     final val CONNECTIVE_URI       = 407
     final val CONNECTIVE_BYTEARRAY = 408
+    final val CONNECTIVE_BIG_INT   = 409
 
     final val PAR = 999
   }

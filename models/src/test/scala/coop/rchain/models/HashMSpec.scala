@@ -60,6 +60,7 @@ class HashMSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers 
 
   assertTypeError("sameResultAsReference[Long]") //see the private instance in HashM
   sameResultAsReference[String]
+  sameResultAsReference[BigInt]
   sameResultAsReference[ByteString]
   sameResultAsReference[BitSet]
   sameResultAsReference[AlwaysEqual[BitSet]]

@@ -37,6 +37,7 @@ trait PrettyInstances extends PrettyDerivation {
   implicit val PrettyInt     = fromToString[Int]
   implicit val PrettyLong    = fromToString[Long]
   implicit val PrettyBitSet  = fromToString[BitSet]
+  implicit val PrettyBigInt  = fromToString[BigInt]
 
   // obviously won't print compiling code,
   // but seeing the stacktrace is more important in this case

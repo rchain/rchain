@@ -238,11 +238,55 @@ class ParSortMatcherSpec extends AnyFlatSpec with Matchers {
     result.term should be(sortedParGround)
   }
 
-  it should "sort in order of boolean, int, string, uri" in {
+  it should "sort so that smaller BigInt values come first" in {
     val parGround =
-      Par(exprs = List(GUri("https://www.rchain.coop/"), GInt(47), GString("Hello"), GBool(true)))
+      Par(
+        exprs = List(
+          GBigInt(2),
+          GBigInt(BigInt("9999999999999999999999999999999999999999999999")),
+          GBigInt(BigInt("-9999999999999999999999999999999999999999999999")),
+          GBigInt(-2),
+          GBigInt(0)
+        )
+      )
+    val sortedParGround: Par =
+      Par(
+        exprs = List(
+          GBigInt(BigInt("-9999999999999999999999999999999999999999999999")),
+          GBigInt(-2),
+          GBigInt(0),
+          GBigInt(2),
+          GBigInt(BigInt("9999999999999999999999999999999999999999999999"))
+        )
+      )
+    val result = sort(parGround)
+    result.term should be(sortedParGround)
+  }
+
+  it should "sort in order of boolean, int, string, uri, ByteArray, BigInt" in {
+    val byteArray = GByteArray(ByteString.copyFrom(Base16.unsafeDecode("80")))
+    val parGround =
+      Par(
+        exprs = List(
+          byteArray,
+          GBigInt(0),
+          GUri("https://www.rchain.coop/"),
+          GInt(47),
+          GString("Hello"),
+          GBool(true)
+        )
+      )
     val sortedParGround =
-      Par(exprs = List(GBool(true), GInt(47), GString("Hello"), GUri("https://www.rchain.coop/")))
+      Par(
+        exprs = List(
+          GBool(true),
+          GInt(47),
+          GString("Hello"),
+          GUri("https://www.rchain.coop/"),
+          GBigInt(0),
+          byteArray
+        )
+      )
     val result = sort(parGround)
     result.term should be(sortedParGround)
   }
@@ -768,13 +812,14 @@ class ParSortMatcherSpec extends AnyFlatSpec with Matchers {
     result.term should be(sortedParExpr)
   }
 
-  it should "sort logical connectives in \"varref\", \"bool\", \"int\", \"string\", \"uri\", \"bytearray\" order" in {
+  it should "sort logical connectives in \"varref\", \"bool\", \"int\", \"string\", \"uri\", \"bytearray\", \"bigint\" order" in {
     val parExpr =
       Par(
         connectives = List(
           Connective(ConnByteArray(true)),
           Connective(ConnUri(true)),
           Connective(ConnString(true)),
+          Connective(ConnBigInt(true)),
           Connective(ConnInt(true)),
           Connective(ConnBool(true)),
           Connective(
@@ -793,7 +838,8 @@ class ParSortMatcherSpec extends AnyFlatSpec with Matchers {
           Connective(ConnInt(true)),
           Connective(ConnString(true)),
           Connective(ConnUri(true)),
-          Connective(ConnByteArray(true))
+          Connective(ConnByteArray(true)),
+          Connective(ConnBigInt(true))
         ),
         connectiveUsed = true
       )

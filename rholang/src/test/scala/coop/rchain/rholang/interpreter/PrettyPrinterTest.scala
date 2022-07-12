@@ -51,6 +51,12 @@ class GroundPrinterSpec extends AnyFlatSpec with Matchers {
     PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gi).value) shouldBe target
   }
 
+  "GroundBigInt" should "Print as \" 9999999999999999999999999999999999999999 \"" in {
+    val gbi            = new GroundBigInt("9999999999999999999999999999999999999999")
+    val target: String = "BigInt(9999999999999999999999999999999999999999)"
+    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gbi).value) shouldBe target
+  }
+
   "GroundString" should "Print as \"" + "String" + "\"" in {
     val gs             = new GroundString("\"String\"")
     val target: String = "\"" + "String" + "\""

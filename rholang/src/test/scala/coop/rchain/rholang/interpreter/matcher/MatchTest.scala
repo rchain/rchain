@@ -890,6 +890,15 @@ class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with Trip
     assertSpatialMatch(failTarget, pattern, None)
   }
 
+  "Matching BigInt" should "work" in {
+    val successTarget: Par  = GBigInt(BigInt("-9999999999999999999999999999999999999999999999"))
+    val failTarget: Par     = GInt(12)
+    val pattern: Connective = Connective(ConnBigInt(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
   "Matching String" should "work" in {
     val successTarget: Par  = GString("Match me!")
     val failTarget: Par     = GInt(42)

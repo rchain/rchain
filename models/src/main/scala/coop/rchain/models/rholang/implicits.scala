@@ -31,6 +31,7 @@ object implicits {
 
   implicit def fromGBool(g: GBool): Expr          = apply(g)
   implicit def fromGInt(g: GInt): Expr            = apply(g)
+  implicit def fromGBigInt(g: GBigInt): Expr      = apply(g)
   implicit def fromGString(g: GString): Expr      = apply(g)
   implicit def fromGUri(g: GUri): Expr            = apply(g)
   implicit def fromByteArray(g: GByteArray): Expr = apply(g)
@@ -232,6 +233,7 @@ object implicits {
       exprInstance match {
         case GBool(_)      => "Bool"
         case GInt(_)       => "Int"
+        case GBigInt(_)    => "BigInt"
         case GString(_)    => "String"
         case GUri(_)       => "Uri"
         case GByteArray(_) => "ByteArray"
@@ -388,6 +390,7 @@ object implicits {
       e.exprInstance match {
         case GBool(_)                                     => false
         case GInt(_)                                      => false
+        case GBigInt(_)                                   => false
         case GString(_)                                   => false
         case GUri(_)                                      => false
         case GByteArray(_)                                => false
@@ -425,6 +428,7 @@ object implicits {
       e.exprInstance match {
         case GBool(_)                                     => BitSet()
         case GInt(_)                                      => BitSet()
+        case GBigInt(_)                                   => BitSet()
         case GString(_)                                   => BitSet()
         case GUri(_)                                      => BitSet()
         case GByteArray(_)                                => BitSet()
@@ -529,6 +533,7 @@ object implicits {
           case VarRefBody(_)            => false
           case _: ConnBool              => true
           case _: ConnInt               => true
+          case _: ConnBigInt            => true
           case _: ConnString            => true
           case _: ConnUri               => true
           case _: ConnByteArray         => true

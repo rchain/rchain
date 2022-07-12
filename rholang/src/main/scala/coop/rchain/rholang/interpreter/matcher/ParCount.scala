@@ -107,6 +107,7 @@ private[matcher] object ParCount {
         (ParCount(), ParCount())
       case _: ConnBool      => (ParCount(exprs = 1), ParCount(exprs = 1))
       case _: ConnInt       => (ParCount(exprs = 1), ParCount(exprs = 1))
+      case _: ConnBigInt    => (ParCount(exprs = 1), ParCount(exprs = 1))
       case _: ConnString    => (ParCount(exprs = 1), ParCount(exprs = 1))
       case _: ConnUri       => (ParCount(exprs = 1), ParCount(exprs = 1))
       case _: ConnByteArray => (ParCount(exprs = 1), ParCount(exprs = 1))
