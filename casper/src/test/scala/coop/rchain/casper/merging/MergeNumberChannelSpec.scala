@@ -199,7 +199,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
 
         leftDeployChains <- leftDeployIndices.toList.traverse(
                              DeployChainIndex(
-                               ByteString.copyFromUtf8("a"),
+                               Blake2b256Hash.fromHex("a".padTo(64, '0')),
                                _,
                                baseCp.root,
                                leftPostState,
@@ -208,7 +208,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
                            )
         rightDeployChains <- rightDeployIndices.toList.traverse(
                               DeployChainIndex(
-                                ByteString.copyFromUtf8("b"),
+                                Blake2b256Hash.fromHex("b".padTo(64, '0')),
                                 _,
                                 baseCp.root,
                                 rightPostState,

@@ -1,9 +1,16 @@
 package coop.rchain.casper
 
-import coop.rchain.casper.merging.DeployChainIndex
+import com.google.protobuf.ByteString
+import coop.rchain.casper.MergingBenchmarkSpec.random
+import coop.rchain.casper.merging.{DeployChainIndex, DeployIdWithCost}
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.merger.{EventLogIndex, StateChange}
 import coop.rchain.sdk.dag.merging.DagMergingLogic.computeRejectionOptions
 import coop.rchain.shared.Stopwatch
 import org.scalatest.flatspec.AnyFlatSpec
+
+import java.util.Objects
+import scala.util.Random
 
 class MergingBenchmarkSpec extends AnyFlatSpec {
   "rejections option benchmark" should "for DeplyChainIndex" in {
@@ -17,7 +24,7 @@ class MergingBenchmarkSpec extends AnyFlatSpec {
 
     val conflictSetSizes = Range(5, 100, 5)
     conflictSetSizes.map { conflictSetSize =>
-      val dciFullPairs = DeployChainIndex.random.take(conflictSetSize).toList.combinations(2).toSet
+      val dciFullPairs = random.take(conflictSetSize).toList.combinations(2).toSet
       val intFullPairs = (1 to conflictSetSize).toList.combinations(2).toSet
 
       // One third random pairs are conflicting
@@ -34,4 +41,21 @@ class MergingBenchmarkSpec extends AnyFlatSpec {
       )
     }
   }
+}
+object MergingBenchmarkSpec {
+  def random: Iterator[DeployChainIndex] =
+    Iterator.continually[Int](Random.nextInt(10) + 1).map { size =>
+      val deployIds = Range(0, size).map { _ =>
+        ByteString.copyFrom(Array.fill(64)((scala.util.Random.nextInt(256) - 128).toByte))
+      }
+      DeployChainIndex(
+        Blake2b256Hash.fromByteArray(new Array[Byte](32)),
+        deployIds.map(id => DeployIdWithCost(id, 0)).toSet,
+        Blake2b256Hash.fromByteArray(new Array[Byte](32)),
+        Blake2b256Hash.fromByteArray(new Array[Byte](32)),
+        EventLogIndex.empty,
+        StateChange.empty,
+        Objects.hash(deployIds.map(id => DeployIdWithCost(id, 0)).map(_.id): _*)
+      )
+    }
 }
