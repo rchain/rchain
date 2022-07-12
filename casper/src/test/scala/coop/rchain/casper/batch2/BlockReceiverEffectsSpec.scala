@@ -133,17 +133,15 @@ class BlockReceiverEffectsSpec
         // All dependencies of child A2 are resolved, so it also goes to the output queue
         a2InOutQueue <- outStream.take(1).compile.lastOrError
       } yield {
-        val bsPutCaptor = ArgCaptor[Seq[(BlockHash, BlockMessage)]]
-        bs.put(bsPutCaptor) wasCalled twice
-        bsPutCaptor.values should contain allOf (Seq((a1.blockHash, a1)), Seq((a2.blockHash, a2)))
+        bs.put(Seq((a1.blockHash, a1))) wasCalled once
+        bs.put(Seq((a2.blockHash, a2))) wasCalled once
 
         val bsContainsCaptor = ArgCaptor[Seq[BlockHash]]
         bs.contains(bsContainsCaptor) wasCalled 3.times
         bsContainsCaptor.values should contain allOf (Seq(a1.blockHash), Seq(a2.blockHash))
 
-        val brAckReceivedCaptor = ArgCaptor[BlockHash]
-        br.ackReceived(brAckReceivedCaptor) wasCalled twice
-        brAckReceivedCaptor.values should contain allOf (a1.blockHash, a2.blockHash)
+        br.ackReceived(a1.blockHash) wasCalled once
+        br.ackReceived(a2.blockHash) wasCalled once
 
         dagStorageWasNotModified(bds)
         a1InOutQueue shouldBe a1.blockHash
