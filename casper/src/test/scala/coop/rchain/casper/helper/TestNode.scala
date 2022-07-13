@@ -38,7 +38,6 @@ import coop.rchain.shared._
 import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.Assertions
 
 import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -76,10 +75,8 @@ case class TestNode[F[_]: Concurrent: Timer](
     shardName: String,
     minPhloPrice: Long
 ) {
-  // Scalatest `assert` macro needs some member of the Assertions trait.
-  // An (inferior) alternative would be to inherit the trait...
-  private val scalatestAssertions = new Assertions {}
-  import scalatestAssertions._
+  // Use ScalaTest asserts (overrides Scala Predef asserts)
+  import org.scalatest.Assertions._
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
   val apiMaxBlocksLimit              = 50
