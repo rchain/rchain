@@ -149,7 +149,7 @@ final case class CacheTransactionAPI[F[_]: Concurrent](
   private val blockDeferMap: TrieMap[String, Deferred[F, TransactionResponse]] = TrieMap.empty
 
   def getTransaction(blockHash: String): F[TransactionResponse] =
-    (if (blockHash.isEmpty) None.pure else store.get1(blockHash)) >>= { transactionOpt =>
+    store.get1(blockHash) >>= { transactionOpt =>
       transactionOpt.fold {
         for {
           defNew <- Deferred[F, TransactionResponse]
