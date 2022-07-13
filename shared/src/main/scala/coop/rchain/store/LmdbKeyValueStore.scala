@@ -5,7 +5,7 @@ import cats.syntax.all._
 import org.lmdbjava._
 
 import java.nio.ByteBuffer
-import scala.util.{Try, Using}
+import scala.util.Using
 import scala.util.control.NonFatal
 
 final case class DbEnv[F[_]](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer], done: F[Unit])
@@ -58,13 +58,7 @@ final case class LmdbKeyValueStore[F[_]: Sync](
   // GET
   override def get[T](keys: Seq[ByteBuffer], fromBuffer: ByteBuffer => T): F[Seq[Option[T]]] =
     withTxnSingleThread(isWrite = false) { (txn, dbi) =>
-      keys.map(
-        x =>
-          Try(dbi.get(txn, x))
-            .collect { case null => throw new Exception("Not found"); case b: ByteBuffer => b }
-            .toOption
-            .map(fromBuffer)
-      )
+      keys.map(x => Option(dbi.get(txn, x)).map(fromBuffer))
     }
 
   // PUT
