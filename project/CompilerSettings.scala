@@ -19,7 +19,11 @@ object CompilerSettings {
     Seq(
       "-Xfuture",
       "-Ypartial-unification",
-      "-Ywarn-dead-code",
+      // To prevent "dead code following this construct" error when using `*` from mockito-scala library
+      // https://github.com/mockito/mockito-scala/#dead-code-warning
+      // This warning should be disabled only for Tests but in that case IntelliJ cannot compile project.
+      // Related issues https://youtrack.jetbrains.com/issue/SCL-11824, https://youtrack.jetbrains.com/issue/IDEA-232043
+      // "-Ywarn-dead-code",
       "-Ywarn-numeric-widen",
       "-deprecation",
       "-encoding", "UTF-8",
