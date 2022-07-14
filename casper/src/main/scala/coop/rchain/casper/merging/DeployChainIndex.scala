@@ -3,24 +3,18 @@ package coop.rchain.casper.merging
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
-import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
-import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared.{Log, Stopwatch}
-import scodec.bits.ByteVector
 
 import java.util.Objects
-import scala.util.Random
 
 final case class DeployIdWithCost(id: ByteString, cost: Long)
 
 /** index of deploys depending on each other inside a single block (state transition) */
 final case class DeployChainIndex(
+    hostBlock: Blake2b256Hash,
     deploysWithCost: Set[DeployIdWithCost],
     preStateHash: Blake2b256Hash,
     postStateHash: Blake2b256Hash,
@@ -40,9 +34,10 @@ final case class DeployChainIndex(
 
 object DeployChainIndex {
 
-  implicit val ord = Ordering.by((_: DeployChainIndex).postStateHash)
+  implicit val ord = Ordering.by((x: DeployChainIndex) => (x.hostBlock, x.postStateHash))
 
   def apply[F[_]: Concurrent, C, P, A, K](
+      hostBlock: Blake2b256Hash,
       deploys: Set[DeployIndex],
       preStateHash: Blake2b256Hash,
       postStateHash: Blake2b256Hash,
@@ -65,6 +60,7 @@ object DeployChainIndex {
                        historyRepository.getSerializeC
                      )
     } yield DeployChainIndex(
+      hostBlock,
       deploysWithCost,
       preStateHash,
       postStateHash,
@@ -73,22 +69,6 @@ object DeployChainIndex {
       Objects.hash(deploysWithCost.map(_.id).toSeq: _*)
     )
   }
-
-  def random: Iterator[DeployChainIndex] =
-    Iterator.continually[Int](Random.nextInt(10) + 1).map { size =>
-      val deployIds = Range(0, size)
-        .map(
-          _ => ByteString.copyFrom(Array.fill(64)((scala.util.Random.nextInt(256) - 128).toByte))
-        )
-      DeployChainIndex(
-        deployIds.map(id => DeployIdWithCost(id, 0)).toSet,
-        Blake2b256Hash.fromByteArray(new Array[Byte](32)),
-        Blake2b256Hash.fromByteArray(new Array[Byte](32)),
-        EventLogIndex.empty,
-        StateChange.empty,
-        Objects.hash(deployIds.map(id => DeployIdWithCost(id, 0)).map(_.id): _*)
-      )
-    }
 
   def deployChainCost(r: DeployChainIndex) = r.deploysWithCost.map(_.cost).sum
   def isDependency(a: DeployChainIndex, dependencyFor: DeployChainIndex) =

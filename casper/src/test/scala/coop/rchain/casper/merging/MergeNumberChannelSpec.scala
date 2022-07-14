@@ -154,7 +154,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
                                  sigBS = makeSig(deploy.sig)
                                } yield DeployIndex(sigBS, deploy.cost, evLogIndex)
                            }
-          } yield (evLogIndices.toSet, endCheckpoint.root)
+          } yield (evLogIndices, endCheckpoint.root)
 
         historyRepo = rm.getHistoryRepo
 
@@ -173,27 +173,47 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         leftResult                     <- runRholang(leftTerms, baseCp.root)
         (leftEvIndices, leftPostState) = leftResult
 
-        leftDeployIndices = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
-          leftEvIndices,
-          (x, y) => EventLogMergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
-        )
+        leftDeployIndices = {
+          val dependencyMap =
+            (0 to (leftEvIndices.size - 2))
+              .map(idx => leftEvIndices(idx) -> Set(leftEvIndices(idx + 1)))
+              .toMap
+          DagMergingLogic
+            .computeGreedyNonIntersectingBranches[DeployIndex](leftEvIndices.toSet, dependencyMap)
+        }
 
         // Branch 2 change
         rightResult                      <- runRholang(rightTerms, baseCp.root)
         (rightEvIndices, rightPostState) = rightResult
 
-        rightDeployIndices = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
-          rightEvIndices,
-          (x, y) => EventLogMergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
-        )
+        rightDeployIndices = {
+          val dependencyMap =
+            (0 to (rightEvIndices.size - 2))
+              .map(idx => rightEvIndices(idx) -> Set(rightEvIndices(idx + 1)))
+              .toMap
+          DagMergingLogic
+            .computeGreedyNonIntersectingBranches[DeployIndex](rightEvIndices.toSet, dependencyMap)
+        }
 
         // Calculate deploy chains / deploy dependency
 
         leftDeployChains <- leftDeployIndices.toList.traverse(
-                             DeployChainIndex(_, baseCp.root, leftPostState, historyRepo)
+                             DeployChainIndex(
+                               Blake2b256Hash.fromHex("a".padTo(64, '0')),
+                               _,
+                               baseCp.root,
+                               leftPostState,
+                               historyRepo
+                             )
                            )
         rightDeployChains <- rightDeployIndices.toList.traverse(
-                              DeployChainIndex(_, baseCp.root, rightPostState, historyRepo)
+                              DeployChainIndex(
+                                Blake2b256Hash.fromHex("b".padTo(64, '0')),
+                                _,
+                                baseCp.root,
+                                rightPostState,
+                                historyRepo
+                              )
                             )
 
         _ = println(s"DEPLOY_CHAINS LEFT : ${leftDeployChains.size}")
@@ -329,8 +349,8 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         DeployTestInfo(rhoChange(-60), 10L, "0x22"),
         DeployTestInfo(parRho(rhoChange(-20), "for(_ <- @\"X\") {Nil}"), 11L, "0x21")
       ),
-      expectedRejected = Set(makeSig("0x11")),
-      expectedFinalResult = 10
+      expectedRejected = Set(makeSig("0x11"), makeSig("0x12")),
+      expectedFinalResult = 20
     )
   }
 
@@ -346,8 +366,8 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         DeployTestInfo(rhoChange(10), 10L, "0x21"), // +10
         DeployTestInfo(rhoChange(-20), 10L, "0x22") // -20
       ),
-      expectedRejected = Set(makeSig("0x11")), // TODO make mergeable deploys depending, this should be empty
-      expectedFinalResult = 15
+      expectedRejected = Set(),
+      expectedFinalResult = 10
     )
   }
 

@@ -139,19 +139,21 @@ object BlockIndex {
                              )
                          }
 
-      deployIndices = usrDeployIndices ++ sysDeployIndices
+      deployIndices = (usrDeployIndices ++ sysDeployIndices).toSet
 
       /** Here deploys from a single block are examined. Atm deploys in block are executed sequentially,
         * so all conflicts are resolved according to order of sequential execution.
         * Therefore there won't be any conflicts between event logs. But there can be dependencies. */
-      deployChains = DagMergingLogic.computeGreedyNonIntersectingBranches[DeployIndex](
-        deployIndices.toSet,
-        (l, r) => EventLogMergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
-      )
+      depends = (l: DeployIndex, r: DeployIndex) =>
+        EventLogMergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
+      dependencyMap = DagMergingLogic.computeDependencyMap(deployIndices, deployIndices, depends)
+      deployChains = DagMergingLogic
+        .computeGreedyNonIntersectingBranches[DeployIndex](deployIndices, dependencyMap)
 
       index <- deployChains.toVector
                 .traverse(
                   DeployChainIndex(
+                    blockHash.toBlake2b256Hash,
                     _,
                     preStateHash,
                     postStateHash,

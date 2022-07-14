@@ -63,8 +63,7 @@ object DagMergingLogic {
   def computeDependencyMap[D] = computeRelationMap[D](directed = true) _
 
   /** Compute branches of depending items. */
-  def computeBranches[D](target: Set[D], depends: (D, D) => Boolean): Map[D, Set[D]] = {
-    val dependencyMap = computeDependencyMap(target, target, depends)
+  def computeBranches[D](target: Set[D], dependencyMap: Map[D, Set[D]]): Map[D, Set[D]] =
     dependencyMap.foldLeft(dependencyMap) {
       case (acc, (root, depending)) =>
         val rootDependencies = acc.collect { case (k, v) if v.contains(root) => k }
@@ -72,7 +71,6 @@ object DagMergingLogic {
           acc - root |+| rootDependencies.map(_ -> (depending + root)).toMap
         else acc
     } ++ (target -- dependencyMap.flatMap { case (k, v) => v + k }).map(_ -> Set.empty[D])
-  }
 
   /**
     * Compute branches of depending items that do not intersect.
@@ -80,9 +78,9 @@ object DagMergingLogic {
     */
   def computeGreedyNonIntersectingBranches[D: Ordering](
       target: Set[D],
-      depends: (D, D) => Boolean
+      dependencyMap: Map[D, Set[D]]
   ): Seq[Set[D]] = {
-    val concurrentRoots = computeBranches(target, depends)
+    val concurrentRoots = computeBranches(target, dependencyMap)
     val sorted =
       concurrentRoots.toList.sortBy { case (k, v) => (-v.size, k) }.map { case (k, v) => v + k }
     partitionScope(sorted)
@@ -165,8 +163,9 @@ object DagMergingLogic {
   }
 
   /** Compute rejections options extended with rejections that have to be made due to mergeable value overflow. */
-  def addMergeableOverflowRejections[D, CH](
+  def addMergeableOverflowRejections[D: Ordering, CH](
       conflictSet: Set[D],
+      dependencyMap: Map[D, Set[D]],
       rejectOptions: Set[Set[D]],
       initMergeableValues: Map[CH, Long],
       mergeableDiffs: Map[D, Map[CH, Long]]
@@ -190,33 +189,47 @@ object DagMergingLogic {
       }
     }
 
-    def foldRejection(baseBalance: Map[CH, Long], toMerge: Set[D]): Set[D] = {
-      // Sort by sum of absolute diffs
-      val sorted = toMerge.toList.sortBy { d =>
-        mergeableDiffs.get(d).map(_.values.map(Math.abs).sum).getOrElse(Long.MinValue)
-      }
-      val (_, rejected) = sorted.foldLeft((baseBalance, Set.empty[D])) {
-        case ((balances, rejected), deploy) =>
-          // TODO come up with a better algorithm to solve below case
-          // currently we are accumulating result from some order and reject the deploy once negative result happens
-          // which doesn't seem perfect cases below
-          //
-          // base result 10 and folding the result from order like [-10, -1, 20]
-          // which on the second case `-1`, the calculation currently would reject it because the result turns
-          // into negative.However, if you look at the all the item view 10 - 10 -1 + 20 is not negative
-          calMergedResult(deploy, balances).fold((balances, rejected + deploy))((_, rejected))
+    def traverseTree(root: D, next: D => Set[D]): LazyList[D] =
+      LazyList
+        .unfold(List(root))(x => x.nonEmpty.guard[Option].as((x.sorted, x.flatMap(next))))
+        .flatten
+
+    def foldRejection(
+        baseBalance: Map[CH, Long],
+        toMerge: Set[D],
+        dependencyMap: Map[D, Set[D]]
+    ): Set[D] = {
+      val concurrentRoots = computeBranches(toMerge, dependencyMap).keysIterator.toList.sorted
+      val seq             = concurrentRoots.map(traverseTree(_, dependencyMap.getOrElse(_: D, Set())))
+      // TODO come up with a better algorithm to solve below case
+      // currently we are accumulating result from some order and reject the deploy once negative result happens
+      // which doesn't seem perfect cases below
+      //
+      // base result 10 and folding the result from order like [-10, -1, 20]
+      // which on the second case `-1`, the calculation currently would reject it because the result turns
+      // into negative.However, if you look at the all the item view 10 - 10 -1 + 20 is not negative
+      val (_, rejected) = seq.foldLeft((baseBalance, Set.empty[D])) {
+        case ((balances, rejected), branch) =>
+          branch.foldLeft((balances, rejected)) {
+            case ((balancesAcc, rejectedAcc), deploy) =>
+              if (rejectedAcc.contains(deploy))
+                (balancesAcc, rejectedAcc)
+              else
+                calMergedResult(deploy, balancesAcc)
+                  .map((_, rejectedAcc))
+                  .getOrElse(
+                    (balancesAcc, rejectedAcc ++ withDependencies(Set(deploy), dependencyMap))
+                  )
+          }
       }
       rejected
     }
 
     if (rejectOptions.isEmpty) {
-      Set(foldRejection(initMergeableValues, conflictSet))
+      Set(foldRejection(initMergeableValues, conflictSet, dependencyMap))
     } else {
-      rejectOptions.map { normalRejectOptions =>
-        normalRejectOptions ++ foldRejection(
-          initMergeableValues,
-          conflictSet diff normalRejectOptions
-        )
+      rejectOptions.map { rj =>
+        rj ++ foldRejection(initMergeableValues, conflictSet diff rj, dependencyMap)
       }
     }
   }
@@ -237,6 +250,7 @@ object DagMergingLogic {
     // add to rejection options rejections caused by mergeable channels overflow
     val mergeableOverflowRejectionOptions = addMergeableOverflowRejections(
       conflictSet,
+      dependencyMap,
       rejectionOptions,
       initMergeableValues,
       mergeableDiffs
