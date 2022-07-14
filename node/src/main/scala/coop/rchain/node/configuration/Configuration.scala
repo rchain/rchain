@@ -93,7 +93,7 @@ object Configuration {
     }
     val nodeConf = nodeConfE.right.get
 
-    // Throw an error if pos-multi-sig-quorum greater then pos-multi-sig-public-keys length
+    // Throw an error if pos-multi-sig-quorum greater than pos-multi-sig-public-keys length
     val posMultiSigQuorum           = nodeConf.casper.genesisBlockData.posMultiSigQuorum
     val posMultiSigPublicKeysLength = nodeConf.casper.genesisBlockData.posMultiSigPublicKeys.length
     if (posMultiSigQuorum > posMultiSigPublicKeysLength) {
