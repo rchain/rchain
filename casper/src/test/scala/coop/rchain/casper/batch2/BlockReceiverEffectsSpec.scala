@@ -227,11 +227,10 @@ class BlockReceiverEffectsSpec
     ValidatorIdentity(privateKey).signBlock(block)
   }
 
-  private def addBlock[F[_]: Sync](bs: BlockStore[F]): F[BlockMessage] =
-    for {
-      block <- Sync[F].delay(makeBlock())
-      _     <- bs.put(Seq((block.blockHash, block)))
-    } yield block
+  private def addBlock[F[_]: Sync](bs: BlockStore[F]): F[BlockMessage] = {
+    val block = makeBlock()
+    bs.put(Seq((block.blockHash, block))).as(block)
+  }
 
   private def dagStorageWasNotModified[F[_]](bds: BlockDagStorage[F]) = {
     bds.insert(*, *, *) wasNever called
