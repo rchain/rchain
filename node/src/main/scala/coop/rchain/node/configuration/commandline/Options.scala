@@ -495,6 +495,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = _ >= 0
     )
 
+    val posMultiSigPublicKeys = opt[List[String]](
+      descr = "Space-separated list of public keys",
+      required = false
+    )(stringListConverter)
+
+    val posMultiSigQuorum = opt[Int](
+      descr = "How many confirmations are necessary to use multi-sig vault",
+      required = false
+    )
+
   }
   addSubcommand(run)
 

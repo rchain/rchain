@@ -80,6 +80,8 @@ object ConfigMapper {
       add("casper.genesis-block-data.pos-vault-pub-key", run.posVaultPubKey)
       add("casper.genesis-block-data.system-contract-pub-key", run.systemContractPubKey)
       add("casper.genesis-block-data.genesis-block-number", run.genesisBlockNumber)
+      add("casper.genesis-block-data.pos-multi-sig-public-keys", run.posMultiSigPublicKeys)
+      add("casper.genesis-block-data.pos-multi-sig-quorum", run.posMultiSigQuorum)
 
       add("casper.autogen-shard-size", run.autogenShardSize)
 
@@ -133,6 +135,8 @@ object ConfigMapper {
     implicit val peerNodeConverter: OptionConverter[PeerNode] = (p: PeerNode) => p.toAddress
     implicit val durationConverter: OptionConverter[FiniteDuration] =
       (d: FiniteDuration) => java.time.Duration.ofNanos(d.toNanos)
+    implicit val listOfStringConverter: OptionConverter[List[String]] = (l: List[String]) =>
+      l.mkString(" ")
   }
 
   private object AddScallopOptionToMap {
