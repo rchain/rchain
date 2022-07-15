@@ -4,7 +4,6 @@ import cats.effect._
 import cats.mtl.implicits._
 import cats.syntax.all._
 import cats.{Alternative, Foldable, MonoidK, SemigroupK}
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
@@ -25,7 +24,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
 
   val A: Alternative[F] = Alternative[F]
 
-  implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
+  implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe()
 
   implicit val costF: _cost[F]   = matcherMonadCostLog[Task]
   implicit val matcherMonadError = implicitly[Sync[F]]
@@ -38,7 +37,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
       _        <- cost.set(Cost(phlo, "initial cost"))
       result   <- f
       phloLeft <- cost.get
-    } yield (phloLeft, result)).unsafeRunSync
+    } yield (phloLeft, result)).runSyncUnsafe()
 
   behavior of "MatcherMonad"
 

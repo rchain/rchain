@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -11,18 +10,18 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
-import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Serialize}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.prop.TableDrivenPropertyChecks._
-import org.scalatest.{AppendedClues, Assertion}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.prop.TableDrivenPropertyChecks._
+import org.scalatest.{AppendedClues, Assertion}
 
 import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
@@ -875,7 +874,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
 
     val result = withTestSpace {
       case TestFixture(space, _) =>
-        implicit val cost          = CostAccounting.emptyCost[Task].unsafeRunSync
+        implicit val cost          = CostAccounting.emptyCost[Task].runSyncUnsafe()
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer                = RholangOnlyDispatcher(space, Map("rho:test:foo" -> byteName(42)))._2
         cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)

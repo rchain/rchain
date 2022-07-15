@@ -3,7 +3,6 @@ package coop.rchain.casper.engine
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{CommUtil, _}
-import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing.Protocol

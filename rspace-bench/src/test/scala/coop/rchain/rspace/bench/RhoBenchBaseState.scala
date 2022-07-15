@@ -1,14 +1,13 @@
 package coop.rchain.rspace.bench
 
-import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime, RholangCLI}
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.Resources
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rholang.interpreter.compiler.Compiler
+import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime, RholangCLI}
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
@@ -28,7 +27,7 @@ abstract class RhoBenchBaseState {
     val r = (for {
       result <- runTask
       _      <- runtime.createCheckpoint
-    } yield result).unsafeRunSync
+    } yield result).runSyncUnsafe()
     bh.consume(r)
   }
 

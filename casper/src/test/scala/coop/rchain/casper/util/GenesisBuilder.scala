@@ -11,7 +11,7 @@ import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.util.ConstructDeploy._
-import coop.rchain.catscontrib.TaskContrib.TaskOps
+import coop.rchain.casper.{BlockRandomSeed, ValidatorIdentity}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
@@ -191,7 +191,8 @@ object GenesisBuilder {
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
       _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)
-    } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory)).unsafeRunSync
+    } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory))
+      .runSyncUnsafe()
   }
 
   case class GenesisContext(

@@ -1,14 +1,13 @@
 package coop.rchain.rspace.bench
 
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.Resources
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, RhoRuntime, RholangCLI}
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rholang.interpreter.compiler.Compiler
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
@@ -26,8 +25,8 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
 
-  val store                       = kvm.rSpaceStores.unsafeRunSync
-  lazy val spaces                 = Resources.createRuntimes[Task](store).unsafeRunSync
+  val store                       = kvm.rSpaceStores.runSyncUnsafe()
+  lazy val spaces                 = Resources.createRuntimes[Task](store).runSyncUnsafe()
   val (runtime, replayRuntime, _) = spaces
 
   val rand: Blake2b512Random = Blake2b512Random.defaultRandom

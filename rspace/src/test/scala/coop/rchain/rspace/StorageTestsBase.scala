@@ -88,14 +88,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
   }
 }
 
-import cats._
-import cats.effect._
-import coop.rchain.metrics.Metrics
-import coop.rchain.shared.Log
-
 trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
-  import coop.rchain.catscontrib.TaskContrib._
-
   import scala.concurrent.ExecutionContext
 
   implicit override val concurrentF: Concurrent[Task] =
@@ -115,8 +108,8 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
       Task.shift(ec).bracket(_ => fa)(_ => Task.shift)
   }
 
-  override def run[RES](f: Task[RES]): RES =
-    f.unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+  import monix.execution.Scheduler.Implicits.global
+  override def run[RES](f: Task[RES]): RES = f.runSyncUnsafe()
 }
 
 abstract class InMemoryHotStoreTestsBase[F[_]]
