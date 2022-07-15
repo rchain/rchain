@@ -5,10 +5,11 @@ import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool}
+import coop.rchain.models.rholang.RhoType
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Expr, ListParWithRandom, Par}
+import coop.rchain.rholang.interpreter.ContractCall
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
-import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 
 object IsAssert {
   def unapply(

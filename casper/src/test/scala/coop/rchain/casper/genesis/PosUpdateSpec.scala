@@ -2,21 +2,20 @@ package coop.rchain.casper.genesis
 
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
-import coop.rchain.casper.protocol.ProcessedDeploy
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.GDeployId
+import coop.rchain.models.rholang.RhoType.{Boolean, Number, String, Tuple2}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.syntax._
-import coop.rchain.models.{GDeployId, PCost}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.RhoType.{Boolean, Number, String, Tuple2}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.Inside.inside
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.io.Source

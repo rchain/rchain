@@ -4,7 +4,7 @@ import coop.rchain.casper.rholang.types.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
-import coop.rchain.rholang.interpreter.RhoType._
+import coop.rchain.models.rholang.RhoType._
 
 final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512Random)
     extends SystemDeploy(rand) {

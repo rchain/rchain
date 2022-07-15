@@ -3,7 +3,7 @@ package coop.rchain.casper.rholang.sysdeploys
 import coop.rchain.casper.rholang.types.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
-import coop.rchain.rholang.interpreter.RhoType._
+import coop.rchain.models.rholang.RhoType._
 
 // Currently we use parentHash as initial random seed
 final case class CloseBlockDeploy(initialRand: Blake2b512Random) extends SystemDeploy(initialRand) {

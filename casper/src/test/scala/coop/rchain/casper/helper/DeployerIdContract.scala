@@ -2,8 +2,9 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.metrics.Span
 import coop.rchain.models.ListParWithRandom
+import coop.rchain.models.rholang.RhoType
+import coop.rchain.rholang.interpreter.ContractCall
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
-import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 
 /**
   * Warning: This should under no circumstances be available in production

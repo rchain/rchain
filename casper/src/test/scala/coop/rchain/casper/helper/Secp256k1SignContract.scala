@@ -4,8 +4,8 @@ import cats.effect.Concurrent
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Span
 import coop.rchain.models.ListParWithRandom
-import coop.rchain.rholang.interpreter.SystemProcesses
-import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
+import coop.rchain.models.rholang.RhoType
+import coop.rchain.rholang.interpreter.{ContractCall, SystemProcesses}
 
 object Secp256k1SignContract {
 

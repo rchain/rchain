@@ -7,7 +7,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.ListParWithRandom
-import coop.rchain.rholang.interpreter.RhoType.Number
+import coop.rchain.models.rholang.RhoType.Number
 import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.hashing.Blake2b256Hash.codecBlake2b256Hash
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}

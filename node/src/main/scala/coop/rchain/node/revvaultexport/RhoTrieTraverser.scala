@@ -2,25 +2,15 @@ package coop.rchain.node.revvaultexport
 
 import cats.effect.Sync
 import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.StandardDeploys
-import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
-import coop.rchain.casper.rholang.{BlockRandomSeed, Tools}
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models._
-import coop.rchain.models.syntax._
-import coop.rchain.rholang.interpreter.RhoType.Name
+import coop.rchain.models.rholang.RhoType
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.storage.serializePar
-import coop.rchain.rholang.interpreter.{RhoRuntime, RhoType}
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Serialize
 
 import scala.annotation.tailrec
-import scala.collection.compat.immutable.LazyList
 
 /**
   * Traverse a Rholang Trie.

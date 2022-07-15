@@ -7,7 +7,7 @@ import coop.rchain.casper.rholang.types.SystemDeployPlatformFailure.UnexpectedRe
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
-import coop.rchain.rholang.interpreter.RhoType.Extractor
+import coop.rchain.models.rholang.RhoType.Extractor
 import shapeless.Witness
 
 abstract class SystemDeploy(initialRand: Blake2b512Random) {

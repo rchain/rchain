@@ -3,8 +3,9 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics.Span
+import coop.rchain.models.rholang.RhoType
 import coop.rchain.models.{ListParWithRandom, Par}
-import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
+import coop.rchain.rholang.interpreter.ContractCall
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
 
 object BlockDataContract {

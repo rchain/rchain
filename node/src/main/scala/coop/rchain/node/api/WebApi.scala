@@ -8,12 +8,12 @@ import coop.rchain.casper.api.BlockApi
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
+import coop.rchain.models.rholang.RhoType._
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.syntax._
-import coop.rchain.models.{Bundle, ETuple, Expr, GUnforgeable, Par}
+import coop.rchain.models.{Bundle, Expr, GUnforgeable, Par}
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
-import coop.rchain.rholang.interpreter.RhoType._
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]

@@ -1,14 +1,11 @@
 package coop.rchain.node.revvaultexport.mainnet1
 
 import cats.effect._
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.crypto.PublicKey
+import coop.rchain.models.Par
+import coop.rchain.models.rholang.RhoType.Name
 import coop.rchain.models.syntax._
-import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.node.revvaultexport.StateBalances
 import coop.rchain.shared.Base16
-import coop.rchain.models.syntax._
-import coop.rchain.rholang.interpreter.RhoType.Name
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
@@ -59,7 +56,6 @@ final case class StateOptions(arguments: Seq[String]) extends ScallopConf(argume
 
 }
 object StateBalanceMain {
-  import coop.rchain.models.rholang.implicits._
 
   // hard-coded value in RevVault.rho
   val genesisVaultMapDepth = 2

@@ -9,23 +9,17 @@ import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
-import coop.rchain.models.{GPrivate, Par}
+import coop.rchain.models.Par
+import coop.rchain.models.rholang.RhoType.{Name, Number}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.RhoType.{Name, Number}
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.convertToReadNumber
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.HotStoreTrieAction
-import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
-import coop.rchain.rspace.merger.{
-  ChannelChange,
-  EventLogMergingLogic,
-  StateChange,
-  StateChangeMerger
-}
+import coop.rchain.rspace.merger.{ChannelChange, StateChange, StateChangeMerger}
 import coop.rchain.rspace.serializers.ScodecSerialize
 import coop.rchain.rspace.syntax._
 import coop.rchain.sdk.dag.merging.DagMergingLogic

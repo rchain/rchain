@@ -4,15 +4,14 @@ import cats.Parallel
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.syntax._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
+import coop.rchain.models.rholang.RhoType.Name
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoTuplespace}
-import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.{ISpaceStub, _}

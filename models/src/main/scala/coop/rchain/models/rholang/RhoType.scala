@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.models.rholang
 
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance._
