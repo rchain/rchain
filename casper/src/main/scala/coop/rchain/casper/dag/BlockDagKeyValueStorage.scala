@@ -36,7 +36,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
     deployStore: KeyValueTypedStore[F, DeployId, Signed[DeployData]]
 ) extends BlockDagStorage[F] {
-  implicit private val logSource: LogSource = LogSource(BlockDagKeyValueStorage.getClass)
 
   def getRepresentation: F[DagRepresentation] = representationState.get
 
