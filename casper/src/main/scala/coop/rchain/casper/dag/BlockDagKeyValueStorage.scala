@@ -56,45 +56,42 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         // Add deploys to deploy index storage
         deployHashes = block.state.deploys.map(_.deploy.sig)
         _            <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
+
+        // Take current DAG state / view of the DAG
+        dagSet    <- blockMetadataIndex.dagSet
+        childMap  <- blockMetadataIndex.childMapData
+        heightMap <- blockMetadataIndex.heightMap
+        dag <- representationState.updateAndGet { dr =>
+                // Update DAG messages state
+                val dagMsgSt       = dr.dagMessageState
+                val msg            = messageFromBlockMetadata(blockMetadata, dagMsgSt.msgMap)
+                val newDagMsgState = dagMsgSt.insertMsg(msg)
+
+                // Update fringes state
+                val fringeStateHash       = blockMetadata.fringeStateHash.toBlake2b256Hash
+                val fringeRejectedDeploys = block.rejectedDeploys.toSet
+                val fringeStateRecord     = (fringeStateHash, fringeRejectedDeploys)
+                val newFringes            = dr.fringeStates + ((msg.fringe, fringeStateRecord))
+
+                // Updated DagRepresentation
+                dr.copy(
+                  dagSet,
+                  childMap,
+                  heightMap,
+                  newDagMsgState,
+                  fringeStates = newFringes
+                )
+              }
+
+        _ <- removeExpiredFromPool(deployStore, dag).map(
+              _.map((_, ())).map((expiredMap.update _).tupled)
+            )
       } yield ()
 
     lock.withPermit(
       blockMetadataIndex
         .contains(blockMetadata.blockHash)
-        .ifM(logAlreadyStored, doInsert) >> {
-        for {
-          // Take current DAG state / view of the DAG
-          dagSet    <- blockMetadataIndex.dagSet
-          childMap  <- blockMetadataIndex.childMapData
-          heightMap <- blockMetadataIndex.heightMap
-          dag <- representationState.updateAndGet {
-                  dr =>
-                    // Update DAG messages state
-                    val dagMsgSt       = dr.dagMessageState
-                    val msg            = messageFromBlockMetadata(blockMetadata, dagMsgSt.msgMap)
-                    val newDagMsgState = dagMsgSt.insertMsg(msg)
-
-                    // Update fringes state
-                    val fringeStateHash       = blockMetadata.fringeStateHash.toBlake2b256Hash
-                    val fringeRejectedDeploys = block.rejectedDeploys.toSet
-                    val fringeStateRecord     = (fringeStateHash, fringeRejectedDeploys)
-                    val newFringes            = dr.fringeStates + ((msg.fringe, fringeStateRecord))
-
-                    // Updated DagRepresentation
-                    dr.copy(
-                      dagSet,
-                      childMap,
-                      heightMap,
-                      newDagMsgState,
-                      fringeStates = newFringes
-                    )
-                }
-
-          _ <- removeExpiredFromPool(deployStore, dag).map(
-                _.map((_, ())).map((expiredMap.update _).tupled)
-              )
-        } yield dag
-      }
+        .ifM(logAlreadyStored, doInsert) *> representationState.get
     )
   }
 
