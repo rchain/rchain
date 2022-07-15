@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package coop.rchain.casper.rholang
 
 import coop.rchain.crypto.PublicKey
 import coop.rchain.rspace.hashing.Blake2b256Hash

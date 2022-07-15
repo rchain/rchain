@@ -8,6 +8,7 @@ import coop.rchain.casper.blocks.proposer.NoNewDeploys
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
@@ -15,7 +16,6 @@ import coop.rchain.models.PCost
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.models.syntax._
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.syntax._
 import monix.eval.Task

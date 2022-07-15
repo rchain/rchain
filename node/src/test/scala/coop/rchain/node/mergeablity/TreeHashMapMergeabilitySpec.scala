@@ -4,8 +4,8 @@ import cats.effect.Sync
 import cats.implicits.catsSyntaxApplicative
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
+import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.hash.Blake2b512Random

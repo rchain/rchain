@@ -3,11 +3,10 @@ package coop.rchain.casper.api
 import cats.effect.Resource
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper._
 import coop.rchain.casper.rholang.Resources.mkRuntimeManager
-import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.shared.Log
 import monix.eval.Task

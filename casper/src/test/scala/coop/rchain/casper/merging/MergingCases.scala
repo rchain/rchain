@@ -2,10 +2,9 @@ package coop.rchain.casper.merging
 
 import cats.effect.Resource
 import cats.syntax.all._
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
-import coop.rchain.casper.rholang.{Resources, RuntimeManager}
+import coop.rchain.casper.rholang.{BlockRandomSeed, Resources, RuntimeManager}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.models.syntax.modelsSyntaxByteString

@@ -3,11 +3,10 @@ package coop.rchain.node.revvaultexport
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.rholang.RuntimeManager.emptyStateHashFixed
-import coop.rchain.casper.rholang.Tools
+import coop.rchain.casper.rholang.{BlockRandomSeed, Tools}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Keccak256
 import coop.rchain.models.Expr.ExprInstance._

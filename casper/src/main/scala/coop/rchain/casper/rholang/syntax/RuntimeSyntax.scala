@@ -8,6 +8,7 @@ import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, Event, ProcessedDeploy, SystemDeployData}
+import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.casper.rholang.InterpreterUtil.printDeployErrors
 import coop.rchain.casper.rholang.RuntimeDeployResult._
 import coop.rchain.casper.rholang.syntax.RuntimeSyntax._
@@ -25,7 +26,7 @@ import coop.rchain.casper.rholang.types.SystemDeployPlatformFailure.{
 }
 import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
-import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource, PrettyPrinter}
+import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.implicits._

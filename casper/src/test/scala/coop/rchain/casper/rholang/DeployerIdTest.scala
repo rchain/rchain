@@ -3,7 +3,6 @@ package coop.rchain.casper.rholang
 import cats.effect.Resource
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.Resources._

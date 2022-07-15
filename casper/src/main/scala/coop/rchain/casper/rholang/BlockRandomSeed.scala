@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package coop.rchain.casper.rholang
 
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
