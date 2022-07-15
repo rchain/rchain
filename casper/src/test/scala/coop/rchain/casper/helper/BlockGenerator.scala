@@ -13,12 +13,12 @@ import coop.rchain.casper.rholang.InterpreterUtil.{
   computeDeploysCheckpoint,
   computeParentsPostState
 }
-import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.{CasperMetricsSource, ParentsMergedState}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource}
+import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator

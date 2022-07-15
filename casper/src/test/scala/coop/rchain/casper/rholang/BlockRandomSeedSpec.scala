@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package coop.rchain.casper.rholang
 
 import coop.rchain.crypto.PublicKey
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -49,7 +49,8 @@ class BlockRandomSeedSpec extends AnyFlatSpec with Checkers {
     }
   }
 
-  "generate random seed from constant BlockRandomSeed object" should "give expected value" in {
+  // If random generator seed logic changes, node will not able to replay previous blocks
+  "BlockRandomSeed serializer and random generator" should "not change without hard-fork" in {
     val pubKeyStr =
       "0406A102343B05BDF86DF2552C125430CC319323792507328DCC9456713E1E7A24E715171E43ACA3288E41DD346E840901A5D1588C2170AD1D55C0885A3230343A"
     val preStateStr = "AD1356323FFEBE9083687265928AD3CAD1356323FDEBE9083687265928AD3918"
@@ -76,14 +77,16 @@ class BlockRandomSeedSpec extends AnyFlatSpec with Checkers {
     }
 
     // Reference values as hex strings
-    val seedHexRef =
-      "06414434353136000000000000000282080d420468760b7bf0dbe4aa5824a86198632646f24a0e651b9928ace27c3cf449ce2a2e3c875946511c83ba68dd0812034ba2b11842e15a3aab8110b4646068755a26ac647ffd7d2106d0e4cb2515a795a26ac647fbd7d2106d0e4cb2515a7230"
-    val rndHexRef = "0C338721fa06CAf348C9E013922E8B6D27C6E31FDC2B18FC6A83F144CA22D375"
+    val seedHexExpected =
+      "0641443435313601410406a102343b05bdf86df2552c125430cc319323792507328dcc9456713e1e7a24e715171e43aca3288e41dd346e840901a5d1588c2170ad1d55c0885a3230343aad1356323ffebe9083687265928ad3cad1356323fdebe9083687265928ad3918"
+    val rndHexExpected = "5d92fa794d3e68dcbdc0716de2b5799f95d04ef122109e21cb42f5fd7d64b359"
 
     // Reference values - seed and first random value
-    val (seedRef, rndRef) = (ByteVector.fromHex(seedHexRef).get, ByteVector.fromHex(rndHexRef).get)
+    val (seedExpected, rndExpected) =
+      (ByteVector.fromHex(seedHexExpected).get, ByteVector.fromHex(rndHexExpected).get)
 
-    seed shouldBe seedRef
-    rnd shouldBe rndRef
+    seed shouldBe seedExpected
+    // Checking of random number is not part of the seed logic so it's here just debugging information
+    rnd shouldBe rndExpected
   }
 }

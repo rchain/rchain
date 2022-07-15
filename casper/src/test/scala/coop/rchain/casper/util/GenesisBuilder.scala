@@ -2,13 +2,13 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockRandomSeed, ValidatorIdentity}
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.catscontrib.TaskContrib.TaskOps

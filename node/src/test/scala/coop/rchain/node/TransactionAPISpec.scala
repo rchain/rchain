@@ -1,9 +1,8 @@
 package coop.rchain.node
 
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.helper.TestNode
-import coop.rchain.casper.rholang.Resources
+import coop.rchain.casper.rholang.{BlockRandomSeed, Resources}
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, GenesisContext}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}

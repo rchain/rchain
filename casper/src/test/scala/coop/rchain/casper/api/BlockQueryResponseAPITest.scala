@@ -7,13 +7,11 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkRuntimeManager
-import coop.rchain.casper.rholang.RuntimeManager
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
@@ -52,7 +50,7 @@ class BlockQueryResponseAPITest
   val randomDeploys =
     (0 until deployCount).toList
       .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i))
-      .unsafeRunSync(scheduler)
+      .runSyncUnsafe()
 
   val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"

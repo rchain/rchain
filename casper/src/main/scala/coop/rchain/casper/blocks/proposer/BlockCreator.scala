@@ -10,15 +10,9 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
-import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.{
-  BlockRandomSeed,
-  MultiParentCasper,
-  ParentsMergedState,
-  PrettyPrinter,
-  ValidatorIdentity
-}
+import coop.rchain.casper.{MultiParentCasper, ParentsMergedState, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed

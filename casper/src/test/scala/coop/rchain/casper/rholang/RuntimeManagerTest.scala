@@ -5,7 +5,6 @@ import cats.effect.{Resource, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Functor, Id}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}

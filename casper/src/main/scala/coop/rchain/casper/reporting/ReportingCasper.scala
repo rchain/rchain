@@ -7,7 +7,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.models.syntax._
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.{BlockRandomSeed, PrettyPrinter}
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{
   BlockMessage,
@@ -16,6 +16,7 @@ import coop.rchain.casper.protocol.{
   SystemDeployData
 }
 import coop.rchain.casper.reporting.ReportingCasper.RhoReportingRspace
+import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source

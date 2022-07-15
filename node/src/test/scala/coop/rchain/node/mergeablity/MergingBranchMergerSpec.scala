@@ -5,14 +5,13 @@ import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
-import coop.rchain.casper.rholang.{Resources, RuntimeManager}
+import coop.rchain.casper.rholang.{BlockRandomSeed, Resources, RuntimeManager}
 import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Secp256k1

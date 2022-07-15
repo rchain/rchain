@@ -8,6 +8,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
+import coop.rchain.casper.blocks.BlockRetriever
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.syntax._
 import coop.rchain.comm.PeerNode

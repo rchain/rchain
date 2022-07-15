@@ -9,16 +9,13 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
+import coop.rchain.casper.blocks.BlockRetriever.{RequestState, RequestedBlocks}
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.engine.BlockRetriever._
-import coop.rchain.casper.engine._
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.{Resources, RuntimeManager}
+import coop.rchain.casper.rholang.{BlockRandomSeed, Resources, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
@@ -33,7 +30,6 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockVersion
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
@@ -41,12 +37,11 @@ import coop.rchain.shared._
 import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.Assertions
 
 import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-case class TestNode[F[_]: Sync: Timer](
+case class TestNode[F[_]: Concurrent: Timer](
     name: String,
     local: PeerNode,
     tle: TransportLayerTestImpl[F],
@@ -65,7 +60,6 @@ case class TestNode[F[_]: Sync: Timer](
     approvedStoreEffect: ApprovedStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
     commUtilEffect: CommUtil[F],
-    blockRetrieverEffect: BlockRetriever[F],
     metricEffect: Metrics[F],
     spanEffect: Span[F],
     runtimeManagerEffect: RuntimeManager[F],
@@ -79,11 +73,9 @@ case class TestNode[F[_]: Sync: Timer](
     routingMessageQueue: Queue[F, RoutingMessage],
     shardName: String,
     minPhloPrice: Long
-)(implicit concurrentF: Concurrent[F]) {
-  // Scalatest `assert` macro needs some member of the Assertions trait.
-  // An (inferior) alternative would be to inherit the trait...
-  private val scalatestAssertions = new Assertions {}
-  import scalatestAssertions._
+) {
+  // Use ScalaTest asserts (overrides Scala Predef asserts)
+  import org.scalatest.Assertions._
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
   val apiMaxBlocksLimit              = 50
@@ -94,7 +86,6 @@ case class TestNode[F[_]: Sync: Timer](
   implicit val approvedStore: ApprovedStore[F]               = approvedStoreEffect
   implicit val blockDagStorage: BlockDagStorage[F]           = blockDagStorageEffect
   implicit val cu: CommUtil[F]                               = commUtilEffect
-  implicit val br: BlockRetriever[F]                         = blockRetrieverEffect
   implicit val me: Metrics[F]                                = metricEffect
   implicit val sp: Span[F]                                   = spanEffect
   implicit val runtimeManager: RuntimeManager[F]             = runtimeManagerEffect
@@ -195,10 +186,7 @@ case class TestNode[F[_]: Sync: Timer](
                           )
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
-                case err =>
-                  concurrentF.raiseError[BlockMessage](
-                    new Throwable(s"failed creating block: $err")
-                  )
+                case err        => new Throwable(s"failed creating block: $err").raiseError
               }
     } yield block
 
@@ -234,9 +222,7 @@ case class TestNode[F[_]: Sync: Timer](
   val maxSyncAttempts = 10
   def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {
     val networkMap = nodes.filterNot(_.local == local).map(node => node.local -> node).toMap
-    val asked = casper.engine.BlockRetriever
-      .RequestedBlocks[F]
-      .get
+    val asked = RequestedBlocks[F].get
       .map(
         _.values
           .flatMap(
@@ -248,7 +234,7 @@ case class TestNode[F[_]: Sync: Timer](
           .toList
       )
     val allSynced = RequestedBlocks[F].get.map(_.isEmpty)
-    val doNothing = concurrentF.unit
+    val doNothing = ().pure[F]
 
     def drainQueueOf(peerNode: PeerNode) =
       networkMap.get(peerNode).fold(doNothing)(_.handleReceive())
@@ -256,9 +242,9 @@ case class TestNode[F[_]: Sync: Timer](
     val step = asked.flatMap(_.traverse(drainQueueOf)) >> handleReceive()
 
     def loop(cnt: Int, done: Boolean) =
-      concurrentF.iterateUntilM(cnt -> done)({
+      (cnt -> done).iterateUntilM {
         case (i, _) => step.as(i + 1) mproduct (_ => allSynced)
-      }) {
+      } {
         case (i, done) => i >= maxSyncAttempts || done
       }
 
@@ -438,7 +424,6 @@ object TestNode {
                implicit val commUtil: CommUtil[F] = CommUtil.of[F]
                implicit val requestedBlocks: RequestedBlocks[F] =
                  Ref.unsafe[F, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
-               implicit val blockRetriever: BlockRetriever[F] = BlockRetriever.of[F]
 
                for {
                  _ <- TestNetwork.addPeer(currentPeerNode)
@@ -507,7 +492,6 @@ object TestNode {
                    rpConfAskEffect = rpConfAsk,
                    commUtilEffect = commUtil,
                    requestedBlocksEffect = requestedBlocks,
-                   blockRetrieverEffect = blockRetriever,
                    metricEffect = metricEff,
                    routingMessageQueue = routingMessageQueue,
                    shardName = shardName,

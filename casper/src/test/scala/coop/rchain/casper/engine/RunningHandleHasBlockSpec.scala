@@ -3,16 +3,16 @@ package coop.rchain.casper.engine
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.engine
-import coop.rchain.casper.engine.BlockRetriever.RequestState
+import coop.rchain.casper.blocks.BlockRetriever
+import coop.rchain.casper.blocks.BlockRetriever.{RequestState, RequestedBlocks}
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper.toPacket
-import coop.rchain.comm.rp.{ProtocolHelper, RPConf}
-import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}
+import coop.rchain.comm.rp.RPConf
+import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{
@@ -22,10 +22,10 @@ import coop.rchain.p2p.EffectsTestInstances.{
   TransportLayerStub
 }
 import monix.eval.Task
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.should.Matchers
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
@@ -33,7 +33,7 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
 
   implicit val log     = new LogStub[Task]
   implicit val metrics = new Metrics.MetricsNOP[Task]
-  implicit val currentRequests: engine.BlockRetriever.RequestedBlocks[Task] =
+  implicit val currentRequests: RequestedBlocks[Task] =
     Ref.unsafe[Task, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
   implicit val connectionsCell: ConnectionsCell[Task] =
     Ref.unsafe[Task, Connections](List(local))

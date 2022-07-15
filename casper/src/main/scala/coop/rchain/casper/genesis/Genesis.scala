@@ -5,10 +5,10 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.ProtoUtil.unsignedBlockProto
-import coop.rchain.casper.{BlockRandomSeed, PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockVersion

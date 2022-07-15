@@ -4,12 +4,12 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockRandomSeed, ValidatorIdentity}
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.rholang.{InterpreterUtil, Resources, RuntimeManager}
+import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, Resources, RuntimeManager}
 import coop.rchain.casper.util.{BondsParser, GenesisBuilder, VaultParser}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics

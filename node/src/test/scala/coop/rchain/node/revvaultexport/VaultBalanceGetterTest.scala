@@ -1,8 +1,8 @@
 package coop.rchain.node.revvaultexport
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.helper.TestNode
+import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.models.syntax._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.node.revvaultexport.mainnet1.StateBalanceMain

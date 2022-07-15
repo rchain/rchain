@@ -4,7 +4,7 @@ import cats.data.EitherT
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import coop.rchain.casper.{BlockRandomSeed, CasperMetricsSource}
+import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol.{
   CloseBlockSystemDeployData,
   Empty,
@@ -40,6 +40,7 @@ import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.Log
 import RuntimeReplaySyntax._
+import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.hash.Blake2b512Random
 

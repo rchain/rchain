@@ -9,13 +9,12 @@ import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
-import coop.rchain.casper.blocks.{BlockProcessor, BlockReceiver, BlockReceiverState}
+import coop.rchain.casper.blocks.{BlockProcessor, BlockReceiver, BlockReceiverState, BlockRetriever}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, PeerMessage}
-import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.engine.{NodeLaunch, PeerMessage}
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
 import coop.rchain.casper.reporting.{ReportStore, ReportingCasper}
-import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.syntax._
 import coop.rchain.comm.RoutingMessage

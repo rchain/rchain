@@ -1,6 +1,5 @@
 package coop.rchain.casper.rholang
 
-import coop.rchain.casper.BlockRandomSeed
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.syntax._
 import coop.rchain.models.syntax._

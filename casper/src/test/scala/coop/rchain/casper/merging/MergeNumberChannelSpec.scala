@@ -370,21 +370,4 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
       expectedFinalResult = 10
     )
   }
-
-  "TEMP encode multiple values" should "show stored binary size" in {
-    val rnd = Blake2b512Random.defaultRandom
-
-    val (res, _) = (1L to 10L).foldLeft((Vector[ByteVector](), rnd)) {
-      case ((acc, r), n) =>
-        val ch      = Blake2b256Hash.create(Array[Byte](n.toByte))
-        val encoded = RholangMergingLogic.createDatumEncoded(ch, n, r)
-        val newAcc  = acc :+ encoded
-
-        newAcc -> r.splitByte(n.toByte)
-    }
-
-    val total = ScodecSerialize.encodeDatumsBinary(res)
-
-    println(s"Values ${res.size}, encoded bytes: ${total.size}")
-  }
 }
