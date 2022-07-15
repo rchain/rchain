@@ -15,9 +15,7 @@ object BlockStore {
 
   def apply[F[_]](implicit instance: BlockStore[F]): instance.type = instance
 
-  def apply[F[_]: Sync](
-      kvm: KeyValueStoreManager[F]
-  ): F[KeyValueTypedStore[F, BlockHash, BlockMessage]] =
+  def apply[F[_]: Sync](kvm: KeyValueStoreManager[F]): F[BlockStore[F]] =
     kvm
       .store("blocks")
       .map(_.toTypedStore[BlockHash, BlockMessage](codecBlockHash, codecBlockMessage))
