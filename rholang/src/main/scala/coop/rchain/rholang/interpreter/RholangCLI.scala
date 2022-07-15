@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter
 import cats._
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
@@ -12,7 +11,6 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.syntax._
-import coop.rchain.sdk.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.{mb, Db, LmdbEnvConfig}
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
@@ -73,7 +71,7 @@ object RholangCLI {
     val runtime = (for {
       store   <- kvm.rSpaceStores
       runtime <- RhoRuntime.createRuntime[Task](store, Par())
-    } yield runtime).unsafeRunSync
+    } yield runtime).runSyncUnsafe()
 
     val problems = try {
       if (conf.files.supplied) {
@@ -180,7 +178,7 @@ object RholangCLI {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
-        evaluate(runtime, line).unsafeRunSync
+        evaluate(runtime, line).runSyncUnsafe()
       case None =>
         Console.println("\nExiting...")
         return
@@ -288,7 +286,7 @@ object RholangCLI {
 
     Try(waitForSuccess(evaluatorTask.runToFuture)).map { _ok =>
       if (!quiet) {
-        printStorageContents(runtime, unmatchedSendsOnly).unsafeRunSync
+        printStorageContents(runtime, unmatchedSendsOnly).runSyncUnsafe()
       }
     }
   }

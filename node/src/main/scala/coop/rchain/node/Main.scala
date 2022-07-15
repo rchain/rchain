@@ -1,6 +1,5 @@
 package coop.rchain.node
 
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
 import coop.rchain.node.runtime.NodeMain
@@ -35,17 +34,17 @@ object Main {
 
     // Ensure terminal is restored on exit
     sys.addShutdownHook {
-      console.close.unsafeRunSync
+      console.close.runSyncUnsafe()
     }
 
     // Parse CLI options
     val options = commandline.Options(args)
     if (options.subcommand.contains(options.run))
       // Start the node
-      NodeMain.startNode[Task](options).unsafeRunSync
+      NodeMain.startNode[Task](options).runSyncUnsafe()
     //or
     else
       // Execute CLI command
-      NodeMain.runCLI[Task](options).unsafeRunSync
+      NodeMain.runCLI[Task](options).runSyncUnsafe()
   }
 }
