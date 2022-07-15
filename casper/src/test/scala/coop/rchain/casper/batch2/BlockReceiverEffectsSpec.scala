@@ -7,9 +7,8 @@ import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation}
 import coop.rchain.casper.ValidatorIdentity
-import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState}
-import coop.rchain.casper.engine.BlockRetriever
-import coop.rchain.casper.engine.BlockRetriever.{AdmitHashResult, Ignore}
+import coop.rchain.casper.blocks.BlockRetriever.{AdmitHashResult, Ignore}
+import coop.rchain.casper.blocks.{BlockReceiver, BlockReceiverState, BlockRetriever}
 import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
 import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
 import coop.rchain.crypto.signatures.Secp256k1

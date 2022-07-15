@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
+import coop.rchain.casper.blocks.BlockRetriever
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
 import coop.rchain.casper.protocol._

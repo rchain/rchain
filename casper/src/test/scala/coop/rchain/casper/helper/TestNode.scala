@@ -12,9 +12,9 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
+import coop.rchain.casper.blocks.BlockRetriever.{RequestState, RequestedBlocks}
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.engine.BlockRetriever._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
@@ -223,9 +223,7 @@ case class TestNode[F[_]: Concurrent: Timer](
   val maxSyncAttempts = 10
   def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {
     val networkMap = nodes.filterNot(_.local == local).map(node => node.local -> node).toMap
-    val asked = casper.engine.BlockRetriever
-      .RequestedBlocks[F]
-      .get
+    val asked = RequestedBlocks[F].get
       .map(
         _.values
           .flatMap(

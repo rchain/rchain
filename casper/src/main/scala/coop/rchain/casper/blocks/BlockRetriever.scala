@@ -1,4 +1,4 @@
-package coop.rchain.casper.engine
+package coop.rchain.casper.blocks
 
 import cats.Monad
 import cats.effect.Timer

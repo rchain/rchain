@@ -1,13 +1,12 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect._
+import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 import cats.effect.concurrent.Ref
 import cats.mtl._
 import cats.syntax.all._
 import com.typesafe.config.Config
-import coop.rchain.casper._
-import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.blocks.BlockRetriever
 import coop.rchain.casper.protocol.CommUtil
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.comm._
@@ -129,7 +128,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       peerNode        = rpConf(local, initPeer)
       rpConfState     = effects.rpConfState[F](peerNode)
       rpConfAsk       = effects.rpConfAsk[F](rpConfState)
-      requestedBlocks <- Ref.of[F, Map[BlockHash, engine.BlockRetriever.RequestState]](Map.empty)
+      requestedBlocks <- Ref.of[F, Map[BlockHash, BlockRetriever.RequestState]](Map.empty)
 
       commUtil = {
         implicit val (tr, cn, cc) = (transport, rpConfAsk, rpConnections)
