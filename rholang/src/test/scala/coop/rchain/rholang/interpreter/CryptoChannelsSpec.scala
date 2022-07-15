@@ -102,7 +102,7 @@ class CryptoChannelsSpec
       val byteArrayToSend: Par     = GByteArray(ByteString.copyFrom(toByteArray))
       val data: List[Par]          = List(byteArrayToSend, ackChannel)
       val send                     = Send(hashChannel, data, persistent = false, BitSet())
-      val expected                 = RhoType.ByteArray(hashFn(toByteArray))
+      val expected                 = RhoType.RhoByteArray(hashFn(toByteArray))
 
       // Send byte array on hash channel. This should:
       // 1. meet with the system process in the tuplespace

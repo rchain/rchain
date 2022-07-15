@@ -16,10 +16,10 @@ object Secp256k1SignContract {
     message match {
       case isContractCall(
           produce,
-          Seq(RhoType.ByteArray(hash), RhoType.ByteArray(sk), ackCh)
+          Seq(RhoType.RhoByteArray(hash), RhoType.RhoByteArray(sk), ackCh)
           ) =>
         val sig = Secp256k1.sign(hash, sk)
-        produce(Seq(RhoType.ByteArray(sig)), ackCh)
+        produce(Seq(RhoType.RhoByteArray(sig)), ackCh)
     }
   }
 }

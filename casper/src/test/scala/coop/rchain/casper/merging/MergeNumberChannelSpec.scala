@@ -10,7 +10,7 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.RhoType.{Name, Number}
+import coop.rchain.models.rholang.RhoType.{RhoName, RhoNumber}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
@@ -91,7 +91,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   val unforgeableNameSeed: Par = {
-    Name(baseRhoSeed.next())
+    RhoName(baseRhoSeed.next())
   }
 
   def testCase[F[_]: Concurrent: ContextShift: Parallel: Span: Log](
@@ -293,7 +293,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
 
         res <- runtime.playExploratoryDeploy(rhoExploreRead, finalHash.toByteString)
 
-        Number(finalBalance) = res.head
+        RhoNumber(finalBalance) = res.head
 
         _ = finalBalance shouldBe expectedFinalResult
 

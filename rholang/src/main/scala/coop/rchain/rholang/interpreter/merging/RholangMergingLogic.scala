@@ -7,7 +7,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.ListParWithRandom
-import coop.rchain.models.rholang.RhoType.Number
+import coop.rchain.models.rholang.RhoType.RhoNumber
 import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.hashing.Blake2b256Hash.codecBlake2b256Hash
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
@@ -140,7 +140,7 @@ object RholangMergingLogic {
       s"Number channel should contain single Int term, found ${parWithRnd.pars}."
     })
 
-    val Number(num) = parWithRnd.pars.head
+    val RhoNumber(num) = parWithRnd.pars.head
 
     (num, parWithRnd.randomState)
   }
@@ -151,7 +151,7 @@ object RholangMergingLogic {
       rnd: Blake2b512Random
   ): ByteVector = {
     // Create value with random generator
-    val numPar     = Number(num)
+    val numPar     = RhoNumber(num)
     val parWithRnd = ListParWithRandom(Seq(numPar), rnd)
     // Create hash of the data
     val dataHash = StableHashProvider.hash(channelHash.bytes, parWithRnd, persist = false)(

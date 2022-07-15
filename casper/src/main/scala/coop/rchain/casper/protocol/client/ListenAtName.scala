@@ -4,7 +4,7 @@ import cats.Id
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.casper.rholang.InterpreterUtil
-import coop.rchain.models.rholang.RhoType.Name
+import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.shared.Time
 
@@ -39,7 +39,7 @@ object ListenAtName {
         InterpreterUtil.mkTerm(content, NormalizerEnv.Empty)
       case PrivName(content) =>
         Sync[F].delay {
-          Name(content.getBytes)
+          RhoName(content.getBytes)
         }
     }
 

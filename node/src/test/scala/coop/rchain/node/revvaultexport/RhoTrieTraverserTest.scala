@@ -8,7 +8,7 @@ import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.models.rholang.RhoType.Name
+import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -72,7 +72,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
           storeToken = {
             val r      = rand.copy()
             val target = LazyList.continually(r.next()).drop(9).head
-            Name(target)
+            RhoName(target)
           }
           rd <- runtime.processDeploy(
                  StandardDeploys.registryGenerator(registry, SHARD_ID),

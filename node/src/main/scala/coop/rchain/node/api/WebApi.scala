@@ -361,24 +361,24 @@ object WebApi {
   def rhoExprToParProto(exp: RhoExpr): Par = exp match {
     // Nested expressions (Par, Tuple, List and Set are converted to JSON list)
     case ExprPar(data)   => data.map(rhoExprToParProto).combineAll
-    case ExprTuple(data) => TupleN(data.map(rhoExprToParProto))
-    case ExprList(data)  => List(data.map(rhoExprToParProto))
-    case ExprSet(data)   => Set(data.map(rhoExprToParProto).toSeq)
-    case ExprMap(data)   => Map(data.map { case (k, v) => (String(k), rhoExprToParProto(v)) })
+    case ExprTuple(data) => RhoTupleN(data.map(rhoExprToParProto))
+    case ExprList(data)  => RhoList(data.map(rhoExprToParProto))
+    case ExprSet(data)   => RhoSet(data.map(rhoExprToParProto).toSeq)
+    case ExprMap(data)   => RhoMap(data.map { case (k, v) => (RhoString(k), rhoExprToParProto(v)) })
     // Terminal expressions (here is the data)
-    case ExprBool(data)   => Boolean(data)
-    case ExprInt(data)    => Number(data)
-    case ExprString(data) => String(data)
-    case ExprUri(data)    => Uri(data)
+    case ExprBool(data)   => RhoBoolean(data)
+    case ExprInt(data)    => RhoNumber(data)
+    case ExprString(data) => RhoString(data)
+    case ExprUri(data)    => RhoUri(data)
     // Binary data is decoded from base16 string
-    case ExprBytes(data)  => ByteArray(data.unsafeHexToByteString.toByteArray)
+    case ExprBytes(data)  => RhoByteArray(data.unsafeHexToByteString.toByteArray)
     case ExprUnforg(data) => unforgToParProto(data)
   }
 
   private def unforgToParProto(unforg: RhoUnforg): Par = unforg match {
-    case UnforgPrivate(name)  => Name(name.unsafeHexToByteString)
-    case UnforgDeploy(name)   => DeployId(name.unsafeDecodeHex)
-    case UnforgDeployer(name) => DeployerId(name.unsafeDecodeHex)
+    case UnforgPrivate(name)  => RhoName(name.unsafeHexToByteString)
+    case UnforgDeploy(name)   => RhoDeployId(name.unsafeDecodeHex)
+    case UnforgDeployer(name) => RhoDeployerId(name.unsafeDecodeHex)
   }
 
   // Data request/response protobuf wrappers

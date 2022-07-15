@@ -17,7 +17,7 @@ object RhoLoggerContract {
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)
 
     message match {
-      case isContractCall(_, Seq(RhoType.String(logLevel), par)) =>
+      case isContractCall(_, Seq(RhoType.RhoString(logLevel), par)) =>
         val msg         = prettyPrinter.buildString(par)
         implicit val ev = LogSource.matLogSource
 

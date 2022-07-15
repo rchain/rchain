@@ -19,7 +19,7 @@ object BlockDataContract {
     message match {
       case isContractCall(
           produce,
-          Seq(RhoType.String("sender"), RhoType.ByteArray(pk), ackCh)
+          Seq(RhoType.RhoString("sender"), RhoType.RhoByteArray(pk), ackCh)
           ) =>
         for {
           _ <- ctx.blockData.update(_.copy(sender = PublicKey(pk)))
@@ -28,7 +28,7 @@ object BlockDataContract {
 
       case isContractCall(
           produce,
-          Seq(RhoType.String("blockNumber"), RhoType.Number(n), ackCh)
+          Seq(RhoType.RhoString("blockNumber"), RhoType.RhoNumber(n), ackCh)
           ) =>
         for {
           _ <- ctx.blockData.update(_.copy(blockNumber = n))

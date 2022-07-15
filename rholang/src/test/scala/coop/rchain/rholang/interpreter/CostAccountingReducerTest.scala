@@ -8,13 +8,13 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
-import coop.rchain.models.rholang.RhoType.Name
+import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.storage.{ISpaceStub, _}
+import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.shared.Log
@@ -41,7 +41,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       urnMap: Map[String, Par]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
     val emptyMergeableRef = Ref.unsafe[M, Set[Par]](Set.empty)
-    val dummyMergeableTag = Name(Array[Byte]())
+    val dummyMergeableTag = RhoName(Array[Byte]())
     RholangAndScalaDispatcher(
       tuplespace,
       dispatchTable,

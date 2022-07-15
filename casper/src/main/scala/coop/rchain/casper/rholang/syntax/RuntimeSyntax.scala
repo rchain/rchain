@@ -36,7 +36,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.block.StateHash.StateHash
-import coop.rchain.models.rholang.RhoType.Name
+import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.rholang.interpreter.RhoRuntime.bootstrapRegistry
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
@@ -461,7 +461,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
 
     // Create return channel as first private name created in deploy term
     val rand       = Blake2b512Random.defaultRandom
-    val returnName = Name(rand.copy().next())
+    val returnName = RhoName(rand.copy().next())
 
     // Execute deploy on top of specified block hash
     captureResults(hash, deploy, rand, returnName)
@@ -492,7 +492,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
   )(implicit s: Sync[F]): F[Seq[Par]] = {
     // Create return channel as first unforgeable name created in deploy term
     val rand       = Blake2b512Random.defaultRandom
-    val returnName = Name(rand.copy().next())
+    val returnName = RhoName(rand.copy().next())
     captureResults(start, deploy, rand, returnName)
   }
 

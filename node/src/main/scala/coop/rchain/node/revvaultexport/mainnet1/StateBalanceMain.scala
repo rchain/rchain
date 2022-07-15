@@ -2,7 +2,7 @@ package coop.rchain.node.revvaultexport.mainnet1
 
 import cats.effect._
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.RhoType.Name
+import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.syntax._
 import coop.rchain.node.revvaultexport.StateBalances
 import coop.rchain.shared.Base16
@@ -62,7 +62,7 @@ object StateBalanceMain {
 
   // TODO support mainnet1 and mainnetx
   val mainnet1VaultMapPar: Par =
-    Name("af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeDecodeHex)
+    RhoName("af4c5fc5336f34ded026393db44916a664a5dc7e48027448f278b62ce902deda".unsafeDecodeHex)
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {

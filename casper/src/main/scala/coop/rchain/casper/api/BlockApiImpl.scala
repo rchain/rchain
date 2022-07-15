@@ -31,7 +31,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.rholang.RhoType.DeployId
+import coop.rchain.models.rholang.RhoType.RhoDeployId
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
@@ -174,7 +174,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     def findProcessedDeployResultAndStatus: OptionT[F, DeployExecStatus] = {
       val lookupDeploy = OptionT(BlockDagStorage[F].lookupByDeployId(deployId))
       lookupDeploy.semiflatMap { blockHash =>
-        val deployIdCh = DeployId(deployId.toByteArray)
+        val deployIdCh = RhoDeployId(deployId.toByteArray)
         for {
           block     <- BlockStore[F].getUnsafe(blockHash)
           deployOpt = block.state.deploys.find(_.deploy.sig == deployId)

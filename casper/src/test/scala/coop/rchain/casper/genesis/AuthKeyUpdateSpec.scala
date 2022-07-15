@@ -6,7 +6,7 @@ import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.GDeployId
-import coop.rchain.models.rholang.RhoType.{Boolean, String, Tuple2}
+import coop.rchain.models.rholang.RhoType.{RhoBoolean, RhoString, RhoTuple2}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -126,8 +126,8 @@ class AuthKeyUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
         _  = assert(!b2.state.deploys.head.isFailed, s"$b2 deploy failed")
 
         // Get update contract result
-        updateResult                               <- rm.getData(b2.postStateHash)(GDeployId(updateDeploy.sig))
-        Tuple2((Boolean(success), String(errMsg))) = updateResult.head
+        updateResult                                        <- rm.getData(b2.postStateHash)(GDeployId(updateDeploy.sig))
+        RhoTuple2((RhoBoolean(success), RhoString(errMsg))) = updateResult.head
         // Expect failed update
         _ = assert(!success, s"update should fail, instead: $errMsg")
       } yield ()
