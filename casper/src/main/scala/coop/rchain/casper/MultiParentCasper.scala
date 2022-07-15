@@ -1,14 +1,13 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
-import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.syntax._
@@ -17,7 +16,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared._
 
 final case class ParsingError(details: String)
@@ -51,6 +50,10 @@ object MultiParentCasper {
       parentHashes: Set[BlockHash]
   ): F[ParentsMergedState] =
     for {
+      _ <- FatalError(
+            "Parents must not be empty to calculate pre-state. Genesis block pre-state is loaded from config."
+          ).raiseError.whenA(parentHashes.isEmpty)
+
       dag <- BlockDagStorage[F].getRepresentation
 
       justifications <- parentHashes.toList.traverse(BlockDagStorage[F].lookupUnsafe(_))
@@ -69,7 +72,7 @@ object MultiParentCasper {
                          val fringeStr = PrettyPrinter.buildString(prevFringeHashes)
                          val errMsg =
                            s"Fringe state not available in state cache, fringe: $fringeStr"
-                         new Exception(errMsg)
+                         FatalError(errMsg)
                        }
 
       (prevFringeState, prevFringeRejectedDeploys) = fringeRecord
