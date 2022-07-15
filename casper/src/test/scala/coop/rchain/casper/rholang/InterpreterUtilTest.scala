@@ -5,7 +5,6 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil._
@@ -23,7 +22,6 @@ import coop.rchain.models.PCost
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
@@ -134,23 +132,23 @@ class InterpreterUtilTest
     }
   }
 
-  //TODO reenable when merging of REV balances is done
-  it should "merge histories in case of multiple parents" ignore effectTest {
+  it should "merge histories in case of multiple parents" in effectTest {
+    val shardId = genesis.shardId
 
     val b1Deploys = Vector(
       "@5!(5)",
       "@2!(2)",
       "for(@a <- @2){ @456!(5 * a) }"
-    ).map(ConstructDeploy.sourceDeployNow(_, ConstructDeploy.defaultSec2))
+    ).map(ConstructDeploy.sourceDeployNow(_, ConstructDeploy.defaultSec2, shardId = shardId))
 
     val b2Deploys = Vector(
       "@1!(1)",
       "for(@a <- @1){ @123!(5 * a) }"
-    ).map(ConstructDeploy.sourceDeployNow(_))
+    ).map(ConstructDeploy.sourceDeployNow(_, shardId = shardId))
 
     val b3Deploys = Vector(
       "for(@a <- @123 & @b <- @456){ @1!(a + b) }"
-    ).map(ConstructDeploy.sourceDeployNow(_))
+    ).map(ConstructDeploy.sourceDeployNow(_, shardId = shardId))
 
     /*
      * DAG Looks like this:
@@ -170,7 +168,7 @@ class InterpreterUtilTest
           b2 <- node2.propagateBlock(b2Deploys: _*)(node1)
           b3 <- node1.addBlock(b3Deploys: _*)
 
-          _ = b3.justifications shouldBe Set(b1, b2).map(_.blockHash)
+          _ = b3.justifications.toSet shouldBe Set(b1, b2).map(_.blockHash)
           _ <- getDataAtPublicChannel[Task](b3, 5) shouldBeF Seq("5")
           _ <- getDataAtPublicChannel[Task](b3, 1) shouldBeF Seq("15")
         } yield ()
@@ -317,27 +315,27 @@ class InterpreterUtilTest
     } yield accCostBatch should contain theSameElementsAs accCostsSep
   }
 
-  it should "return cost of deploying even if one of the programs within the deployment throws an error" in
-    pendingUntilFixed { //reference costs
-      withGenesis(genesisContext) {
-        implicit blockStore => implicit blockDagStorage =>
-          implicit runtimeManager =>
-            //deploy each Rholang program separately and record its cost
-            val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
-            val deploy2 = ConstructDeploy.sourceDeployNow("@2!([1,2,3,4])")
-            for {
-              cost1 <- computeDeployCosts(deploy1)
-              cost2 <- computeDeployCosts(deploy2)
+  it should "return cost of deploying even if one of the programs within the deployment throws an error" in {
+    withGenesis(genesisContext) {
+      implicit blockStore => implicit blockDagStorage =>
+        implicit runtimeManager =>
+          //deploy each Rholang program separately and record its cost
+          val deploy1   = ConstructDeploy.sourceDeployNow("@1!(Nil)")
+          val deploy2   = ConstructDeploy.sourceDeployNow("@2!([1,2,3,4])")
+          val deployErr = ConstructDeploy.sourceDeployNow("@3!(\"a\" + 3)")
+          for {
+            cost1 <- computeDeployCosts(deploy1)
+            cost2 <- computeDeployCosts(deploy2)
+            cost3 <- computeDeployCosts(deployErr)
 
-              accCostsSep = cost1 ++ cost2
+            accCostsSep = cost1 ++ cost2 ++ cost3
 
-              deployErr    = ConstructDeploy.sourceDeployNow("@3!(\"a\" + 3)")
-              accCostBatch <- computeDeployCosts(deploy1, deploy2, deployErr)
-            } yield accCostBatch should contain theSameElementsAs accCostsSep
-      }
+            accCostBatch <- computeDeployCosts(deploy1, deploy2, deployErr)
+          } yield accCostBatch should contain theSameElementsAs accCostsSep
     }
+  }
 
-  // TODO: ignored until support is for invalid block is implemented
+  // TODO: ignored until support for invalid block is implemented
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" ignore withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow(_))

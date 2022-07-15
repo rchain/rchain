@@ -12,7 +12,6 @@ import coop.rchain.blockstorage.dag._
 import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
@@ -22,8 +21,8 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import fs2.Stream
 
@@ -39,7 +38,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   def getRepresentation: F[DagRepresentation] = representationState.get
 
-  override def insertNew(
+  override def insert(
       blockMetadata: BlockMetadata,
       block: BlockMessage
   ): F[DagRepresentation] = {
@@ -95,39 +94,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     )
   }
 
-  // TODO: legacy function, used only in tests, it should be removed when tests are fixed
-  def insert(block: BlockMessage, invalid: Boolean, approved: Boolean): F[DagRepresentation] =
-    for {
-      fringeWithState <- if (approved) {
-                          (Set(block.blockHash), block.postStateHash).pure[F]
-                        } else {
-                          for {
-                            dag       <- getRepresentation
-                            dagMsgSt  = dag.dagMessageState
-                            finalizer = Finalizer(dagMsgSt.msgMap)
-                            parents   = block.justifications.map(dagMsgSt.msgMap).toSet
-                            fringe    = finalizer.latestFringe(parents).map(_.id)
-                            (fringeState, _) = if (fringe.isEmpty)
-                              (
-                                RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
-                                Set[ByteString]()
-                              )
-                            else
-                              dag.fringeStates(fringe)
-                          } yield (fringe, fringeState.toByteString)
-                        }
-
-      (fringe, fringeState) = fringeWithState
-      bmd = BlockMetadata
-        .fromBlock(block)
-        .copy(validationFailed = invalid, fringe = fringe.toList, fringeStateHash = fringeState)
-
-      result <- insertNew(bmd, block)
-    } yield result
-
-  override def lookup(
-      blockHash: BlockHash
-  ): F[Option[BlockMetadata]] = blockMetadataIndex.get(blockHash)
+  override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
+    blockMetadataIndex.get(blockHash)
 
   override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
     deployIndex.get1(deployId)

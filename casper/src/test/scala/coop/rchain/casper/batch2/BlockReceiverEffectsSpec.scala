@@ -232,8 +232,7 @@ class BlockReceiverEffectsSpec
   }
 
   private def dagStorageWasNotModified[F[_]](bds: BlockDagStorage[F]) = {
-    bds.insert(*, *, *) wasNever called
-    bds.insertNew(*, *) wasNever called
+    bds.insert(*, *) wasNever called
     bds.addDeploy(*) wasNever called
   }
 }

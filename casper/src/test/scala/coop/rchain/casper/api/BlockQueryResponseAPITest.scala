@@ -11,6 +11,7 @@ import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.blockImplicits.getRandomBlock
@@ -213,8 +214,8 @@ class BlockQueryResponseAPITest
     import coop.rchain.blockstorage.syntax._
     for {
       _ <- List(genesisBlock, secondBlock).traverse(BlockStore[F].put(_))
-      _ <- BlockDagStorage[F].insert(genesisBlock, false, approved = true)
-      _ <- BlockDagStorage[F].insert(secondBlock, false)
+      _ <- BlockDagStorage[F].insertLegacy(genesisBlock, false, approved = true)
+      _ <- BlockDagStorage[F].insertLegacy(secondBlock, false)
     } yield ()
   }
 }

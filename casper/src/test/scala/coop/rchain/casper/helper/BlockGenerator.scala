@@ -1,26 +1,25 @@
 package coop.rchain.casper.helper
 
-import cats._
-import cats.effect._
+import cats.Applicative
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil.{
   computeDeploysCheckpoint,
   computeParentsPostState
 }
-import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.rholang.types.SystemDeploy
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.{CasperMetricsSource, ParentsMergedState}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash._
 import coop.rchain.models.blockImplicits.getRandomBlock
@@ -77,7 +76,7 @@ object BlockGenerator {
     } yield (postStateHash, processedDeploys)
   }
 
-  private def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
+  private def injectPostStateHash[F[_]: Sync: BlockStore: BlockDagStorage](
       b: BlockMessage,
       postGenStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
@@ -86,7 +85,7 @@ object BlockGenerator {
       b.state.copy(deploys = processedDeploys.toList)
     val updatedBlock = b.copy(postStateHash = postGenStateHash, state = updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) >>
-      BlockDagStorage[F].insert(updatedBlock, invalid = false).void
+      BlockDagStorage[F].insertLegacy(updatedBlock, invalid = false).void
   }
 }
 
@@ -112,14 +111,14 @@ trait BlockGenerator {
       setSeqNumber = seqNum.some
     ).pure[F]
 
-  def createGenesis[F[_]: Monad: BlockStore: BlockDagStorage](
+  def createGenesis[F[_]: Sync: BlockStore: BlockDagStorage](
       creator: Validator = BlockUtil.generateValidator("Validator genesis"),
       bonds: Map[Validator, Long] = Map.empty,
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
-      preStateHash: ByteString = ByteString.EMPTY,
+      preStateHash: ByteString = RuntimeManager.emptyStateHashFixed,
       seqNum: Long = 0
   ): F[BlockMessage] =
     for {
@@ -133,8 +132,8 @@ trait BlockGenerator {
                   preStateHash,
                   seqNum
                 )
-      _ <- BlockDagStorage[F].insert(genesis, false, false)
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
+      _ <- BlockDagStorage[F].insertGenesis(genesis)
     } yield genesis
 
   def createBlock[F[_]: Sync: BlockStore: BlockDagStorage](
@@ -144,7 +143,7 @@ trait BlockGenerator {
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
-      preStateHash: ByteString = ByteString.EMPTY,
+      preStateHash: ByteString = RuntimeManager.emptyStateHashFixed,
       seqNum: Long = 0,
       invalid: Boolean = false
   ): F[BlockMessage] =
@@ -171,8 +170,11 @@ trait BlockGenerator {
           blockNumber = nextId,
           seqNum = nextCreatorSeqNum
         )
-      _ <- BlockDagStorage[F].insert(modifiedBlock, invalid, false)
       _ <- BlockStore[F].put(block.blockHash, modifiedBlock)
+      blockMeta = BlockMetadata
+        .fromBlock(modifiedBlock)
+        .copy(validated = true, validationFailed = invalid, fringeStateHash = preStateHash)
+      _ <- BlockDagStorage[F].insert(blockMeta, modifiedBlock)
     } yield modifiedBlock
 
   def getLatestSeqNum(sender: Validator, dag: DagRepresentation): Long = {

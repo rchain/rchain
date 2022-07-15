@@ -185,7 +185,7 @@ class NodeSyncing[F[_]
               s"Adding ${PrettyPrinter.buildString(block, short = true)}."
             )
         bmd = BlockMetadata.fromBlock(block)
-        _   <- BlockDagStorage[F].insertNew(bmd, block)
+        _   <- BlockDagStorage[F].insert(bmd, block)
       } yield ()
 
     for {

@@ -14,8 +14,9 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.models.BlockMetadata
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import monix.eval.Task
@@ -188,7 +189,15 @@ object GenesisBuilder {
       blockStore      <- BlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
-      _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)
+
+      blockMeta = BlockMetadata.fromBlock(genesis)
+      // TODO: genesis is finalized for legacy tests to pass
+      blockMetaUpdated = blockMeta.copy(
+        validated = true,
+        fringe = List(genesis.blockHash),
+        fringeStateHash = genesis.postStateHash
+      )
+      _ <- blockDagStorage.insert(blockMetaUpdated, genesis)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory))
       .runSyncUnsafe()
   }

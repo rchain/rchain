@@ -1,5 +1,6 @@
 package coop.rchain
 
+import coop.rchain.casper.blocks.BlockDagStorageSyntax
 import coop.rchain.casper.blocks.proposer.ProposerResult
 import coop.rchain.casper.protocol.CommUtilSyntax
 import coop.rchain.casper.rholang.syntax.{RuntimeManagerSyntax, RuntimeReplaySyntax, RuntimeSyntax}
@@ -18,14 +19,13 @@ package object casper {
   val MergingMetricsSource: Metrics.Source = Metrics.Source(CasperMetricsSource, "merging")
 
   // Importing syntax object means using all extensions in the project
-  object syntax
-      extends AllSyntaxCasper
-      with AllSyntaxComm
-      with AllSyntaxBlockStorage
-      with RuntimeManagerSyntax
-      with RuntimeSyntax
-      with RuntimeReplaySyntax
+  object syntax extends AllSyntaxCasper with AllSyntaxComm with AllSyntaxBlockStorage
 }
 
 // Casper syntax
-trait AllSyntaxCasper extends CommUtilSyntax
+trait AllSyntaxCasper
+    extends CommUtilSyntax
+    with BlockDagStorageSyntax
+    with RuntimeManagerSyntax
+    with RuntimeSyntax
+    with RuntimeReplaySyntax

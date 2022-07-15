@@ -51,13 +51,13 @@ object BlockProcessor {
       // TODO: legacy code returns updated DAG
       updatedDag <- result
                      .map { blockMeta =>
-                       BlockDagStorage[F].insertNew(blockMeta, block)
+                       BlockDagStorage[F].insert(blockMeta, block)
                      }
                      .leftMap {
                        // TODO: refactor/remove all this nonsense with Either/BlockError/ValidBlock statuses!
                        case (blockMeta, _: InvalidBlock) =>
                          // TODO: error should already in BlockMetadata
-                         BlockDagStorage[F].insertNew(blockMeta, block)
+                         BlockDagStorage[F].insert(blockMeta, block)
                        // TODO: legacy code, raise error in this case
                        case _ => dag.pure[F] // this should never happen
                      }

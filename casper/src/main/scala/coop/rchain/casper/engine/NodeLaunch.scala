@@ -73,23 +73,14 @@ object NodeLaunch {
         genBlockStr       = PrettyPrinter.buildString(genesisBlock)
         _                 <- Log[F].info(s"Sending genesis $genBlockStr to peers...")
 
-        bmd = BlockMetadata
-          .fromBlock(genesisBlock)
-          .copy(
-            validated = true,
-            // TODO: replay genesis deploys to check that creation execution was correct
-            validationFailed = false,
-            // Fringe is empty for genesis block and pre-state is the finalized fringe state
-            fringe = List.empty,
-            fringeStateHash = genesisBlock.preStateHash
-          )
-
         // Store genesis block
         _             <- BlockStore[F].put(genesisBlock)
-        genesisFringe = FinalizedFringe(bmd.fringe, bmd.fringeStateHash)
+        genesisFringe = FinalizedFringe(hashes = Seq(), genesisBlock.preStateHash)
         _             <- ApprovedStore[F].putApprovedBlock(genesisFringe)
+
         // Add genesis block to DAG
-        _ <- BlockDagStorage[F].insertNew(bmd, genesisBlock)
+        // TODO: replay genesis block to confirm creation was correct, it's fatal error if replay fails
+        _ <- BlockDagStorage[F].insertGenesis(genesisBlock)
 
         // Send fringe data to peers
         _ <- CommUtil[F].streamToPeers(genesisFringe.toProto)

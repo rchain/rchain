@@ -198,21 +198,30 @@ object MultiParentCasper {
       // Create block and measure duration
       r                    <- Stopwatch.duration(validationProcess.value)
       (valResult, elapsed) = r
-      _ <- valResult
-            .map { blockMeta =>
-              val blockInfo   = PrettyPrinter.buildString(block, short = true)
-              val deployCount = block.state.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) (Valid) [$elapsed]") *>
-                indexBlock
-            }
-            .leftMap {
-              case (_, err) =>
-                val deployCount = block.state.deploys.size
-                val blockInfo   = PrettyPrinter.buildString(block, short = true)
-                Log[F].warn(s"Block replayed: $blockInfo (${deployCount}d) ($err) [$elapsed]")
-            }
-            .merge
-    } yield valResult
+      // TODO: update validated fields in a more clear way
+      valResultUpdated <- valResult
+                           .map { blockMeta =>
+                             val blockInfo   = PrettyPrinter.buildString(block, short = true)
+                             val deployCount = block.state.deploys.size
+                             Log[F].info(
+                               s"Block replayed: $blockInfo (${deployCount}d) (Valid) [$elapsed]"
+                             ) *>
+                               indexBlock as blockMeta
+                               .copy(validated = true)
+                               .asRight[(BlockMetadata, BlockError)]
+                           }
+                           .leftMap {
+                             case (blockMeta, err) =>
+                               val deployCount = block.state.deploys.size
+                               val blockInfo   = PrettyPrinter.buildString(block, short = true)
+                               Log[F].warn(
+                                 s"Block replayed: $blockInfo (${deployCount}d) ($err) [$elapsed]"
+                               ) as
+                                 (blockMeta.copy(validated = true, validationFailed = true), err)
+                                   .asLeft[BlockMetadata]
+                           }
+                           .merge
+    } yield valResultUpdated
 
     Log[F].info(s"Validating ${PrettyPrinter.buildString(block)}.") *> validationProcessDiag
   }
