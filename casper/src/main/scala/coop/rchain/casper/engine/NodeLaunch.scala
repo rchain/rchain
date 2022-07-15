@@ -75,8 +75,14 @@ object NodeLaunch {
 
         bmd = BlockMetadata
           .fromBlock(genesisBlock)
-          // Genesis pre-state is used as finalized state hash
-          .copy(fringeStateHash = genesisBlock.preStateHash)
+          .copy(
+            validated = true,
+            // TODO: replay genesis deploys to check that creation execution was correct
+            validationFailed = false,
+            // Fringe is empty for genesis block and pre-state is the finalized fringe state
+            fringe = List.empty,
+            fringeStateHash = genesisBlock.preStateHash
+          )
 
         // Store genesis block
         _             <- BlockStore[F].put(genesisBlock)
@@ -85,7 +91,7 @@ object NodeLaunch {
         // Add genesis block to DAG
         _ <- BlockDagStorage[F].insertNew(bmd, genesisBlock)
 
-        // Send approved block to peers
+        // Send fringe data to peers
         _ <- CommUtil[F].streamToPeers(genesisFringe.toProto)
       } yield ()
 

@@ -120,7 +120,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       (fringe, fringeState) = fringeWithState
       bmd = BlockMetadata
         .fromBlock(block)
-        .copy(invalid = invalid, fringe = fringe.toList, fringeStateHash = fringeState)
+        .copy(validationFailed = invalid, fringe = fringe.toList, fringeStateHash = fringeState)
 
       result <- insertNew(bmd, block)
     } yield result
@@ -189,10 +189,10 @@ object BlockDagKeyValueStorage {
       kvm: KeyValueStoreManager[F]
   ): F[BlockDagKeyValueStorage[F]] =
     for {
-      lock   <- MetricsSemaphore.single[F]
-      stores <- createStores(kvm)
+      lock     <- MetricsSemaphore.single[F]
+      stores   <- createStores(kvm)
+      metadata = stores.metadata
       initST <- {
-        import stores._
         for {
           // Take current DAG state / view of the DAG
           dagSet    <- metadata.dagSet

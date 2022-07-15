@@ -206,17 +206,19 @@ message StoreItemsMessageProto {
 // --------- Internal types ---------
 
 message BlockMetadataProto {
+  // BlockMessage data
   bytes blockHash               = 1;
   int64 blockNum                = 2;
   bytes sender                  = 3;
   int64 seqNum                  = 4;
   repeated bytes justifications = 5 [(scalapb.field).collection_type="List"];
   repeated BondProto bonds      = 6 [(scalapb.field).collection_type="List"];
-  bool validated                = 7; // whether the block is validated (processed)
-  bool invalid                  = 8; // whether the block was marked as invalid
-  bool finalized                = 21; // whether the block is finalized
-  repeated bytes fringe         = 23 [(scalapb.field).collection_type="List"];
-  bytes fringeStateHash         = 24;
+  // Replay status
+  bool validated                = 20; // block replayed/validated
+  bool validationFailed         = 21; // block replay failed
+  // Finalization fringe seen by this block
+  repeated bytes fringe         = 30 [(scalapb.field).collection_type="List"];
+  bytes fringeStateHash         = 31;
 }
 
 // --------- End Internal types ---------

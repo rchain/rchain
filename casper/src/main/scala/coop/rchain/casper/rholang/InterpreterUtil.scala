@@ -64,7 +64,7 @@ object InterpreterUtil {
       _ <- Span[F].mark("before-unsafe-get-parents")
       parents <- block.justifications
                   .traverse(BlockDagStorage[F].lookupUnsafe(_))
-                  .map(_.filter(!_.invalid))
+                  .map(_.filter(!_.validationFailed))
                   .map(_.map(_.blockHash))
 
       _          <- Span[F].mark("before-compute-parents-post-state")
@@ -124,8 +124,7 @@ object InterpreterUtil {
         .fromBlock(block)
         .copy(
           validated = true,
-          invalid = result.isLeft || result.right.get.isEmpty,
-          finalized = false,
+          validationFailed = result.isLeft || result.right.get.isEmpty,
           fringe = preState.fringe.toList,
           fringeStateHash = preState.fringeState.bytes.toArray.toByteString
         )
@@ -145,7 +144,7 @@ object InterpreterUtil {
       _ <- Span[F].mark("before-unsafe-get-parents")
       parents <- block.justifications
                   .traverse(BlockDagStorage[F].lookupUnsafe(_))
-                  .map(_.filter(!_.invalid))
+                  .map(_.filter(!_.validationFailed))
                   .map(_.map(_.blockHash))
 
       _          <- Span[F].mark("before-compute-parents-post-state")

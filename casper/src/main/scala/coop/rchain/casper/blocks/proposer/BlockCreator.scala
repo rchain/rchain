@@ -118,7 +118,7 @@ object BlockCreator {
               for {
                 parents <- justifications
                             .traverse(BlockDagStorage[F].lookupUnsafe(_))
-                            .map(_.filter(!_.invalid))
+                            .map(_.filter(!_.validationFailed))
                             .map(_.map(_.blockHash))
 
                 // Merge justifications and get pre-state for the new block

@@ -179,7 +179,7 @@ object Validate {
     for {
       parents <- b.justifications
                   .traverse(BlockDagStorage[F].lookupUnsafe(_))
-                  .map(_.filter(!_.invalid))
+                  .map(_.filter(!_.validationFailed))
       maxBlockNumber = parents.map(_.blockNum).maximumOption.getOrElse(-1L)
       number         = b.blockNumber
       result         = maxBlockNumber + 1 == number
@@ -344,7 +344,7 @@ object Validate {
       justifications <- block.justifications.flatTraverse(
                          BlockDagStorage[F].lookup(_).map(_.toList)
                        )
-      invalidValidators = justifications.filter(_.invalid).map(b => b.sender)
+      invalidValidators = justifications.filter(_.validationFailed).map(b => b.sender)
       neglectedInvalidJustification = invalidValidators.exists { invalidValidator =>
         val slashedValidatorBond = block.bonds.get(invalidValidator)
         slashedValidatorBond match {

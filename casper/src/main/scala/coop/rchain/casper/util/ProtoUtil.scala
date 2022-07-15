@@ -19,7 +19,7 @@ object ProtoUtil {
   def getParentsMetadata[F[_]: Sync: BlockDagStorage](b: BlockMetadata): F[List[BlockMetadata]] =
     b.justifications
       .traverse(BlockDagStorage[F].lookupUnsafe(_))
-      .map(_.filter(!_.invalid))
+      .map(_.filter(!_.validationFailed))
 
   def getParentMetadatasAboveBlockNumber[F[_]: Sync: BlockDagStorage](
       b: BlockMetadata,

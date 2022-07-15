@@ -35,8 +35,7 @@ object BlockMetadataStore {
   private final case class DagState(
       dagSet: Set[BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
-      heightMap: SortedMap[Long, Set[BlockHash]],
-      finalizedBlockSet: Set[BlockHash]
+      heightMap: SortedMap[Long, Set[BlockHash]]
   )
 
   def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
@@ -44,8 +43,7 @@ object BlockMetadataStore {
       blockMeta.blockHash,
       blockMeta.justifications.toSet,
       blockMeta.blockNum,
-      blockMeta.invalid,
-      blockMeta.finalized
+      blockMeta.validationFailed
     )
 
   class BlockMetadataStore[F[_]: Monad](
@@ -90,8 +88,6 @@ object BlockMetadataStore {
 
     def heightMap: F[SortedMap[Long, Set[BlockHash]]] =
       dagState.get.map(_.heightMap)
-
-    def finalizedBlockSet: F[Set[BlockHash]] = dagState.get.map(_.finalizedBlockSet)
   }
 
   private def addBlockToDagState(block: BlockInfo)(state: DagState): DagState = {
@@ -107,19 +103,15 @@ object BlockMetadataStore {
     }
 
     // Update block height map
-    val newHeightMap = if (!block.isInvalid) {
+    val newHeightMap = if (!block.validationFailed) {
       val currSet = state.heightMap.getOrElse(block.blockNum, Set())
       state.heightMap.updated(block.blockNum, currSet + block.hash)
     } else state.heightMap
 
-    val newFinalisedBlockSet =
-      if (block.isFinalized) state.finalizedBlockSet + block.hash else state.finalizedBlockSet
-
     state.copy(
       dagSet = newDagSet,
       childMap = newChildMap,
-      heightMap = newHeightMap,
-      finalizedBlockSet = newFinalisedBlockSet
+      heightMap = newHeightMap
     )
   }
 
@@ -136,8 +128,7 @@ object BlockMetadataStore {
       hash: BlockHash,
       parents: Set[BlockHash],
       blockNum: Long,
-      isInvalid: Boolean,
-      isFinalized: Boolean
+      validationFailed: Boolean
   )
 
   private def recreateInMemoryState(
@@ -147,8 +138,7 @@ object BlockMetadataStore {
       DagState(
         dagSet = Set(),
         childMap = Map(),
-        heightMap = SortedMap(),
-        finalizedBlockSet = Set()
+        heightMap = SortedMap()
       )
 
     // Add blocks to DAG state

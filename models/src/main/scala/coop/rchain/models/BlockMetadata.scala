@@ -13,9 +13,10 @@ final case class BlockMetadata(
     seqNum: Long,
     justifications: List[BlockHash],
     bondsMap: Map[Validator, Long],
+    // Replay status
     validated: Boolean,
-    invalid: Boolean,
-    finalized: Boolean,
+    validationFailed: Boolean,
+    // Finalization fringe seen by this block
     fringe: List[BlockHash],
     fringeStateHash: StateHash
 ) {
@@ -33,8 +34,7 @@ object BlockMetadata {
     b.justifications,
     b.bonds.map(b => b.validator -> b.stake).toMap,
     b.validated,
-    b.invalid,
-    b.finalized,
+    b.validationFailed,
     b.fringe,
     b.fringeStateHash
   )
@@ -47,8 +47,7 @@ object BlockMetadata {
     b.justifications,
     b.bondsMap.map { case (validator, stake) => BondProto(validator, stake) }.toList,
     b.validated,
-    b.invalid,
-    b.finalized,
+    b.validationFailed,
     b.fringe,
     b.fringeStateHash
   )
@@ -67,8 +66,7 @@ object BlockMetadata {
       b.justifications,
       b.bonds,
       validated = false,
-      invalid = false,
-      finalized = false,
+      validationFailed = false,
       fringe = List(),
       fringeStateHash = protobuf.ByteString.EMPTY
     )
