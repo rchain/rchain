@@ -1,9 +1,9 @@
 package coop.rchain.casper.helper
 
+import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
-import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage._
@@ -507,18 +507,18 @@ object TestNode {
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
-  def propagate[F[_]: Monad](nodes: Seq[TestNode[F]]): F[Unit] = {
+  def propagate[F[_]: Sync](nodes: Seq[TestNode[F]]): F[Unit] = {
     val nodesList = nodes.toList
     val peers     = nodesList.map(_.local).toSet
     val network   = nodesList.head.transportLayerEff.testNetworkF
     val heatDeath =
-      network.inspect(_.filterKeys(peers.contains(_)).valuesIterator.forall(_.isEmpty))
+      network.get.map(_.filterKeys(peers.contains).valuesIterator.forall(_.isEmpty))
     val propagation = nodesList.traverse_(_.handleReceive())
 
     propagation.untilM_(heatDeath)
   }
 
-  def propagate[F[_]: Monad](node1: TestNode[F], node2: TestNode[F]): F[Unit] =
+  def propagate[F[_]: Sync](node1: TestNode[F], node2: TestNode[F]): F[Unit] =
     propagate(Seq(node1, node2))
 
 }

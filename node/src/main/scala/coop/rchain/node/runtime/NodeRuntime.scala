@@ -69,7 +69,7 @@ object NodeRuntime {
       discoveryPort = nodeConf.peersDiscovery.port
       newLocal      <- WhoAmI.checkLocalPeerNode[F](protocolPort, discoveryPort, local)
       _ <- newLocal.traverse_ { peer =>
-            Connect.resetConnections[F] *> RPConfState[F].modify(_.copy(local = peer))
+            Connect.resetConnections[F] *> RPConfState[F].update(_.copy(local = peer))
           }
     } yield ()
 }

@@ -15,7 +15,6 @@ import coop.rchain.monix.Monixable
 import coop.rchain.shared._
 import monix.eval._
 import monix.execution._
-import monix.execution.atomic.AtomicAny
 
 import java.nio.file.Path
 import scala.concurrent.duration._
@@ -67,10 +66,9 @@ package object effects {
   def rpConnections[F[_]: Concurrent]: F[ConnectionsCell[F]] =
     Ref[F].of(Connections.empty)
 
-  def rpConfState[F[_]: Monad: Sync](conf: RPConf): MonadState[F, RPConf] =
-    new AtomicMonadState[F, RPConf](AtomicAny(conf))
+  def rpConfState[F[_]: Sync](conf: RPConf): Ref[F, RPConf] = Ref.unsafe[F, RPConf](conf)
 
-  def rpConfAsk[F[_]: Monad](state: MonadState[F, RPConf]): ApplicativeAsk[F, RPConf] =
+  def rpConfAsk[F[_]: Applicative](state: Ref[F, RPConf]): ApplicativeAsk[F, RPConf] =
     new DefaultApplicativeAsk[F, RPConf] {
       val applicative: Applicative[F] = Applicative[F]
       def ask: F[RPConf]              = state.get
