@@ -325,8 +325,8 @@ object SystemProcesses {
             Seq(RhoType.RhoString("check"), argument, ack)
             ) =>
           val response = argument match {
-            case RhoType.SysAuthToken(_) => RhoType.RhoBoolean(true)
-            case _                       => RhoType.RhoBoolean(false)
+            case RhoType.RhoSysAuthToken(_) => RhoType.RhoBoolean(true)
+            case _                          => RhoType.RhoBoolean(false)
           }
           produce(Seq(response), ack)
       }

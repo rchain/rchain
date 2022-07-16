@@ -179,7 +179,7 @@ object RhoType {
     def apply(expr: Expr): Par = expr
   }
 
-  object SysAuthToken {
+  object RhoSysAuthToken {
     def unapply(p: Par): Option[GSysAuthToken] =
       p.singleUnforgeable().collect {
         case GUnforgeable(GSysAuthTokenBody(token)) => token

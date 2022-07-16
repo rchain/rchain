@@ -24,7 +24,7 @@ object SysAuthTokenContract {
           Seq(ackCh)
           ) =>
         for {
-          _ <- produce(Seq(RhoType.SysAuthToken(GSysAuthToken())), ackCh)
+          _ <- produce(Seq(RhoType.RhoSysAuthToken(GSysAuthToken())), ackCh)
         } yield ()
     }
   }
