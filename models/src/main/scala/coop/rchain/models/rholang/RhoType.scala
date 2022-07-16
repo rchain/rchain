@@ -143,7 +143,7 @@ object RhoType {
     def apply(bytes: Array[Byte]): Par = GDeployerId(bytes.toByteString)
   }
 
-  type RhoDeployId = RhoDeployerId.type
+  type RhoDeployId = RhoDeployId.type
   object RhoDeployId {
     def unapply(p: Par): Option[Array[Byte]] =
       p.singleUnforgeable().collect {
