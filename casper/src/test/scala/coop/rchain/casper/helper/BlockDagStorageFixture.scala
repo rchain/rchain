@@ -6,7 +6,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.rholang.{Resources, RuntimeManager}
+import coop.rchain.casper.rholang.{BlockRandomSeed, Resources, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
@@ -50,7 +50,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     implicit val metrics = new MetricsNOP[Task]()
     implicit val log     = Log.log[Task]
 
-    BlockDagStorageTestFixture.withStorageF[Task, R](f).runSyncUnsafe()
+    BlockDagStorageTestFixture.withStorageF[Task].use(Function.uncurried(f).tupled).runSyncUnsafe()
   }
 }
 
