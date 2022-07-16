@@ -1,6 +1,5 @@
 package coop.rchain.casper.rholang
 
-import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -9,31 +8,27 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
-import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, ParentsMergedState}
 import coop.rchain.casper.protocol.{
   BlockMessage,
   DeployData,
   ProcessedDeploy,
   ProcessedSystemDeploy
 }
-import coop.rchain.casper.rholang.RuntimeManager.{emptyStateHashFixed, StateHash}
+import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.types._
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.rholang.implicits.fromGUnforgeable
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import retry.{retryingOnFailures, RetryPolicies}
 

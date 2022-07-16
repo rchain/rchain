@@ -14,6 +14,7 @@ import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.BlockRetriever.{RequestState, RequestedBlocks}
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
+import coop.rchain.casper.merging.ParentsMergedState
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{BlockRandomSeed, Resources, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext

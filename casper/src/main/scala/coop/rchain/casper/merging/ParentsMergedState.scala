@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package coop.rchain.casper.merging
 
 import com.google.protobuf.ByteString
 import coop.rchain.models.BlockHash.BlockHash

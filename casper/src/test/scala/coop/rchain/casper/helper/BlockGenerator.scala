@@ -7,6 +7,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
+import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.merging.ParentsMergedState
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil.{
   computeDeploysCheckpoint,
@@ -16,7 +18,6 @@ import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.{CasperMetricsSource, ParentsMergedState}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata

@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
-import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex}
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, ParentsMergedState}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.syntax._
