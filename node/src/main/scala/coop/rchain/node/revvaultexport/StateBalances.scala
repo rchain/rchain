@@ -5,7 +5,7 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.BlockRandomSeed
+import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GString}
