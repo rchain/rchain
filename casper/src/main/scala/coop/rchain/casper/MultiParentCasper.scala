@@ -139,12 +139,12 @@ object MultiParentCasper {
       for {
         _                                <- validateSummary
         _                                <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
-        validated                        <- EitherT.liftF(InterpreterUtil.validateBlockCheckpointNew(block))
+        validated                        <- EitherT.liftF(InterpreterUtil.validateBlockCheckpoint(block))
         (blockMetadata, validatedResult) = validated
         _ <- EitherT.fromEither(validatedResult match {
-              case Left(ex)       => Left((blockMetadata, ex))
-              case Right(Some(_)) => Right(blockMetadata)
-              case Right(None)    => Left((blockMetadata, BlockStatus.invalidTransaction))
+              case Left(ex)     => Left((blockMetadata, ex))
+              case Right(true)  => Right(blockMetadata)
+              case Right(false) => Left((blockMetadata, BlockStatus.invalidStateHash))
             })
         _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
         _ <- EitherT(Validate.bondsCache(block)).as(blockMetadata).leftMap(e => (blockMetadata, e))

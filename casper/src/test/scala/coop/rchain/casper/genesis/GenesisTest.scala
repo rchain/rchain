@@ -181,11 +181,10 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                         implicitly[Concurrent[Task]],
                         log
                       )
-            _ <- BlockStore[Task].put(genesis.blockHash, genesis)
-            _ <- blockDagStorage.insertGenesis(genesis)
-            maybePostGenesisStateHash <- InterpreterUtil
-                                          .validateBlockCheckpoint[Task](genesis)
-          } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
+            _         <- BlockStore[Task].put(genesis.blockHash, genesis)
+            _         <- blockDagStorage.insertGenesis(genesis)
+            postState <- InterpreterUtil.validateBlockCheckpointLegacy[Task](genesis)
+          } yield postState.value shouldBe true
       }
   }
 

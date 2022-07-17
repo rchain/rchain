@@ -26,6 +26,7 @@ import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -33,7 +34,8 @@ class InterpreterUtilTest
     extends AnyFlatSpec
     with Matchers
     with BlockGenerator
-    with BlockDagStorageFixture {
+    with BlockDagStorageFixture
+    with EitherValues {
   import BlockGenerator.step
 
   implicit val logEff                    = new LogStub[Task]
@@ -235,9 +237,8 @@ class InterpreterUtilTest
            )
       _         <- step[Task](b1)
       _         <- step[Task](b2)
-      postState <- validateBlockCheckpoint[Task](b3)
-      result    = postState shouldBe Right(None)
-    } yield result
+      postState <- validateBlockCheckpointLegacy[Task](b3)
+    } yield postState.value shouldBe false
   }
 
   it should "merge histories in case of multiple parents (uneven histories)" ignore withGenesis(
@@ -281,9 +282,8 @@ class InterpreterUtilTest
       _ <- step[Task](b3)
       _ <- step[Task](b4)
 
-      postState <- validateBlockCheckpoint[Task](b5)
-      result    = postState shouldBe Right(None)
-    } yield result
+      postState <- validateBlockCheckpointLegacy[Task](b5)
+    } yield postState.value shouldBe false
   }
 
   def computeDeployCosts(deploy: Signed[DeployData]*)(
@@ -347,10 +347,9 @@ class InterpreterUtilTest
         BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId)
       ).use { implicit runtimeManager =>
         for {
-          block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
-          validateResult   <- validateBlockCheckpoint[Task](block)
-          Right(stateHash) = validateResult
-        } yield stateHash should be(None)
+          block          <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
+          validateResult <- validateBlockCheckpointLegacy[Task](block)
+        } yield validateResult.value shouldBe false
       }
   }
 
@@ -383,9 +382,8 @@ class InterpreterUtilTest
                 justifications = Seq(genesis.blockHash)
               )
 
-      validateResult <- validateBlockCheckpoint[Task](block)
-      Right(tsHash)  = validateResult
-    } yield tsHash should be(Some(computedTsHash))
+      validateResult <- validateBlockCheckpointLegacy[Task](block)
+    } yield validateResult.value shouldBe true
   }
 
   it should "pass linked list test" in withGenesis(genesisContext) {
@@ -429,9 +427,8 @@ class InterpreterUtilTest
                   preStateHash = preStateHash,
                   justifications = Seq(genesis.blockHash)
                 )
-        validateResult <- validateBlockCheckpoint[Task](block)
-        Right(tsHash)  = validateResult
-      } yield tsHash should be(Some(computedTsHash))
+        validateResult <- validateBlockCheckpointLegacy[Task](block)
+      } yield validateResult.value shouldBe true
   }
 
   it should "pass persistent produce test with causality" in withGenesis(genesisContext) {
@@ -480,9 +477,8 @@ class InterpreterUtilTest
                   preStateHash = preStateHash,
                   justifications = Seq(genesis.blockHash)
                 )
-        validateResult <- validateBlockCheckpoint[Task](block)
-        Right(tsHash)  = validateResult
-      } yield tsHash should be(Some(computedTsHash))
+        validateResult <- validateBlockCheckpointLegacy[Task](block)
+      } yield validateResult.value shouldBe true
   }
 
   it should "pass tests involving primitives" in withGenesis(genesisContext) {
@@ -528,9 +524,8 @@ class InterpreterUtilTest
                   preStateHash = preStateHash,
                   justifications = Seq(genesis.blockHash)
                 )
-        validateResult <- validateBlockCheckpoint[Task](block)
-        Right(tsHash)  = validateResult
-      } yield tsHash should be(Some(computedTsHash))
+        validateResult <- validateBlockCheckpointLegacy[Task](block)
+      } yield validateResult.value shouldBe true
   }
 
   it should "pass tests involving races" in withGenesis(genesisContext) {
@@ -571,9 +566,8 @@ class InterpreterUtilTest
                     justifications = Seq(genesis.blockHash)
                   )
 
-          validateResult <- validateBlockCheckpoint[Task](block)
-          Right(tsHash)  = validateResult
-        } yield tsHash should be(Some(computedTsHash))
+          validateResult <- validateBlockCheckpointLegacy[Task](block)
+        } yield validateResult.value shouldBe true
       }
   }
 
@@ -600,9 +594,8 @@ class InterpreterUtilTest
                   preStateHash = preStateHash,
                   justifications = Seq(genesis.blockHash)
                 )
-        validateResult <- validateBlockCheckpoint[Task](block)
-        Right(tsHash)  = validateResult
-      } yield tsHash should be(None)
+        validateResult <- validateBlockCheckpointLegacy[Task](block)
+      } yield validateResult.value shouldBe false
   }
 
   it should "pass map update test" in withGenesis(genesisContext) {
@@ -644,9 +637,8 @@ class InterpreterUtilTest
                     seqNum = i + 1L,
                     justifications = Seq(genesis.blockHash)
                   )
-          validateResult <- validateBlockCheckpoint[Task](block)
-          Right(tsHash)  = validateResult
-        } yield tsHash.map(_.toHexString) should be(Some(computedTsHash.toHexString))
+          validateResult <- validateBlockCheckpointLegacy[Task](block)
+        } yield validateResult.value shouldBe true
       }
   }
 
