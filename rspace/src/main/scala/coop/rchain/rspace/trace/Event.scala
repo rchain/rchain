@@ -1,5 +1,7 @@
 package coop.rchain.rspace.trace
 
+import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.hashing.StableHashProvider._
 import coop.rchain.rspace.internal.ConsumeCandidate
@@ -23,17 +25,20 @@ final case class COMM(
 ) extends Event
 
 object COMM {
-  def apply[C, A](
+  def apply[F[_]: Concurrent: ContextShift, C, A](
       dataCandidates: Seq[ConsumeCandidate[C, A]],
       consumeRef: Consume,
       peeks: SortedSet[Int],
-      produceCounters: (Seq[Produce]) => Map[Produce, Int]
-  ): COMM = {
-    val produceRefs =
-      dataCandidates.map(_.datum.source).sortBy(p => (p.channelsHash, p.hash, p.persistent))
-
-    COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs))
-  }
+      produceCounters: (Seq[Produce]) => F[Map[Produce, Int]]
+  ): F[COMM] =
+    for {
+      produceRefs <- Sync[F].delay(
+                      dataCandidates
+                        .map(_.datum.source)(Seq.canBuildFrom)
+                        .sortBy(p => (p.channelsHash, p.hash, p.persistent))
+                    )
+      counters <- produceCounters(produceRefs)
+    } yield COMM(consumeRef, produceRefs, peeks, counters)
 }
 
 sealed trait IOEvent extends Event
