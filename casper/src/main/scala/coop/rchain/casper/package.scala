@@ -9,7 +9,7 @@ import coop.rchain.models.BlockHash.BlockHash
 
 package object casper {
   type TopoSort             = Vector[Vector[BlockHash]]
-  type BlockProcessing[A]   = Either[BlockError, A]
+  type BlockProcessing[A]   = Either[InvalidBlock, A]
   type ValidBlockProcessing = BlockProcessing[ValidBlock]
 
   type ProposeFunction[F[_]] = Boolean => F[ProposerResult]

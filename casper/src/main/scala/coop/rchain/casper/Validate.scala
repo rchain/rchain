@@ -184,7 +184,7 @@ object Validate {
       number         = b.blockNumber
       result         = maxBlockNumber + 1 == number
       status <- if (result) {
-                 BlockStatus.valid.asRight[BlockError].pure[F]
+                 BlockStatus.valid.asRight[InvalidBlock].pure[F]
                } else {
                  val logMessage =
                    if (parents.isEmpty)
@@ -251,7 +251,7 @@ object Validate {
       number                 = b.seqNum
       result                 = creatorLatestSeqNumber + 1L == number
       status <- if (result) {
-                 BlockStatus.valid.asRight[BlockError].pure[F]
+                 BlockStatus.valid.asRight[InvalidBlock].pure[F]
                } else {
                  for {
                    _ <- Log[F].warn(
@@ -271,7 +271,7 @@ object Validate {
   ): F[ValidBlockProcessing] = {
     assert(shardId.onlyAscii, "Shard name should contain only ASCII characters")
     if (b.state.deploys.forall(_.deploy.data.shardId == shardId)) {
-      BlockStatus.valid.asRight[BlockError].pure
+      BlockStatus.valid.asRight[InvalidBlock].pure
     } else {
       for {
         _ <- Log[F].warn(ignore(b, s"not for all deploys shard identifier is $shardId."))
@@ -307,7 +307,7 @@ object Validate {
       b: BlockMessage
   ): F[ValidBlockProcessing] =
     checkJustificationRegression(b).map { isValidOpt =>
-      if (isValidOpt.getOrElse(true)) BlockStatus.valid.asRight[BlockError]
+      if (isValidOpt.getOrElse(true)) BlockStatus.valid.asRight[InvalidBlock]
       else BlockStatus.justificationRegression.asLeft
     }
 
@@ -355,7 +355,7 @@ object Validate {
       result = if (neglectedInvalidJustification) {
         BlockStatus.neglectedInvalidBlock.asLeft[ValidBlock]
       } else {
-        BlockStatus.valid.asRight[BlockError]
+        BlockStatus.valid.asRight[InvalidBlock]
       }
     } yield result
 
@@ -367,7 +367,7 @@ object Validate {
 
     RuntimeManager[F].computeBonds(tuplespaceHash).flatMap { computedBonds =>
       if (bonds.toSet == computedBonds.toSet) {
-        BlockStatus.valid.asRight[BlockError].pure
+        BlockStatus.valid.asRight[InvalidBlock].pure
       } else {
         for {
           _ <- Log[F].warn("Bonds in proof of stake contract do not match block's bond cache.")
@@ -384,7 +384,7 @@ object Validate {
       minPhloPrice: Long
   ): F[ValidBlockProcessing] =
     if (b.state.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
-      BlockStatus.valid.asRight[BlockError].pure
+      BlockStatus.valid.asRight[InvalidBlock].pure
     } else {
       BlockStatus.containsLowCostDeploy.asLeft[ValidBlock].pure
     }

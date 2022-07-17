@@ -138,7 +138,7 @@ object Proposer {
       MultiParentCasper.validate(block, shardId, minPhloPrice).flatMap { result =>
         result
           .map { blockMeta =>
-            BlockDagStorage[F].insert(blockMeta, block).as(BlockStatus.valid.asRight[BlockError])
+            BlockDagStorage[F].insert(blockMeta, block).as(BlockStatus.valid.asRight[InvalidBlock])
           }
           .leftMap {
             case (_, err) =>

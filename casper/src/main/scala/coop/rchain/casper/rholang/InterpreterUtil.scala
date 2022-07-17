@@ -95,7 +95,7 @@ object InterpreterUtil {
               s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
                 .buildString(incomingPreStateHash)}"
             )
-            .as(none[StateHash].asRight[BlockError])
+            .as(none[StateHash].asRight[InvalidBlock])
         } else if (rejectedDeployIds.toSet != block.rejectedDeploys.toSet) {
           // TODO: if rejected deploys are different that almost certain
           //  hashes doesn't match also so this branch is unreachable
@@ -175,7 +175,7 @@ object InterpreterUtil {
               s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
                 .buildString(incomingPreStateHash)}"
             )
-            .as(none[StateHash].asRight[BlockError])
+            .as(none[StateHash].asRight[InvalidBlock])
         } else if (rejectedDeployIds.toSet != block.rejectedDeploys.toSet) {
           // TODO: if rejected deploys are different that almost certain
           //  hashes doesn't match also so this branch is unreachable
@@ -258,31 +258,31 @@ object InterpreterUtil {
               .warn(
                 s"Found replay status mismatch; replay failure is $replayFailed and orig failure is $initialFailed"
               )
-              .as(none[StateHash].asRight[BlockError])
+              .as(none[StateHash].asRight[InvalidBlock])
           case UnusedCOMMEvent(replayException) =>
             Log[F]
               .warn(
                 s"Found replay exception: ${replayException.getMessage}"
               )
-              .as(none[StateHash].asRight[BlockError])
+              .as(none[StateHash].asRight[InvalidBlock])
           case ReplayCostMismatch(initialCost, replayCost) =>
             Log[F]
               .warn(
                 s"Found replay cost mismatch: initial deploy cost = $initialCost, replay deploy cost = $replayCost"
               )
-              .as(none[StateHash].asRight[BlockError])
+              .as(none[StateHash].asRight[InvalidBlock])
           // Restructure errors so that this case is unnecessary
           case SystemDeployErrorMismatch(playMsg, replayMsg) =>
             Log[F]
               .warn(
                 s"Found system deploy error mismatch: initial deploy error message = $playMsg, replay deploy error message = $replayMsg"
               )
-              .as(none[StateHash].asRight[BlockError])
+              .as(none[StateHash].asRight[InvalidBlock])
         }
       case Right(computedStateHash) =>
         if (tsHash == computedStateHash) {
           // state hash in block matches computed hash!
-          computedStateHash.some.asRight[BlockError].pure
+          computedStateHash.some.asRight[InvalidBlock].pure
         } else {
           // state hash in block does not match computed hash -- invalid!
           // return no state hash, do not update the state hash set
@@ -291,7 +291,7 @@ object InterpreterUtil {
               s"Tuplespace hash ${PrettyPrinter.buildString(tsHash)} does not match computed hash ${PrettyPrinter
                 .buildString(computedStateHash)}."
             )
-            .as(none[StateHash].asRight[BlockError])
+            .as(none[StateHash].asRight[InvalidBlock])
         }
     }
 

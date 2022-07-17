@@ -30,7 +30,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
     (_: ValidatorIdentity) => true.pure[F]
 
   def alwaysSuccesfullValidation[F[_]: Applicative] =
-    (_: BlockMessage) => BlockStatus.valid.asRight[BlockError].pure[F]
+    (_: BlockMessage) => BlockStatus.valid.asRight[InvalidBlock].pure[F]
 
   def alwaysUnsuccesfullValidation[F[_]: Applicative] =
     (_: BlockMessage) => BlockStatus.invalidSequenceNumber.asLeft[ValidBlock].pure[F]

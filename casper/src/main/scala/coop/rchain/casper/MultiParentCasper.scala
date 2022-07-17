@@ -128,14 +128,14 @@ object MultiParentCasper {
       block: BlockMessage,
       shardId: String,
       minPhloPrice: Long
-  ): F[Either[(BlockMetadata, BlockError), BlockMetadata]] = {
+  ): F[Either[(BlockMetadata, InvalidBlock), BlockMetadata]] = {
     val initBlockMeta = BlockMetadata.fromBlock(block)
 
     val validateSummary = EitherT(Validate.blockSummary(block, shardId, deployLifespan))
       .as(initBlockMeta)
       .leftMap(e => (initBlockMeta, e))
 
-    val validationProcess: EitherT[F, (BlockMetadata, BlockError), BlockMetadata] =
+    val validationProcess: EitherT[F, (BlockMetadata, InvalidBlock), BlockMetadata] =
       for {
         _                                <- validateSummary
         _                                <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
@@ -159,10 +159,10 @@ object MultiParentCasper {
         status <- EitherT(Validate.phloPrice(block, minPhloPrice))
                    .recoverWith {
                      case _ =>
-                       val warnToLog = EitherT.liftF[F, BlockError, Unit](
+                       val warnToLog = EitherT.liftF[F, InvalidBlock, Unit](
                          Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
                        )
-                       val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
+                       val asValid = EitherT.rightT[F, InvalidBlock](BlockStatus.valid)
                        warnToLog *> asValid
                    }
                    .as(blockMetadata)
@@ -208,7 +208,7 @@ object MultiParentCasper {
                              ) *>
                                indexBlock as blockMeta
                                .copy(validated = true)
-                               .asRight[(BlockMetadata, BlockError)]
+                               .asRight[(BlockMetadata, InvalidBlock)]
                            }
                            .leftMap {
                              case (blockMeta, err) =>
