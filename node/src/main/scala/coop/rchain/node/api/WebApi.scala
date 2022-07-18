@@ -123,7 +123,7 @@ object WebApi {
       OptionT
         .whenF(hash.nonEmpty)(cacheTransactionAPI.getTransaction(hash))
         .value
-        .flatMap(_.liftTo(new Exception("Block hash cannot be empty.")))
+        .flatMap(_.liftTo(new BlockApiException("Block hash cannot be empty.")))
   }
 
   // Rholang terms interesting for translation to JSON
