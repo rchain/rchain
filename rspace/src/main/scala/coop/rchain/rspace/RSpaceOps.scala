@@ -85,11 +85,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
 
   protected[this] val logger: Logger
 
-  private[this] val installs: SyncVar[Installs[F, C, P, A, K]] = {
-    val installs = new SyncVar[Installs[F, C, P, A, K]]()
-    installs.put(Map.empty)
-    installs
-  }
+  private[this] val installs: F[Ref[F, Installs[F, C, P, A, K]]] =
+    Ref[F].of(Map.empty[Seq[C], Install[F, P, A, K]])
 
   def historyRepo: HistoryRepository[F, C, P, A, K] = historyRepositoryAtom.get()
 
@@ -173,12 +170,9 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
 
   def restoreInstalls(): F[Unit] =
     /*spanF.trace(restoreInstallsSpanLabel)*/
-    installs.get.toList
-      .traverse {
-        case (channels, Install(patterns, continuation)) =>
-          install(channels, patterns, continuation)
-      }
-      .as(())
+    installs.flatMap(_.get.flatMap(_.toList.traverse_ {
+      case (channels, Install(patterns, continuation)) => install(channels, patterns, continuation)
+    }))
 
   override def consume(
       channels: Seq[C],
@@ -285,11 +279,10 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
         result <- options match {
                    case None =>
                      for {
-                       _ <- syncF.delay {
-                             installs.update(
-                               _.updated(channels, Install(patterns, continuation))
-                             )
-                           }
+                       installsRef <- installs
+                       _ <- installsRef.update(
+                             i => i.updated(channels, Install(patterns, continuation))
+                           )
                        _ <- store.installContinuation(
                              channels,
                              WaitingContinuation(
