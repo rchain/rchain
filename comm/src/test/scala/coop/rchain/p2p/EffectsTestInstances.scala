@@ -122,6 +122,8 @@ object EffectsTestInstances {
       Sync[F].delay(infos = infos :+ msg) >> delegate.info(msg)
     def warn(msg: => String)(implicit ev: LogSource): F[Unit] =
       Sync[F].delay(warns = warns :+ msg) >> delegate.warn(msg)
+    def warn(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] =
+      Sync[F].delay(warns = warns :+ msg) >> delegate.warn(msg, cause)
     def error(msg: => String)(implicit ev: LogSource): F[Unit] =
       Sync[F].delay(errors = errors :+ msg) >> delegate.error(msg)
     def error(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] =

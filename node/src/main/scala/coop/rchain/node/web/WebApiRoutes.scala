@@ -38,9 +38,7 @@ object WebApiRoutes {
               // Logging only unanticipated errors, not related to Block API or input parsing (user errors)
               // To indicate that error is not related to internal node error and
               // node can continue running, error logged as a warning.
-              Log[F].warn("HTTP API response error") *>
-                Sync[F].delay(err.printStackTrace()) *>
-                BadRequest(err.getMessageSafe.asJson)
+              Log[F].warn("HTTP API response error", err) *> BadRequest(err.getMessageSafe.asJson)
           }
     }
 

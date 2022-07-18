@@ -41,6 +41,7 @@ trait Log[F[_]] {
   def debug(msg: => String)(implicit ev: LogSource): F[Unit]
   def info(msg: => String)(implicit ev: LogSource): F[Unit]
   def warn(msg: => String)(implicit ev: LogSource): F[Unit]
+  def warn(msg: => String, cause: Throwable)(implicit ev: LogSource): F[Unit]
   def error(msg: => String)(implicit ev: LogSource): F[Unit]
   def error(msg: => String, cause: Throwable)(implicit ev: LogSource): F[Unit]
 }
@@ -54,6 +55,7 @@ object Log extends LogInstances {
     def debug(msg: => String)(implicit ev: LogSource): F[Unit]                   = ().pure[F]
     def info(msg: => String)(implicit ev: LogSource): F[Unit]                    = ().pure[F]
     def warn(msg: => String)(implicit ev: LogSource): F[Unit]                    = ().pure[F]
+    def warn(msg: => String, cause: Throwable)(implicit ev: LogSource): F[Unit]  = ().pure[F]
     def error(msg: => String)(implicit ev: LogSource): F[Unit]                   = ().pure[F]
     def error(msg: => String, cause: Throwable)(implicit ev: LogSource): F[Unit] = ().pure[F]
   }
@@ -66,6 +68,8 @@ object Log extends LogInstances {
       override def debug(msg: => String)(implicit ev: LogSource): G[Unit] = nt(log.debug(msg))
       override def info(msg: => String)(implicit ev: LogSource): G[Unit]  = nt(log.info(msg))
       override def warn(msg: => String)(implicit ev: LogSource): G[Unit]  = nt(log.warn(msg))
+      override def warn(msg: => String, cause: Throwable)(implicit ev: LogSource): G[Unit] =
+        nt(log.warn(msg, cause))
       override def error(msg: => String)(implicit ev: LogSource): G[Unit] = nt(log.error(msg))
       override def error(msg: => String, cause: Throwable)(implicit ev: LogSource): G[Unit] =
         nt(log.error(msg, cause))
@@ -88,6 +92,8 @@ sealed abstract class LogInstances {
       Sync[F].delay(Logger(ev.clazz).info(msg))
     def warn(msg: => String)(implicit ev: LogSource): F[Unit] =
       Sync[F].delay(Logger(ev.clazz).warn(msg))
+    def warn(msg: => String, cause: Throwable)(implicit ev: LogSource): F[Unit] =
+      Sync[F].delay(Logger(ev.clazz).warn(msg, cause))
     def error(msg: => String)(implicit ev: LogSource): F[Unit] =
       Sync[F].delay(Logger(ev.clazz).error(msg))
     def error(msg: => String, cause: Throwable)(implicit ev: LogSource): F[Unit] =
