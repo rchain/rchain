@@ -3,11 +3,6 @@ package coop.rchain.catscontrib
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.shared.{Log, LogSource}
-import monix.eval.Task
-import monix.execution.Scheduler
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 object TaskContrib {
 
@@ -18,16 +13,4 @@ object TaskContrib {
       fa.onError { case ex => log.error(msg, ex) }
 
   }
-
-  implicit class TaskOps[A](val task: Task[A]) extends AnyVal {
-
-    // TODO: This is duplicated `Task#runSyncUnsafe` / it should be removed
-    def unsafeRunSync(implicit scheduler: Scheduler): A =
-      Await.result(
-        task.runToFuture,
-        Duration.Inf
-      )
-
-  }
-
 }

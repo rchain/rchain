@@ -1,7 +1,6 @@
 package coop.rchain.rspace.bench
 
 import cats.effect.{ContextShift, Sync}
-import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -11,7 +10,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.rspace.{Match, RSpace, _}
+import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
@@ -47,22 +46,22 @@ class BasicBench {
           state.tc.head,
           false
         )
-        .unsafeRunSync
+        .runSyncUnsafe()
 
       assert(c1.isEmpty)
       bh.consume(c1)
 
       val r2 =
-        space.produce(state.channels(i), state.data(i), false).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false).runSyncUnsafe()
 
       assert(r2.nonEmpty)
       bh.consume(r2)
       if (state.debug) {
-        assert(space.toMap.unsafeRunSync.isEmpty)
+        assert(space.toMap.runSyncUnsafe().isEmpty)
       }
     }
     if (state.debug) {
-      assert(space.createCheckpoint().unsafeRunSync.log.size == 303)
+      assert(space.createCheckpoint().runSyncUnsafe().log.size == 303)
     }
   }
 
@@ -72,7 +71,7 @@ class BasicBench {
     val space = state.testSpace
     for (i <- 0 to 100) {
       val r2 =
-        space.produce(state.channels(i), state.data(i), false).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false).runSyncUnsafe()
 
       assert(r2.isEmpty)
       bh.consume(r2)
@@ -84,16 +83,16 @@ class BasicBench {
           state.tc.head,
           false
         )
-        .unsafeRunSync
+        .runSyncUnsafe()
 
       assert(c1.nonEmpty)
       bh.consume(c1)
       if (state.debug) {
-        assert(space.toMap.unsafeRunSync.isEmpty)
+        assert(space.toMap.runSyncUnsafe().isEmpty)
       }
     }
     if (state.debug) {
-      assert(space.createCheckpoint().unsafeRunSync.log.size == 303)
+      assert(space.createCheckpoint().runSyncUnsafe().log.size == 303)
     }
   }
 }
@@ -131,9 +130,9 @@ object BasicBench {
           ListParWithRandom,
           TaggedContinuation
         ](rSpaceStore)
-        .unsafeRunSync
+        .runSyncUnsafe()
 
-    implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync
+    implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).runSyncUnsafe()
 
     val initSeed = 123456789L
 

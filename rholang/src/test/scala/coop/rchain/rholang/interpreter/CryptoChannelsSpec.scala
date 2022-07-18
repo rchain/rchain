@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics
@@ -23,9 +22,9 @@ import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import org.scalatest.{Assertion, Outcome}
 import org.scalatest.flatspec.FixtureAnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{Assertion, Outcome}
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import java.nio.file.Files
@@ -227,7 +226,7 @@ class CryptoChannelsSpec
       spaces                      <- Resources.createRuntimes[Task](store)
       (runtime, replayRuntime, _) = spaces
       _                           <- runtime.cost.set(Cost.UNSAFE_MAX)
-    } yield runtime).unsafeRunSync
+    } yield runtime).runSyncUnsafe()
 
     try {
       test(runtime)

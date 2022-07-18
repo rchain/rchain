@@ -1,10 +1,9 @@
 package coop.rchain.rspace.concurrent
 
+import coop.rchain.metrics.Metrics
 import monix.eval.Task
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.metrics.Metrics
 
 class TwoStepLockTest extends AnyFlatSpec with Matchers {
 
@@ -21,7 +20,7 @@ class TwoStepLockTest extends AnyFlatSpec with Matchers {
     val t4   = acquireLock(lock, List("a", "b"), List("w1", "w2"), { a = a - 8 })
 
     val r = Task.parSequenceUnordered(List(t1, t2, t3, t4))
-    r.unsafeRunSync
+    r.runSyncUnsafe()
   }
 
   def acquireLock(

@@ -104,7 +104,7 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
   ): StreamMessage =
     StreamHandler
       .handleStream(stream, circuitBreaker = neverBreak, cache)
-      .unsafeRunSync
+      .runSyncUnsafe()
       .right
       .get
 
@@ -115,7 +115,7 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
   ): StreamHandler.StreamError =
     StreamHandler
       .handleStream(stream, circuitBreaker = circuitBreaker, cache)
-      .unsafeRunSync
+      .runSyncUnsafe()
       .left
       .get
 

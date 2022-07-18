@@ -2,7 +2,6 @@ package coop.rchain.shared
 
 import cats.Functor
 import cats.syntax.functor._
-import coop.rchain.catscontrib.TaskContrib.TaskOps
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertion
@@ -20,6 +19,5 @@ object scalatestcontrib extends Matchers {
       )
   }
 
-  def effectTest[T](f: Task[T])(implicit scheduler: Scheduler): T =
-    f.unsafeRunSync(scheduler)
+  def effectTest[T](f: Task[T])(implicit scheduler: Scheduler): T = f.runSyncUnsafe()
 }

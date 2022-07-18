@@ -3,7 +3,6 @@ package coop.rchain.casper.engine
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{CommUtil, _}
-import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -47,7 +46,7 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           implicit val commUtil        = CommUtil.of[Task]
           // when
-          CommUtil[Task].sendBlockRequest(hash).unsafeRunSync
+          CommUtil[Task].sendBlockRequest(hash).runSyncUnsafe()
           // then
           val requested = transport.requests
             .map(_.msg)
@@ -69,7 +68,7 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           implicit val commUtil        = CommUtil.of[Task]
           // when
-          CommUtil[Task].sendBlockRequest(hash).unsafeRunSync
+          CommUtil[Task].sendBlockRequest(hash).runSyncUnsafe()
           // then
           log.infos contains (s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
         }
@@ -79,9 +78,9 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           implicit val connectionsCell = initConnectionsCell()
           implicit val commUtil        = CommUtil.of[Task]
           // when
-          CommUtil[Task].sendBlockRequest(hash).unsafeRunSync
+          CommUtil[Task].sendBlockRequest(hash).runSyncUnsafe()
           // then
-          requestedBlocks.read.unsafeRunSync.contains(hash) should be(true)
+          requestedBlocks.read.runSyncUnsafe().contains(hash) should be(true)
         }
       }
       describe("if given block was already requested") {
@@ -100,7 +99,7 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           implicit val commUtil        = CommUtil.of[Task]
           // when
-          CommUtil[Task].sendBlockRequest(hash).unsafeRunSync
+          CommUtil[Task].sendBlockRequest(hash).runSyncUnsafe()
           // then
           transport.requests.size shouldBe 0
           log.infos.size shouldBe 0

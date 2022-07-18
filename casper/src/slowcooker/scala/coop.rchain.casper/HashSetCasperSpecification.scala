@@ -8,7 +8,6 @@ import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.Signed
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -62,7 +61,7 @@ object HashSetCasperActions {
     ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, shardId = "root")
 
   implicit class EffectOps[A](f: Effect[A]) {
-    def result: A = f.unsafeRunSync
+    def result: A = f.runSyncUnsafe()
   }
 }
 

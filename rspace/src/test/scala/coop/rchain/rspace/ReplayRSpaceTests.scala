@@ -3,10 +3,7 @@ package coop.rchain.rspace
 import cats.Functor
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import cats.effect._
-import cats.effect.concurrent.{Ref, Semaphore}
 import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.examples.StringExamples._
@@ -1030,9 +1027,9 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         (store, replayStore, space, replaySpace) =>
           Task.delay {
             for (i <- indices) {
-              replaySpace.produce("ch1", s"datum$i", false).unsafeRunSync
+              replaySpace.produce("ch1", s"datum$i", false).runSyncUnsafe()
             }
-            space.createCheckpoint().unsafeRunSync
+            space.createCheckpoint().runSyncUnsafe()
           }
       }
 
@@ -1309,7 +1306,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
         replayStore
       )
       res <- f(store, replayStore, space, replaySpace)
-    } yield { res }).unsafeRunSync
+    } yield { res }).runSyncUnsafe()
   }
 }
 

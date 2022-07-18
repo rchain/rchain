@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, Wildcard}
@@ -314,6 +313,6 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       importer2 <- historyRepository2.importer
 
       res <- f(space1, exporter1, importer1, space2, exporter2, importer2)
-    } yield { res }).unsafeRunSync
+    } yield { res }).runSyncUnsafe()
   }
 }

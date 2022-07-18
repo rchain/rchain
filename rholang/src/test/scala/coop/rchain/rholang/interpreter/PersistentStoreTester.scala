@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
@@ -27,13 +26,13 @@ trait PersistentStoreTester {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
-    implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
+    implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe()
     implicit val m    = matchListPar[Task]
     implicit val kvm  = InMemoryStoreManager[Task]
-    val store         = kvm.rSpaceStores.unsafeRunSync
+    val store         = kvm.rSpaceStores.runSyncUnsafe()
     val space = RSpace
       .create[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
-      .unsafeRunSync
+      .runSyncUnsafe()
     val reducer = RholangOnlyDispatcher(space)._2
     cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
 
