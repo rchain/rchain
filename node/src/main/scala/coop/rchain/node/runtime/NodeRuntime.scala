@@ -69,7 +69,7 @@ object NodeRuntime {
       discoveryPort = nodeConf.peersDiscovery.port
       newLocal      <- WhoAmI.checkLocalPeerNode[F](protocolPort, discoveryPort, local)
       _ <- newLocal.traverse_ { peer =>
-            Connect.resetConnections[F] *> RPConfState[F].modify(_.copy(local = peer))
+            Connect.resetConnections[F] *> RPConfState[F].update(_.copy(local = peer))
           }
     } yield ()
 }
@@ -126,7 +126,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       rpConnections   <- effects.rpConnections[F]
       initPeer        = if (nodeConf.standalone) None else Some(nodeConf.protocolClient.bootstrap)
       peerNode        = rpConf(local, initPeer)
-      rpConfState     = effects.rpConfState[F](peerNode)
+      rpConfState     <- effects.rpConfState[F](peerNode)
       rpConfAsk       = effects.rpConfAsk[F](rpConfState)
       requestedBlocks <- Ref.of[F, Map[BlockHash, BlockRetriever.RequestState]](Map.empty)
 

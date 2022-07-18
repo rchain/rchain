@@ -94,10 +94,10 @@ object Connect {
 
   import Connections._
 
-  type RPConfState[F[_]] = MonadState[F, RPConf]
+  type RPConfState[F[_]] = Ref[F, RPConf]
 
   object RPConfState {
-    def apply[F[_]](implicit instance: MonadState[F, RPConf]): instance.type = instance
+    def apply[F[_]](implicit instance: Ref[F, RPConf]): instance.type = instance
   }
 
   type RPConfAsk[F[_]] = ApplicativeAsk[F, RPConf]
