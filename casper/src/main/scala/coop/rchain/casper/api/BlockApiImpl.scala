@@ -9,7 +9,6 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag._
-import coop.rchain.casper.MultiParentCasper.parsingError
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
@@ -22,7 +21,7 @@ import coop.rchain.casper.protocol.deploy.v1.{
   ProcessedWithError,
   ProcessedWithSuccess
 }
-import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
@@ -32,12 +31,11 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
+import coop.rchain.models.rholang.RhoType.RhoDeployId
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
-import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
-import coop.rchain.rholang.interpreter.RhoType.DeployId
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.sdk.syntax.all._
@@ -176,7 +174,7 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
     def findProcessedDeployResultAndStatus: OptionT[F, DeployExecStatus] = {
       val lookupDeploy = OptionT(BlockDagStorage[F].lookupByDeployId(deployId))
       lookupDeploy.semiflatMap { blockHash =>
-        val deployIdCh = DeployId(deployId.toByteArray)
+        val deployIdCh = RhoDeployId(deployId.toByteArray)
         for {
           block     <- BlockStore[F].getUnsafe(blockHash)
           deployOpt = block.state.deploys.find(_.deploy.sig == deployId)

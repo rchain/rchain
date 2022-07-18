@@ -5,10 +5,11 @@ import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool}
+import coop.rchain.models.rholang.RhoType
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Expr, ListParWithRandom, Par}
+import coop.rchain.rholang.interpreter.ContractCall
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
-import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 
 object IsAssert {
   def unapply(
@@ -16,10 +17,10 @@ object IsAssert {
   ): Option[(String, Long, Par, String, Par)] =
     p match {
       case Seq(
-          RhoType.String(testName),
-          RhoType.Number(attempt),
+          RhoType.RhoString(testName),
+          RhoType.RhoNumber(attempt),
           assertion,
-          RhoType.String(clue),
+          RhoType.RhoString(clue),
           ackChannel
           ) =>
         Some((testName, attempt, assertion, clue, ackChannel))
@@ -32,14 +33,14 @@ object IsComparison {
       p: Par
   ): Option[(Par, String, Par)] =
     p.singleExpr().collect {
-      case Expr(ETupleBody(ETuple(List(expected, RhoType.String(operator), actual), _, _))) =>
+      case Expr(ETupleBody(ETuple(List(expected, RhoType.RhoString(operator), actual), _, _))) =>
         (expected, operator, actual)
     }
 }
 object IsSetFinished {
   def unapply(p: Seq[Par]): Option[Boolean] =
     p match {
-      case Seq(RhoType.Boolean(hasFinished)) =>
+      case Seq(RhoType.RhoBoolean(hasFinished)) =>
         Some(hasFinished)
       case _ => None
     }
@@ -111,7 +112,7 @@ class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
               _ <- result.update(_.addAssertion(attempt, assertion))
               _ <- produce(Seq(Expr(GBool(assertion.isSuccess))), ackChannel)
             } yield ()
-          case RhoType.Boolean(condition) =>
+          case RhoType.RhoBoolean(condition) =>
             for {
               _ <- result.update(_.addAssertion(attempt, RhoAssertTrue(testName, condition, clue)))
               _ <- produce(Seq(Expr(GBool(condition))), ackChannel)

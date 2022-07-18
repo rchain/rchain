@@ -4,7 +4,7 @@ import coop.rchain.casper.rholang.types.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.RhoType._
+import coop.rchain.models.rholang.RhoType._
 
 final case class SlashDeploy(
     slashedValidator: Validator,
@@ -12,10 +12,8 @@ final case class SlashDeploy(
 ) extends SystemDeploy(initialRand) {
   import coop.rchain.models._
   import Expr.ExprInstance._
-  import coop.rchain.models.syntax._
   import rholang.{implicits => toPar}
   import shapeless._
-  import shapeless.record._
   import shapeless.syntax.singleton._
 
   type Output = (RhoBoolean, Either[RhoString, RhoNil])

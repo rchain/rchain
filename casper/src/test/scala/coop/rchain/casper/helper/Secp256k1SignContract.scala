@@ -4,8 +4,8 @@ import cats.effect.Concurrent
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Span
 import coop.rchain.models.ListParWithRandom
-import coop.rchain.rholang.interpreter.SystemProcesses
-import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
+import coop.rchain.models.rholang.RhoType
+import coop.rchain.rholang.interpreter.{ContractCall, SystemProcesses}
 
 object Secp256k1SignContract {
 
@@ -16,10 +16,10 @@ object Secp256k1SignContract {
     message match {
       case isContractCall(
           produce,
-          Seq(RhoType.ByteArray(hash), RhoType.ByteArray(sk), ackCh)
+          Seq(RhoType.RhoByteArray(hash), RhoType.RhoByteArray(sk), ackCh)
           ) =>
         val sig = Secp256k1.sign(hash, sk)
-        produce(Seq(RhoType.ByteArray(sig)), ackCh)
+        produce(Seq(RhoType.RhoByteArray(sig)), ackCh)
     }
   }
 }

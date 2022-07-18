@@ -10,6 +10,7 @@ import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
+import coop.rchain.models.rholang.RhoType
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.Resources
@@ -101,7 +102,7 @@ class CryptoChannelsSpec
       val byteArrayToSend: Par     = GByteArray(ByteString.copyFrom(toByteArray))
       val data: List[Par]          = List(byteArrayToSend, ackChannel)
       val send                     = Send(hashChannel, data, persistent = false, BitSet())
-      val expected                 = RhoType.ByteArray(hashFn(toByteArray))
+      val expected                 = RhoType.RhoByteArray(hashFn(toByteArray))
 
       // Send byte array on hash channel. This should:
       // 1. meet with the system process in the tuplespace

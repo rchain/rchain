@@ -3,12 +3,10 @@ package coop.rchain.casper.protocol.client
 import cats.Id
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.rholang.InterpreterUtil
-import coop.rchain.models.{GPrivate, NormalizerEnv, Par}
+import coop.rchain.models.rholang.RhoType.RhoName
+import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.shared.Time
-import coop.rchain.models.syntax._
-import coop.rchain.rholang.interpreter.RhoType.Name
 
 object ListenAtName {
   sealed trait Name
@@ -35,18 +33,15 @@ object ListenAtName {
         f.flatMap(_.traverse(buildParId[F]))
     }
 
-  private def buildParId[F[_]: Sync](name: Name): F[Par] = {
-    import coop.rchain.models.rholang.implicits._
-
+  private def buildParId[F[_]: Sync](name: Name): F[Par] =
     name match {
       case PubName(content) =>
         InterpreterUtil.mkTerm(content, NormalizerEnv.Empty)
       case PrivName(content) =>
         Sync[F].delay {
-          Name(content.getBytes)
+          RhoName(content.getBytes)
         }
     }
-  }
 
   private def applyUntil[A, F[_]: Sync: Time](retrieve: F[A])(breakCond: A => Boolean): F[A] = {
     import scala.concurrent.duration._

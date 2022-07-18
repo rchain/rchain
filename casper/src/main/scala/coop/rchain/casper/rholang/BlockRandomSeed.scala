@@ -4,8 +4,8 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
+import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.syntax._
-import coop.rchain.rholang.interpreter.RhoType.Name
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
 import scodec.codecs.{bytes, uint8, utf8, variableSizeBytes, vlong}
@@ -125,7 +125,7 @@ object BlockRandomSeed {
     val nonNegativeContractIndex: Byte = 3
     val rand                           = splitRandomNumberFromGenesis(shardId, nonNegativeContractIndex, UserDeploySplitIndex)
     val unforgeableByte                = Iterator.continually(rand.next()).drop(1).next()
-    Name(unforgeableByte)
+    RhoName(unforgeableByte)
   }
 
   // This is the unforgeable name for
@@ -136,7 +136,7 @@ object BlockRandomSeed {
     val rand =
       splitRandomNumberFromGenesis(shardId, RevVaultContractDeployIndex, UserDeploySplitIndex)
     val unfogeableBytes = Iterator.continually(rand.next()).drop(10).next()
-    Name(unfogeableBytes)
+    RhoName(unfogeableBytes)
   }
 
   def storeTokenUnforgeable(shardId: String): Par = {
@@ -145,7 +145,7 @@ object BlockRandomSeed {
     val rand =
       splitRandomNumberFromGenesis(shardId, TreeHashMapContractDeployIndex, UserDeploySplitIndex)
     val target = LazyList.continually(rand.next()).drop(9).head
-    Name(target)
+    RhoName(target)
   }
 
   def revVaultUnforgeable(shardId: String): Par = {
@@ -154,7 +154,7 @@ object BlockRandomSeed {
     val rand =
       splitRandomNumberFromGenesis(shardId, RevVaultContractDeployIndex, UserDeploySplitIndex)
     val unfogeableBytes = rand.next()
-    Name(unfogeableBytes)
+    RhoName(unfogeableBytes)
   }
 
 }

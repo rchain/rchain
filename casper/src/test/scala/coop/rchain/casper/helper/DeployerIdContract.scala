@@ -2,8 +2,9 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.metrics.Span
 import coop.rchain.models.ListParWithRandom
+import coop.rchain.models.rholang.RhoType
+import coop.rchain.rholang.interpreter.ContractCall
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
-import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 
 /**
   * Warning: This should under no circumstances be available in production
@@ -19,10 +20,10 @@ object DeployerIdContract {
     message match {
       case isContractCall(
           produce,
-          Seq(RhoType.String("deployerId"), RhoType.ByteArray(pk), ackCh)
+          Seq(RhoType.RhoString("deployerId"), RhoType.RhoByteArray(pk), ackCh)
           ) =>
         for {
-          _ <- produce(Seq(RhoType.DeployerId(pk)), ackCh)
+          _ <- produce(Seq(RhoType.RhoDeployerId(pk)), ackCh)
         } yield ()
     }
   }

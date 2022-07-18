@@ -2,21 +2,20 @@ package coop.rchain.casper.genesis
 
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
-import coop.rchain.casper.protocol.ProcessedDeploy
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.GDeployId
+import coop.rchain.models.rholang.RhoType.{RhoBoolean, RhoNumber, RhoString, RhoTuple2}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.syntax._
-import coop.rchain.models.{GDeployId, PCost}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.RhoType.{Boolean, Number, String, Tuple2}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.Inside.inside
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.io.Source
@@ -115,10 +114,10 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
                           exploreUpdateResultTerm,
                           genesis.genesisBlock.postStateHash
                         )
-        _ = originalEpoch should matchPattern { case Seq(Number(1000)) => }
+        _ = originalEpoch should matchPattern { case Seq(RhoNumber(1000)) => }
 
-        ret                  <- rm.playExploratoryDeploy(getBalanceTerm, b2.postStateHash)
-        Seq(Number(balance)) = ret
+        ret                     <- rm.playExploratoryDeploy(getBalanceTerm, b2.postStateHash)
+        Seq(RhoNumber(balance)) = ret
 
         b5 <- node
                .addBlock(
@@ -130,10 +129,10 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
         _ = assert(!b5.state.deploys.head.isFailed, s"$b5 deploy failed")
 
         ret2 <- rm.playExploratoryDeploy(getBalanceTerm, b5.postStateHash)
-        _    = inside(ret2) { case Seq(Number(n)) => n shouldBe balance + transferAmount.toLong }
+        _    = inside(ret2) { case Seq(RhoNumber(n)) => n shouldBe balance + transferAmount.toLong }
 
         ret3 <- rm.playExploratoryDeploy(explorePosNewMethod, b5.postStateHash)
-        _    = ret3 should matchPattern { case Seq(String("hello")) => }
+        _    = ret3 should matchPattern { case Seq(RhoString("hello")) => }
       } yield ()
     }
   }
@@ -159,7 +158,7 @@ class PosUpdateSpec extends AnyFlatSpec with Matchers with Inspectors {
         updateResult <- rm.getData(b2.postStateHash)(GDeployId(updateDeploy.sig))
         // Expect failed update
         _ = updateResult should matchPattern {
-          case Seq(Tuple2((Boolean(false), String(_)))) =>
+          case Seq(RhoTuple2((RhoBoolean(false), RhoString(_)))) =>
         }
       } yield ()
     }

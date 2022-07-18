@@ -3,7 +3,7 @@ package coop.rchain.casper.rholang.sysdeploys
 import coop.rchain.casper.rholang.types.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
-import coop.rchain.rholang.interpreter.RhoType._
+import coop.rchain.models.rholang.RhoType._
 
 final class RefundDeploy(refundAmount: Long, rand: Blake2b512Random) extends SystemDeploy(rand) {
   import coop.rchain.models._

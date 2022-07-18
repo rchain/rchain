@@ -3,8 +3,9 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics.Span
+import coop.rchain.models.rholang.RhoType
 import coop.rchain.models.{ListParWithRandom, Par}
-import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
+import coop.rchain.rholang.interpreter.ContractCall
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
 
 object BlockDataContract {
@@ -18,7 +19,7 @@ object BlockDataContract {
     message match {
       case isContractCall(
           produce,
-          Seq(RhoType.String("sender"), RhoType.ByteArray(pk), ackCh)
+          Seq(RhoType.RhoString("sender"), RhoType.RhoByteArray(pk), ackCh)
           ) =>
         for {
           _ <- ctx.blockData.update(_.copy(sender = PublicKey(pk)))
@@ -27,7 +28,7 @@ object BlockDataContract {
 
       case isContractCall(
           produce,
-          Seq(RhoType.String("blockNumber"), RhoType.Number(n), ackCh)
+          Seq(RhoType.RhoString("blockNumber"), RhoType.RhoNumber(n), ackCh)
           ) =>
         for {
           _ <- ctx.blockData.update(_.copy(blockNumber = n))

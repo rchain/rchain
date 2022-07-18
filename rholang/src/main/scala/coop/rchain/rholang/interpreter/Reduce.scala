@@ -11,6 +11,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
+import coop.rchain.models.rholang.RhoType
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
@@ -412,10 +413,10 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           neu.injections
             .get(urn)
             .map {
-              case RhoType.Unforgeable(GUnforgeable(unfInstance)) if unfInstance.isDefined =>
+              case RhoType.RhoUnforgeable(GUnforgeable(unfInstance)) if unfInstance.isDefined =>
                 newEnv.put(unfInstance).asRight[InterpreterError]
 
-              case RhoType.Expression(Expr(exprInstance)) if exprInstance.isDefined =>
+              case RhoType.RhoExpression(Expr(exprInstance)) if exprInstance.isDefined =>
                 newEnv.put(exprInstance).asRight[InterpreterError]
 
               case _ =>
@@ -1530,7 +1531,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         locallyFree: Coeval[BitSet],
         remainder: Option[Var]
     ) = {
-      val keyPairs = ps.map(RhoType.Tuple2.unapply)
+      val keyPairs = ps.map(RhoType.RhoTuple2.unapply)
       if (keyPairs.exists(_.isEmpty))
         MethodNotDefined("toMap", "types except List[(K,V)]").raiseError[M, Par]
       else
