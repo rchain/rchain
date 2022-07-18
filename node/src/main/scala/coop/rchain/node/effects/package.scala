@@ -66,7 +66,7 @@ package object effects {
   def rpConnections[F[_]: Concurrent]: F[ConnectionsCell[F]] =
     Ref[F].of(Connections.empty)
 
-  def rpConfState[F[_]: Sync](conf: RPConf): Ref[F, RPConf] = Ref.unsafe[F, RPConf](conf)
+  def rpConfState[F[_]: Sync](conf: RPConf): F[Ref[F, RPConf]] = Ref.of(conf)
 
   def rpConfAsk[F[_]: Applicative](state: Ref[F, RPConf]): ApplicativeAsk[F, RPConf] =
     new DefaultApplicativeAsk[F, RPConf] {
