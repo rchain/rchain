@@ -1,5 +1,7 @@
 package coop.rchain.node.configuration
 
+import cats.syntax.all._
+
 import java.io.File
 import java.nio.file.{Path, Paths}
 
@@ -79,7 +81,14 @@ object Configuration {
     val mergedConf = optionsConfig
       .withFallback(fileConfig)
       .withFallback(defaultConfig)
-    val nodeConfE = mergedConf.load[NodeConf]
+
+    val nodeConfE = if (options.run.posMultiSigPublicKeys.isSupplied) {
+      implicit val listOfStringsReader =
+        ConfigReader.fromString[List[String]](_.split(" ").toList.asRight)
+      mergedConf.load[NodeConf]
+    } else {
+      mergedConf.load[NodeConf]
+    }
 
     nodeConfE match {
       case Left(t) =>
@@ -93,7 +102,7 @@ object Configuration {
     }
     val nodeConf = nodeConfE.right.get
 
-    // Throw an error if pos-multi-sig-quorum greater then pos-multi-sig-public-keys length
+    // Throw an error if pos-multi-sig-quorum greater than pos-multi-sig-public-keys length
     val posMultiSigQuorum           = nodeConf.casper.genesisBlockData.posMultiSigQuorum
     val posMultiSigPublicKeysLength = nodeConf.casper.genesisBlockData.posMultiSigPublicKeys.length
     if (posMultiSigQuorum > posMultiSigPublicKeysLength) {
