@@ -11,7 +11,7 @@ trait BlockDagStorage[F[_]] {
 
   def getRepresentation: F[DagRepresentation]
 
-  def insert(blockMetadata: BlockMetadata, block: BlockMessage): F[DagRepresentation]
+  def insert(blockMetadata: BlockMetadata, block: BlockMessage): F[Unit]
 
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
 

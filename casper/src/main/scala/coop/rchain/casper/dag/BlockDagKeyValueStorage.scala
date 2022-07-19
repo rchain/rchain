@@ -41,7 +41,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   override def insert(
       blockMetadata: BlockMetadata,
       block: BlockMessage
-  ): F[DagRepresentation] = {
+  ): F[Unit] = {
     val logAlreadyStored =
       Log[F].warn(s"Block ${PrettyPrinter.buildString(block, short = true)} is already stored.")
 
@@ -90,7 +90,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     lock.withPermit(
       blockMetadataIndex
         .contains(blockMetadata.blockHash)
-        .ifM(logAlreadyStored, doInsert) *> representationState.get
+        .ifM(logAlreadyStored, doInsert)
     )
   }
 

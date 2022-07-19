@@ -23,7 +23,7 @@ final class BlockDagStorageOps[F[_]](
   // TODO: legacy function, used only in tests, it should be removed when tests are fixed
   def insertLegacy(block: BlockMessage, invalid: Boolean, approved: Boolean = false)(
       implicit sync: Sync[F]
-  ): F[DagRepresentation] =
+  ): F[Unit] =
     for {
       fringeWithState <- if (approved) {
                           (Set(block.blockHash), block.postStateHash).pure[F]
@@ -49,6 +49,6 @@ final class BlockDagStorageOps[F[_]](
         .fromBlock(block)
         .copy(validationFailed = invalid, fringe = fringe.toList, fringeStateHash = fringeState)
 
-      result <- bds.insert(bmd, block)
-    } yield result
+      _ <- bds.insert(bmd, block)
+    } yield ()
 }
