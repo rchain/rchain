@@ -36,7 +36,9 @@ object WebApiRoutes {
             case err: BlockApiException => BadRequest(err.getMessageSafe.asJson)
             case err: Throwable         =>
               // Logging only unanticipated errors, not related to Block API or input parsing (user errors)
-              Log[F].error("HTTP API response error", err) *> BadRequest(err.getMessageSafe.asJson)
+              // To indicate that error is not related to internal node error and
+              // node can continue running, error logged as a warning.
+              Log[F].warn("HTTP API response error", err) *> BadRequest(err.getMessageSafe.asJson)
           }
     }
 

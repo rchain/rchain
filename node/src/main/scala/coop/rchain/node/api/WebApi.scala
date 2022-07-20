@@ -1,5 +1,6 @@
 package coop.rchain.node.api
 
+import cats.data.OptionT
 import cats.effect.Sync
 import cats.kernel.Monoid
 import cats.syntax.all._
@@ -119,7 +120,10 @@ object WebApi {
       blockApi.isFinalized(hash).flatMap(_.liftToBlockApiErr)
 
     def getTransaction(hash: String): F[TransactionResponse] =
-      cacheTransactionAPI.getTransaction(hash)
+      OptionT
+        .whenF(hash.nonEmpty)(cacheTransactionAPI.getTransaction(hash))
+        .value
+        .flatMap(_.liftTo(new BlockApiException("Block hash cannot be empty.")))
   }
 
   // Rholang terms interesting for translation to JSON
