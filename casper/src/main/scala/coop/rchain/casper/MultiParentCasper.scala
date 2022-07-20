@@ -223,7 +223,7 @@ object MultiParentCasper {
                            .merge
     } yield valResultUpdated
 
-    Log[F].info(s"Validating ${PrettyPrinter.buildString(block)}.") *> validationProcessDiag
+    Log[F].info(s"Validating block ${PrettyPrinter.buildString(block)}.") *> validationProcessDiag
   }
 
   def lastFinalizedBlock[F[_]: Sync: BlockDagStorage: BlockStore]: F[BlockMessage] =

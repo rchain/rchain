@@ -195,7 +195,7 @@ object LfsBlockRequester {
         */
       def validateReceivedBlock(block: BlockMessage) = {
         def invalidBlockMsg =
-          s"Received ${PrettyPrinter.buildString(block)} with invalid hash. Ignored block."
+          s"Received block ${PrettyPrinter.buildString(block)} with invalid hash. Ignored block."
         val blockNumber = block.blockNumber
         for {
           // Mark block as received and calculate minimum height (if latest)
@@ -287,7 +287,7 @@ object LfsBlockRequester {
         .parEvalMapProcBounded { hash =>
           for {
             block <- getBlockFromStore(hash)
-            _     <- Log[F].info(s"Process existing ${PrettyPrinter.buildString(block)}")
+            _     <- Log[F].info(s"Process existing block ${PrettyPrinter.buildString(block)}")
             _     <- processBlock(block)
           } yield ()
         }

@@ -19,9 +19,9 @@ object PrettyPrinter {
 
   private def buildString(b: BlockMessage, short: Boolean): String =
     if (short) {
-      s"#${b.blockNumber} (${buildString(b.blockHash)})"
+      s"#${b.blockNumber} ${buildString(b.blockHash)} by ${buildString(b.sender)}"
     } else {
-      s"Block #${b.blockNumber} (${buildString(b.blockHash)}) " +
+      s"#${b.blockNumber} ${buildString(b.blockHash)} " +
         s"sender: ${buildString(b.sender)}, " +
         s"state: ${buildString(b.postStateHash)}, " +
         s"shard: ${limit(b.shardId, maxLength = 10)}, " +

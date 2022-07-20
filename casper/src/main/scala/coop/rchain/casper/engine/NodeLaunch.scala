@@ -71,7 +71,7 @@ object NodeLaunch {
         validatorIdentity <- validatorIdentityOpt.liftTo(noValidatorIdentityError)
         genesisBlock      <- createGenesisBlockFromConfig(validatorIdentity, conf)
         genBlockStr       = PrettyPrinter.buildString(genesisBlock)
-        _                 <- Log[F].info(s"Sending genesis $genBlockStr to peers...")
+        _                 <- Log[F].info(s"Sending genesis block $genBlockStr to peers...")
 
         // Store genesis block
         _             <- BlockStore[F].put(genesisBlock)
