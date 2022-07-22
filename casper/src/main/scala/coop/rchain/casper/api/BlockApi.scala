@@ -110,6 +110,6 @@ object BlockApi {
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.state.deploys.length,
       justifications = block.justifications.map(PrettyPrinter.buildStringNoLimit),
-      rejectedDeploys = block.rejectedDeploys.map(PrettyPrinter.buildStringNoLimit)
+      rejectedDeploys = block.rejectedDeploys.toSeq.map(PrettyPrinter.buildStringNoLimit)
     )
 }

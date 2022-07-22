@@ -1,25 +1,26 @@
 package coop.rchain.casper.merging
 
 import cats.effect.Concurrent
+import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.Message
+import coop.rchain.blockstorage.dag.{Finalizer, Message}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.FringeData
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
+import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.merger.{ChannelChange, StateChange, StateChangeMerger}
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
+import coop.rchain.rspace.merger.{ChannelChange, StateChange, StateChangeMerger}
+import coop.rchain.rspace.syntax._
 import coop.rchain.sdk.dag.merging.DagMergingLogic
 import coop.rchain.sdk.dag.merging.DagMergingLogic._
-import coop.rchain.shared.{Log, Stopwatch}
 import coop.rchain.shared.syntax._
+import coop.rchain.shared.{Log, Stopwatch}
 import scodec.bits.ByteVector
-import cats.syntax.all._
-import coop.rchain.rholang.syntax._
-import coop.rchain.rspace.syntax._
 
 object BlockHashDagMerger {
   def merge[F[_]: Concurrent: Log](
@@ -27,7 +28,7 @@ object BlockHashDagMerger {
       finalFringe: Set[BlockHash],
       finalState: Blake2b256Hash,
       merger: BlockHashDagMerger,
-      fringeStates: Map[Set[BlockHash], (Blake2b256Hash, Set[ByteString])],
+      fringeStates: Map[Set[BlockHash], FringeData],
       historyRepository: RhoHistoryRepository[F],
       blockIndex: BlockHash => F[BlockIndex],
       rejectionCost: DeployChainIndex => Long = DeployChainIndex.deployChainCost
@@ -48,12 +49,16 @@ object BlockHashDagMerger {
       }
       .map {
         case (conflictScopeIndices, finalScopeIndices, finalStateMergeableValues) =>
-          val rejectedInHostFringe = fringeStates.flatMap { case (k, v) => k.map((_, v._2)) }
+          val rejectedInHostFringe = fringeStates.flatMap {
+            case (k, v) => k.map((_, v.rejectedDeploys))
+          }
           val (acceptedFinally, rejectedFinally) = finalScopeIndices.iterator
             .flatMap(b => b.deployChains.map(b.blockHash -> _))
             .partition {
               case (hash, deploy) =>
-                rejectedInHostFringe(hash).contains(deploy.deploysWithCost.map(_.id).head)
+                rejectedInHostFringe
+                  .get(hash)
+                  .exists(_.contains(deploy.deploysWithCost.map(_.id).head))
             }
           merger
             .resolveConflicts(
@@ -129,13 +134,11 @@ final case class BlockHashDagMerger(
       finalFringe: Set[BlockHash]
   ): (Set[BlockHash], Set[BlockHash]) = {
     val seen   = msgMap.getUnsafe(_: BlockHash).seen
-    val fringe = msgMap.getUnsafe(_: BlockHash).fringe
-    val height = msgMap.getUnsafe(_: BlockHash).height
-
     val cScope = conflictScope(tips, finalFringe, seen)
     // lowest fringe required to to be able to resolve conflicts
-    val lFringe = lowestFringe(cScope.map(fringe), height)
-    val fScope  = finalScope(finalFringe, lFringe, seen)
+    val finalizer = Finalizer(msgMap)
+    val lFringe   = finalizer.lowestFringe(cScope.map(msgMap)).map(_.id)
+    val fScope    = finalScope(finalFringe, lFringe, seen)
     (cScope, fScope)
   }
 

@@ -10,10 +10,7 @@ import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.merging.ParentsMergedState
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.InterpreterUtil.{
-  computeDeploysCheckpoint,
-  computeParentsPostState
-}
+import coop.rchain.casper.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.rholang.types.SystemDeploy
 import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.syntax._
@@ -41,12 +38,15 @@ object BlockGenerator {
   // Dummy empty Casper snapshot
   val dummyParentsPreState = ParentsMergedState(
     justifications = Set.empty,
+    maxBlockNum = 0L,
+    maxSeqNums = Map.empty,
     fringe = Set(),
     fringeState = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
-    bondsMap = Map.empty,
-    rejectedDeploys = Set(),
-    maxBlockNum = 0L,
-    maxSeqNums = Map.empty
+    fringeBondsMap = Map.empty,
+    fringeRejectedDeploys = Set(),
+    // Pre-state is the same as fringe state
+    preStateHash = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
+    rejectedDeploys = Set()
   )
 
   def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
@@ -62,18 +62,18 @@ object BlockGenerator {
       block: BlockMessage,
       preState: ParentsMergedState
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
-    val deploys = block.state.deploys.map(_.deploy)
+    val deploys      = block.state.deploys.map(_.deploy)
+    val preStateHash = preState.preStateHash.toByteString
+    val rand         = BlockRandomSeed.randomGenerator(block)
     for {
-      computedParentsInfo <- computeParentsPostState(block.justifications, preState)
-      rand                = BlockRandomSeed.randomGenerator(block)
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],
                  rand,
                  BlockData.fromBlock(block),
-                 computedParentsInfo
+                 preStateHash
                )
-      (preStateHash, postStateHash, processedDeploys, rejectedDeploys, _) = result
+      (postStateHash, processedDeploys, _) = result
     } yield (postStateHash, processedDeploys)
   }
 

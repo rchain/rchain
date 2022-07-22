@@ -44,7 +44,7 @@ final class BlockDagStorageOps[F[_]](
                 .copy(
                   validated = true,
                   validationFailed = false,
-                  fringe = List.empty,
+                  fringe = Set.empty,
                   fringeStateHash = genesisBlock.preStateHash
                 )
             }

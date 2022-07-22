@@ -34,12 +34,14 @@ object RNodeKeyValueStoreManager {
       // Block storage
       (Db("blocks"), blockStorageEnvConfig),
       // Block metadata storage
-      (Db("finalized-store"), dagStorageEnvConfig),
       (Db("block-metadata"), dagStorageEnvConfig),
+      (Db("fringe-data"), dagStorageEnvConfig),
+      (Db("finalized-store"), dagStorageEnvConfig),
+      // Deploys from blocks
       (Db("deploy-index"), dagStorageEnvConfig),
       // Runtime mergeable store (cache of mergeable channels for block-merge)
       (Db("mergeable-channel-cache"), dagStorageEnvConfig),
-      // Deploy storage
+      // Deploys waiting to be added
       (Db("deploy-pool"), deployPoolEnvConfig),
       // Reporting (trace) cache
       (Db("reporting-cache"), reportingEnvConfig),

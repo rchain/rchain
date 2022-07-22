@@ -111,47 +111,34 @@ object BlockCreator {
         // TODO: fix invalid blocks from non-finalized scope
         ilm <- Seq[(Validator, BlockHash)]().pure[F]
         ilmFromBonded = ilm.filter {
-          case (validator, _) => preState.bondsMap.getOrElse(validator, 0L) > 0L
+          case (validator, _) => preState.fringeBondsMap.getOrElse(validator, 0L) > 0L
         }
         deploys = userDeploys ++ dummyDeploys
         r <- if (deploys.nonEmpty || ilmFromBonded.nonEmpty) {
               val blockData = BlockData(nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+              val rand = BlockRandomSeed.randomGenerator(
+                shardId,
+                nextBlockNum,
+                validatorIdentity.publicKey,
+                preState.preStateHash
+              )
               for {
-                parents <- justifications
-                            .traverse(BlockDagStorage[F].lookupUnsafe(_))
-                            .map(_.filter(!_.validationFailed))
-                            .map(_.map(_.blockHash))
-
-                // Merge justifications and get pre-state for the new block
-                computedParentsInfo <- InterpreterUtil.computeParentsPostState(parents, preState)
-                rand = BlockRandomSeed.randomGenerator(
-                  shardId,
-                  nextBlockNum,
-                  validatorIdentity.publicKey,
-                  computedParentsInfo._1.toBlake2b256Hash
-                )
                 slashingDeploys <- prepareSlashingDeploys(ilmFromBonded, rand, deploys.size)
                 // make sure closeBlock is the last system Deploy
                 systemDeploys = slashingDeploys :+ CloseBlockDeploy(
                   rand.splitByte((deploys.size + slashingDeploys.size).toByte)
                 )
+                preStateHash = preState.preStateHash.toByteString
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    deploys.toSeq,
                                    systemDeploys,
                                    rand,
                                    blockData,
-                                   computedParentsInfo
+                                   preStateHash
                                  )
-                (
-                  preStateHash,
-                  postStateHash,
-                  processedDeploys,
-                  rejectedDeploys,
-                  processedSystemDeploys
-                ) = checkpointData
+                (postStateHash, processedDeploys, processedSystemDeploys) = checkpointData
 
-                newBonds <- RuntimeManager[F].computeBonds(postStateHash)
-                _        <- Span[F].mark("before-packing-block")
+                _ <- Span[F].mark("before-packing-block")
 
                 // Create block and calculate block hash
                 unsignedBlock = packageBlock(
@@ -161,11 +148,15 @@ object BlockCreator {
                   preStateHash,
                   postStateHash,
                   processedDeploys,
-                  rejectedDeploys.toList,
                   processedSystemDeploys,
-                  newBonds,
                   shardId,
-                  BlockVersion.Current
+                  BlockVersion.Current,
+                  // Bonds data in the block is referring to finalized fringe
+                  //  not bonds in conflict scope
+                  preState.fringeBondsMap,
+                  // Rejected data in the block is referring to finalized fringe
+                  //  not rejections in conflict scope
+                  preState.fringeRejectedDeploys
                 )
                 _ <- Span[F].mark("block-created")
 
@@ -206,11 +197,12 @@ object BlockCreator {
       preStateHash: StateHash,
       postStateHash: StateHash,
       deploys: Seq[ProcessedDeploy],
-      rejectedDeploys: List[ByteString],
       systemDeploys: Seq[ProcessedSystemDeploy],
-      bondsMap: Map[Validator, Long],
       shardId: String,
-      version: Int
+      version: Int,
+      // Fringe data
+      bondsMap: Map[Validator, Long],
+      rejectedDeploys: Set[ByteString]
   ): BlockMessage = {
     val state = RholangState(deploys.toList, systemDeploys.toList)
     ProtoUtil.unsignedBlockProto(

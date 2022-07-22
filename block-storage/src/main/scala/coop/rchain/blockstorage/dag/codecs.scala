@@ -6,7 +6,7 @@ import coop.rchain.blockstorage.BlockStore.{blockMessageToBytes, bytesToBlockMes
 import coop.rchain.blockstorage.approvedStore.{bytesToFringe, fringeToBytes}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData, DeployDataProto, FinalizedFringe}
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.models.{BlockHash, BlockMetadata}
+import coop.rchain.models.{BlockHash, BlockMetadata, FringeData}
 import scodec.bits.ByteVector
 import scodec.codecs._
 import scodec.{Attempt, Codec, Err}
@@ -25,6 +25,11 @@ object codecs {
   val codecBlockMetadata = bytes.xmap[BlockMetadata](
     byteVector => BlockMetadata.fromBytes(byteVector.toArray),
     blockMetadata => ByteVector(BlockMetadata.toBytes(blockMetadata))
+  )
+
+  val codecFringeData = bytes.xmap[FringeData](
+    byteVector => FringeData.fromBytes(byteVector.toArray),
+    fringeData => ByteVector(FringeData.toBytes(fringeData))
   )
 
   val codecBlockMessage = bytes.exmap[BlockMessage](

@@ -1,12 +1,10 @@
 package coop.rchain.blockstorage.dag
 
 import cats.syntax.all._
-import com.google.protobuf.ByteString
-import coop.rchain.models.BlockHash
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.models.{BlockHash, FringeData}
 
 import scala.collection.immutable.SortedMap
 
@@ -26,8 +24,8 @@ final case class DagRepresentation(
     childMap: Map[BlockHash, Set[BlockHash]],
     heightMap: SortedMap[Long, Set[BlockHash]],
     dagMessageState: DagMessageState[BlockHash, Validator],
-    // Cache for merged fringe states (including rejected deploy signatures)
-    fringeStates: Map[Set[BlockHash], (Blake2b256Hash, Set[ByteString])]
+    // In-memory cache for fringe data store (it should only include working range of blocks needed for finalization)
+    fringeStates: Map[Set[BlockHash], FringeData]
 ) {
   // TODO: pick highest block from fringe until LFB is replaced with fringe completely
   lazy val lastFinalizedBlockHash: Option[BlockHash] =

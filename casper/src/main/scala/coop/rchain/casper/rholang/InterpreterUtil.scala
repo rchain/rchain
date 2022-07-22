@@ -3,12 +3,11 @@ package coop.rchain.casper.rholang
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
-import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, ParentsMergedState}
+import coop.rchain.casper.merging.ParentsMergedState
 import coop.rchain.casper.protocol.{
   BlockMessage,
   DeployData,
@@ -39,9 +38,6 @@ object InterpreterUtil {
   private[this] val ComputeDeploysCheckpointMetricsSource =
     Metrics.Source(CasperMetricsSource, "compute-deploys-checkpoint")
 
-  private[this] val ComputeParentPostStateMetricsSource =
-    Metrics.Source(CasperMetricsSource, "compute-parents-post-state")
-
   private[this] val ReplayBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "replay-block")
 
@@ -53,8 +49,7 @@ object InterpreterUtil {
   //  handled (with included data e.g. hash not equal) and fatal errors which should NOT be handled
   def validateBlockCheckpoint[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
-  ): F[(BlockMetadata, BlockProcessing[Boolean])] = {
-    val incomingPreStateHash = block.preStateHash
+  ): F[(BlockMetadata, BlockProcessing[Boolean])] =
     for {
       _ <- Span[F].mark("before-unsafe-get-parents")
       parents <- block.justifications
@@ -68,26 +63,33 @@ object InterpreterUtil {
                    MultiParentCasper.getPreStateForParents(parents.toSet)
                  else {
                    // Genesis block
+                   val genesisPreStateHash = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash
                    ParentsMergedState(
                      justifications = Set[BlockMetadata](),
                      fringe = Set[BlockHash](),
-                     fringeState = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
+                     fringeState = genesisPreStateHash,
                      // TODO: validate with data from bonds file
-                     bondsMap = block.bonds,
-                     rejectedDeploys = Set[ByteString](),
+                     fringeBondsMap = block.bonds,
+                     fringeRejectedDeploys = Set[ByteString](),
                      // TODO: validate with data from config (genesis block number)
                      maxBlockNum = 0L,
                      // TODO: validate with sender in bonds map
-                     maxSeqNums = Map[Validator, Long](block.sender -> 0L)
+                     maxSeqNums = Map[Validator, Long](block.sender -> 0L),
+                     // TODO: validate genesis post-state hash
+                     preStateHash = genesisPreStateHash,
+                     rejectedDeploys = Set()
                    ).pure[F]
                  }
-      rand                = BlockRandomSeed.randomGenerator(block)
-      computedParentsInfo <- computeParentsPostState(parents, preState)
-      _ <- Log[F].info(
-            s"Computed parents post state for ${PrettyPrinter.buildString(block, short = true)}."
-          )
+      blockStr          = PrettyPrinter.buildString(block, short = true)
+      fringeRejectedStr = PrettyPrinter.buildString(preState.fringeRejectedDeploys)
+      rejectedStr       = PrettyPrinter.buildString(preState.rejectedDeploys)
+      infoMsg           = s"Computed parents post state for block $blockStr, fringe rejections: $fringeRejectedStr, rejections: $rejectedStr"
+      _                 <- Log[F].info(infoMsg)
+
+      computedPreStateHash = preState.preStateHash.toByteString
+      rejectedDeployIds    = preState.fringeRejectedDeploys
       result <- {
-        val (computedPreStateHash, rejectedDeployIds) = computedParentsInfo
+        val incomingPreStateHash = block.preStateHash
         if (incomingPreStateHash != computedPreStateHash) {
           //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
           Log[F]
@@ -96,7 +98,7 @@ object InterpreterUtil {
                 .buildString(incomingPreStateHash)}"
             )
             .as(false.asRight[InvalidBlock])
-        } else if (rejectedDeployIds.toSet != block.rejectedDeploys.toSet) {
+        } else if (rejectedDeployIds != block.rejectedDeploys) {
           // TODO: if rejected deploys are different that almost certain
           //  hashes doesn't match also so this branch is unreachable
           Log[F]
@@ -108,6 +110,7 @@ object InterpreterUtil {
             )
             .as(InvalidRejectedDeploy.asLeft)
         } else {
+          val rand = BlockRandomSeed.randomGenerator(block)
           for {
             replayResult <- replayBlock(incomingPreStateHash, block, rand)
             result       <- handleErrors(block.postStateHash, replayResult)
@@ -120,12 +123,11 @@ object InterpreterUtil {
         .copy(
           validated = true,
           validationFailed = result.isLeft || !result.right.get,
-          fringe = preState.fringe.toList,
+          fringe = preState.fringe,
           fringeStateHash = preState.fringeState.bytes.toArray.toByteString
         )
       (bmd, result)
     }
-  }
 
   def validateBlockCheckpointLegacy[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
@@ -246,10 +248,9 @@ object InterpreterUtil {
       systemDeploys: Seq[SystemDeploy],
       rand: Blake2b512Random,
       blockData: BlockData,
-      computedParentsInfo: (StateHash, Seq[ByteString])
-  ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])] =
+      preStateHash: StateHash
+  ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     Span[F].trace(ComputeDeploysCheckpointMetricsSource) {
-      val (preStateHash, rejectedDeploys) = computedParentsInfo
       for {
         result <- RuntimeManager[F].computeState(preStateHash)(
                    deploys,
@@ -258,44 +259,6 @@ object InterpreterUtil {
                    blockData
                  )
         (postStateHash, processedDeploys, processedSystemDeploys) = result
-      } yield (
-        preStateHash,
-        postStateHash,
-        processedDeploys,
-        rejectedDeploys,
-        processedSystemDeploys
-      )
-    }
-
-  def computeParentsPostState[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
-      parents: Seq[BlockHash],
-      preState: ParentsMergedState
-  ): F[(StateHash, Seq[ByteString])] =
-    Span[F].trace(ComputeParentPostStateMetricsSource) {
-      parents match {
-        // For genesis, use empty trie's root hash
-        case Seq() =>
-          (RuntimeManager.emptyStateHashFixed, Seq.empty[ByteString]).pure[F]
-
-        // For single parent, get its post state hash
-        case Seq(parent) =>
-          BlockStore[F].getUnsafe(parent).map(_.postStateHash).map((_, Seq.empty[ByteString]))
-
-        // Multi-parent merging
-        case _ =>
-          for {
-            dag <- BlockDagStorage[F].getRepresentation
-            r <- BlockHashDagMerger.merge[F](
-                  dag.dagMessageState.latestMsgs.map(_.id),
-                  preState.fringe,
-                  preState.fringeState,
-                  BlockHashDagMerger(dag.dagMessageState.msgMap),
-                  dag.fringeStates,
-                  RuntimeManager[F].getHistoryRepo,
-                  BlockIndex.getBlockIndex[F]
-                )
-            (state, rejected) = r
-          } yield (ByteString.copyFrom(state.bytes.toArray), rejected.toSeq)
-      }
+      } yield (postStateHash, processedDeploys, processedSystemDeploys)
     }
 }

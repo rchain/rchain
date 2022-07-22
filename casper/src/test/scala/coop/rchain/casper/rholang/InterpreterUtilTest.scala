@@ -5,6 +5,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.InterpreterUtil._
@@ -55,29 +56,36 @@ class InterpreterUtilTest
   ): F[
     Either[
       Throwable,
-      (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])
+      (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy], Set[ByteString])
     ]
   ] =
-    computeParentsPostState(parents, dummyParentsPreState)
-      .flatMap(
-        preState => {
-          val rand = BlockRandomSeed.randomGenerator(
-            genesis.shardId,
-            blockNumber,
-            genesisContext.validatorPks.head,
-            preState._1.toBlake2b256Hash
-          )
-          InterpreterUtil
-            .computeDeploysCheckpoint[F](
-              deploys,
-              List.empty[SystemDeploy],
-              rand,
-              BlockData(blockNumber, genesisContext.validatorPks.head, seqNum),
-              preState
-            )
-        }
+    for {
+      preState <- MultiParentCasper.getPreStateForParents(parents.toSet)
+      rand = BlockRandomSeed.randomGenerator(
+        genesis.shardId,
+        blockNumber,
+        genesisContext.validatorPks.head,
+        preState.preStateHash
       )
-      .attempt
+      result <- InterpreterUtil
+                 .computeDeploysCheckpoint[F](
+                   deploys,
+                   List.empty[SystemDeploy],
+                   rand,
+                   BlockData(blockNumber, genesisContext.validatorPks.head, seqNum),
+                   preState.preStateHash.toByteString
+                 )
+                 .attempt
+    } yield result.map {
+      case (postState, deploys, sysDeploys) =>
+        (
+          preState.preStateHash.toByteString,
+          postState,
+          deploys,
+          sysDeploys,
+          preState.fringeRejectedDeploys
+        )
+    }
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in effectTest {
     val time    = 0L

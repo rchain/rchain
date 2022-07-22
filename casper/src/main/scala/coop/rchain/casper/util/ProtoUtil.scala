@@ -17,7 +17,7 @@ import coop.rchain.models.syntax._
 object ProtoUtil {
 
   def getParentsMetadata[F[_]: Sync: BlockDagStorage](b: BlockMetadata): F[List[BlockMetadata]] =
-    b.justifications
+    b.justifications.toList
       .traverse(BlockDagStorage[F].lookupUnsafe(_))
       .map(_.filter(!_.validationFailed))
 
@@ -41,7 +41,7 @@ object ProtoUtil {
       postStateHash: ByteString,
       justifications: List[BlockHash],
       bonds: Map[Validator, Long],
-      rejectedDeploys: List[ByteString],
+      rejectedDeploys: Set[ByteString],
       state: RholangState
   ): BlockMessage = {
     val block = BlockMessage(
@@ -56,6 +56,8 @@ object ProtoUtil {
       justifications,
       bonds,
       rejectedDeploys,
+      rejectedBlocks = Set(),
+      rejectedSenders = Set(),
       state,
       // Signature algorithm is now part of the block hash
       //  so it should be set immediately.

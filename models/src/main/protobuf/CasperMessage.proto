@@ -219,6 +219,20 @@ message BlockMetadataProto {
   // Finalization fringe seen by this block
   repeated bytes fringe         = 30 [(scalapb.field).collection_type="List"];
   bytes fringeStateHash         = 31;
+  // Fringe where/when block is finalized
+  bytes memberOfFringe          = 40;
+}
+
+message FringeDataProto {
+  bytes fringeHash               = 1;
+  repeated bytes fringe          = 2 [(scalapb.field).collection_type="List"];
+  repeated bytes fringeDiff      = 3 [(scalapb.field).collection_type="List"];
+  // State data
+  bytes stateHash                = 4;
+  // Rejected data in finalized fringe
+  repeated bytes rejectedDeploys = 10 [(scalapb.field).collection_type="List"];
+  repeated bytes rejectedBlocks  = 11 [(scalapb.field).collection_type="List"];
+  repeated bytes rejectedSenders = 12 [(scalapb.field).collection_type="List"];
 }
 
 // --------- End Internal types ---------

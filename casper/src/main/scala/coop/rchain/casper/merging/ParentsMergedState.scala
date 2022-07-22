@@ -11,19 +11,25 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
   * parent relations (justifications) or for the new block, latest messages which will be used as justifications.
   *
   * @param justifications block justifications (latest blocks for the new block)
-  * @param fringe finalized fringe seen (finalized) by parents
-  * @param fringeState finalized fringe (merged) state
-  * @param bondsMap bonds map of validators on fringe state
-  * @param rejectedDeploys rejected deploys from blocks finalized with [[fringe]] blocks
   * @param maxBlockNum maximum block height from parent blocks
   * @param maxSeqNums latest sequence numbers for bonded validators
+  * @param fringe finalized fringe seen (finalized) by parents
+  * @param fringeState finalized fringe (merged) state
+  * @param fringeBondsMap bonds map of validators on finalized fringe state
+  * @param fringeRejectedDeploys rejected deploys from blocks finalized with [[fringe]] blocks
+  * @param preStateHash state hash after non-finalized blocks are merged
+  * @param rejectedDeploys rejected deploys after non-finalized blocks are merged
   */
 final case class ParentsMergedState(
     justifications: Set[BlockMetadata],
+    maxBlockNum: Long,
+    maxSeqNums: Map[Validator, Long],
+    // Fringe merged state
     fringe: Set[BlockHash],
     fringeState: Blake2b256Hash,
-    bondsMap: Map[Validator, Long],
-    rejectedDeploys: Set[ByteString],
-    maxBlockNum: Long,
-    maxSeqNums: Map[Validator, Long]
+    fringeBondsMap: Map[Validator, Long],
+    fringeRejectedDeploys: Set[ByteString],
+    // Conflict scope state (non-finalized blocks)
+    preStateHash: Blake2b256Hash,
+    rejectedDeploys: Set[ByteString]
 )

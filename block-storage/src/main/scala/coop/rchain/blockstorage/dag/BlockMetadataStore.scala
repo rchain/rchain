@@ -41,7 +41,7 @@ object BlockMetadataStore {
   def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
     BlockInfo(
       blockMeta.blockHash,
-      blockMeta.justifications.toSet,
+      blockMeta.justifications,
       blockMeta.blockNum,
       blockMeta.validationFailed
     )

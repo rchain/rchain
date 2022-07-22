@@ -2,10 +2,10 @@ package coop.rchain.casper.blocks
 
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.{BlockDagStorage, DagRepresentation, Finalizer}
+import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.syntax._
 
@@ -26,7 +26,7 @@ final class BlockDagStorageOps[F[_]](
   ): F[Unit] =
     for {
       fringeWithState <- if (approved) {
-                          (Set(block.blockHash), block.postStateHash).pure[F]
+                          (Set[BlockHash](), block.postStateHash).pure[F]
                         } else {
                           for {
                             dag       <- bds.getRepresentation
@@ -34,20 +34,17 @@ final class BlockDagStorageOps[F[_]](
                             finalizer = Finalizer(dagMsgSt.msgMap)
                             parents   = block.justifications.map(dagMsgSt.msgMap).toSet
                             fringe    = finalizer.latestFringe(parents).map(_.id)
-                            (fringeState, _) = if (fringe.isEmpty)
-                              (
-                                RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
-                                Set[ByteString]()
-                              )
-                            else
-                              dag.fringeStates(fringe)
+                            fringeState = if (fringe.isEmpty) {
+                              RuntimeManager.emptyStateHashFixed.toBlake2b256Hash
+                            } else
+                              dag.fringeStates(fringe).stateHash
                           } yield (fringe, fringeState.toByteString)
                         }
 
       (fringe, fringeState) = fringeWithState
       bmd = BlockMetadata
         .fromBlock(block)
-        .copy(validationFailed = invalid, fringe = fringe.toList, fringeStateHash = fringeState)
+        .copy(validationFailed = invalid, fringe = fringe, fringeStateHash = fringeState)
 
       _ <- bds.insert(bmd, block)
     } yield ()

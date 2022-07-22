@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
@@ -75,8 +76,9 @@ object MultiParentCasper {
                          FatalError(errMsg)
                        }
 
-      (prevFringeState, prevFringeRejectedDeploys) = fringeRecord
-      prevFringeStateHash                          = prevFringeState.bytes.toArray.toByteString
+      prevFringeState           = fringeRecord.stateHash
+      prevFringeRejectedDeploys = fringeRecord.rejectedDeploys
+      prevFringeStateHash       = prevFringeState.toByteString
       // TODO: for empty fringe bonds map should be loaded from bonds file (if validated in replay)
       bondsMap <- if (prevFringe.isEmpty)
                    justifications.head.bondsMap.pure[F]
@@ -90,9 +92,9 @@ object MultiParentCasper {
       newFringeResult <- newFringeHashes.traverse { fringe =>
                           for {
                             result <- BlockHashDagMerger.merge[F](
-                                       fringe,
-                                       prevFringeHashes,
-                                       prevFringeStateHash.toBlake2b256Hash,
+                                       tips = fringe,
+                                       finalFringe = prevFringeHashes,
+                                       finalState = prevFringeStateHash.toBlake2b256Hash,
                                        BlockHashDagMerger(dag.dagMessageState.msgMap),
                                        dag.fringeStates,
                                        RuntimeManager[F].getHistoryRepo,
@@ -102,26 +104,51 @@ object MultiParentCasper {
                             finalizedStateStr = PrettyPrinter.buildString(
                               finalizedState.toByteString
                             )
-                            rejectedCount = rejected.size
-                            msgFinalized  = s"Finalized fringe state: $finalizedStateStr, rejectedDeploys: $rejectedCount"
-                            _             <- Log[F].info(msgFinalized)
+                            rejectedDeploysStr = PrettyPrinter.buildString(rejected)
+                            msgFinalized       = s"Finalized fringe state: $finalizedStateStr, rejectedDeploys: $rejectedDeploysStr"
+                            _                  <- Log[F].info(msgFinalized)
                           } yield result
                         }
       (fringeState, rejectedDeploys) = newFringeResult getOrElse (prevFringeState, prevFringeRejectedDeploys)
 
-      // TODO: merge non-finalized blocks and data to ParentsPreState data
-
       maxHeight  = justifications.map(_.blockNum).maximumOption.getOrElse(-1L)
       maxSeqNums = justifications.map(m => (m.sender, m.seqNum)).toMap
       newFringe  = newFringeHashes.getOrElse(prevFringeHashes)
+
+      // Merge conflict scope (non-finalized blocks above fringe)
+      conflictScopeMergeResult <- parentHashes.toSeq match {
+                                   case Seq(parent) =>
+                                     BlockStore[F]
+                                       .getUnsafe(parent)
+                                       .map(_.postStateHash)
+                                       .map(x => (x.toBlake2b256Hash, Set.empty[ByteString]))
+                                   case _ =>
+                                     BlockHashDagMerger.merge[F](
+                                       tips = parentHashes,
+                                       finalFringe = newFringe,
+                                       finalState = fringeState,
+                                       BlockHashDagMerger(dag.dagMessageState.msgMap),
+                                       dag.fringeStates,
+                                       RuntimeManager[F].getHistoryRepo,
+                                       BlockIndex.getBlockIndex[F]
+                                     )
+                                 }
+      (preStateHash, csRejectedDeploys) = conflictScopeMergeResult
+
+      // TODO: in validation (InterpreterUtil.validateBlockCheckpoint) this is logged also, check how to unify
+      csRejectedDeploysStr = PrettyPrinter.buildString(csRejectedDeploys)
+      csMsg                = s"Conflict scope merged with rejectedDeploys: $csRejectedDeploysStr"
+      _                    <- Log[F].info(csMsg)
     } yield ParentsMergedState(
       justifications = justifications.toSet,
+      maxHeight,
+      maxSeqNums,
       fringe = newFringe,
       fringeState = fringeState,
-      bondsMap = bondsMap,
-      rejectedDeploys = rejectedDeploys,
-      maxHeight,
-      maxSeqNums
+      fringeBondsMap = bondsMap,
+      fringeRejectedDeploys = rejectedDeploys,
+      preStateHash = preStateHash,
+      rejectedDeploys = csRejectedDeploys
     )
 
   def validate[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](

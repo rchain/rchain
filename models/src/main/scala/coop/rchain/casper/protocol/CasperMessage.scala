@@ -113,7 +113,9 @@ final case class BlockMessage(
     justifications: List[BlockHash],
     bonds: Map[Validator, Long],
     // Rejections
-    rejectedDeploys: List[ByteString],
+    rejectedDeploys: Set[ByteString],
+    rejectedBlocks: Set[BlockHash],
+    rejectedSenders: Set[ByteString],
     // Rholang (tuple space) state change
     state: RholangState,
     // Block signature
@@ -141,13 +143,16 @@ object BlockMessage {
       bm.postStateHash,
       bm.justifications,
       bm.bonds.map(b => (b.validator, b.stake)).toMap,
-      bm.rejectedDeploys,
+      bm.rejectedDeploys.toSet,
+      bm.rejectedBlocks.toSet,
+      bm.rejectedSenders.toSet,
       state,
       bm.sigAlgorithm,
       bm.sig
     )
 
   def toProto(bm: BlockMessage): BlockMessageProto = {
+    // TODO: Sorting should not be required. Block hash is checked as serialized binary of the block.
     // Sorted justifications
     val sortedJustifications = bm.justifications.sorted
     // Sorted bonds map
@@ -155,7 +160,9 @@ object BlockMessage {
       .sortBy { case (validator, _) => validator }
       .map { case (validator, stake) => BondProto(validator, stake) }
     // Sorted rejections
-    val sortedRejectedDeploys = bm.rejectedDeploys.sorted
+    val sortedRejectedDeploys = bm.rejectedDeploys.toList.sorted
+    val sortedRejectedBlocks  = bm.rejectedBlocks.toList.sorted
+    val sortedRejectedSenders = bm.rejectedSenders.toList.sorted
     // Build proto message
     BlockMessageProto()
       .withVersion(bm.version)
@@ -169,6 +176,8 @@ object BlockMessage {
       .withJustifications(sortedJustifications)
       .withBonds(sortedBonds)
       .withRejectedDeploys(sortedRejectedDeploys)
+      .withRejectedBlocks(sortedRejectedBlocks)
+      .withRejectedSenders(sortedRejectedSenders)
       .withState(RholangState.toProto(bm.state))
       .withSigAlgorithm(bm.sigAlgorithm)
       .withSig(bm.sig)

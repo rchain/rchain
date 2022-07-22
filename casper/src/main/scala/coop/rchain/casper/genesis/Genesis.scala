@@ -111,7 +111,7 @@ object Genesis {
       postStateHash = postStateHash,
       justifications = List.empty,
       bonds = buildBondsMap(genesis.proofOfStake),
-      rejectedDeploys = List.empty,
+      rejectedDeploys = Set.empty,
       state = state
     )
   }
