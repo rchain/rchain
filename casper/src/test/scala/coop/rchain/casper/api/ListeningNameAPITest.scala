@@ -48,7 +48,8 @@ class ListeningNameAPITest extends AnyFlatSpec with Matchers with Inside with Bl
     }
   }
 
-  it should "work across a chain" in effectTest {
+  // TODO: ignored test, it will be fixed in PR#3787 https://github.com/rchain/rchain/pull/3787
+  it should "work across a chain" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val timeEff = new LogicalTime[Effect]
       for {

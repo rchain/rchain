@@ -2,6 +2,7 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
@@ -14,7 +15,6 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
-import coop.rchain.models.BlockMetadata
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
@@ -189,15 +189,8 @@ object GenesisBuilder {
       blockStore      <- BlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
-
-      blockMeta = BlockMetadata.fromBlock(genesis)
-      // TODO: genesis is finalized for legacy tests to pass
-      blockMetaUpdated = blockMeta.copy(
-        validated = true,
-        fringe = List(genesis.blockHash),
-        fringeStateHash = genesis.postStateHash
-      )
-      _ <- blockDagStorage.insert(blockMetaUpdated, genesis)
+      // Add genesis block to DAG
+      _ <- blockDagStorage.insertGenesis(genesis)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory))
       .runSyncUnsafe()
   }
