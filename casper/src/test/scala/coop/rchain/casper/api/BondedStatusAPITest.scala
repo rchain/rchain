@@ -8,15 +8,16 @@ import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
-import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder._
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.Span
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
@@ -48,7 +49,10 @@ class BondedStatusAPITest
     .map { case ((_, pubKey), (_, bond)) => pubKey.bytes.toByteString -> bond }
     .toMap
   private val gB =
-    makeBlock(bonds = initialComputeBondsResult, validatorId = ValidatorIdentity(keys.head._1))
+    getRandomBlock(
+      setBonds = initialComputeBondsResult.some,
+      setValidator = toValidatorOpt(keys.head._1)
+    )
 
   "bondStatus" should "return true for bonded validator" in effectTest {
     implicit val (c, log, bds, bs, rm, sp) = createMocks[Task]
@@ -83,40 +87,17 @@ class BondedStatusAPITest
     val newValidator     = ValidatorIdentity(keys.last._1)
 
     for {
-      _  <- BondingUtil.bondingDeploy[Task](stake, newValidator.privateKey, shardId = gB.shardId)
-      _  <- bondedStatus(genesisValidator, newValidator.publicKey, gB) shouldBeF false
-      b1 = makeBlock(List(gB.blockHash), newComputeBondsResult, newValidator)
+      _ <- BondingUtil.bondingDeploy[Task](stake, newValidator.privateKey, shardId = gB.shardId)
+      _ <- bondedStatus(genesisValidator, newValidator.publicKey, gB) shouldBeF false
+      b1 = getRandomBlock(
+        setJustifications = Seq(gB.blockHash).some,
+        setBonds = newComputeBondsResult.some,
+        setValidator = toValidatorOpt(newValidator.privateKey)
+      )
 
       // b1 is now finalized, hence n4 is now bonded
       _ <- bondedStatus(genesisValidator, newValidator.publicKey, b1) shouldBeF true
     } yield ()
-  }
-
-  private def makeDefaultBlock =
-    BlockMessage
-      .from(
-        BlockMessageProto(
-          shardId = "root",
-          postStateHash = "abc".unsafeHexToByteString,
-          sigAlgorithm = Secp256k1.name
-        )
-      )
-      .right
-      .get
-
-  def makeBlock(
-      justifications: List[BlockHash] = List(),
-      bonds: Map[Validator, Long],
-      validatorId: ValidatorIdentity
-  ): BlockMessage = {
-    val (privateKey, pubKey) = (validatorId.privateKey, validatorId.publicKey)
-    val block =
-      makeDefaultBlock.copy(
-        sender = pubKey.bytes.toByteString,
-        justifications = justifications,
-        bonds = bonds
-      )
-    ValidatorIdentity(privateKey).signBlock(block)
   }
 
   private def createMocks[F[_]: Concurrent: Sync] = {
@@ -144,6 +125,8 @@ class BondedStatusAPITest
 
     (c, log, bds, bs, rm, sp)
   }
+
+  private def toValidatorOpt(pk: PrivateKey) = pk.bytes.toByteString.some
 
   private def toMessage(m: BlockMessage) = Message[BlockHash, Validator](
     m.blockHash,
