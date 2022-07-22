@@ -8,10 +8,12 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.metrics.Span
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.shared.Log
 import org.mockito.ArgumentMatchersSugar.any
 import org.mockito.IdiomaticMockito.StubbingOps
 import org.mockito.MockitoSugar.mock
@@ -89,6 +91,14 @@ object Mocks {
     bds.getRepresentation returns state.get
 
     bds
+  }
+
+  def createSpan[F[_]]: Span[F] = mock[Span[F]]
+
+  def createLog[F[_]: Sync]: Log[F] = {
+    val log = mock[Log[F]]
+    log.warn(any) returns ().pure
+    log
   }
 
   // Default args only available for public method in Scala 2.12 (https://github.com/scala/bug/issues/12168)
