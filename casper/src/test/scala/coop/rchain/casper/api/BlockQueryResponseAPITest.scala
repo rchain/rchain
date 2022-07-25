@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.dag._
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.blockImplicits.getRandomBlock

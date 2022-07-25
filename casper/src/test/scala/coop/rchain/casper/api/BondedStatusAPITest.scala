@@ -16,6 +16,7 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.Span
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.FringeData
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
@@ -114,7 +115,17 @@ class BondedStatusAPITest
       Map(gB.blockHash -> Set()),
       SortedMap(0L     -> Set(gB.blockHash)),
       new DagMessageState(Set(msg), Map(msg.id -> msg)),
-      Map(Set(gB.blockHash) -> (gB.blockHash.toBlake2b256Hash, Set()))
+      Map(
+        Set(gB.blockHash) -> FringeData(
+          FringeData.fringeHash(Set.empty),
+          Set.empty,
+          Set.empty,
+          gB.blockHash.toBlake2b256Hash,
+          Set.empty,
+          Set.empty,
+          Set.empty
+        )
+      )
     )
 
     val bs = mock[BlockStore[F]]

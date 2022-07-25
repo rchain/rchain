@@ -8,8 +8,10 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.syntax._
 import coop.rchain.metrics.Span
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.{BlockMetadata, FringeData}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -48,13 +50,23 @@ object Mocks {
         Map(),
         SortedMap(),
         DagMessageState(),
-        Map(Set() -> (Blake2b256Hash.fromByteString(genesisHash), Set()))
+        Map(
+          Set(genesisHash) -> FringeData(
+            FringeData.fringeHash(Set.empty),
+            Set.empty,
+            Set.empty,
+            genesisHash.toBlake2b256Hash,
+            Set.empty,
+            Set.empty,
+            Set.empty
+          )
+        )
       )
     )
     val bds = mock[BlockDagStorage[F]]
 
-    bds.insert(any, invalid = false) answers { (b: BlockMessage) =>
-      state.updateAndGet { s =>
+    bds.insert(any, any) answers { (bmd: BlockMetadata, b: BlockMessage) =>
+      state.update { s =>
         val newDagSet = s.dagSet + b.blockHash
 
         val newChildMap = b.justifications.foldLeft(s.childMap) {
