@@ -186,4 +186,14 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
       .map(_.fringe)
       .getOrElse(Set())
       .map(msgMap)
+
+  /**
+    * Lowest fringe for input messages
+    */
+  def lowestFringe(msgs: Set[Message[M, S]]): Set[Message[M, S]] =
+    msgs.toList
+      .minimumByOption(_.fringe.map(msgMap).toList.map(_.height).minimumOption.getOrElse(-1L))
+      .map(_.fringe)
+      .getOrElse(Set())
+      .map(msgMap)
 }

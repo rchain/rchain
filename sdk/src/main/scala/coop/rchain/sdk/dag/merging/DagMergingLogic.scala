@@ -4,7 +4,6 @@ import cats.Order
 import cats.syntax.all._
 
 import scala.collection.compat.immutable.LazyList
-import scala.collection.immutable.Map
 import scala.collection.mutable
 import scala.math.Numeric.LongIsIntegral
 
@@ -84,15 +83,6 @@ object DagMergingLogic {
     val sorted =
       concurrentRoots.toList.sortBy { case (k, v) => (-v.size, k) }.map { case (k, v) => v + k }
     partitionScope(sorted)
-  }
-
-  /** Lowest fringe across number of fringes. */
-  def lowestFringe[B: Ordering](fringes: Set[Set[B]], height: B => Long): Set[B] = {
-    require(fringes.nonEmpty, "Cannot compute lowest fringe on empty set.")
-    if (fringes.size > 1) fringes.minBy { f =>
-      val minBlock = f.minBy(b => (height(b), b))
-      (height(minBlock), minBlock)
-    } else fringes.head
   }
 
   /** All items in the conflict scope. */

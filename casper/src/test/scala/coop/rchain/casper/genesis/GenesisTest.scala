@@ -4,6 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Registry, Validator}
@@ -16,7 +17,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.syntax._
 import monix.eval.Task
@@ -180,11 +181,10 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
                         implicitly[Concurrent[Task]],
                         log
                       )
-            _ <- blockDagStorage.insert(genesis, false, approved = true)
-            _ <- BlockStore[Task].put(genesis.blockHash, genesis)
-            maybePostGenesisStateHash <- InterpreterUtil
-                                          .validateBlockCheckpoint[Task](genesis)
-          } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
+            _         <- BlockStore[Task].put(genesis.blockHash, genesis)
+            _         <- blockDagStorage.insertGenesis(genesis)
+            postState <- InterpreterUtil.validateBlockCheckpointLegacy[Task](genesis)
+          } yield postState.value shouldBe true
       }
   }
 

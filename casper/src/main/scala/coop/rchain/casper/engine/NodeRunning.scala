@@ -277,8 +277,9 @@ class NodeRunning[F[_]
 
         // Respond with latest finalized fringe
         // TODO: optimize response to read from cache
-        latestFringeHashes         = dag.dagMessageState.latestFringe.map(_.id)
-        (latestFringeStateHash, _) = dag.fringeStates(latestFringeHashes)
+        latestFringeHashes    = dag.dagMessageState.latestFringe.map(_.id)
+        fringeData            = dag.fringeStates(latestFringeHashes)
+        latestFringeStateHash = fringeData.stateHash
         fringeResponse = FinalizedFringe(
           latestFringeHashes.toList,
           latestFringeStateHash.toByteString

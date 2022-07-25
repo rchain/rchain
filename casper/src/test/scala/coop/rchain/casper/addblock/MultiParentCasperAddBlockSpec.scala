@@ -484,7 +484,9 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
         postStateHash = ByteString.EMPTY,
         serializedJustifications,
         bonds = genesis.genesisBlock.bonds,
-        rejectedDeploys = List.empty,
+        rejectedDeploys = Set.empty,
+        rejectedBlocks = Set.empty,
+        rejectedSenders = Set.empty,
         state,
         sigAlgorithm = "",
         sig = ByteString.EMPTY

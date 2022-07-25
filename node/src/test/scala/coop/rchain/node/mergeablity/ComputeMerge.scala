@@ -148,9 +148,9 @@ trait ComputeMerge {
                         )
             kvm      = new InMemoryStoreManager
             dagStore <- BlockDagKeyValueStorage.create[F](kvm)
-            _        <- dagStore.insert(bBlock, false, approved = true)
-            _        <- dagStore.insert(lBlock, false)
-            _        <- dagStore.insert(rBlock, false)
+            _        <- dagStore.insertLegacy(bBlock, false, approved = true)
+            _        <- dagStore.insertLegacy(lBlock, false)
+            _        <- dagStore.insertLegacy(rBlock, false)
             dag      <- dagStore.getRepresentation
             indices = Map(
               bBlock.blockHash -> baseIndex,

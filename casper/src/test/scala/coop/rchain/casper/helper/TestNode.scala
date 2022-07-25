@@ -14,6 +14,7 @@ import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.BlockRetriever.{RequestState, RequestedBlocks}
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
+import coop.rchain.casper.merging.ParentsMergedState
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{BlockRandomSeed, Resources, RuntimeManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
@@ -157,7 +158,9 @@ case class TestNode[F[_]: Concurrent: Timer](
       _              = assert(status == expectedStatus)
     } yield block
 
-  def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
+  def createBlockWithPreState(
+      deployDatums: Signed[DeployData]*
+  ): F[(BlockCreatorResult, ParentsMergedState)] =
     for {
       _ <- deployDatums.toList.traverse(
             deploy =>
@@ -172,9 +175,12 @@ case class TestNode[F[_]: Concurrent: Timer](
                             validatorIdOpt.get,
                             shardName
                           )
-    } yield createBlockResult
+    } yield (createBlockResult, preState)
 
-  // This method assumes that block will be created sucessfully
+  def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
+    createBlockWithPreState(deployDatums: _*).map(_._1)
+
+  // This method assumes that block will be created successfully
   def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
       _        <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])

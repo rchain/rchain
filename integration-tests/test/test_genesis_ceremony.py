@@ -56,7 +56,7 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
             wait_for_approved_block_received_handler_state(context, validator_b)
             wait_for_approved_block_received_handler_state(context, readonly_a)
 
-            added_to_dag_pattern = re.compile("Block #0 [a-fA-F0-9.()]+ added to DAG.")
+            added_to_dag_pattern = re.compile("Block #0 [a-fA-F0-9.()]+ by [a-fA-F0-9.()]+ added to DAG.")
 
             wait_for_log_match(context, validator_a, added_to_dag_pattern)
             wait_for_log_match(context, validator_b, added_to_dag_pattern)

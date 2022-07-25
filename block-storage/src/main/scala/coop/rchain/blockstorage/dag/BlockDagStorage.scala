@@ -11,10 +11,7 @@ trait BlockDagStorage[F[_]] {
 
   def getRepresentation: F[DagRepresentation]
 
-  def insertNew(blockMetadata: BlockMetadata, block: BlockMessage): F[DagRepresentation]
-
-  // TODO: legacy function, used only in tests, it should be removed when tests are fixed
-  def insert(block: BlockMessage, invalid: Boolean, approved: Boolean = false): F[DagRepresentation]
+  def insert(blockMetadata: BlockMetadata, block: BlockMessage): F[Unit]
 
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
 

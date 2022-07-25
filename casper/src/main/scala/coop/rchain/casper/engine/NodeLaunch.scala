@@ -71,21 +71,18 @@ object NodeLaunch {
         validatorIdentity <- validatorIdentityOpt.liftTo(noValidatorIdentityError)
         genesisBlock      <- createGenesisBlockFromConfig(validatorIdentity, conf)
         genBlockStr       = PrettyPrinter.buildString(genesisBlock)
-        _                 <- Log[F].info(s"Sending genesis $genBlockStr to peers...")
-
-        bmd = BlockMetadata
-          .fromBlock(genesisBlock)
-          // Genesis pre-state is used as finalized state hash
-          .copy(fringeStateHash = genesisBlock.preStateHash)
+        _                 <- Log[F].info(s"Sending genesis block $genBlockStr to peers...")
 
         // Store genesis block
         _             <- BlockStore[F].put(genesisBlock)
-        genesisFringe = FinalizedFringe(bmd.fringe, bmd.fringeStateHash)
+        genesisFringe = FinalizedFringe(hashes = Seq(), genesisBlock.preStateHash)
         _             <- ApprovedStore[F].putApprovedBlock(genesisFringe)
-        // Add genesis block to DAG
-        _ <- BlockDagStorage[F].insertNew(bmd, genesisBlock)
 
-        // Send approved block to peers
+        // Add genesis block to DAG
+        // TODO: replay genesis block to confirm creation was correct, it's fatal error if replay fails
+        _ <- BlockDagStorage[F].insertGenesis(genesisBlock)
+
+        // Send fringe data to peers
         _ <- CommUtil[F].streamToPeers(genesisFringe.toProto)
       } yield ()
 

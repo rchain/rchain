@@ -143,7 +143,9 @@ object blockImplicits {
         preStateHash = preStatehash,
         postStateHash = postStatehash,
         bonds = bonds,
-        rejectedDeploys = List.empty,
+        rejectedDeploys = Set.empty,
+        rejectedBlocks = Set.empty,
+        rejectedSenders = Set.empty,
         state = RholangState(deploys = deploys.toList, systemDeploys = setSysDeploys.toList.flatten),
         sigAlgorithm = Secp256k1.name,
         sig = ByteString.EMPTY

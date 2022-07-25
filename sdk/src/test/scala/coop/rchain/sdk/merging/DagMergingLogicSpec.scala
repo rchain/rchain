@@ -56,13 +56,6 @@ class DagMergingLogicSpec extends AnyFlatSpec with Matchers with Checkers {
     )
   }
 
-  "lowestFringe" should "sort input by (height, size, first element)." in {
-    val fringes = Set(Set(1), Set(1, 11), Set(1, 10), Set(2), Set(3, 4))
-    // (1), (1, 11), (1, 10) are lowest, (1, 11) is the largest and 11 > 10
-    val heightMap = Map(1 -> 0, 11 -> 0, 10 -> 0, 2 -> 10, 3 -> 9, 4 -> 9).mapValues(_.toLong)
-    lowestFringe(fringes, heightMap) shouldBe Set(1, 11)
-  }
-
   "computeRelationMapForMergeSet" should "output map with " +
     "- conflicts inside conflict set" +
     "- conflicts between conflict set and final set" +

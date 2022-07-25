@@ -1,26 +1,23 @@
 package coop.rchain.casper.helper
 
-import cats._
-import cats.effect._
+import cats.Applicative
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
-import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.rholang.InterpreterUtil.{
-  computeDeploysCheckpoint,
-  computeParentsPostState
-}
-import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
-import coop.rchain.casper.rholang.types.SystemDeploy
-import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.{CasperMetricsSource, ParentsMergedState}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.merging.ParentsMergedState
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.InterpreterUtil.computeDeploysCheckpoint
+import coop.rchain.casper.rholang.types.SystemDeploy
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
+import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash._
 import coop.rchain.models.blockImplicits.getRandomBlock
@@ -41,12 +38,15 @@ object BlockGenerator {
   // Dummy empty Casper snapshot
   val dummyParentsPreState = ParentsMergedState(
     justifications = Set.empty,
+    maxBlockNum = 0L,
+    maxSeqNums = Map.empty,
     fringe = Set(),
     fringeState = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
-    bondsMap = Map.empty,
-    rejectedDeploys = Set(),
-    maxBlockNum = 0L,
-    maxSeqNums = Map.empty
+    fringeBondsMap = Map.empty,
+    fringeRejectedDeploys = Set(),
+    // Pre-state is the same as fringe state
+    preStateHash = RuntimeManager.emptyStateHashFixed.toBlake2b256Hash,
+    rejectedDeploys = Set()
   )
 
   def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
@@ -62,22 +62,22 @@ object BlockGenerator {
       block: BlockMessage,
       preState: ParentsMergedState
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
-    val deploys = block.state.deploys.map(_.deploy)
+    val deploys      = block.state.deploys.map(_.deploy)
+    val preStateHash = preState.preStateHash.toByteString
+    val rand         = BlockRandomSeed.randomGenerator(block)
     for {
-      computedParentsInfo <- computeParentsPostState(block.justifications, preState)
-      rand                = BlockRandomSeed.randomGenerator(block)
       result <- computeDeploysCheckpoint[F](
                  deploys,
                  List.empty[SystemDeploy],
                  rand,
                  BlockData.fromBlock(block),
-                 computedParentsInfo
+                 preStateHash
                )
-      (preStateHash, postStateHash, processedDeploys, rejectedDeploys, _) = result
+      (postStateHash, processedDeploys, _) = result
     } yield (postStateHash, processedDeploys)
   }
 
-  private def injectPostStateHash[F[_]: Monad: BlockStore: BlockDagStorage](
+  private def injectPostStateHash[F[_]: Sync: BlockStore: BlockDagStorage](
       b: BlockMessage,
       postGenStateHash: StateHash,
       processedDeploys: Seq[ProcessedDeploy]
@@ -86,7 +86,7 @@ object BlockGenerator {
       b.state.copy(deploys = processedDeploys.toList)
     val updatedBlock = b.copy(postStateHash = postGenStateHash, state = updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) >>
-      BlockDagStorage[F].insert(updatedBlock, invalid = false).void
+      BlockDagStorage[F].insertLegacy(updatedBlock, invalid = false).void
   }
 }
 
@@ -112,14 +112,14 @@ trait BlockGenerator {
       setSeqNumber = seqNum.some
     ).pure[F]
 
-  def createGenesis[F[_]: Monad: BlockStore: BlockDagStorage](
+  def createGenesis[F[_]: Sync: BlockStore: BlockDagStorage](
       creator: Validator = BlockUtil.generateValidator("Validator genesis"),
       bonds: Map[Validator, Long] = Map.empty,
       justifications: Seq[BlockHash] = Seq.empty[BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
-      preStateHash: ByteString = ByteString.EMPTY,
+      preStateHash: ByteString = RuntimeManager.emptyStateHashFixed,
       seqNum: Long = 0
   ): F[BlockMessage] =
     for {
@@ -133,8 +133,8 @@ trait BlockGenerator {
                   preStateHash,
                   seqNum
                 )
-      _ <- BlockDagStorage[F].insert(genesis, false, false)
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
+      _ <- BlockDagStorage[F].insertGenesis(genesis)
     } yield genesis
 
   def createBlock[F[_]: Sync: BlockStore: BlockDagStorage](
@@ -144,7 +144,7 @@ trait BlockGenerator {
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
       shardId: String = "root",
-      preStateHash: ByteString = ByteString.EMPTY,
+      preStateHash: ByteString = RuntimeManager.emptyStateHashFixed,
       seqNum: Long = 0,
       invalid: Boolean = false
   ): F[BlockMessage] =
@@ -171,8 +171,11 @@ trait BlockGenerator {
           blockNumber = nextId,
           seqNum = nextCreatorSeqNum
         )
-      _ <- BlockDagStorage[F].insert(modifiedBlock, invalid, false)
       _ <- BlockStore[F].put(block.blockHash, modifiedBlock)
+      blockMeta = BlockMetadata
+        .fromBlock(modifiedBlock)
+        .copy(validated = true, validationFailed = invalid, fringeStateHash = preStateHash)
+      _ <- BlockDagStorage[F].insert(blockMeta, modifiedBlock)
     } yield modifiedBlock
 
   def getLatestSeqNum(sender: Validator, dag: DagRepresentation): Long = {

@@ -16,6 +16,7 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
+import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.{Log, Time}
 
 sealed abstract class ProposerResult
@@ -137,12 +138,11 @@ object Proposer {
       MultiParentCasper.validate(block, shardId, minPhloPrice).flatMap { result =>
         result
           .map { blockMeta =>
-            BlockDagStorage[F].insertNew(blockMeta, block).as(BlockStatus.valid.asRight[BlockError])
+            BlockDagStorage[F].insert(blockMeta, block).as(BlockStatus.valid.asRight[InvalidBlock])
           }
           .leftMap {
             case (_, err) =>
-              new Exception(s"Unexpected fatal error when replay own block: $err")
-                .raiseError[F, ValidBlockProcessing]
+              FatalError(s"Failed to replay own block: $err").raiseError[F, ValidBlockProcessing]
           }
           .merge
       }

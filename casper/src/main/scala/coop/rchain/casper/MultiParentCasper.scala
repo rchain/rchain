@@ -1,14 +1,14 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
-import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, ParentsMergedState}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.syntax._
@@ -17,7 +17,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared._
 
 final case class ParsingError(details: String)
@@ -51,6 +51,10 @@ object MultiParentCasper {
       parentHashes: Set[BlockHash]
   ): F[ParentsMergedState] =
     for {
+      _ <- FatalError(
+            "Parents must not be empty to calculate pre-state. Genesis block pre-state is loaded from config."
+          ).raiseError.whenA(parentHashes.isEmpty)
+
       dag <- BlockDagStorage[F].getRepresentation
 
       justifications <- parentHashes.toList.traverse(BlockDagStorage[F].lookupUnsafe(_))
@@ -69,11 +73,12 @@ object MultiParentCasper {
                          val fringeStr = PrettyPrinter.buildString(prevFringeHashes)
                          val errMsg =
                            s"Fringe state not available in state cache, fringe: $fringeStr"
-                         new Exception(errMsg)
+                         FatalError(errMsg)
                        }
 
-      (prevFringeState, prevFringeRejectedDeploys) = fringeRecord
-      prevFringeStateHash                          = prevFringeState.bytes.toArray.toByteString
+      prevFringeState           = fringeRecord.stateHash
+      prevFringeRejectedDeploys = fringeRecord.rejectedDeploys
+      prevFringeStateHash       = prevFringeState.toByteString
       // TODO: for empty fringe bonds map should be loaded from bonds file (if validated in replay)
       bondsMap <- if (prevFringe.isEmpty)
                    justifications.head.bondsMap.pure[F]
@@ -87,9 +92,9 @@ object MultiParentCasper {
       newFringeResult <- newFringeHashes.traverse { fringe =>
                           for {
                             result <- BlockHashDagMerger.merge[F](
-                                       fringe,
-                                       prevFringeHashes,
-                                       prevFringeStateHash.toBlake2b256Hash,
+                                       tips = fringe,
+                                       finalFringe = prevFringeHashes,
+                                       finalState = prevFringeStateHash.toBlake2b256Hash,
                                        BlockHashDagMerger(dag.dagMessageState.msgMap),
                                        dag.fringeStates,
                                        RuntimeManager[F].getHistoryRepo,
@@ -99,49 +104,74 @@ object MultiParentCasper {
                             finalizedStateStr = PrettyPrinter.buildString(
                               finalizedState.toByteString
                             )
-                            rejectedCount = rejected.size
-                            msgFinalized  = s"Finalized fringe state: $finalizedStateStr, rejectedDeploys: $rejectedCount"
-                            _             <- Log[F].info(msgFinalized)
+                            rejectedDeploysStr = PrettyPrinter.buildString(rejected)
+                            msgFinalized       = s"Finalized fringe state: $finalizedStateStr, rejectedDeploys: $rejectedDeploysStr"
+                            _                  <- Log[F].info(msgFinalized)
                           } yield result
                         }
       (fringeState, rejectedDeploys) = newFringeResult getOrElse (prevFringeState, prevFringeRejectedDeploys)
 
-      // TODO: merge non-finalized blocks and data to ParentsPreState data
-
       maxHeight  = justifications.map(_.blockNum).maximumOption.getOrElse(-1L)
       maxSeqNums = justifications.map(m => (m.sender, m.seqNum)).toMap
       newFringe  = newFringeHashes.getOrElse(prevFringeHashes)
+
+      // Merge conflict scope (non-finalized blocks above fringe)
+      conflictScopeMergeResult <- parentHashes.toSeq match {
+                                   case Seq(parent) =>
+                                     BlockStore[F]
+                                       .getUnsafe(parent)
+                                       .map(_.postStateHash)
+                                       .map(x => (x.toBlake2b256Hash, Set.empty[ByteString]))
+                                   case _ =>
+                                     BlockHashDagMerger.merge[F](
+                                       tips = parentHashes,
+                                       finalFringe = newFringe,
+                                       finalState = fringeState,
+                                       BlockHashDagMerger(dag.dagMessageState.msgMap),
+                                       dag.fringeStates,
+                                       RuntimeManager[F].getHistoryRepo,
+                                       BlockIndex.getBlockIndex[F]
+                                     )
+                                 }
+      (preStateHash, csRejectedDeploys) = conflictScopeMergeResult
+
+      // TODO: in validation (InterpreterUtil.validateBlockCheckpoint) this is logged also, check how to unify
+      csRejectedDeploysStr = PrettyPrinter.buildString(csRejectedDeploys)
+      csMsg                = s"Conflict scope merged with rejectedDeploys: $csRejectedDeploysStr"
+      _                    <- Log[F].info(csMsg)
     } yield ParentsMergedState(
       justifications = justifications.toSet,
+      maxHeight,
+      maxSeqNums,
       fringe = newFringe,
       fringeState = fringeState,
-      bondsMap = bondsMap,
-      rejectedDeploys = rejectedDeploys,
-      maxHeight,
-      maxSeqNums
+      fringeBondsMap = bondsMap,
+      fringeRejectedDeploys = rejectedDeploys,
+      preStateHash = preStateHash,
+      rejectedDeploys = csRejectedDeploys
     )
 
   def validate[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
       shardId: String,
       minPhloPrice: Long
-  ): F[Either[(BlockMetadata, BlockError), BlockMetadata]] = {
+  ): F[Either[(BlockMetadata, InvalidBlock), BlockMetadata]] = {
     val initBlockMeta = BlockMetadata.fromBlock(block)
 
     val validateSummary = EitherT(Validate.blockSummary(block, shardId, deployLifespan))
       .as(initBlockMeta)
       .leftMap(e => (initBlockMeta, e))
 
-    val validationProcess: EitherT[F, (BlockMetadata, BlockError), BlockMetadata] =
+    val validationProcess: EitherT[F, (BlockMetadata, InvalidBlock), BlockMetadata] =
       for {
         _                                <- validateSummary
         _                                <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
-        validated                        <- EitherT.liftF(InterpreterUtil.validateBlockCheckpointNew(block))
+        validated                        <- EitherT.liftF(InterpreterUtil.validateBlockCheckpoint(block))
         (blockMetadata, validatedResult) = validated
         _ <- EitherT.fromEither(validatedResult match {
-              case Left(ex)       => Left((blockMetadata, ex))
-              case Right(Some(_)) => Right(blockMetadata)
-              case Right(None)    => Left((blockMetadata, BlockStatus.invalidTransaction))
+              case Left(ex)     => Left((blockMetadata, ex))
+              case Right(true)  => Right(blockMetadata)
+              case Right(false) => Left((blockMetadata, BlockStatus.invalidStateHash))
             })
         _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
         _ <- EitherT(Validate.bondsCache(block)).as(blockMetadata).leftMap(e => (blockMetadata, e))
@@ -156,10 +186,10 @@ object MultiParentCasper {
         status <- EitherT(Validate.phloPrice(block, minPhloPrice))
                    .recoverWith {
                      case _ =>
-                       val warnToLog = EitherT.liftF[F, BlockError, Unit](
+                       val warnToLog = EitherT.liftF[F, InvalidBlock, Unit](
                          Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
                        )
-                       val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
+                       val asValid = EitherT.rightT[F, InvalidBlock](BlockStatus.valid)
                        warnToLog *> asValid
                    }
                    .as(blockMetadata)
@@ -195,23 +225,32 @@ object MultiParentCasper {
       // Create block and measure duration
       r                    <- Stopwatch.duration(validationProcess.value)
       (valResult, elapsed) = r
-      _ <- valResult
-            .map { blockMeta =>
-              val blockInfo   = PrettyPrinter.buildString(block, short = true)
-              val deployCount = block.state.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) (Valid) [$elapsed]") *>
-                indexBlock
-            }
-            .leftMap {
-              case (_, err) =>
-                val deployCount = block.state.deploys.size
-                val blockInfo   = PrettyPrinter.buildString(block, short = true)
-                Log[F].warn(s"Block replayed: $blockInfo (${deployCount}d) ($err) [$elapsed]")
-            }
-            .merge
-    } yield valResult
+      // TODO: update validated fields in a more clear way
+      valResultUpdated <- valResult
+                           .map { blockMeta =>
+                             val blockInfo   = PrettyPrinter.buildString(block, short = true)
+                             val deployCount = block.state.deploys.size
+                             Log[F].info(
+                               s"Block replayed: $blockInfo (${deployCount}d) (Valid) [$elapsed]"
+                             ) *>
+                               indexBlock as blockMeta
+                               .copy(validated = true)
+                               .asRight[(BlockMetadata, InvalidBlock)]
+                           }
+                           .leftMap {
+                             case (blockMeta, err) =>
+                               val deployCount = block.state.deploys.size
+                               val blockInfo   = PrettyPrinter.buildString(block, short = true)
+                               Log[F].warn(
+                                 s"Block replayed: $blockInfo (${deployCount}d) ($err) [$elapsed]"
+                               ) as
+                                 (blockMeta.copy(validated = true, validationFailed = true), err)
+                                   .asLeft[BlockMetadata]
+                           }
+                           .merge
+    } yield valResultUpdated
 
-    Log[F].info(s"Validating ${PrettyPrinter.buildString(block)}.") *> validationProcessDiag
+    Log[F].info(s"Validating block ${PrettyPrinter.buildString(block)}.") *> validationProcessDiag
   }
 
   def lastFinalizedBlock[F[_]: Sync: BlockDagStorage: BlockStore]: F[BlockMessage] =

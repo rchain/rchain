@@ -12,6 +12,7 @@ import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.crypto.PrivateKey
@@ -454,7 +455,6 @@ class ValidateTest
       val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
 
       for {
-        _      <- blockDagStorage.insert(genesis, false, approved = true)
         kvm    <- mkTestRNodeStoreManager[Task](storageDirectory)
         rStore <- kvm.rSpaceStores
         mStore <- RuntimeManager.mergeableStore(kvm)
@@ -469,7 +469,7 @@ class ValidateTest
         result <- {
           implicit val rm = runtimeManager
           for {
-            _               <- InterpreterUtil.validateBlockCheckpoint[Task](genesis)
+            _               <- InterpreterUtil.validateBlockCheckpointLegacy[Task](genesis)
             _               <- Validate.bondsCache[Task](genesis) shouldBeF Right(Valid)
             modifiedBonds   = Map.empty[Validator, Long]
             modifiedGenesis = genesis.copy(bonds = modifiedBonds)
@@ -484,7 +484,6 @@ class ValidateTest
       val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
-        _      <- blockDagStorage.insert(genesis, false, approved = true)
         dag    <- blockDagStorage.getRepresentation
         sender = ByteString.copyFrom(pk.bytes)
         seqNum = getLatestSeqNum(sender, dag) + 1L
