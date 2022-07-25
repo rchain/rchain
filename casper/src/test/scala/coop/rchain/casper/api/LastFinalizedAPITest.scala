@@ -1,130 +1,107 @@
 package coop.rchain.casper.api
 
+import cats.Applicative
 import cats.syntax.all._
-import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation, Message}
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.helper._
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ConstructDeploy.basicDeployData
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.GenesisBuilder._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.Span
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
-import coop.rchain.shared.scalatestcontrib._
+import coop.rchain.shared.Log
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import org.mockito.cats.IdiomaticMockitoCats
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-// TODO finalizer test for multiparent
+import scala.collection.immutable.SortedMap
+
 class LastFinalizedAPITest
     extends AnyFlatSpec
     with Matchers
     with EitherValues
     with BlockGenerator
     with BlockDagStorageFixture
-    with BlockApiFixture {
-  val genesisParameters = buildGenesisParametersFromBonds(List(10L, 10L, 10L))
-  val genesisContext    = buildGenesis(genesisParameters)
+    with BlockApiFixture
+    with IdiomaticMockito
+    with IdiomaticMockitoCats
+    with ArgumentMatchersSugar {
 
-  implicit val metricsEff = new Metrics.MetricsNOP[Task]
+  private val knownHash   = "abc"
+  private val unknownHash = "bcd"
+  private val wrongHash   = "xyz"
 
-  def isFinalized(node: TestNode[Task])(block: BlockMessage): Task[Boolean] =
+  private val createValidator = ValidatorIdentity(randomValidatorKeyPairs.take(1).toList.head._1)
+  private val createSender    = createValidator.publicKey.bytes.toByteString
+
+  "isFinalized" should "return true for a block placed in the DAG" in {
+    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
     for {
-      blockApi <- createBlockApi(node)
-      res      <- blockApi.isFinalized(block.blockHash.toHexString)
-    } yield res.value
-
-  /*
-   * DAG Looks like this:
-   *
-   *           b7
-   *           |
-   *           b6
-   *           |
-   *           b5 <- last finalized block
-   *         / |
-   *        |  b4
-   *        |  |
-   *       b2  b3
-   *         \ |
-   *           b1
-   *           |
-   *         genesis
-   */
-  "isFinalized" should "return true for ancestors of last finalized block" ignore effectTest {
-    TestNode.networkEff(genesisContext, networkSize = 3).use {
-      case nodes @ n1 +: n2 +: n3 +: Seq() =>
-        for {
-          produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
-
-          b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
-          b2 <- n2.publishBlock(produceDeploys(1))()
-          b3 <- n3.propagateBlock(produceDeploys(2))(n1)
-          b4 <- n1.propagateBlock(produceDeploys(3))(nodes: _*)
-          b5 <- n2.propagateBlock(produceDeploys(4))(nodes: _*)
-          b6 <- n1.propagateBlock(produceDeploys(5))(nodes: _*)
-          b7 <- n2.propagateBlock(produceDeploys(6))(nodes: _*)
-
-          lastFinalizedBlock <- n1.lastFinalizedBlock
-          _                  = lastFinalizedBlock shouldBe b5
-
-          // Checking if last finalized block is finalized
-          _ <- isFinalized(n1)(b5) shouldBeF true
-          // Checking if parent of last finalized block is finalized
-          _ <- isFinalized(n1)(b4) shouldBeF true
-          // Checking if secondary parent of last finalized block is finalized
-          _ <- isFinalized(n1)(b2) shouldBeF true
-        } yield ()
-    }
+      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      res      <- blockApi.isFinalized(knownHash)
+    } yield res shouldBe true
   }
 
-  /*
-   * DAG Looks like this:
-   *
-   *           b5
-   *             \
-   *              b4
-   *             /
-   *        b7 b3 <- last finalized block
-   *        |    \
-   *        b6    b2
-   *          \  /
-   *           b1
-   *       [n3 n1 n2]
-   *           |
-   *         genesis
-   */
-  it should "return false for children, uncles and cousins of last finalized block" ignore effectTest {
-    TestNode.networkEff(genesisContext, networkSize = 3).use {
-      case nodes @ n1 +: n2 +: n3 +: Seq() =>
-        for {
-          produceDeploys <- (0 until 7).toList.traverse(
-                             i =>
-                               basicDeployData[Task](
-                                 i,
-                                 shardId = genesisContext.genesisBlock.shardId
-                               )
-                           )
+  "isFinalized" should "return false for a block not placed in the DAG" in {
+    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    for {
+      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      res      <- blockApi.isFinalized(unknownHash)
+    } yield res shouldBe false
+  }
 
-          b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
-          b2 <- n2.propagateBlock(produceDeploys(1))(n1)
-          b3 <- n1.propagateBlock(produceDeploys(2))(n2)
-          b4 <- n2.propagateBlock(produceDeploys(3))(n1)
-          b5 <- n1.propagateBlock(produceDeploys(4))(n2)
-          _  <- n3.shutoff() // n3 misses b2, b3, b4, b5
-          b6 <- n3.propagateBlock(produceDeploys(5))(nodes: _*)
-          b7 <- n3.propagateBlock(produceDeploys(6))(nodes: _*)
+  "isFinalized" should "not throw exception and return false for wrong hash" in {
+    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    for {
+      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
 
-          lastFinalizedBlock <- n1.lastFinalizedBlock
-          _                  = lastFinalizedBlock shouldBe b3
+      // No exception is thrown here, because the decoding implementation simply discards non-hex characters
+      res <- blockApi.isFinalized(wrongHash)
+    } yield res shouldBe false
+  }
 
-          // Checking if child of last finalized block is finalized
-          _ <- isFinalized(n1)(b4) shouldBeF false
-          // Checking if uncle of last finalized block is finalized
-          _ <- isFinalized(n1)(b6) shouldBeF false
-          // Checking if cousin of last finalized block is finalized
-          _ <- isFinalized(n1)(b7) shouldBeF false
-        } yield ()
-    }
+  "isFinalized" should "return true for hash which becomes known after removing wrong characters" in {
+    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    for {
+      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      res      <- blockApi.isFinalized(wrongHash + knownHash)
+    } yield res shouldBe true
+  }
+
+  private def createMocks[F[_]: Applicative]
+      : (Log[F], Span[F], RuntimeManager[F], BlockStore[F], BlockDagStorage[F]) = {
+    val log = mock[Log[F]]
+    val sp  = mock[Span[F]]
+    val rm  = mock[RuntimeManager[F]]
+    val bs  = mock[BlockStore[F]]
+
+    val bds = mock[BlockDagStorage[F]]
+
+    val msg = new Message[BlockHash, Validator](
+      knownHash.unsafeHexToByteString,
+      0,
+      createSender,
+      0,
+      Map.empty,
+      Set.empty,
+      Set.empty,
+      Set.empty
+    )
+
+    bds.getRepresentation returnsF DagRepresentation(
+      Set(),
+      Map(),
+      SortedMap(),
+      new DagMessageState(Set(msg), Map(msg.id -> msg)),
+      Map()
+    )
+
+    (log, sp, rm, bs, bds)
   }
 }
