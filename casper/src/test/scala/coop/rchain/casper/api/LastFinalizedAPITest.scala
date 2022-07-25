@@ -45,7 +45,10 @@ class LastFinalizedAPITest
     for {
       blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(knownHash)
-    } yield res shouldBe true
+    } yield {
+      res shouldBe true
+      bds.getRepresentation wasCalled once
+    }
   }
 
   "isFinalized" should "return false for a block not placed in the DAG" in {
@@ -53,7 +56,10 @@ class LastFinalizedAPITest
     for {
       blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(unknownHash)
-    } yield res shouldBe false
+    } yield {
+      res shouldBe false
+      bds.getRepresentation wasCalled once
+    }
   }
 
   "isFinalized" should "not throw exception and return false for wrong hash" in {
@@ -63,7 +69,10 @@ class LastFinalizedAPITest
 
       // No exception is thrown here, because the decoding implementation simply discards non-hex characters
       res <- blockApi.isFinalized(wrongHash)
-    } yield res shouldBe false
+    } yield {
+      res shouldBe false
+      bds.getRepresentation wasCalled once
+    }
   }
 
   "isFinalized" should "return true for hash which becomes known after removing wrong characters" in {
@@ -71,7 +80,10 @@ class LastFinalizedAPITest
     for {
       blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(wrongHash + knownHash)
-    } yield res shouldBe true
+    } yield {
+      res shouldBe true
+      bds.getRepresentation wasCalled once
+    }
   }
 
   private def createMocks[F[_]: Applicative]
