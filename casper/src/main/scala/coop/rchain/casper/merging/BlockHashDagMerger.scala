@@ -166,7 +166,7 @@ final case class BlockHashDagMerger(
       conflictSet,
       finalSet,
       DeployChainIndex.deploysAreConflicting,
-      DeployChainIndex.isDependency
+      DeployChainIndex.depends
     )
     DagMergingLogic.resolveDag[BlockHash, DeployChainIndex, Blake2b256Hash, Blake2b256Hash](
       // DAG
