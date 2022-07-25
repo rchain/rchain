@@ -104,9 +104,10 @@ object DagMergingLogic {
       conflicts: (D, D) => Boolean,
       depends: (D, D) => Boolean
   ): (Map[D, Set[D]], Map[D, Set[D]]) = {
-    val conflictsMap = computeConflictsMap(conflictSet, finalSet, conflicts) ++
+    val conflictsMap = computeConflictsMap(conflictSet, finalSet, conflicts) |+|
       computeConflictsMap(conflictSet, conflictSet, conflicts)
-    val dependencyMap = computeDependencyMap(conflictSet, finalSet, depends)
+    val dependencyMap = computeDependencyMap(conflictSet, finalSet, depends) |+|
+      computeDependencyMap(conflictSet, conflictSet, depends)
     (conflictsMap, dependencyMap)
   }
 
