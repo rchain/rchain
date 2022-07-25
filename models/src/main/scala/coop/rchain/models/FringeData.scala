@@ -30,9 +30,7 @@ object FringeData {
     * Used like a primary key in fringe data store.
     */
   def fringeHash(fringe: Set[BlockHash]) = {
-    val ordering: Ordering[ByteString] =
-      Ordering.by((b: ByteString) => b.toByteArray.toIterable)
-    val sortedFringe = fringe.toSeq.sorted(ordering).map(x => ByteVector(x.toByteArray))
+    val sortedFringe = fringe.toSeq.sorted.map(x => ByteVector(x.toByteArray))
 
     Blake2b256Hash.create(sortedFringe)
   }
