@@ -14,24 +14,25 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
+import monix.testing.scalatest.MonixTaskTest
+import org.mockito.IdiomaticMockito
 import org.mockito.cats.IdiomaticMockitoCats
-import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.scalatest.EitherValues
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.SortedMap
 
 class LastFinalizedAPITest
-    extends AnyFlatSpec
+    extends AsyncFlatSpec
+    with MonixTaskTest
     with Matchers
     with EitherValues
     with BlockGenerator
     with BlockDagStorageFixture
     with BlockApiFixture
     with IdiomaticMockito
-    with IdiomaticMockitoCats
-    with ArgumentMatchersSugar {
+    with IdiomaticMockitoCats {
 
   private val knownHash   = "abc"
   private val unknownHash = "bcd"
@@ -46,7 +47,7 @@ class LastFinalizedAPITest
       blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(knownHash)
     } yield {
-      res shouldBe true
+      res.value shouldBe true
       bds.getRepresentation wasCalled once
     }
   }
@@ -57,7 +58,7 @@ class LastFinalizedAPITest
       blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(unknownHash)
     } yield {
-      res shouldBe false
+      res.value shouldBe false
       bds.getRepresentation wasCalled once
     }
   }
@@ -70,7 +71,7 @@ class LastFinalizedAPITest
       // No exception is thrown here, because the decoding implementation simply discards non-hex characters
       res <- blockApi.isFinalized(wrongHash)
     } yield {
-      res shouldBe false
+      res.value shouldBe false
       bds.getRepresentation wasCalled once
     }
   }
@@ -81,7 +82,7 @@ class LastFinalizedAPITest
       blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(wrongHash + knownHash)
     } yield {
-      res shouldBe true
+      res.value shouldBe true
       bds.getRepresentation wasCalled once
     }
   }
@@ -95,23 +96,25 @@ class LastFinalizedAPITest
 
     val bds = mock[BlockDagStorage[F]]
 
+    val knownHashBS = knownHash.unsafeHexToByteString
     val msg = new Message[BlockHash, Validator](
-      knownHash.unsafeHexToByteString,
+      knownHashBS,
       0,
       createSender,
       0,
       Map.empty,
       Set.empty,
-      Set.empty,
-      Set.empty
+      // DAG contains only one message, which is finalized and sees itself
+      Set(knownHashBS),
+      Set(knownHashBS)
     )
 
     bds.getRepresentation returnsF DagRepresentation(
-      Set(),
-      Map(),
-      SortedMap(),
+      Set.empty,
+      Map.empty,
+      SortedMap.empty,
       new DagMessageState(Set(msg), Map(msg.id -> msg)),
-      Map()
+      Map.empty
     )
 
     (log, sp, rm, bs, bds)
