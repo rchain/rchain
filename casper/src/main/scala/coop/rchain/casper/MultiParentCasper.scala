@@ -90,7 +90,8 @@ object MultiParentCasper {
 
       // If new fringe is finalized, merge it
       newFringeResult <- newFringeHashes.traverse { fringe =>
-                          val ms = MergeScope(fringe, prevFringeHashes, prevFringeState, msgMap)
+                          val ms =
+                            MergeScope.fromDag(fringe, prevFringeHashes, prevFringeState, msgMap)
                           for {
                             result <- MergeScope
                                        .optimise[F](
@@ -134,7 +135,12 @@ object MultiParentCasper {
                                      val lms    = dag.dagMessageState.latestMsgs.map(_.id)
                                      val msgMap = dag.dagMessageState.msgMap
                                      val ms =
-                                       MergeScope(lms, prevFringeHashes, prevFringeState, msgMap)
+                                       MergeScope.fromDag(
+                                         lms,
+                                         prevFringeHashes,
+                                         prevFringeState,
+                                         msgMap
+                                       )
                                      MergeScope
                                        .optimise[F](
                                          ms,
