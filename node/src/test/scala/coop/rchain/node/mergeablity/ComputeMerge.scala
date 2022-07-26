@@ -172,10 +172,9 @@ trait ComputeMerge {
                 )
             }
             ms = MergeScope(
-              Set(lBlock, rBlock).map(_.blockHash),
               Set(bBlock.blockHash),
-              baseCheckpoint.root,
-              dag.dagMessageState.msgMap
+              Set(lBlock, rBlock).map(_.blockHash),
+              baseCheckpoint.root
             )
             r <- MergeScope.merge[F](
                   ms,

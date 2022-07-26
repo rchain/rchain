@@ -72,7 +72,15 @@ object MergeScope {
     else mergeScope.pure
   }
 
-  def apply(
+  /**
+    * Create Merge scope from DAG
+    * @param mergeFringe tip messages of the DAG
+    * @param finalFringe finalization fringe
+    * @param finalState state of the final fringe
+    * @param dagData structure of the DAG
+    * @return
+    */
+  def fromDag(
       mergeFringe: Set[BlockHash],
       finalFringe: Set[BlockHash],
       finalState: Blake2b256Hash,
