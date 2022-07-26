@@ -17,7 +17,7 @@ import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.trace.Produce
-import coop.rchain.sdk.dag.merging.DagMergingLogic
+import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
 
 import scala.collection.concurrent.TrieMap
 
@@ -146,8 +146,12 @@ object BlockIndex {
         * Therefore there won't be any conflicts between event logs. But there can be dependencies. */
       depends = (l: DeployIndex, r: DeployIndex) =>
         EventLogMergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
-      dependencyMap = DagMergingLogic.computeDependencyMap(deployIndices, deployIndices, depends)
-      deployChains = DagMergingLogic
+      dependencyMap = ConflictResolutionLogic.computeDependencyMap(
+        deployIndices,
+        deployIndices,
+        depends
+      )
+      deployChains = ConflictResolutionLogic
         .computeGreedyNonIntersectingBranches[DeployIndex](deployIndices, dependencyMap)
 
       index <- deployChains.toVector

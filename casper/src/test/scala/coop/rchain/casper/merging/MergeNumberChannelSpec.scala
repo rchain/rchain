@@ -22,8 +22,8 @@ import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger.{ChannelChange, StateChange, StateChangeMerger}
 import coop.rchain.rspace.serializers.ScodecSerialize
 import coop.rchain.rspace.syntax._
-import coop.rchain.sdk.dag.merging.DagMergingLogic
-import coop.rchain.sdk.dag.merging.DagMergingLogic._
+import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
+import coop.rchain.sdk.dag.merging.ConflictResolutionLogic._
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
@@ -172,7 +172,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
             (0 to (leftEvIndices.size - 2))
               .map(idx => leftEvIndices(idx) -> Set(leftEvIndices(idx + 1)))
               .toMap
-          DagMergingLogic
+          ConflictResolutionLogic
             .computeGreedyNonIntersectingBranches[DeployIndex](leftEvIndices.toSet, dependencyMap)
         }
 
@@ -185,7 +185,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
             (0 to (rightEvIndices.size - 2))
               .map(idx => rightEvIndices(idx) -> Set(rightEvIndices(idx + 1)))
               .toMap
-          DagMergingLogic
+          ConflictResolutionLogic
             .computeGreedyNonIntersectingBranches[DeployIndex](rightEvIndices.toSet, dependencyMap)
         }
 
@@ -265,14 +265,17 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
           .map(d => d -> d.eventLogIndex.numberChannelsData)
           .toMap
 
-        rejected = DagMergingLogic.resolveConflictSet[DeployChainIndex, Blake2b256Hash](
-          conflictSet = actualSet.toSet,
-          dependencyMap = dependencyMap,
-          conflictsMap = conflictsMap,
-          cost = DeployChainIndex.deployChainCost,
-          mergeableDiffs = mergeableDiffs,
-          baseMergeableChRes
-        )
+        (_, rejected) = ConflictResolutionLogic
+          .resolveConflictSet[DeployChainIndex, Blake2b256Hash](
+            conflictSet = actualSet.toSet,
+            acceptedFinally = Set(),
+            rejectedFinally = Set(),
+            cost = DeployChainIndex.deployChainCost,
+            dependencyMap = dependencyMap,
+            conflictsMap = conflictsMap,
+            mergeableDiffs = mergeableDiffs,
+            initMergeableValues = baseMergeableChRes
+          )
         toMerge = actualSet.toSet -- rejected
 
         allChanges = toMerge.toList.map(_.stateChanges).combineAll
