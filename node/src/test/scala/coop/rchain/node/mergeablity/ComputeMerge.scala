@@ -181,7 +181,8 @@ trait ComputeMerge {
                   ms,
                   dag.fringeStates,
                   historyRepo,
-                  indices(_: BlockHash).pure
+                  indices(_: BlockHash).pure,
+                  rejectionCost = rejectAlg
                 )
             (mergedState, toReject) = r
             result <- checkFunction(

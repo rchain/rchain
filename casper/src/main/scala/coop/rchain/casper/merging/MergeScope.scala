@@ -93,11 +93,9 @@ object MergeScope {
       blockIndex: BlockHash => F[BlockIndex],
       rejectionCost: DeployChainIndex => Long = DeployChainIndex.deployChainCost
   ): F[(Blake2b256Hash, Set[ByteString])] = {
-    val MergeScope(finalScope, conflictScope, baseState) = mergeScope
-
     // if some indices can be computed - merge is impossible.
-    val loadIndices =
-      List(conflictScope, finalScope).traverse(_.toList.traverse(blockIndex).map(_.toSet))
+    val loadIndices = List(mergeScope.conflictScope, mergeScope.finalScope)
+      .traverse(_.toList.traverse(blockIndex).map(_.toSet))
 
     loadIndices.flatMap {
       case List(conflictScope, finalScope) =>
@@ -116,7 +114,7 @@ object MergeScope {
         // mergeable channels
         val mergeableDiffsMap = conflictSet.map(b => b -> b.eventLogIndex.numberChannelsData).toMap
         val loadInitMergeableValues = historyRepository.readMergeableValues(
-          baseState,
+          mergeScope.baseState,
           mergeableDiffsMap.valuesIterator.flatMap(_.keySet).toSet
         )
         // TODO conflictsMap and dependentsMap computations are expensive
@@ -143,7 +141,7 @@ object MergeScope {
         }
         resolveConflicts.flatMap {
           case (toMerge, rejected) =>
-            computeMergedState(toMerge, baseState, historyRepository).map { newState =>
+            computeMergedState(toMerge, mergeScope.baseState, historyRepository).map { newState =>
               (newState, rejected.flatMap(_.deploysWithCost.map(_.id)))
             }
         }
