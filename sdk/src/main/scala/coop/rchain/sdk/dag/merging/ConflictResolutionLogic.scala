@@ -225,7 +225,7 @@ object ConflictResolutionLogic {
     }
   }
 
-  /** Compute merge for the DAG. */
+  /** Compute resolution for conflict set. */
   def resolveConflictSet[D: Ordering, CH](
       conflictSet: Set[D],
       acceptedFinally: Set[D],
