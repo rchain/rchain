@@ -8,7 +8,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
-import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, ParentsMergedState}
+import coop.rchain.casper.merging.{BlockIndex, MergeScope, ParentsMergedState}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.syntax._
@@ -90,15 +90,13 @@ object MultiParentCasper {
 
       // If new fringe is finalized, merge it
       newFringeResult <- newFringeHashes.traverse { fringe =>
+                          val ms = MergeScope(fringe, prevFringeHashes, prevFringeState, msgMap)
                           for {
-                            result <- BlockHashDagMerger.merge[F](
-                                       tips = fringe,
-                                       finalFringe = prevFringeHashes,
-                                       finalState = prevFringeStateHash.toBlake2b256Hash,
-                                       BlockHashDagMerger(dag.dagMessageState.msgMap),
+                            result <- MergeScope.merge(
+                                       ms,
                                        dag.fringeStates,
                                        RuntimeManager[F].getHistoryRepo,
-                                       BlockIndex.getBlockIndex[F]
+                                       BlockIndex.getBlockIndex[F](_)
                                      )
                             (finalizedState, rejected) = result
                             finalizedStateStr = PrettyPrinter.buildString(
@@ -123,14 +121,15 @@ object MultiParentCasper {
                                        .map(_.postStateHash)
                                        .map(x => (x.toBlake2b256Hash, Set.empty[ByteString]))
                                    case _ =>
-                                     BlockHashDagMerger.merge[F](
-                                       tips = parentHashes,
-                                       finalFringe = newFringe,
-                                       finalState = fringeState,
-                                       BlockHashDagMerger(dag.dagMessageState.msgMap),
+                                     val lms    = dag.dagMessageState.latestMsgs.map(_.id)
+                                     val msgMap = dag.dagMessageState.msgMap
+                                     val ms =
+                                       MergeScope(lms, prevFringeHashes, prevFringeState, msgMap)
+                                     MergeScope.merge(
+                                       ms,
                                        dag.fringeStates,
                                        RuntimeManager[F].getHistoryRepo,
-                                       BlockIndex.getBlockIndex[F]
+                                       BlockIndex.getBlockIndex[F](_)
                                      )
                                  }
       (preStateHash, csRejectedDeploys) = conflictScopeMergeResult
