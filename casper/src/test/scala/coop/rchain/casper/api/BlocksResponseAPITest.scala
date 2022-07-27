@@ -1,23 +1,40 @@
 package coop.rchain.casper.api
 
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
+import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper._
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.metrics.{NoopSpan, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax._
+import coop.rchain.models.{BlockMetadata, FringeData}
 import coop.rchain.shared.Log
 import monix.eval.Task
-import org.scalatest.flatspec.AnyFlatSpec
+import monix.testing.scalatest.MonixTaskTest
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
+import org.scalatest.EitherValues
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import scala.collection.immutable.SortedMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
-    extends AnyFlatSpec
+    extends AsyncFlatSpec
+    with MonixTaskTest
     with Matchers
+    with EitherValues
     with BlockGenerator
     with BlockDagStorageFixture
-    with BlockApiFixture {
+    with BlockApiFixture
+    with IdiomaticMockito
+    with ArgumentMatchersSugar {
 
   implicit val log: Log[Task]       = new Log.NOPLog[Task]()
   implicit val noopSpan: Span[Task] = NoopSpan[Task]()
@@ -75,27 +92,45 @@ class BlocksResponseAPITest
     } yield genesis
 
   "getBlocks" should "return all blocks" in {
-    implicit val (blockStore, blockDagStorage, runtimeManager) = Mocks.create[Task]()
+    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
       genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       blocksResponse <- blockApi.getBlocks(10)
-    } yield blocksResponse.right.get.length should be(8)
+    } yield {
+      blocksResponse shouldBe 'right
+      blocksResponse.value.length shouldBe 8
+
+      blockStore.put(*) wasCalled 8.times
+      blockStore.get(*) wasCalled 24.times
+
+      blockDagStorage.insert(*, *) wasCalled 8.times
+      blockDagStorage.getRepresentation wasCalled 8.times
+    }
   }
 
   it should "return until depth" in {
-    implicit val (blockStore, blockDagStorage, runtimeManager) = Mocks.create[Task]()
+    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
       genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       blocksResponse <- blockApi.getBlocks(2)
-    } yield blocksResponse.right.get.length should be(3)
+    } yield {
+      blocksResponse shouldBe 'right
+      blocksResponse.value.length shouldBe 3
+
+      blockStore.put(*) wasCalled 8.times
+      blockStore.get(*) wasCalled 19.times
+
+      blockDagStorage.insert(*, *) wasCalled 8.times
+      blockDagStorage.getRepresentation wasCalled 8.times
+    }
   }
 
   "getBlocksByHeights" should "return blocks between startBlockNumber and endBlockNumber" in {
-    implicit val (blockStore, blockDagStorage, runtimeManager) = Mocks.create[Task]()
+    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
       genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
@@ -105,6 +140,113 @@ class BlocksResponseAPITest
       _              = blocks.length should be(5)
       _              = blocks.head.blockNumber should be(2)
       _              = blocks.last.blockNumber should be(4)
-    } yield ()
+    } yield {
+      blocksResponse shouldBe 'right
+      val blocks = blocksResponse.value
+      blocks.head.blockNumber shouldBe 2
+      blocks.last.blockNumber shouldBe 4
+
+      blockStore.put(*) wasCalled 8.times
+      blockStore.get(*) wasCalled 21.times
+
+      blockDagStorage.insert(*, *) wasCalled 8.times
+      blockDagStorage.getRepresentation wasCalled 8.times
+    }
   }
+
+  private def createMocks[F[_]: Sync] =
+    (createBlockStore, createBlockDagStorage, mock[RuntimeManager[F]])
+
+  private def createBlockStore[F[_]: Sync]: BlockStore[F] = {
+    val state = Ref.unsafe[F, List[BlockMessage]](List())
+    val bs    = mock[BlockStore[F]]
+
+    bs.put(*) answers { kvPairs: Seq[(BlockHash, BlockMessage)] =>
+      state.update(s => kvPairs.foldLeft(s) { case (acc, item) => acc :+ item._2 })
+    }
+    bs.get(*) answers { keys: Seq[BlockHash] =>
+      state.get.map(s => keys.map(h => s.find(_.blockHash == h)))
+    }
+    bs
+  }
+
+  private def createBlockDagStorage[F[_]: Sync]: BlockDagStorage[F] = {
+    val genesisHash = RuntimeManager.emptyStateHashFixed
+
+    val state = Ref.unsafe[F, DagRepresentation](
+      DagRepresentation(
+        Set(),
+        Map(),
+        SortedMap(),
+        DagMessageState(),
+        Map(
+          Set(genesisHash) -> FringeData(
+            FringeData.fringeHash(Set.empty),
+            Set.empty,
+            Set.empty,
+            genesisHash.toBlake2b256Hash,
+            Set.empty,
+            Set.empty,
+            Set.empty
+          )
+        )
+      )
+    )
+    val bds = mock[BlockDagStorage[F]]
+
+    bds.insert(any, any) answers { (bmd: BlockMetadata, b: BlockMessage) =>
+      state.update { s =>
+        val newDagSet = s.dagSet + b.blockHash
+
+        val newChildMap = b.justifications.foldLeft(s.childMap) {
+          case (m, h) => m + (h -> (m.getOrElse(h, Set.empty) + b.blockHash))
+        } + (b.blockHash -> Set.empty[BlockHash])
+
+        val newHeightMap = s.heightMap + (b.blockNumber -> (s.heightMap
+          .getOrElse(b.blockNumber, Set.empty) + b.blockHash))
+
+        val seen = b.justifications
+          .flatMap(h => s.dagMessageState.msgMap(h).seen)
+          .toSet ++ b.justifications + b.blockHash
+
+        val newMsgMap = s.dagMessageState.msgMap + (b.blockHash -> toMessage(b, seen))
+
+        val newLatestMsgs = newMsgMap.foldLeft(Set.empty[Message[BlockHash, Validator]]) {
+          case (acc, (_, msg)) =>
+            acc + acc
+              .find(_.sender == msg.sender)
+              .map(m => if (msg.height > m.height) msg else m)
+              .getOrElse(msg)
+        }
+        val newDagMessageState = s.dagMessageState.copy(newLatestMsgs, newMsgMap)
+
+        s.copy(
+          dagSet = newDagSet,
+          childMap = newChildMap,
+          heightMap = newHeightMap,
+          dagMessageState = newDagMessageState
+        )
+      }
+    }
+
+    bds.getRepresentation returns state.get
+
+    bds
+  }
+
+  // Default args only available for public method in Scala 2.12 (https://github.com/scala/bug/issues/12168)
+  def toMessage(
+      m: BlockMessage,
+      seen: Set[BlockHash] = Set.empty[BlockHash]
+  ): Message[BlockHash, Validator] =
+    Message[BlockHash, Validator](
+      m.blockHash,
+      m.blockNumber,
+      m.sender,
+      m.seqNum,
+      m.bonds,
+      m.justifications.toSet,
+      Set(),
+      seen
+    )
 }
