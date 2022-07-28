@@ -149,6 +149,7 @@ object Setup {
           validatorIdentity,
           conf.casper.shardName,
           conf.casper.minPhloPrice,
+          conf.casper.genesisBlockData.epochLength,
           dummyDeployerKey.map((_, "Nil"))
         )
       }

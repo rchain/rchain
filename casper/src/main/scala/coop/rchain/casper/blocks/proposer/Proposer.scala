@@ -11,12 +11,14 @@ import coop.rchain.casper._
 import coop.rchain.casper.protocol.{BlockMessage, CommUtil}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.sdk.error.FatalError
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
 
 sealed abstract class ProposerResult
@@ -118,6 +120,7 @@ object Proposer {
       validatorIdentity: ValidatorIdentity,
       shardId: String,
       minPhloPrice: Long,
+      epochLength: Int,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
   ): Proposer[F] = {
     // TODO: refactor proposer to get this from parent pre state
@@ -128,10 +131,76 @@ object Proposer {
         maxSeqNum  = latestMsgs.find(_.sender == sender).map(_.senderSeq)
       } yield maxSeqNum.getOrElse(-1)
 
-    def createBlock(validatorIdentity: ValidatorIdentity) =
+    def createBlock(validatorIdentity: ValidatorIdentity): F[BlockCreatorResult] =
       for {
-        parentsPreState <- MultiParentCasper.getPreStateForNewBlock
-        result          <- BlockCreator.create(parentsPreState, validatorIdentity, shardId, dummyDeployOpt)
+        // merge pre state
+        preState <- MultiParentCasper.getPreStateForNewBlock
+        // misc
+        preStateHash      = preState.preStateHash
+        creatorsPk        = validatorIdentity.publicKey
+        creatorsId        = ByteString.copyFrom(creatorsPk.bytes)
+        creatorsLatestOpt = preState.justifications.find(_.sender == creatorsId)
+        nextSeqNum        = creatorsLatestOpt.map(_.seqNum + 1).getOrElse(0L)
+        nextBlockNum      = preState.justifications.map(_.blockNum).max + 1
+        parentHashes      = preState.justifications.map(_.blockHash)
+        finalBonds        = preState.fringeBondsMap
+        offenders         = preState.justifications.filter(_.validationFailed).map(_.sender)
+        // slashing
+        preStateBonds <- RuntimeManager[F].computeBonds(preStateHash.toByteString)
+        toSlash       = offenders intersect preStateBonds.filter { case (_, b) => b > 0 }.keySet
+        // epoch
+        changeEpoch = epochLength % nextBlockNum == 0
+        // attestation
+        // no need to attest if nothing meaningful to finalize. TODO analyse finalization to suppress more
+        dag <- BlockDagStorage[F].getRepresentation
+        conflictSet = {
+          val msgMap = dag.dagMessageState.msgMap
+          parentHashes.flatMap(msgMap(_).seen) -- preState.fringe.flatMap(msgMap(_).seen)
+        }
+        suppressAttestation <- conflictSet.toList
+                                .traverse(BlockStore[F].getUnsafe)
+                                .map(_.forall { b =>
+                                  b.state.systemDeploys.isEmpty && b.state.deploys.isEmpty
+                                })
+        // push dummy deploy if needed
+        p <- BlockDagStorage[F].pooledDeploys
+        _ <- dummyDeployOpt
+              .traverse {
+                case (privateKey, term) =>
+                  val deployData = ConstructDeploy.sourceDeployNow(
+                    source = term,
+                    sec = privateKey,
+                    vabn = nextBlockNum - 1,
+                    shardId = shardId
+                  )
+                  BlockDagStorage[F].addDeploy(deployData)
+              }
+              .whenA(p.isEmpty)
+        // user deploys
+        pooled <- BlockDagStorage[F].pooledDeploys
+        deploys <- pooled.toList
+                    .filterA {
+                      case (id, d) =>
+                        val future       = d.data.validAfterBlockNumber > nextBlockNum
+                        val expired      = d.data.validAfterBlockNumber < nextBlockNum - MultiParentCasper.deployLifespan
+                        val replayAttack = BlockDagStorage[F].lookupByDeployId(id).map(_.nonEmpty)
+                        (future.pure ||^ expired.pure ||^ replayAttack).not
+                    }
+                    .map(_.map(_._1))
+        // create block
+        _ <- Log[F].info(s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})")
+        result <- BlockCreator(validatorIdentity, shardId).create(
+                   preStateHash,
+                   parentHashes,
+                   finalBonds,
+                   preState.rejectedDeploys,
+                   nextBlockNum,
+                   nextSeqNum,
+                   deploys,
+                   toSlash,
+                   changeEpoch,
+                   suppressAttestation
+                 )
       } yield result
 
     def validateBlock(block: BlockMessage) =
