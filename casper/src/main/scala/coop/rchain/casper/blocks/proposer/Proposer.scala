@@ -19,6 +19,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Log, Time}
 
 sealed abstract class ProposerResult
@@ -148,20 +149,37 @@ object Proposer {
         // slashing
         preStateBonds <- RuntimeManager[F].computeBonds(preStateHash.toByteString)
         toSlash       = offenders intersect preStateBonds.filter { case (_, b) => b > 0 }.keySet
+        _             <- Log[F].info(s"Slashing senders: [${toSlash.map(_.show).mkString("; ")}]")
         // epoch
         changeEpoch = epochLength % nextBlockNum == 0
         // attestation
-        // no need to attest if nothing meaningful to finalize. TODO analyse finalization to suppress more
+        // no need to attest if nothing meaningful to finalize.
         dag <- BlockDagStorage[F].getRepresentation
         conflictSet = {
           val msgMap = dag.dagMessageState.msgMap
           parentHashes.flatMap(msgMap(_).seen) -- preState.fringe.flatMap(msgMap(_).seen)
         }
-        suppressAttestation <- conflictSet.toList
-                                .traverse(BlockStore[F].getUnsafe)
-                                .map(_.forall { b =>
-                                  b.state.systemDeploys.isEmpty && b.state.deploys.isEmpty
-                                })
+        nothingToFinalize = conflictSet.toList
+          .traverse(BlockStore[F].getUnsafe)
+          .map(_.forall { b =>
+            b.state.systemDeploys.isEmpty && b.state.deploys.isEmpty
+          })
+        waitingForSupermajorityToAttest = {
+          val newlySeen = creatorsLatestOpt
+            .map { prev =>
+              prev.justifications.flatMap(dag.dagMessageState.msgMap(_).seen) --
+                parentHashes.flatMap(dag.dagMessageState.msgMap(_).seen)
+            }
+            .getOrElse(Set())
+          newlySeen.toList.traverse(BlockStore[F].getUnsafe).map { newBlocks =>
+            val newStateTransition =
+              newBlocks.exists(b => b.state.systemDeploys.nonEmpty || b.state.deploys.nonEmpty)
+            val attestationStake =
+              preStateBonds.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
+            !newStateTransition && attestationStake * 3 < preStateBonds.values.toList.sum * 2
+          }
+        }
+        suppressAttestation <- nothingToFinalize ||^ waitingForSupermajorityToAttest
         // push dummy deploy if needed
         p <- BlockDagStorage[F].pooledDeploys
         _ <- dummyDeployOpt
