@@ -23,7 +23,7 @@ import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.testing.scalatest.MonixTaskTest
 import org.mockito.cats.IdiomaticMockitoCats
-import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito, Mockito}
 import org.scalatest._
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -78,6 +78,7 @@ class BlockQueryResponseAPITest
     for {
       _                  <- prepareDagStorage[Task]
       blockApi           <- createBlockApi[Task]("", 1)
+      _                  = Mockito.clearInvocations(bs, bds)
       hash               = secondBlock.blockHash.toHexString
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
@@ -86,13 +87,11 @@ class BlockQueryResponseAPITest
       blockInfo.deploys shouldBe randomDeploys.map(_.toDeployInfo)
       blockInfo.blockInfo shouldBe BlockApi.getLightBlockInfo(secondBlock)
 
-      bs.put(Seq((genesisBlock.blockHash, genesisBlock))) wasCalled once
-      bs.put(Seq((secondBlock.blockHash, secondBlock))) wasCalled once
+      bs.put(*) wasNever called
       bs.get(Seq(secondBlock.blockHash)) wasCalled once
 
-      bds.insert(*, genesisBlock) wasCalled once
-      bds.insert(*, secondBlock) wasCalled once
-      bds.getRepresentation wasCalled 3.times
+      bds.insert(*, *) wasNever called
+      bds.getRepresentation wasCalled twice
       bds.lookupByDeployId(*) wasNever called
     }
   }
@@ -167,19 +166,18 @@ class BlockQueryResponseAPITest
     for {
       _                  <- prepareDagStorage[Task]
       blockApi           <- createBlockApi[Task]("", 1)
+      _                  = Mockito.clearInvocations(bs, bds)
       deployId           = randomDeploys.head.deploy.sig
       blockQueryResponse <- blockApi.findDeploy(deployId)
     } yield {
       blockQueryResponse shouldBe 'right
       blockQueryResponse.value shouldBe BlockApi.getLightBlockInfo(secondBlock)
 
-      bs.put(Seq((genesisBlock.blockHash, genesisBlock))) wasCalled once
-      bs.put(Seq((secondBlock.blockHash, secondBlock))) wasCalled once
+      bs.put(*) wasNever called
       bs.get(Seq(secondBlock.blockHash)) wasCalled once
 
-      bds.insert(*, genesisBlock) wasCalled once
-      bds.insert(*, secondBlock) wasCalled once
-      bds.getRepresentation wasCalled once
+      bds.insert(*, *) wasNever called
+      bds.getRepresentation wasNever called
       bds.lookupByDeployId(deployId) wasCalled once
     }
   }

@@ -17,7 +17,7 @@ import coop.rchain.models.{BlockMetadata, FringeData}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.testing.scalatest.MonixTaskTest
-import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito, Mockito}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -97,16 +97,17 @@ class BlocksResponseAPITest
     for {
       genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+      _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocks(10)
     } yield {
       blocksResponse shouldBe 'right
       blocksResponse.value.length shouldBe 8
 
-      blockStore.put(*) wasCalled 8.times
-      blockStore.get(*) wasCalled 24.times
+      blockStore.put(*) wasNever called
+      blockStore.get(*) wasCalled 8.times
 
-      blockDagStorage.insert(*, *) wasCalled 8.times
-      blockDagStorage.getRepresentation wasCalled 8.times
+      blockDagStorage.insert(*, *) wasNever called
+      blockDagStorage.getRepresentation wasCalled once
     }
   }
 
@@ -116,16 +117,17 @@ class BlocksResponseAPITest
     for {
       genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+      _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocks(2)
     } yield {
       blocksResponse shouldBe 'right
       blocksResponse.value.length shouldBe 3
 
-      blockStore.put(*) wasCalled 8.times
-      blockStore.get(*) wasCalled 19.times
+      blockStore.put(*) wasNever called
+      blockStore.get(*) wasCalled 3.times
 
-      blockDagStorage.insert(*, *) wasCalled 8.times
-      blockDagStorage.getRepresentation wasCalled 8.times
+      blockDagStorage.insert(*, *) wasNever called
+      blockDagStorage.getRepresentation wasCalled once
     }
   }
 
@@ -135,6 +137,7 @@ class BlocksResponseAPITest
     for {
       genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+      _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocksByHeights(2, 5)
       blocks         = blocksResponse.right.get
       _              = blocks.length should be(5)
@@ -146,11 +149,11 @@ class BlocksResponseAPITest
       blocks.head.blockNumber shouldBe 2
       blocks.last.blockNumber shouldBe 4
 
-      blockStore.put(*) wasCalled 8.times
-      blockStore.get(*) wasCalled 21.times
+      blockStore.put(*) wasNever called
+      blockStore.get(*) wasCalled 5.times
 
-      blockDagStorage.insert(*, *) wasCalled 8.times
-      blockDagStorage.getRepresentation wasCalled 8.times
+      blockDagStorage.insert(*, *) wasNever called
+      blockDagStorage.getRepresentation wasCalled once
     }
   }
 
