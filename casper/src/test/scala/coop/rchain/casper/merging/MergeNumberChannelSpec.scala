@@ -254,7 +254,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
         dependencyMap = computeDependencyMap(
           actualSet.toSet,
           actualSet.toSet,
-          DeployChainIndex.isDependency
+          DeployChainIndex.depends
         )
         conflictsMap = computeConflictsMap(
           actualSet.toSet,

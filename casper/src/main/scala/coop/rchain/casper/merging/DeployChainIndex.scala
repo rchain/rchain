@@ -71,8 +71,8 @@ object DeployChainIndex {
   }
 
   def deployChainCost(r: DeployChainIndex) = r.deploysWithCost.map(_.cost).sum
-  def isDependency(a: DeployChainIndex, dependencyFor: DeployChainIndex) =
-    EventLogMergingLogic.depends(dependencyFor.eventLogIndex, a.eventLogIndex)
+  def depends(a: DeployChainIndex, b: DeployChainIndex) =
+    EventLogMergingLogic.depends(a.eventLogIndex, b.eventLogIndex)
   def branchesAreConflicting(as: Set[DeployChainIndex], bs: Set[DeployChainIndex]): Boolean =
     (as.flatMap(_.deploysWithCost.map(_.id)) intersect bs.flatMap(_.deploysWithCost.map(_.id))).nonEmpty ||
       EventLogMergingLogic.areConflicting(

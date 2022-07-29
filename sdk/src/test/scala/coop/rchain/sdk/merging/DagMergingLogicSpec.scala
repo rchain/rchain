@@ -59,17 +59,18 @@ class DagMergingLogicSpec extends AnyFlatSpec with Matchers with Checkers {
   "computeRelationMapForMergeSet" should "output map with " +
     "- conflicts inside conflict set" +
     "- conflicts between conflict set and final set" +
-    "- dependencies between conflict set and final set." in {
+    "- dependencies inside conflict set" +
+    "- dependencies between conflict set and final set" in {
     val conflictSet  = Set(1, 2)
     val finalSet     = Set(3, 4)
     val conflictsMap = Map(1 -> Set(2), 2 -> Set(1))
-    val dependsMap   = Map(3 -> Set(2), 10 -> Set(9))
+    val dependsMap   = Map(2 -> Set(1), 3 -> Set(2))
     def conflicts(a: Int, b: Int) =
       conflictsMap.get(a).exists(_.contains(b))
     def depends(target: Int, maybeDependency: Int) =
       dependsMap.get(maybeDependency).exists(_.contains(target))
     computeRelationMapForMergeSet(conflictSet, finalSet, conflicts, depends) shouldBe
-      (conflictsMap, dependsMap.filterKeys(finalSet.contains))
+      (conflictsMap, dependsMap)
   }
 
   // some random conflict maps and rejection options, computed manually
