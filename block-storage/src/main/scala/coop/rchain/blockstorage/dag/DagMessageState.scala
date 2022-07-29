@@ -199,4 +199,6 @@ final case class DagMessageState[M: Ordering, S: Ordering](
 
   def showMsgs(ms: Seq[Message[M, S]]): String =
     ms.sortBy(x => (x.sender, x.height, x.id)).map(_.id).mkString(" ")
+
+  def findGenesis: Option[M] = msgMap.values.find(_.parents.isEmpty).map(_.id)
 }

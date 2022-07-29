@@ -1,6 +1,5 @@
 package coop.rchain.casper.merging
 
-import cats.Applicative
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -27,75 +26,41 @@ import scodec.bits.ByteVector
   * The scope to merge.
   * @param finalScope     blocks that cannot be altered
   * @param conflictScope  blocks that can be altered
-  * @param baseState      base state to merge into
   */
-final case class MergeScope(
-    finalScope: Set[BlockHash],
-    conflictScope: Set[BlockHash],
-    baseState: Blake2b256Hash
-)
+final case class MergeScope(finalScope: Set[BlockHash], conflictScope: Set[BlockHash])
 
 object MergeScope {
-
-  private def findGenesis(
-      dagData: Map[BlockHash, Message[BlockHash, Validator]]
-  ): Option[BlockHash] = {
-    val candidates = dagData.filter {
-      case (_, m) =>
-        val edge      = m.seen == Set(m.id)
-        val seenByAll = dagData.valuesIterator.forall(_.seen.contains(m.id))
-        edge && seenByAll
-    }
-    if (candidates.size > 1) none[BlockHash] else candidates.headOption.map(_._1)
-  }
-
-  /**
-    * Use dag data to optimise the merge scope.
-    * For now covers only the case of genesis ceremony, when final set is empty so
-    * genesis block can be removed from conflict set and merge can be done into genesis post state.
-    */
-  def optimise[F[_]: Applicative](
-      mergeScope: MergeScope,
-      dagData: Map[BlockHash, Message[BlockHash, Validator]],
-      postState: BlockHash => F[Blake2b256Hash]
-  ): F[MergeScope] = {
-    val MergeScope(fScope, cScope, _) = mergeScope
-    val genesisCase = {
-      val gOpt   = findGenesis(dagData)
-      val errStr = "Cannot create merge scope. Genesis case but genesis block cannot be found"
-      assert(gOpt.isDefined, errStr)
-      val genesis = gOpt.get
-      postState(genesis).map(MergeScope(fScope, cScope - genesis, _))
-    }
-    // if final scope is empty - do special case for genesis
-    if (fScope.isEmpty) genesisCase
-    else mergeScope.pure
-  }
 
   /**
     * Create Merge scope from DAG
     * @param mergeFringe tip messages of the DAG
     * @param finalFringe finalization fringe
-    * @param finalState state of the final fringe
     * @param dagData structure of the DAG
-    * @return
+    * @return Merge scope and (optionally) block which should be used as a base for merge.
+    *         By default merge should be done into the final state.
     */
   def fromDag(
       mergeFringe: Set[BlockHash],
       finalFringe: Set[BlockHash],
-      finalState: Blake2b256Hash,
       dagData: Map[BlockHash, Message[BlockHash, Validator]]
-  ): MergeScope = {
+  ): (MergeScope, Option[BlockHash]) = {
     val seen      = dagData.getUnsafe(_: BlockHash).seen
     val cScope    = conflictScope(mergeFringe, finalFringe, seen)
     val finalizer = Finalizer(dagData)
     val lFringe   = finalizer.lowestFringe(cScope.map(dagData)).map(_.id)
     val fScope    = finalScope(finalFringe, lFringe, seen)
-    MergeScope(fScope, cScope, finalState)
+    // genesis case
+    if (fScope.isEmpty) {
+      val genesisOpt = dagData.values.find(_.parents.isEmpty).map(_.id)
+      assert(genesisOpt.nonEmpty, "Final scope is empty but no genesis found.")
+      (MergeScope(fScope, cScope), genesisOpt.get.some)
+    } else (MergeScope(fScope, cScope), none[BlockHash])
+
   }
 
   def merge[F[_]: Concurrent: Log](
       mergeScope: MergeScope,
+      baseState: Blake2b256Hash,
       fringeStates: Map[Set[BlockHash], FringeData],
       historyRepository: RhoHistoryRepository[F],
       blockIndex: BlockHash => F[BlockIndex],
@@ -122,7 +87,7 @@ object MergeScope {
         // mergeable channels
         val mergeableDiffsMap = conflictSet.map(b => b -> b.eventLogIndex.numberChannelsData).toMap
         val loadInitMergeableValues = historyRepository.readMergeableValues(
-          mergeScope.baseState,
+          baseState,
           mergeableDiffsMap.valuesIterator.flatMap(_.keySet).toSet
         )
         // TODO conflictsMap and dependentsMap computations are expensive
@@ -149,7 +114,7 @@ object MergeScope {
         }
         resolveConflicts.flatMap {
           case (toMerge, rejected) =>
-            computeMergedState(toMerge, mergeScope.baseState, historyRepository).map { newState =>
+            computeMergedState(toMerge, baseState, historyRepository).map { newState =>
               (newState, rejected.flatMap(_.deploysWithCost.map(_.id)))
             }
         }
