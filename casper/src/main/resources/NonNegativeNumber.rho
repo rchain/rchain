@@ -16,8 +16,8 @@
  */
 
 new
-  NonNegativeNumber,
-  MergeableTag,
+  NonNegativeNumber,  // Unforgeable contract location stored in registry
+  MergeableTag,       // Indirection for mergeability
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
   deployerId(`rho:rchain:deployerId`)
@@ -61,13 +61,14 @@ in {
         }
       } |
       contract this(@"value", return) = {
-        // Peek the value
+        // Peek the value and return
         for (@v <<- @(*MergeableTag, *valueStore)) {
           return!(v)
         }
       } |
       return!(bundle+{*this}) |
-      match init { //Initial balance is zero if given is negative on non-integer
+      // Initial balance is zero if `init` is negative or non-integer
+      match init {
         Int => {
           if (init >= 0) { @(*MergeableTag, *valueStore)!(init) }
           else           { @(*MergeableTag, *valueStore)!(0) }
