@@ -173,11 +173,11 @@ trait ComputeMerge {
             }
             ms = MergeScope(
               Set(bBlock.blockHash),
-              Set(lBlock, rBlock).map(_.blockHash),
-              baseCheckpoint.root
+              Set(lBlock, rBlock).map(_.blockHash)
             )
             r <- MergeScope.merge[F](
                   ms,
+                  baseCheckpoint.root,
                   dag.fringeStates,
                   historyRepo,
                   indices(_: BlockHash).pure,
