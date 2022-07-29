@@ -1,193 +1,186 @@
 package coop.rchain.casper.api
 
+import cats.Applicative
 import cats.syntax.all._
-import coop.rchain.casper.helper.TestNode._
-import coop.rchain.casper.helper.{BlockApiFixture, TestNode}
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
-import coop.rchain.crypto.signatures.Signed
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation, Message}
+import coop.rchain.casper.ValidatorIdentity
+import coop.rchain.casper.helper.BlockApiFixture
+import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProduceEvent}
+import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.GenesisBuilder.randomValidatorKeyPairs
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.metrics.Span
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.shared.scalatestcontrib._
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.models.syntax._
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.shared.Log
+import monix.eval.Task
+import monix.testing.scalatest.MonixTaskTest
+import org.mockito.cats.IdiomaticMockitoCats
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.scalatest._
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class ListeningNameAPITest extends AnyFlatSpec with Matchers with Inside with BlockApiFixture {
+import scala.collection.immutable.SortedMap
 
-  import GenesisBuilder._
+class ListeningNameAPITest
+    extends AsyncFlatSpec
+    with MonixTaskTest
+    with Matchers
+    with Inside
+    with BlockApiFixture
+    with EitherValues
+    with IdiomaticMockito
+    with IdiomaticMockitoCats
+    with ArgumentMatchersSugar {
 
-  val genesis = buildGenesis()
+  private val createValidator = ValidatorIdentity(randomValidatorKeyPairs.take(1).toList.head._1)
 
-  "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      import node.t
+  private val listeningTerm = "@{ 3 | 2 | 1 }!(0)"
+  private val listeningName = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
+  private val listeningHash = "b87b08f07e4fadbfde88af2ff54a0d9ba58de47a063f798c5a8ce39f8f6892b6"
 
-      for {
-        block <- ConstructDeploy.sourceDeployNowF(
-                  "@{ 3 | 2 | 1 }!(0)",
-                  shardId = this.genesis.genesisBlock.shardId
-                ) >>= (node.addBlock(_))
+  private val resultData = Par().copy(exprs = Seq(Expr(GInt(0))))
 
-        listeningName          = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
-        resultData             = Par().copy(exprs = Seq(Expr(GInt(0))))
-        blockApi               <- createBlockApi(node)
-        depth                  = node.apiMaxBlocksLimit
-        listeningNameResponse1 <- blockApi.getListeningNameDataResponse(depth, listeningName)
-        _ = inside(listeningNameResponse1) {
-          case Right((blockResults, l)) =>
-            val data1   = blockResults.map(_.postBlockData)
-            val blocks1 = blockResults.map(_.block)
-            data1 should be(List(List(resultData)))
-            blocks1.length should be(1)
-            l should be(1)
-        }
-      } yield ()
+  private val deploy = ProcessedDeploy
+    .empty(ConstructDeploy.sourceDeployNow(listeningTerm, shardId = "root"))
+    .copy(
+      deployLog = List(
+        ProduceEvent(
+          Blake2b256Hash.fromHex(listeningHash).toByteString,
+          Blake2b256.hash("".getBytes).toByteString,
+          persistent = false,
+          0
+        )
+      )
+    )
+
+  private val b1 = getRandomBlock(setDeploys = Seq(deploy).some)
+  private val b2 = getRandomBlock()
+  private val b3 = getRandomBlock()
+
+  "getListeningNameDataResponse" should "return error if depth more than max depth limit" in {
+    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    for {
+      blockApi <- createBlockApi[Task]("root", 2, createValidator.some)
+      res      <- blockApi.getListeningNameDataResponse(3, listeningName)
+    } yield {
+      res shouldBe 'left
+      res.left.value shouldBe "Your request on getListeningName depth 3 exceed the max limit 2"
+
+      rm.getData(*)(*) wasNever called
+      bs.get(*) wasNever called
+      bds.getRepresentation wasCalled once
     }
   }
 
-  // TODO: ignored test, it will be fixed in PR#3787 https://github.com/rchain/rchain/pull/3787
-  it should "work across a chain" ignore effectTest {
-    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
-      implicit val timeEff = new LogicalTime[Effect]
-      for {
-        deployDatas <- (0 to 7).toList
-                        .traverse[Effect, Signed[DeployData]](
-                          _ =>
-                            ConstructDeploy
-                              .basicDeployData[Effect](0, shardId = genesis.genesisBlock.shardId)
-                        )
+  it should "return empty result if listening name deeper than expected" in {
+    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    for {
+      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      res      <- blockApi.getListeningNameDataResponse(1, listeningName)
+    } yield {
+      res shouldBe 'right
+      val (_, length) = res.value
+      length shouldBe 0
 
-        block1 <- nodes(0).propagateBlock(deployDatas(0))(nodes: _*)
-
-        listeningName          = Par().copy(exprs = Seq(Expr(GInt(0))))
-        resultData             = Par().copy(exprs = Seq(Expr(GInt(0))))
-        blockApi               <- createBlockApi(nodes(0))
-        depth                  = nodes(0).apiMaxBlocksLimit
-        listeningNameResponse1 <- blockApi.getListeningNameDataResponse(depth, listeningName)
-        _ = inside(listeningNameResponse1) {
-          case Right((blockResults, l)) =>
-            val data1   = blockResults.map(_.postBlockData)
-            val blocks1 = blockResults.map(_.block)
-            data1 should be(List(List(resultData)))
-            blocks1.length should be(1)
-            l should be(1)
-        }
-        block2 <- nodes(1).propagateBlock(deployDatas(1))(nodes: _*)
-        block3 <- nodes(2).propagateBlock(deployDatas(2))(nodes: _*)
-        block4 <- nodes(0).propagateBlock(deployDatas(3))(nodes: _*)
-
-        listeningNameResponse2 <- blockApi.getListeningNameDataResponse(depth, listeningName)
-        _ = inside(listeningNameResponse2) {
-          case Right((blockResults, l)) =>
-            val data2   = blockResults.map(_.postBlockData)
-            val blocks2 = blockResults.map(_.block)
-            data2 should be(
-              List(
-                List(resultData, resultData, resultData, resultData),
-                List(resultData, resultData, resultData),
-                List(resultData, resultData),
-                List(resultData)
-              )
-            )
-            blocks2.length should be(4)
-            l should be(4)
-        }
-        block5 <- nodes(1).propagateBlock(deployDatas(4))(nodes: _*)
-        block6 <- nodes(2).propagateBlock(deployDatas(5))(nodes: _*)
-        block7 <- nodes(0).propagateBlock(deployDatas(6))(nodes: _*)
-
-        listeningNameResponse3 <- blockApi.getListeningNameDataResponse(depth, listeningName)
-        _ = inside(listeningNameResponse3) {
-          case Right((blockResults, l)) =>
-            val data3   = blockResults.map(_.postBlockData)
-            val blocks3 = blockResults.map(_.block)
-            data3 should be(
-              List(
-                List(
-                  resultData,
-                  resultData,
-                  resultData,
-                  resultData,
-                  resultData,
-                  resultData,
-                  resultData
-                ),
-                List(resultData, resultData, resultData, resultData, resultData, resultData),
-                List(resultData, resultData, resultData, resultData, resultData),
-                List(resultData, resultData, resultData, resultData),
-                List(resultData, resultData, resultData),
-                List(resultData, resultData),
-                List(resultData)
-              )
-            )
-            blocks3.length should be(7)
-            l should be(7)
-        }
-        listeningNameResponse3UntilDepth <- blockApi.getListeningNameDataResponse(1, listeningName)
-        _ = inside(listeningNameResponse3UntilDepth) {
-          case Right((_, l)) => l should be(1)
-        }
-        listeningNameResponse3UntilDepth2 <- blockApi.getListeningNameDataResponse(2, listeningName)
-        _ = inside(listeningNameResponse3UntilDepth2) {
-          case Right((_, l)) => l should be(2)
-        }
-      } yield ()
+      rm.getData(*)(*) wasNever called
+      bs.get(*) wasCalled twice
+      bds.getRepresentation wasCalled once
     }
   }
 
-  "getListeningNameContinuationResponse" should "work with unsorted channels" in {
-    TestNode.standaloneEff(genesis).use { node =>
-      def basicDeployData: Signed[DeployData] =
-        ConstructDeploy.sourceDeployNow("for (@0 <- @{ 3 | 2 | 1 } & @1 <- @{ 2 | 1 }) { 0 }")
+  it should "return expected result if block falls within the specified depth" in {
+    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    for {
+      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      res      <- blockApi.getListeningNameDataResponse(2, listeningName)
+    } yield {
+      res shouldBe 'right
+      val (blocks, length) = res.value
+      length shouldBe 1
+      val (par, block) = (blocks.head.postBlockData.head, blocks.head.block)
 
-      for {
-        block <- node.addBlock(basicDeployData)
+      par shouldBe resultData
+      block shouldBe BlockApi.getLightBlockInfo(b1)
 
-        listeningNamesShuffled1 = List(
-          Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))),
-          Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
-        )
-        desiredResult = WaitingContinuationInfo(
-          List(
-            BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(1))))), None, 0),
-            BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(0))))), None, 0)
-          ),
-          Par().copy(exprs = Vector(Expr(GInt(0))))
-        )
-        blockApi <- createBlockApi(node)
-        depth    = node.apiMaxBlocksLimit
-        listeningNameResponse1 <- blockApi.getListeningNameContinuationResponse(
-                                   depth,
-                                   listeningNamesShuffled1
-                                 )
-        _ = inside(listeningNameResponse1) {
-          case Right((blockResults, l)) =>
-            val continuations1 = blockResults.map(_.postBlockContinuations)
-            val blocks1        = blockResults.map(_.block)
-            continuations1 should be(List(List(desiredResult)))
-            blocks1.length should be(1)
-            l should be(1)
-        }
-        listeningNamesShuffled2 = List(
-          Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
-          Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))
-        )
-        listeningNameResponse2 <- blockApi.getListeningNameContinuationResponse(
-                                   depth,
-                                   listeningNamesShuffled2
-                                 )
-        _ = inside(listeningNameResponse2) {
-          case Right((blockResults, l)) =>
-            val continuations2 = blockResults.map(_.postBlockContinuations)
-            val blocks2        = blockResults.map(_.block)
-            continuations2 should be(List(List(desiredResult)))
-            blocks2.length should be(1)
-            l should be(1)
-        }
-      } yield ()
+      rm.getData(*)(*) wasCalled once
+      bs.get(*) wasCalled 3.times
+      bds.getRepresentation wasCalled once
     }
+  }
+
+  it should "return expected result even if depth is greater than possible" in {
+    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    for {
+      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      res      <- blockApi.getListeningNameDataResponse(10, listeningName)
+    } yield {
+      res shouldBe 'right
+      val (blocks, length) = res.value
+      length shouldBe 1
+      val (par, block) = (blocks.head.postBlockData.head, blocks.head.block)
+
+      par shouldBe resultData
+      block shouldBe BlockApi.getLightBlockInfo(b1)
+
+      rm.getData(*)(*) wasCalled once
+      bs.get(*) wasCalled 3.times
+      bds.getRepresentation wasCalled once
+    }
+  }
+
+  def toMessage(m: BlockMessage): Message[BlockHash, Validator] =
+    Message[BlockHash, Validator](
+      m.blockHash,
+      m.blockNumber,
+      m.sender,
+      m.seqNum,
+      m.bonds,
+      m.justifications.toSet,
+      Set.empty,
+      Set(m.blockHash)
+    )
+
+  private def createMocks[F[_]: Applicative]
+      : (Log[F], Span[F], RuntimeManager[F], BlockStore[F], BlockDagStorage[F]) = {
+    val log = mock[Log[F]]
+    val sp  = mock[Span[F]]
+
+    val rm = mock[RuntimeManager[F]]
+    rm.getData(*)(*) returnsF Seq(resultData)
+
+    val bs = mock[BlockStore[F]]
+
+    bs.get(*) answersF { (keys: Seq[BlockHash]) =>
+      Seq((keys.head match {
+        case b1.blockHash => b1
+        case b2.blockHash => b2
+        case b3.blockHash => b3
+      }).some)
+    }
+
+    val bds = mock[BlockDagStorage[F]]
+
+    val m1 = toMessage(b1)
+    val m2 = toMessage(b2)
+    val m3 = toMessage(b3)
+
+    bds.getRepresentation returnsF DagRepresentation(
+      Set(m1.id, m2.id, m3.id),
+      Map(m1.id    -> Set(m2.id, m3.id)),
+      SortedMap(0L -> Set(m1.id), 1L -> Set(m2.id, m3.id)),
+      new DagMessageState(Set(m2, m3), Map(m1.id -> m1, m2.id -> m2, m3.id -> m3)),
+      Map.empty
+    )
+
+    (log, sp, rm, bs, bds)
   }
 }
