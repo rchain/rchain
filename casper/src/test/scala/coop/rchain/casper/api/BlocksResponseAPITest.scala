@@ -143,15 +143,9 @@ class BlocksResponseAPITest
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocksByHeights(2, 5)
-      blocks         = blocksResponse.right.get
-      _              = blocks.length should be(5)
-      _              = blocks.head.blockNumber should be(2)
-      _              = blocks.last.blockNumber should be(4)
     } yield {
       blocksResponse shouldBe 'right
-      val blocks = blocksResponse.value
-      blocks.head.blockNumber shouldBe 2
-      blocks.last.blockNumber shouldBe 4
+      blocksResponse.value shouldBe blocks.takeRight(5).map(BlockApi.getLightBlockInfo)
 
       blockStore.put(*) wasNever called
       blocks.takeRight(5).map { b =>
