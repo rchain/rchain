@@ -86,13 +86,14 @@ class BlocksResponseAPITest
              bonds,
              Seq(b6.blockHash, b5.blockHash, b4.blockHash)
            )
-    } yield genesis
+    } yield List(genesis, b2, b3, b4, b5, b6, b7, b8)
 
   "getBlocks" should "return all blocks" in {
     implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
-      genesis        <- createDagWith8Blocks[Task]
+      blocks         <- createDagWith8Blocks[Task]
+      genesis        = blocks.head
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocks(10)
@@ -101,7 +102,9 @@ class BlocksResponseAPITest
       blocksResponse.value.length shouldBe 8
 
       blockStore.put(*) wasNever called
-      blockStore.get(*) wasCalled 8.times
+      blocks.map { b =>
+        blockStore.get(Seq(b.blockHash)) wasCalled once
+      }
 
       blockDagStorage.insert(*, *) wasNever called
       blockDagStorage.getRepresentation wasCalled once
@@ -112,7 +115,8 @@ class BlocksResponseAPITest
     implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
-      genesis        <- createDagWith8Blocks[Task]
+      blocks         <- createDagWith8Blocks[Task]
+      genesis        = blocks.head
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocks(2)
@@ -121,7 +125,9 @@ class BlocksResponseAPITest
       blocksResponse.value.length shouldBe 3
 
       blockStore.put(*) wasNever called
-      blockStore.get(*) wasCalled 3.times
+      blocks.takeRight(3).map { b =>
+        blockStore.get(Seq(b.blockHash)) wasCalled once
+      }
 
       blockDagStorage.insert(*, *) wasNever called
       blockDagStorage.getRepresentation wasCalled once
@@ -132,7 +138,8 @@ class BlocksResponseAPITest
     implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
-      genesis        <- createDagWith8Blocks[Task]
+      blocks         <- createDagWith8Blocks[Task]
+      genesis        = blocks.head
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocksByHeights(2, 5)
@@ -147,7 +154,9 @@ class BlocksResponseAPITest
       blocks.last.blockNumber shouldBe 4
 
       blockStore.put(*) wasNever called
-      blockStore.get(*) wasCalled 5.times
+      blocks.takeRight(5).map { b =>
+        blockStore.get(Seq(b.blockHash)) wasCalled once
+      }
 
       blockDagStorage.insert(*, *) wasNever called
       blockDagStorage.getRepresentation wasCalled once
