@@ -11,11 +11,11 @@ import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockApiFixture, BlockDagStorageFixture}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.RuntimeManager
-import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockMetadata, FringeData}
@@ -298,10 +298,12 @@ class BlockQueryResponseAPITest
 
   private def prepareDagStorage[F[_]: Sync: BlockDagStorage: BlockStore]: F[Unit] = {
     import coop.rchain.blockstorage.syntax._
+    def insertToDag(b: BlockMessage, stateHash: StateHash): F[Unit] =
+      BlockDagStorage[F].insert(BlockMetadata.fromBlock(b).copy(fringeStateHash = stateHash), b)
     for {
       _ <- List(genesisBlock, secondBlock).traverse(BlockStore[F].put(_))
-      _ <- BlockDagStorage[F].insertLegacy(genesisBlock, invalid = false, approved = true)
-      _ <- BlockDagStorage[F].insertLegacy(secondBlock, invalid = false)
+      _ <- insertToDag(genesisBlock, genesisBlock.postStateHash)
+      _ <- insertToDag(secondBlock, RuntimeManager.emptyStateHashFixed)
     } yield ()
   }
 }
