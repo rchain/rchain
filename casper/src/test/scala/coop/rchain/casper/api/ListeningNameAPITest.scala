@@ -6,7 +6,7 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation, Message}
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.helper.BlockApiFixture
-import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProduceEvent}
+import coop.rchain.casper.protocol.{BlockMessage, DataWithBlockInfo, ProcessedDeploy, ProduceEvent}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.randomValidatorKeyPairs
@@ -88,8 +88,7 @@ class ListeningNameAPITest
       res      <- blockApi.getListeningNameDataResponse(1, listeningName)
     } yield {
       res shouldBe 'right
-      val (_, length) = res.value
-      length shouldBe 0
+      res.value shouldBe (_: Seq[DataWithBlockInfo], 0)
 
       rm.getData(*)(*) wasNever called
       bs.get(*) wasCalled twice
