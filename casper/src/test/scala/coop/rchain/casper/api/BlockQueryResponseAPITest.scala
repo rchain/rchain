@@ -130,7 +130,7 @@ class BlockQueryResponseAPITest
       blockQueryResponse.left.value shouldBe s"Input hash value is not valid hex string: $invalidHexQuery"
 
       bs.put(*) wasNever called
-      bs.get(Seq(secondBlock.blockHash)) wasNever called
+      bs.get(*) wasNever called
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasNever called
@@ -151,7 +151,7 @@ class BlockQueryResponseAPITest
       blockQueryResponse.left.value shouldBe s"Input hash value must be at least 6 characters: $tooShortQuery"
 
       bs.put(*) wasNever called
-      bs.get(Seq(secondBlock.blockHash)) wasNever called
+      bs.get(*) wasNever called
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasNever called
@@ -195,7 +195,7 @@ class BlockQueryResponseAPITest
         s"Couldn't find block containing deploy with id: ${PrettyPrinter.buildStringNoLimit(unknownDeploy)}"
 
       bs.put(*) wasNever called
-      bs.get(Seq(secondBlock.blockHash)) wasNever called
+      bs.get(*) wasNever called
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasNever called
