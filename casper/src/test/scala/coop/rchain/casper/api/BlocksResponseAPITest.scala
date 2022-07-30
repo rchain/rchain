@@ -48,43 +48,40 @@ class BlocksResponseAPITest
   val bonds: Map[Validator, Long] = Map(v1Bond, v2Bond, v3Bond)
   val maxBlockLimit               = 50
 
-  private def createDagWith8Blocks(
-      implicit blockstore: BlockStore[Task],
-      dagstore: BlockDagStorage[Task]
-  ) =
+  private def createDagWith8Blocks[F[_]: Sync: BlockStore: BlockDagStorage] =
     for {
-      genesis <- createGenesis[Task](bonds = bonds)
-      b2 <- createBlock[Task](
+      genesis <- createGenesis[F](bonds = bonds)
+      b2 <- createBlock[F](
              v2,
              bonds,
              Seq(genesis.blockHash)
            )
-      b3 <- createBlock[Task](
+      b3 <- createBlock[F](
              v1,
              bonds,
              Seq(genesis.blockHash)
            )
-      b4 <- createBlock[Task](
+      b4 <- createBlock[F](
              v3,
              bonds,
              Seq(genesis.blockHash, b2.blockHash)
            )
-      b5 <- createBlock[Task](
+      b5 <- createBlock[F](
              v2,
              bonds,
              Seq(b3.blockHash, b2.blockHash, genesis.blockHash)
            )
-      b6 <- createBlock[Task](
+      b6 <- createBlock[F](
              v1,
              bonds,
              Seq(b3.blockHash, b2.blockHash, b4.blockHash)
            )
-      b7 <- createBlock[Task](
+      b7 <- createBlock[F](
              v3,
              bonds,
              Seq(b3.blockHash, b5.blockHash, b4.blockHash)
            )
-      b8 <- createBlock[Task](
+      b8 <- createBlock[F](
              v2,
              bonds,
              Seq(b6.blockHash, b5.blockHash, b4.blockHash)
@@ -95,7 +92,7 @@ class BlocksResponseAPITest
     implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
-      genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
+      genesis        <- createDagWith8Blocks[Task]
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocks(10)
@@ -115,7 +112,7 @@ class BlocksResponseAPITest
     implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
-      genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
+      genesis        <- createDagWith8Blocks[Task]
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocks(2)
@@ -135,7 +132,7 @@ class BlocksResponseAPITest
     implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
 
     for {
-      genesis        <- createDagWith8Blocks(blockStore, blockDagStorage)
+      genesis        <- createDagWith8Blocks[Task]
       blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocksByHeights(2, 5)
