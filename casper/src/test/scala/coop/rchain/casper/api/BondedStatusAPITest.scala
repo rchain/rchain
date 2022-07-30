@@ -48,12 +48,10 @@ class BondedStatusAPITest
     .zip(createBonds(keys.map(_._2)))
     .map { case ((_, pubKey), (_, bond)) => pubKey.bytes.toByteString -> bond }
     .toMap
-  private val gB = {
-    getRandomBlock(
-      setBonds = initialComputeBondsResult.some,
-      setValidator = toValidatorOpt(keys.head._1)
-    )
-  }
+  private val gB = getRandomBlock(
+    setBonds = initialComputeBondsResult.some,
+    setValidator = toValidatorOpt(keys.head._1)
+  )
 
   "bondStatus" should "return true for bonded validator" in {
     implicit val (c, log, bds, bs, rm, sp) = createMocks[Task]
