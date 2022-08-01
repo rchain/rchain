@@ -101,10 +101,10 @@ class BlocksResponseAPITest
       blocksResponse shouldBe 'right
       blocksResponse.value.length shouldBe 8
 
-      blockStore.put(*) wasNever called
       blocks.map { b =>
         blockStore.get(Seq(b.blockHash)) wasCalled once
       }
+      verifyNoMoreInteractions(blockStore)
 
       blockDagStorage.insert(*, *) wasNever called
       blockDagStorage.getRepresentation wasCalled once
@@ -124,10 +124,10 @@ class BlocksResponseAPITest
       blocksResponse shouldBe 'right
       blocksResponse.value.length shouldBe 3
 
-      blockStore.put(*) wasNever called
       blocks.takeRight(3).map { b =>
         blockStore.get(Seq(b.blockHash)) wasCalled once
       }
+      verifyNoMoreInteractions(blockStore)
 
       blockDagStorage.insert(*, *) wasNever called
       blockDagStorage.getRepresentation wasCalled once
@@ -147,10 +147,10 @@ class BlocksResponseAPITest
       blocksResponse shouldBe 'right
       blocksResponse.value shouldBe blocks.takeRight(5).map(BlockApi.getLightBlockInfo)
 
-      blockStore.put(*) wasNever called
       blocks.takeRight(5).map { b =>
         blockStore.get(Seq(b.blockHash)) wasCalled once
       }
+      verifyNoMoreInteractions(blockStore)
 
       blockDagStorage.insert(*, *) wasNever called
       blockDagStorage.getRepresentation wasCalled once

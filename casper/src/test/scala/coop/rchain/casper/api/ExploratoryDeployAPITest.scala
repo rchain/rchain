@@ -147,6 +147,7 @@ class ExploratoryDeployAPITest
       b.blockHash shouldBe PrettyPrinter.buildStringNoLimit(b2.blockHash)
 
       bs.get(Seq(b2.blockHash)) wasCalled once
+      verifyNoMoreInteractions(bs)
       bds.getRepresentation wasCalled once
       rm.playExploratoryDeploy(term, *) wasCalled once
     }
@@ -155,8 +156,8 @@ class ExploratoryDeployAPITest
   it should "exploratoryDeploy return error on bonded validator" in {
     implicit val blockDagStorage = mock[BlockDagStorage[Task]]
     implicit val blockStore      = mock[BlockStore[Task]]
-    implicit val log             = mock[Log[Task]]
     implicit val runtimeManager  = mock[RuntimeManager[Task]]
+    implicit val log             = mock[Log[Task]]
     implicit val sp              = mock[Span[Task]]
 
     for {
@@ -168,6 +169,10 @@ class ExploratoryDeployAPITest
     } yield {
       result shouldBe 'left
       result.left.value shouldBe "Exploratory deploy can only be executed on read-only RNode."
+
+      verifyNoMoreInteractions(blockDagStorage)
+      verifyNoMoreInteractions(blockStore)
+      verifyNoMoreInteractions(runtimeManager)
     }
   }
 

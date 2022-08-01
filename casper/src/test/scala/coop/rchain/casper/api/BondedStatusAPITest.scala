@@ -66,6 +66,7 @@ class BondedStatusAPITest
       _ <- bondedStatus(v3, v3.publicKey, gB) shouldBeF true
     } yield {
       bs.get(Seq(gB.blockHash)) wasCalled 3.times
+      verifyNoMoreInteractions(bs)
       bds.getRepresentation wasCalled 3.times
       rm.computeBonds(gB.postStateHash) wasCalled 3.times
     }
@@ -78,6 +79,7 @@ class BondedStatusAPITest
       _ <- bondedStatus(genesisValidator, createValidator.publicKey, gB) shouldBeF false
     } yield {
       bs.get(Seq(gB.blockHash)) wasCalled once
+      verifyNoMoreInteractions(bs)
       bds.getRepresentation wasCalled once
       rm.computeBonds(gB.postStateHash) wasCalled once
     }
@@ -108,6 +110,7 @@ class BondedStatusAPITest
       _ <- bondedStatus(genesisValidator, newValidator.publicKey, b1) shouldBeF true
     } yield {
       bs.get(Seq(gB.blockHash)) wasCalled twice
+      verifyNoMoreInteractions(bs)
       bds.getRepresentation wasCalled twice
       rm.computeBonds(gB.postStateHash) wasCalled once
       rm.computeBonds(b1.postStateHash) wasCalled once

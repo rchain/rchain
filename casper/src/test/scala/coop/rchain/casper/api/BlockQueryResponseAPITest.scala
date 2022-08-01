@@ -23,7 +23,7 @@ import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
 import monix.testing.scalatest.MonixTaskTest
 import org.mockito.cats.IdiomaticMockitoCats
-import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito, Mockito}
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito, Mockito, MockitoSugar}
 import org.scalatest._
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -87,8 +87,8 @@ class BlockQueryResponseAPITest
       blockInfo.deploys shouldBe randomDeploys.map(_.toDeployInfo)
       blockInfo.blockInfo shouldBe BlockApi.getLightBlockInfo(secondBlock)
 
-      bs.put(*) wasNever called
       bs.get(Seq(secondBlock.blockHash)) wasCalled once
+      verifyNoMoreInteractions(bs)
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasCalled twice
@@ -108,8 +108,8 @@ class BlockQueryResponseAPITest
       blockQueryResponse shouldBe 'left
       blockQueryResponse.left.value shouldBe s"Error: Failure to find block with hash: $badTestHashQuery"
 
-      bs.put(*) wasNever called
       bs.get(Seq(badTestHashQuery.unsafeHexToByteString)) wasCalled once
+      verifyNoMoreInteractions(bs)
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasCalled once
@@ -129,8 +129,7 @@ class BlockQueryResponseAPITest
       blockQueryResponse shouldBe 'left
       blockQueryResponse.left.value shouldBe s"Input hash value is not valid hex string: $invalidHexQuery"
 
-      bs.put(*) wasNever called
-      bs.get(*) wasNever called
+      verifyNoMoreInteractions(bs)
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasNever called
@@ -150,8 +149,7 @@ class BlockQueryResponseAPITest
       blockQueryResponse shouldBe 'left
       blockQueryResponse.left.value shouldBe s"Input hash value must be at least 6 characters: $tooShortQuery"
 
-      bs.put(*) wasNever called
-      bs.get(*) wasNever called
+      verifyNoMoreInteractions(bs)
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasNever called
@@ -173,8 +171,8 @@ class BlockQueryResponseAPITest
       blockQueryResponse shouldBe 'right
       blockQueryResponse.value shouldBe BlockApi.getLightBlockInfo(secondBlock)
 
-      bs.put(*) wasNever called
       bs.get(Seq(secondBlock.blockHash)) wasCalled once
+      verifyNoMoreInteractions(bs)
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasNever called
@@ -194,8 +192,7 @@ class BlockQueryResponseAPITest
       blockQueryResponse.left.value shouldBe
         s"Couldn't find block containing deploy with id: ${PrettyPrinter.buildStringNoLimit(unknownDeploy)}"
 
-      bs.put(*) wasNever called
-      bs.get(*) wasNever called
+      verifyNoMoreInteractions(bs)
 
       bds.insert(*, *) wasNever called
       bds.getRepresentation wasNever called

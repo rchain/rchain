@@ -49,6 +49,9 @@ class LastFinalizedAPITest
     } yield {
       res.value shouldBe true
       bds.getRepresentation wasCalled once
+
+      verifyNoMoreInteractions(bs)
+      verifyNoMoreInteractions(bds)
     }
   }
 
@@ -60,6 +63,9 @@ class LastFinalizedAPITest
     } yield {
       res.value shouldBe false
       bds.getRepresentation wasCalled once
+
+      verifyNoMoreInteractions(bs)
+      verifyNoMoreInteractions(bds)
     }
   }
 
@@ -73,6 +79,9 @@ class LastFinalizedAPITest
     } yield {
       res.value shouldBe false
       bds.getRepresentation wasCalled once
+
+      verifyNoMoreInteractions(bs)
+      verifyNoMoreInteractions(bds)
     }
   }
 
@@ -84,6 +93,9 @@ class LastFinalizedAPITest
     } yield {
       res.value shouldBe true
       bds.getRepresentation wasCalled once
+
+      verifyNoMoreInteractions(bs)
+      verifyNoMoreInteractions(bds)
     }
   }
 

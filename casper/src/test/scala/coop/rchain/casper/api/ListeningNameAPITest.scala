@@ -75,9 +75,11 @@ class ListeningNameAPITest
       res shouldBe 'left
       res.left.value shouldBe "Your request on getListeningName depth 3 exceed the max limit 2"
 
-      rm.getData(*)(*) wasNever called
-      bs.get(*) wasNever called
       bds.getRepresentation wasCalled once
+
+      verifyNoMoreInteractions(bs)
+      verifyNoMoreInteractions(bds)
+      verifyNoMoreInteractions(rm)
     }
   }
 
@@ -88,11 +90,14 @@ class ListeningNameAPITest
       res      <- blockApi.getListeningNameDataResponse(1, listeningName)
     } yield {
       res shouldBe 'right
-      res.value shouldBe (_: Seq[DataWithBlockInfo], 0)
+      res.value shouldBe (Seq(), 0)
 
-      rm.getData(*)(*) wasNever called
       bs.get(*) wasCalled twice
       bds.getRepresentation wasCalled once
+
+      verifyNoMoreInteractions(bs)
+      verifyNoMoreInteractions(bds)
+      verifyNoMoreInteractions(rm)
     }
   }
 
@@ -113,6 +118,10 @@ class ListeningNameAPITest
       rm.getData(*)(*) wasCalled once
       bs.get(*) wasCalled 3.times
       bds.getRepresentation wasCalled once
+
+      verifyNoMoreInteractions(bs)
+      verifyNoMoreInteractions(bds)
+      verifyNoMoreInteractions(rm)
     }
   }
 
@@ -133,6 +142,10 @@ class ListeningNameAPITest
       rm.getData(*)(*) wasCalled once
       bs.get(*) wasCalled 3.times
       bds.getRepresentation wasCalled once
+
+      verifyNoMoreInteractions(bs)
+      verifyNoMoreInteractions(bds)
+      verifyNoMoreInteractions(rm)
     }
   }
 
