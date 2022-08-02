@@ -16,8 +16,8 @@
  */
 
 new
-  NonNegativeNumber,
-  MergeableTag,
+  NonNegativeNumber,  // Unforgeable contract location stored in registry
+  MergeableTag,       // Indirection for mergeability
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
   deployerId(`rho:rchain:deployerId`)
@@ -26,12 +26,16 @@ in {
     new this, valueStore in {
       contract this(@"add", @x, success) = {
         if (x >= 0) {
-          for(@v <- @(*MergeableTag, *valueStore)){
+          // Peek the value
+          for (@v <<- @(*MergeableTag, *valueStore)) {
             if (v + x >= v) {
-              @(*MergeableTag, *valueStore)!(v + x) | success!(true)
+              // No overflow => consume + replace and return success
+              for (_ <- @(*MergeableTag, *valueStore)) {
+                @(*MergeableTag, *valueStore)!(v + x) | success!(true)
+              }
             } else {
-              //overflow
-              @(*MergeableTag, *valueStore)!(v) | success!(false)
+              // Overflow => return failure
+              success!(false)
             }
           }
         } else {
@@ -40,11 +44,16 @@ in {
       } |
       contract this(@"sub", @x, success) = {
         if (x >= 0) {
-          for(@v <- @(*MergeableTag, *valueStore)) {
+          // Peek the value
+          for (@v <<- @(*MergeableTag, *valueStore)) {
             if (x <= v) {
-              @(*MergeableTag, *valueStore)!(v - x) | success!(true)
+              // Valid amount to subtract => consume + replace and return success
+              for (_ <- @(*MergeableTag, *valueStore)) {
+                @(*MergeableTag, *valueStore)!(v - x) | success!(true)
+              }
             } else {
-              @(*MergeableTag, *valueStore)!(v) | success!(false)
+              // Invalid amount to subtract => return failure
+              success!(false)
             }
           }
         } else {
@@ -52,14 +61,16 @@ in {
         }
       } |
       contract this(@"value", return) = {
-        for(@v <- @(*MergeableTag, *valueStore)) {
-          @(*MergeableTag, *valueStore)!(v) | return!(v)
+        // Peek the value and return
+        for (@v <<- @(*MergeableTag, *valueStore)) {
+          return!(v)
         }
       } |
       return!(bundle+{*this}) |
-      match init { //Initial balance is zero if given is negative on non-integer
+      // Initial balance is zero if `init` is negative or non-integer
+      match init {
         Int => {
-          if (init >= 0) { @(*MergeableTag, *valueStore)!(init)  }
+          if (init >= 0) { @(*MergeableTag, *valueStore)!(init) }
           else           { @(*MergeableTag, *valueStore)!(0) }
         }
          _ => { @(*MergeableTag, *valueStore)!(0) }
