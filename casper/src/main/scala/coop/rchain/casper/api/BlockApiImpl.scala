@@ -11,6 +11,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockApi._
+import coop.rchain.casper.api.GraphGenerator.ValidatorBlock
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
@@ -487,13 +488,20 @@ class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore
       // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
       startBlockNum = if (startBlockNumber == 0) dag.latestBlockNumber else startBlockNumber.toLong
       depthLimited  = if (depth <= 0 || depth > maxDepthLimit) maxDepthLimit else depth
-      topoSortDag   <- dag.topoSortUnsafe(startBlockNum - depthLimited, Some(startBlockNum))
       ref           <- Ref[F].of(Vector[String]())
       ser           = new ListSerializer(ref)
-      config        = GraphConfig(showJustificationLines)
-      lfb           = PrettyPrinter.buildString(dag.lastFinalizedBlockHash)
-      _             <- GraphzGenerator.dagAsCluster[F](topoSortDag, lfb, config, ser)
-      result        <- ref.get
+      lowestHeight  = startBlockNum - depthLimited
+      topBlocks     = dag.dagMessageState.msgMap.valuesIterator.filter(_.height >= lowestHeight)
+      blocks = topBlocks.map { m =>
+        def toHashStr(blockHash: BlockHash) = blockHash.toHexString.take(5)
+        val blockHashStr                    = toHashStr(m.id)
+        val parentsStr                      = m.parents.map(toHashStr).toList
+        val fringeStr                       = m.fringe.map(toHashStr)
+        val validatorStr                    = toHashStr(m.sender)
+        ValidatorBlock(blockHashStr, validatorStr, m.height, parentsStr, fringeStr)
+      }.toVector
+      _      <- GraphGenerator.dagAsCluster[F](blocks, ser)
+      result <- ref.get
     } yield result.asRight[Error]
 
   override def machineVerifiableDag(depth: Int): F[ApiErr[String]] =
