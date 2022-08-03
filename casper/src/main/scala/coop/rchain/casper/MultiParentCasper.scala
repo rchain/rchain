@@ -60,11 +60,10 @@ object MultiParentCasper {
       justifications <- parentHashes.toList.traverse(BlockDagStorage[F].lookupUnsafe(_))
 
       // Calculate finalized fringe from justifications
-      msgMap    = dag.dagMessageState.msgMap
-      parents   = parentHashes.map(msgMap)
-      finalizer = Finalizer(dag.dagMessageState.msgMap)
+      msgMap  = dag.dagMessageState.msgMap
+      parents = parentHashes.map(msgMap)
       // Get currently finalized bonds map
-      prevFringe       = finalizer.latestFringe(parents)
+      prevFringe       = dag.dagMessageState.msgMap.latestFringe(parents)
       prevFringeHashes = prevFringe.map(_.id)
       // Previous fringe state should be present (loaded from BlockMetadata store)
       fringeRecord <- dag.fringeStates
@@ -85,6 +84,7 @@ object MultiParentCasper {
                  else
                    RuntimeManager[F].computeBonds(prevFringeStateHash)
 
+      finalizer         = Finalizer(dag.dagMessageState.msgMap)
       (_, newFringeOpt) = finalizer.calculateFinalization(parents, bondsMap)
       newFringeHashes   = newFringeOpt.map(_.map(_.id))
 

@@ -3,11 +3,11 @@ package coop.rchain.casper.merging
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.{Finalizer, Message}
+import coop.rchain.blockstorage.dag.Message
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.FringeData
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.syntax._
@@ -17,8 +17,6 @@ import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsDiff
 import coop.rchain.rspace.merger.{ChannelChange, StateChange, StateChangeMerger}
 import coop.rchain.rspace.syntax._
 import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
-import coop.rchain.sdk.dag.merging.ConflictResolutionLogic.{conflictScope, finalScope}
-import coop.rchain.sdk.syntax.all._
 import coop.rchain.shared.{Log, Stopwatch}
 import scodec.bits.ByteVector
 
@@ -44,18 +42,27 @@ object MergeScope {
       finalFringe: Set[BlockHash],
       dagData: Map[BlockHash, Message[BlockHash, Validator]]
   ): (MergeScope, Option[BlockHash]) = {
-    val seen      = dagData.getUnsafe(_: BlockHash).seen
-    val cScope    = conflictScope(mergeFringe, finalFringe, seen)
-    val finalizer = Finalizer(dagData)
-    val lFringe   = finalizer.lowestFringe(cScope.map(dagData)).map(_.id)
-    val fScope    = finalScope(finalFringe, lFringe, seen)
-    // genesis case
-    if (fScope.isEmpty) {
-      val genesisOpt = dagData.values.find(_.parents.isEmpty).map(_.id)
-      assert(genesisOpt.nonEmpty, "Final scope is empty but no genesis found.")
-      (MergeScope(fScope, cScope), genesisOpt.get.some)
-    } else (MergeScope(fScope, cScope), none[BlockHash])
+    // Conflict scope
+    val mergeFringeMsgs = mergeFringe.map(dagData)
+    val finalFringeMsgs = finalFringe.map(dagData)
+    val cScope          = dagData.between(mergeFringeMsgs, finalFringeMsgs)
 
+    // Final scope
+    val lFringe = dagData.lowestFringe(cScope)
+    val fScope  = dagData.between(finalFringeMsgs, lFringe)
+
+    // Scope ids
+    val cScopeIds = cScope.map(_.id)
+    val fScopeIds = fScope.map(_.id)
+
+    // Find base message if final scope is empty (genesis merging scope)
+    val baseMsg = Option(fScope).filter(_.isEmpty).flatMap { _ =>
+      val genesisOpt = dagData.findWithEmptyParents
+      assert(genesisOpt.nonEmpty, "Final scope is empty but no genesis found.")
+      genesisOpt.map(_.id)
+    }
+
+    (MergeScope(fScopeIds, cScopeIds), baseMsg)
   }
 
   def merge[F[_]: Concurrent: Log](

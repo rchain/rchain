@@ -1,15 +1,15 @@
 package coop.rchain.casper.dag
 
-import cats.{Monad, Show}
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
-import com.google.protobuf.ByteString
+import cats.{Monad, Show}
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag._
 import coop.rchain.blockstorage.dag.codecs._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
@@ -63,9 +63,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         // Store fringe data
         fringeHash = FringeData.fringeHash(blockMetadata.fringe)
         // Calculate blocks included in the fringe
-        finalizer          = Finalizer(dagState.msgMap)
         justificationsMsgs = blockMetadata.justifications.map(dagState.msgMap)
-        prevFringeMsgs     = finalizer.latestFringe(justificationsMsgs)
+        prevFringeMsgs     = dagState.msgMap.latestFringe(justificationsMsgs)
         fringeMsgs         = blockMetadata.fringe.map(dagState.msgMap)
         fringeDiff         = fringeMsgs.flatMap(_.seen) -- prevFringeMsgs.flatMap(_.seen)
 
