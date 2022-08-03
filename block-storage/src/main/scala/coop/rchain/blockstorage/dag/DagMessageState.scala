@@ -1,6 +1,7 @@
 package coop.rchain.blockstorage.dag
 
 import cats.syntax.all._
+import coop.rchain.blockstorage.syntax._
 
 object DagMessageState {
   def apply[M: Ordering, S: Ordering](): DagMessageState[M, S] =
@@ -121,12 +122,10 @@ final case class DagMessageState[M: Ordering, S: Ordering](
   }
 
   /**
-    * Convenient method to get latest fringe
+    * Convenient method to get latest fringe by using latest messages as parents
     */
-  def latestFringe: Set[Message[M, S]] = {
-    val finalizer = Finalizer(msgMap)
-    finalizer.latestFringe(latestMsgs)
-  }
+  def latestFringe: Set[Message[M, S]] =
+    msgMap.latestFringe(latestMsgs)
 
   /**
     * DEBUG: Prints debug output of a message (it has overhead of fringe support Map calculation)
@@ -199,6 +198,4 @@ final case class DagMessageState[M: Ordering, S: Ordering](
 
   def showMsgs(ms: Seq[Message[M, S]]): String =
     ms.sortBy(x => (x.sender, x.height, x.id)).map(_.id).mkString(" ")
-
-  def findGenesis: Option[M] = msgMap.values.find(_.parents.isEmpty).map(_.id)
 }

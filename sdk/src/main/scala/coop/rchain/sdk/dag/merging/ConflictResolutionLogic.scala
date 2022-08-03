@@ -85,18 +85,6 @@ object ConflictResolutionLogic {
     partitionScope(sorted)
   }
 
-  /** All items in the conflict scope. */
-  def conflictScope[B](latestMessages: Set[B], fringeMessages: Set[B], seen: B => Set[B]): Set[B] =
-    latestMessages ++ latestMessages.flatMap(seen) -- fringeMessages -- fringeMessages.flatMap(seen)
-
-  /** All items in the final scope. */
-  def finalScope[B: Ordering](
-      latestFringe: Set[B],
-      lowestFringe: Set[B],
-      seen: B => Set[B]
-  ): Set[B] =
-    latestFringe.flatMap(seen) -- lowestFringe.flatMap(seen) ++ latestFringe
-
   /** Relation map sufficient for merge set. */
   def computeRelationMapForMergeSet[D](
       conflictSet: Set[D],
