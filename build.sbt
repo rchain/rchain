@@ -15,13 +15,12 @@ lazy val projectSettings = Seq(
   organization := "coop.rchain",
   scalaVersion := "2.12.15",
   version := "0.1.0-SNAPSHOT",
-  resolvers ++= Seq(
-    Resolver.sonatypeRepo("releases"),
-    Resolver.sonatypeRepo("snapshots"),
-    "jitpack" at "https://jitpack.io"
-  ),
+  resolvers ++=
+    Resolver.sonatypeOssRepos("releases") ++
+    Resolver.sonatypeOssRepos("snapshots") ++
+    Seq("jitpack" at "https://jitpack.io"),
   wartremoverExcluded += sourceManaged.value,
-  wartremoverErrors in (Compile, compile) ++= Warts.allBut(
+  Compile / compile / wartremoverErrors ++= Warts.allBut(
     // those we want
     Wart.DefaultArguments,
     Wart.ImplicitParameter,
@@ -53,8 +52,8 @@ lazy val projectSettings = Seq(
     Wart.AnyVal
   ),
   scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
-  scapegoatVersion in ThisBuild := "1.4.11",
-  testOptions in Test += Tests.Argument("-oD"), //output test durations
+  ThisBuild / scapegoatVersion := "1.4.11",
+  Test / testOptions += Tests.Argument("-oD"), //output test durations
   javacOptions ++= Seq("-source", "11", "-target", "11"),
   Test / fork := true,
   Test / parallelExecution := false,
@@ -62,7 +61,7 @@ lazy val projectSettings = Seq(
   IntegrationTest / fork := true,
   IntegrationTest / parallelExecution := false,
   IntegrationTest / testForkedParallel := false,
-  assemblyMergeStrategy in assembly := {
+  assembly / assemblyMergeStrategy := {
     // For some reason, all artifacts from 'io.netty' group contain this file with different contents.
     // Discarding it as it's not needed.
     case path if path.endsWith("io.netty.versions.properties") => MergeStrategy.discard
@@ -75,9 +74,9 @@ lazy val projectSettings = Seq(
 // skip api doc generation if SKIP_DOC env variable is defined
   Seq(sys.env.get("SKIP_DOC")).flatMap { _ =>
     Seq(
-      publishArtifact in (Compile, packageDoc) := false,
-      publishArtifact in packageDoc := false,
-      sources in (Compile, doc) := Seq.empty
+      Compile / packageDoc / publishArtifact := false,
+      packageDoc / publishArtifact := false,
+      Compile / doc / sources := Seq.empty,
     )
   }
 
@@ -88,8 +87,8 @@ lazy val coverageSettings = Seq(
   coverageMinimum := 90,
   coverageFailOnMinimum := false,
   coverageExcludedFiles := Seq(
-    (javaSource in Compile).value,
-    (sourceManaged in Compile).value.getPath ++ "/.*"
+    (Compile / javaSource).value,
+    (Compile / sourceManaged).value.getPath ++ "/.*"
   ).mkString(";")
 )
 
@@ -100,11 +99,11 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
 // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp)
 lazy val profilerSettings = Seq(
-  javaOptions in run ++= sys.env
+  run / javaOptions ++= sys.env
     .get("YOURKIT_AGENT")
     .map(agent => s"-agentpath:$agent=onexit=snapshot,sampling")
     .toSeq,
-  javaOptions in reStart ++= (javaOptions in run).value
+  reStart / javaOptions ++= (run / javaOptions).value
 )
 
 lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings ++ profilerSettings
@@ -205,9 +204,9 @@ lazy val comm = (project in file("comm"))
       monix,
       guava
     ),
-    PB.targets in Compile := Seq(
-      scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value,
-      grpcmonix.generators.gen() -> (sourceManaged in Compile).value
+    Compile / PB.targets := Seq(
+      scalapb.gen(grpc = false)  -> (Compile / sourceManaged).value,
+      grpcmonix.generators.gen() -> (Compile / sourceManaged).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", crypto, models)
@@ -240,9 +239,9 @@ lazy val models = (project in file("models"))
       scalacheckShapeless,
       scalapbRuntimegGrpc
     ),
-    PB.targets in Compile := Seq(
-      coop.rchain.scalapb.gen(flatPackage = true, grpc = false) -> (sourceManaged in Compile).value,
-      grpcmonix.generators.gen()                                -> (sourceManaged in Compile).value
+    Compile / PB.targets := Seq(
+      coop.rchain.scalapb.gen(flatPackage = true, grpc = false) -> (Compile / sourceManaged).value,
+      grpcmonix.generators.gen()                                -> (Compile / sourceManaged).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", rspace)
@@ -276,18 +275,18 @@ lazy val node = (project in file("node"))
         circeGenericExtras,
         pureconfig
       ),
-    PB.targets in Compile := Seq(
-      scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value / "protobuf",
-      grpcmonix.generators.gen() -> (sourceManaged in Compile).value / "protobuf"
+    Compile / PB.targets := Seq(
+      scalapb.gen(grpc = false)  -> (Compile / sourceManaged).value / "protobuf",
+      grpcmonix.generators.gen() -> (Compile / sourceManaged).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
-    mainClass in Compile := Some("coop.rchain.node.Main"),
-    mainClass in assembly := Some("coop.rchain.node.Main"),
-    assemblyMergeStrategy in assembly := {
+    Compile / mainClass := Some("coop.rchain.node.Main"),
+    assembly / mainClass := Some("coop.rchain.node.Main"),
+    assembly / assemblyMergeStrategy := {
       case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
       case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        val oldStrategy = (assembly / assemblyMergeStrategy).value
         oldStrategy(x)
     },
     /*
@@ -329,13 +328,13 @@ lazy val node = (project in file("node"))
     dockerUpdateLatest := sys.env.get("DRONE").isEmpty,
     dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
-      val daemon = (daemonUser in Docker).value
+      val daemon = (Docker / daemonUser).value
       Seq(
         Cmd("FROM", dockerBaseImage.value),
         ExecCmd("RUN", "apt", "update"),
         ExecCmd("RUN", "apt", "install", "-yq", "openssl", "openssh-server", "procps"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
-        Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
+        Cmd("WORKDIR", (Docker / defaultLinuxInstallLocation).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", "root"),
         ExecCmd(
@@ -348,16 +347,16 @@ lazy val node = (project in file("node"))
       )
     },
     // Replace unsupported character `+`
-    version in Docker := { version.value.replace("+", "__") },
-    mappings in Docker ++= {
-      val base = (defaultLinuxInstallLocation in Docker).value
-      directory((baseDirectory in rholang).value / "examples")
+    Docker / version := { version.value.replace("+", "__") },
+    Docker / mappings ++= {
+      val base = (Docker / defaultLinuxInstallLocation).value
+      directory((rholang / baseDirectory).value / "examples")
         .map { case (f, p) => f -> s"$base/$p" }
     },
     /* Packaging */
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
-      val rholangExamples = directory((baseDirectory in rholang).value / "examples")
+      val rholangExamples = directory((rholang / baseDirectory).value / "examples")
         .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
       Seq(
         packageMapping(file -> "/lib/systemd/system/rnode.service"),
@@ -365,7 +364,7 @@ lazy val node = (project in file("node"))
       )
     },
     /* Debian */
-    debianPackageDependencies in Debian ++= Seq(
+    Debian / debianPackageDependencies ++= Seq(
       "openjdk-11-jre-headless",
       "openssl(>= 1.0.2g) | openssl(>= 1.1.1h)", //ubuntu & debian
       "bash (>= 2.05a-11)"
@@ -375,12 +374,12 @@ lazy val node = (project in file("node"))
      * RPM version string cannot contain dashes:
      *   http://ftp.rpm.org/max-rpm/ch-rpm-file-format.html
      */
-    version in Rpm := version.value.replace('-', '.'),
+    Rpm / version := version.value.replace('-', '.'),
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
     rpmLicense := Some("Apache 2.0"),
-    packageArchitecture in Rpm := "noarch",
-    maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
+    Rpm / packageArchitecture := "noarch",
+    Rpm / maintainerScripts := maintainerScriptsAppendFromFile((Rpm/maintainerScripts).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
     rpmPrerequisites := Seq(
@@ -411,9 +410,9 @@ lazy val rholang = (project in file("rholang"))
       "-Xfatal-warnings",
       "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
     ),
-    publishArtifact in (Compile, packageDoc) := false,
-    publishArtifact in packageDoc := false,
-    sources in (Compile, doc) := Seq.empty,
+    Compile / packageDoc/ publishArtifact := false,
+    packageDoc / publishArtifact := false,
+    Compile / doc / sources := Seq.empty,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsMtl,
       catsEffect,
@@ -427,14 +426,14 @@ lazy val rholang = (project in file("rholang"))
     // TODO: investigate if still needed?
     // mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
-      (javaSource in Compile).value,
-      (bnfcGrammarDir in BNFCConfig).value,
-      (bnfcOutputDir in BNFCConfig).value,
+      (Compile / javaSource).value,
+      (BNFCConfig / bnfcGrammarDir).value,
+      (BNFCConfig / bnfcOutputDir).value,
       baseDirectory.value / "src" / "main" / "k",
       baseDirectory.value / "src" / "main" / "rbl"
     ).map(_.getPath ++ "/.*").mkString(";"),
     //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
-    javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
+    Test / javaOptions ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
   )
   .dependsOn(
     models % "compile->compile;test->test",
@@ -446,8 +445,8 @@ lazy val rholang = (project in file("rholang"))
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
   .settings(
-    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
-    assemblyMergeStrategy in assembly := {
+    assembly / mainClass := Some("coop.rchain.rholang.interpreter.RholangCLI"),
+    assembly / assemblyMergeStrategy := {
       case path if path.endsWith("module-info.class") => MergeStrategy.discard
       case path                                       => MergeStrategy.defaultMergeStrategy(path)
     }
@@ -501,7 +500,7 @@ lazy val rspace = (project in file("rspace"))
       else
         Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
-    publishArtifact in Test := false,
+    Test / publishArtifact := false,
     licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
     homepage := Some(url("https://www.rchain.coop"))
   )
@@ -515,12 +514,12 @@ lazy val rspaceBench = (project in file("rspace-bench"))
     dependencyOverrides ++= Seq(
       "org.ow2.asm" % "asm" % "9.0"
     ),
-    sourceDirectory in Jmh := (sourceDirectory in Test).value,
-    classDirectory in Jmh := (classDirectory in Test).value,
-    dependencyClasspath in Jmh := (dependencyClasspath in Test).value,
+    Jmh / sourceDirectory := (Test / sourceDirectory).value,
+    Jmh / classDirectory := (Test / classDirectory).value,
+    Jmh / dependencyClasspath := (Test / dependencyClasspath).value,
     // rewire tasks, so that 'jmh:run' automatically invokes 'jmh:compile' (otherwise a clean 'jmh:run' would fail),
-    compile in Jmh := (compile in Jmh).dependsOn(compile in Test).value,
-    run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated
+    Jmh / compile := (Jmh / compile).dependsOn(Test / compile).value,
+    Jmh / run := (Jmh / run).dependsOn(Jmh / Keys.compile).evaluated
   )
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace % "test->test", rholang % "test->test", models % "test->test")
