@@ -1,6 +1,7 @@
 package coop.rchain.blockstorage.dag
 
 import cats.syntax.all._
+import coop.rchain.sdk.syntax.all.mapSyntax
 
 trait MessageMapSyntax {
   implicit def blockStorageSyntaxMessageMap[M, S](
@@ -48,4 +49,12 @@ final class MessageMapSyntaxOps[M, S](private val msgMap: Map[M, Message[M, S]])
     * Finds a message with empty parents
     */
   def findWithEmptyParents: Option[Msg] = msgMap.values.find(_.parents.isEmpty)
+
+  /**
+    * The highest fringe that is not required for merging.
+    */
+  def pruneFringe(
+      finalFringe: Set[M],
+      childMap: Map[M, Set[M]]
+  ): Set[Message[M, S]] = lowestFringe(finalFringe.flatMap(childMap).map(msgMap.getUnsafe))
 }

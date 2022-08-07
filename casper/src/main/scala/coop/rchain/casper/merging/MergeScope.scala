@@ -3,7 +3,7 @@ package coop.rchain.casper.merging
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.Message
+import coop.rchain.blockstorage.dag.{DagRepresentation, Message}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.FringeData
@@ -33,23 +33,36 @@ object MergeScope {
     * Create Merge scope from DAG
     * @param mergeFringe tip messages of the DAG
     * @param finalFringe finalization fringe
-    * @param dagData structure of the DAG
+    * @param childMap    children for a message
+    * @param dagData     structure of the DAG
     * @return Merge scope and (optionally) block which should be used as a base for merge.
     *         By default merge should be done into the final state.
     */
   def fromDag(
       mergeFringe: Set[BlockHash],
       finalFringe: Set[BlockHash],
+      childMap: Map[BlockHash, Set[BlockHash]],
       dagData: Map[BlockHash, Message[BlockHash, Validator]]
   ): (MergeScope, Option[BlockHash]) = {
-    // Conflict scope
+    val pruneFringe = dagData.pruneFringe(finalFringe, childMap).map(_.id)
+    fromFringes(mergeFringe, finalFringe, pruneFringe, dagData)
+  }
+
+  def fromFringes(
+      mergeFringe: Set[BlockHash],
+      finalFringe: Set[BlockHash],
+      pruneFringe: Set[BlockHash],
+      dagData: Map[BlockHash, Message[BlockHash, Validator]]
+  ): (MergeScope, Option[BlockHash]) = {
     val mergeFringeMsgs = mergeFringe.map(dagData)
     val finalFringeMsgs = finalFringe.map(dagData)
-    val cScope          = dagData.between(mergeFringeMsgs, finalFringeMsgs)
+    val pruneFringeMsgs = pruneFringe.map(dagData)
+
+    // Conflict scope
+    val cScope = dagData.between(mergeFringeMsgs, finalFringeMsgs)
 
     // Final scope
-    val lFringe = dagData.lowestFringe(cScope)
-    val fScope  = dagData.between(finalFringeMsgs, lFringe)
+    val fScope = dagData.between(finalFringeMsgs, pruneFringeMsgs)
 
     // Scope ids
     val cScopeIds = cScope.map(_.id)

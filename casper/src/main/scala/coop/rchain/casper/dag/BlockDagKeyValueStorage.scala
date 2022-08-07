@@ -11,6 +11,7 @@ import coop.rchain.blockstorage.dag._
 import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage._
+import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.crypto.signatures.Signed
@@ -110,6 +111,13 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                 )
               }
 
+        // attempt to prune only when sender is the only outsider
+        lowestFringe            = dagState.msgMap.lowestFringe(dagState.latestMsgs).map(_.id)
+        outsiders               = dagState.latestMsgs.filter(_.fringe == lowestFringe).map(_.sender)
+        senderIsTheOnlyOutsider = outsiders == Set(blockMetadata.sender)
+        shouldPrune             = fringeDiff.nonEmpty && senderIsTheOnlyOutsider
+        _                       <- pruneDiff(dag.dagMessageState, dagState, childMap).whenA(shouldPrune)
+
         _ <- removeExpiredFromPool(deployStore, dag).map(
               _.map((_, ())).map((expiredMap.update _).tupled)
             )
@@ -120,6 +128,37 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         .contains(blockMetadata.blockHash)
         .ifM(logAlreadyStored, doInsert)
     )
+  }
+
+  /**
+    * Fringe messages below which (+ messages of the fringe) can be pruned since they are not
+    * required for processing of any future message.
+    */
+  def dbPruneFringe(
+      dbState: DagMessageState[BlockHash, Validator],
+      childMap: Map[BlockHash, Set[BlockHash]]
+  ): Set[Message[BlockHash, Validator]] = {
+    val lowestFringe = dbState.msgMap.lowestFringe(dbState.latestMsgs).map(_.id)
+    dbState.msgMap.pruneFringe(lowestFringe, childMap)
+  }
+
+  /**
+    * Prune database.
+    * Remove data that is not required for processing any future block.
+    * TODO for now its just clean merging index cache, but can be used to prune the whole DB.
+    * `Diff` here is because data pruned is what is not required in new state compared to current state.
+    */
+  def pruneDiff(
+      newState: DagMessageState[BlockHash, Validator],
+      curState: DagMessageState[BlockHash, Validator],
+      childMap: Map[BlockHash, Set[BlockHash]]
+  ): F[Unit] = {
+    val newLPF = dbPruneFringe(newState, childMap)
+    val curLPF = dbPruneFringe(curState, childMap)
+    val toPune = (newState.msgMap.between(newLPF, curLPF) ++ curLPF).map(_.id)
+
+    toPune.toList.foreach(BlockIndex.cache.remove)
+    Log[F].info(s"Pruned ${toPune.size} merging indices, new size: ${BlockIndex.cache.size}")
   }
 
   override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
