@@ -82,7 +82,7 @@ object MergeScope {
         val conflictSet = conflictScope.flatMap(_.deployChains)
         val finalSet    = finalScope.flatMap(_.deployChains)
         // finalization decisions made in final set
-        val (acceptedFinally, rejectedFinally) = {
+        val (rejectedFinally, acceptedFinally) = {
           val rejectionsMap = fringeStates.flatMap { case (k, v) => k.map((_, v.rejectedDeploys)) }
           finalScope.iterator
             .flatMap(b => b.deployChains.map(b.blockHash -> _))
