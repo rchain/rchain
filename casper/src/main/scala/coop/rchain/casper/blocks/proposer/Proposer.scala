@@ -1,5 +1,6 @@
 package coop.rchain.casper.blocks.proposer
 
+import cats.data.OptionT
 import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
@@ -180,31 +181,49 @@ object Proposer {
           }
         }
         suppressAttestation <- nothingToFinalize ||^ waitingForSupermajorityToAttest
-        // push dummy deploy if needed
-        p <- BlockDagStorage[F].pooledDeploys
-        _ <- dummyDeployOpt
-              .traverse {
-                case (privateKey, term) =>
-                  val deployData = ConstructDeploy.sourceDeployNow(
-                    source = term,
-                    sec = privateKey,
-                    vabn = nextBlockNum - 1,
-                    shardId = shardId
-                  )
-                  BlockDagStorage[F].addDeploy(deployData)
-              }
-              .whenA(p.isEmpty)
+//        // push dummy deploy if needed
+//        p <- BlockDagStorage[F].pooledDeploys
+//        _ <- dummyDeployOpt
+//              .traverse {
+//                case (privateKey, term) =>
+//                  val deployData = ConstructDeploy.sourceDeployNow(
+//                    source = term,
+//                    sec = privateKey,
+//                    vabn = nextBlockNum - 1,
+//                    shardId = shardId
+//                  )
+//                  BlockDagStorage[F].addDeploy(deployData)
+//              }
+//              .whenA(p.isEmpty)
         // user deploys
         pooled <- BlockDagStorage[F].pooledDeploys
-        deploys <- pooled.toList
-                    .filterA {
-                      case (id, d) =>
-                        val future       = d.data.validAfterBlockNumber > nextBlockNum
-                        val expired      = d.data.validAfterBlockNumber < nextBlockNum - MultiParentCasper.deployLifespan
-                        val replayAttack = BlockDagStorage[F].lookupByDeployId(id).map(_.nonEmpty)
-                        (future.pure ||^ expired.pure ||^ replayAttack).not
-                    }
-                    .map(_.map(_._1))
+        pooledOk <- pooled.toList
+                     .filterA {
+                       case (id, d) =>
+                         val future       = d.data.validAfterBlockNumber > nextBlockNum
+                         val expired      = d.data.validAfterBlockNumber < nextBlockNum - MultiParentCasper.deployLifespan
+                         val replayAttack = BlockDagStorage[F].lookupByDeployId(id).map(_.nonEmpty)
+                         (future.pure ||^ expired.pure ||^ replayAttack).not
+                     }
+                     .map(_.map(_._1))
+        deploys <- {
+          val dummy = dummyDeployOpt
+            .traverse {
+              case (privateKey, term) =>
+                val deployData = ConstructDeploy.sourceDeployNow(
+                  source = term,
+                  sec = privateKey,
+                  vabn = nextBlockNum - 1,
+                  shardId = shardId
+                )
+                BlockDagStorage[F].addDeploy(deployData).as(List(deployData.sig))
+            }
+          OptionT
+            .fromOption(pooledOk.nonEmpty.guard[Option].as(pooledOk))
+            .orElseF(dummy)
+            .value
+            .map(_.getOrElse(List()))
+        }
         // create block
         _ <- Log[F].info(s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})")
         result <- BlockCreator(validatorIdentity, shardId).create(
