@@ -91,7 +91,7 @@ object MultiParentCasper {
       // If new fringe is finalized, merge it
       newFringeResult <- newFringeHashes.traverse { fringe =>
                           val (mScope, baseOpt) =
-                            MergeScope.fromDag(fringe, prevFringeHashes, msgMap)
+                            MergeScope.fromDag(fringe, prevFringeHashes, dag.childMap, msgMap)
                           for {
                             baseStateOpt <- baseOpt.traverse { h =>
                                              BlockStore[F]
@@ -129,7 +129,12 @@ object MultiParentCasper {
                                        .map(x => (x.toBlake2b256Hash, Set.empty[ByteString]))
                                    case _ =>
                                      val (mScope, baseOpt) =
-                                       MergeScope.fromDag(parentHashes, newFringe, msgMap)
+                                       MergeScope.fromDag(
+                                         parentHashes,
+                                         newFringe,
+                                         dag.childMap,
+                                         msgMap
+                                       )
                                      for {
                                        baseStateOpt <- baseOpt.traverse { h =>
                                                         BlockStore[F]
