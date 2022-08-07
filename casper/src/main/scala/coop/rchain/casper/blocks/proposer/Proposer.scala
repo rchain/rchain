@@ -211,7 +211,7 @@ object Proposer {
                    preStateHash,
                    parentHashes,
                    finalBonds,
-                   preState.rejectedDeploys,
+                   preState.fringeRejectedDeploys,
                    nextBlockNum,
                    nextSeqNum,
                    deploys,
