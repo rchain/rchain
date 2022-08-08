@@ -276,7 +276,7 @@ class ValidateTest
         block <- createGenesis[Task](
                   deploys = Seq(deploy)
                 )
-        status <- Validate.transactionExpiration[Task](block, expirationThreshold = 10)
+        status = BlockValidationLogic.transactionExpiration(block, expirationThreshold = 10)
         _      = status should be(Right(Valid))
       } yield ()
   }
@@ -294,8 +294,10 @@ class ValidateTest
         blockWithExpiredDeploy <- createGenesis[Task](
                                    deploys = Seq(deploy.copy(deploy = updatedDeployData))
                                  )
-        status <- Validate
-                   .transactionExpiration[Task](blockWithExpiredDeploy, expirationThreshold = 10)
+        status = BlockValidationLogic.transactionExpiration(
+          blockWithExpiredDeploy,
+          expirationThreshold = 10
+        )
         _ = status should be(Left(ContainsExpiredDeploy))
       } yield ()
   }

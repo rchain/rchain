@@ -33,4 +33,13 @@ object BlockValidationLogic {
       .find(_.data.validAfterBlockNumber > b.blockNumber)
       .as(BlockStatus.containsFutureDeploy.asLeft[ValidBlock])
       .getOrElse(BlockStatus.valid.asRight[InvalidBlock])
+
+  def transactionExpiration(b: BlockMessage, expirationThreshold: Int): ValidBlockProcessing = {
+    val earliestAcceptableValidAfterBlockNumber = b.blockNumber - expirationThreshold
+    b.state.deploys
+      .map(_.deploy)
+      .find(_.data.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
+      .as(BlockStatus.containsExpiredDeploy.asLeft[ValidBlock])
+      .getOrElse(BlockStatus.valid.asRight[InvalidBlock])
+  }
 }

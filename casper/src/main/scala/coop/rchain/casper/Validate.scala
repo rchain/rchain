@@ -58,7 +58,7 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
       _ = BlockValidationLogic.futureTransaction(block)
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
-      _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
+      _ = BlockValidationLogic.transactionExpiration(block, expirationThreshold)
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
       s <- EitherT(Validate.repeatDeploy(block, expirationThreshold))
     } yield s).value
@@ -144,28 +144,6 @@ object Validate {
                  } yield BlockStatus.invalidBlockNumber.asLeft[ValidBlock]
                }
     } yield status
-
-  def transactionExpiration[F[_]: Monad: Log](
-      b: BlockMessage,
-      expirationThreshold: Int
-  ): F[ValidBlockProcessing] = {
-    val earliestAcceptableValidAfterBlockNumber = b.blockNumber - expirationThreshold
-    val deploys                                 = b.state.deploys.map(_.deploy)
-    val maybeExpiredDeploy =
-      deploys.find(_.data.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
-    maybeExpiredDeploy
-      .traverse { expiredDeploy =>
-        Log[F]
-          .warn(
-            ignore(
-              b,
-              s"block contains an expired deploy with valid after block number of ${expiredDeploy.data.validAfterBlockNumber}: ${expiredDeploy.data.term}"
-            )
-          )
-          .as(BlockStatus.containsExpiredDeploy)
-      }
-      .map(maybeError => maybeError.toLeft(BlockStatus.valid))
-  }
 
   /**
     * Works with either efficient justifications or full explicit justifications.
