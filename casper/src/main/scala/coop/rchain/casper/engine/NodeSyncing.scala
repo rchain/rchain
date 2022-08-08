@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -143,7 +143,7 @@ class NodeSyncing[F[_]
                              BlockStore[F].contains(_),
                              BlockStore[F].getUnsafe,
                              BlockStore[F].put(_, _),
-                             Validate.blockHash[F]
+                             block => Sync[F].delay(BlockValidationLogic.blockHash(block))
                            )
 
       // Request tuple space state for Last Finalized State

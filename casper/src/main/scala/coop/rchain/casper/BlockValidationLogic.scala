@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.syntax.all._
 import coop.rchain.casper.Validate.signatureVerifiers
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockVersion
 import coop.rchain.models.syntax._
 
@@ -55,4 +56,6 @@ object BlockValidationLogic {
       BlockStatus.invalidDeployShardId.asLeft[ValidBlock]
     }
   }
+
+  def blockHash(b: BlockMessage): Boolean = b.blockHash == ProtoUtil.hashBlock(b)
 }

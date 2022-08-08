@@ -500,14 +500,14 @@ class ValidateTest
       val blockValidHash = block.copy(blockHash = hash)
 
       // Test valid block hash
-      val hashValid = Validate.blockHash[Task](blockValidHash).runSyncUnsafe()
+      val hashValid = BlockValidationLogic.blockHash(blockValidHash)
 
       hashValid shouldBe true
 
       val blockInValidHash = block.copy(blockHash = ByteString.copyFromUtf8("123"))
 
       // Test invalid block hash
-      val hashInValid = Validate.blockHash[Task](blockInValidHash).runSyncUnsafe()
+      val hashInValid = BlockValidationLogic.blockHash(blockInValidHash)
 
       hashInValid shouldBe false
     }

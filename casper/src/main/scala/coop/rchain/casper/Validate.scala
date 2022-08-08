@@ -1,9 +1,9 @@
 package coop.rchain.casper
 
+import cats.Monad
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -170,24 +170,6 @@ object Validate {
                  } yield BlockStatus.invalidSequenceNumber.asLeft[ValidBlock]
                }
     } yield status
-
-  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] = {
-    val blockHashComputed = ProtoUtil.hashBlock(b)
-    if (b.blockHash == blockHashComputed)
-      true.pure
-    else {
-      val computedHashString = PrettyPrinter.buildString(blockHashComputed)
-      val hashString         = PrettyPrinter.buildString(b.blockHash)
-      for {
-        _ <- Log[F].warn(
-              ignore(
-                b,
-                s"block hash $hashString does not match to computed value $computedHashString."
-              )
-            )
-      } yield false
-    }
-  }
 
   /**
     * Justification regression check.
