@@ -521,7 +521,7 @@ class ValidateTest
       // Expected one of hard-coded block versions supported by this version of RNode software
       val expectedValid = BlockVersion.Supported.contains(version)
       // Actual validation
-      val actualValid = Validate.version[Task](blockWithVersion).runSyncUnsafe()
+      val actualValid = BlockValidationLogic.version(blockWithVersion)
 
       actualValid shouldBe expectedValid
     }

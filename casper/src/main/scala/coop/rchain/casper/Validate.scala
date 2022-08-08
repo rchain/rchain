@@ -15,8 +15,8 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.syntax._
-import coop.rchain.models.{BlockMetadata, BlockVersion}
 import coop.rchain.shared._
 
 // TODO: refactor all validation functions to separate logging from actual validation logic
@@ -36,17 +36,6 @@ object Validate {
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
   /* Validation of block with logging included */
-
-  def version[F[_]: Monad: Log](b: BlockMessage): F[Boolean] = {
-    val blockVersion = b.version
-    if (BlockVersion.Supported.contains(blockVersion)) {
-      true.pure
-    } else {
-      val versionsStr = BlockVersion.Supported.mkString(" or ")
-      val msg         = s"received block version $blockVersion is not the expected version $versionsStr."
-      Log[F].warn(ignore(b, msg)).as(false)
-    }
-  }
 
   def blockSummary[F[_]: Sync: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,

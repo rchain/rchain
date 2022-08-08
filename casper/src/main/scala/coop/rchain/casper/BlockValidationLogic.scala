@@ -2,6 +2,7 @@ package coop.rchain.casper
 
 import coop.rchain.casper.Validate.signatureVerifiers
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.models.BlockVersion
 import coop.rchain.models.syntax._
 
 import scala.util.{Success, Try}
@@ -23,4 +24,5 @@ object BlockValidationLogic {
       b.sigAlgorithm.nonEmpty &&
       b.shardId.nonEmpty &&
       b.postStateHash.nonEmpty
+  def version(b: BlockMessage): Boolean = BlockVersion.Supported.contains(b.version)
 }
