@@ -16,7 +16,6 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockMetadata
-import coop.rchain.models.syntax._
 import coop.rchain.shared._
 
 // TODO: refactor all validation functions to separate logging from actual validation logic
@@ -54,7 +53,7 @@ object Validate {
       _ <- EitherT(Validate.blockNumber(block))
       // Deploys validation
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
-      _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
+      _ = BlockValidationLogic.deploysShardIdentifier(block, shardId)
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
       _ = BlockValidationLogic.futureTransaction(block)
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
@@ -171,21 +170,6 @@ object Validate {
                  } yield BlockStatus.invalidSequenceNumber.asLeft[ValidBlock]
                }
     } yield status
-
-  // Validator should only process deploys from its own shard with shard names in ASCII characters only
-  def deploysShardIdentifier[F[_]: Monad: Log](
-      b: BlockMessage,
-      shardId: String
-  ): F[ValidBlockProcessing] = {
-    assert(shardId.onlyAscii, "Shard name should contain only ASCII characters")
-    if (b.state.deploys.forall(_.deploy.data.shardId == shardId)) {
-      BlockStatus.valid.asRight[InvalidBlock].pure
-    } else {
-      for {
-        _ <- Log[F].warn(ignore(b, s"not for all deploys shard identifier is $shardId."))
-      } yield BlockStatus.invalidDeployShardId.asLeft[ValidBlock]
-    }
-  }
 
   def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] = {
     val blockHashComputed = ProtoUtil.hashBlock(b)

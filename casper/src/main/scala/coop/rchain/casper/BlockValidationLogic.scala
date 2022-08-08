@@ -42,4 +42,17 @@ object BlockValidationLogic {
       .as(BlockStatus.containsExpiredDeploy.asLeft[ValidBlock])
       .getOrElse(BlockStatus.valid.asRight[InvalidBlock])
   }
+
+  // Validator should only process deploys from its own shard with shard names in ASCII characters only
+  def deploysShardIdentifier(
+      b: BlockMessage,
+      shardId: String
+  ): ValidBlockProcessing = {
+    assert(shardId.onlyAscii, "Shard name should contain only ASCII characters")
+    if (b.state.deploys.forall(_.deploy.data.shardId == shardId)) {
+      BlockStatus.valid.asRight[InvalidBlock]
+    } else {
+      BlockStatus.invalidDeployShardId.asLeft[ValidBlock]
+    }
+  }
 }
