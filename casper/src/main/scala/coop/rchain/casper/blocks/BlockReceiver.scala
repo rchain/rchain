@@ -205,7 +205,7 @@ object BlockReceiver {
       // TODO: 1. validation and logging in these checks should be separated
       //       2. logging of these block should indicate that information cannot be trusted
       //           e.g. if block hash is invalid it cannot represent identity of a block
-      val validFormat = Validate.formatOfFields(b)
+      val validFormat = BlockValidationLogic.formatOfFields(b).pure
       val validHash   = Validate.blockHash(b)
       val validSig    = BlockValidationLogic.blockSignature(b).pure
       // TODO: check sender to be valid bonded validator

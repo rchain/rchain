@@ -37,31 +37,6 @@ object Validate {
 
   /* Validation of block with logging included */
 
-  def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
-    if (b.blockHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block hash is empty."))
-      } yield false
-    } else if (b.sig.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature is empty."))
-      } yield false
-    } else if (b.sigAlgorithm.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
-      } yield false
-    } else if (b.shardId.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
-      } yield false
-    } else if (b.postStateHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
-      } yield false
-    } else {
-      true.pure
-    }
-
   def version[F[_]: Monad: Log](b: BlockMessage): F[Boolean] = {
     val blockVersion = b.version
     if (BlockVersion.Supported.contains(blockVersion)) {

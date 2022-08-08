@@ -482,14 +482,12 @@ class ValidateTest
         seqNum = getLatestSeqNum(sender, dag) + 1L
         genesis = ValidatorIdentity(sk)
           .signBlock(context.genesisBlock.copy(seqNum = seqNum))
-        _ <- Validate.formatOfFields[Task](genesis) shouldBeF true
-        _ <- Validate.formatOfFields[Task](genesis.copy(blockHash = ByteString.EMPTY)) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.copy(sig = ByteString.EMPTY)) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.copy(sigAlgorithm = "")) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.copy(shardId = "")) shouldBeF false
-        _ <- Validate.formatOfFields[Task](
-              genesis.copy(postStateHash = ByteString.EMPTY)
-            ) shouldBeF false
+        _ = BlockValidationLogic.formatOfFields(genesis) shouldBe true
+        _ = BlockValidationLogic.formatOfFields(genesis.copy(blockHash = ByteString.EMPTY)) shouldBe false
+        _ = BlockValidationLogic.formatOfFields(genesis.copy(sig = ByteString.EMPTY)) shouldBe false
+        _ = BlockValidationLogic.formatOfFields(genesis.copy(sigAlgorithm = "")) shouldBe false
+        _ = BlockValidationLogic.formatOfFields(genesis.copy(shardId = "")) shouldBe false
+        _ = BlockValidationLogic.formatOfFields(genesis.copy(postStateHash = ByteString.EMPTY)) shouldBe false
       } yield ()
   }
 

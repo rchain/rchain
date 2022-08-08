@@ -2,6 +2,7 @@ package coop.rchain.casper
 
 import coop.rchain.casper.Validate.signatureVerifiers
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.models.syntax._
 
 import scala.util.{Success, Try}
 
@@ -15,4 +16,11 @@ object BlockValidationLogic {
           case _             => false
         }
       })
+
+  def formatOfFields(b: BlockMessage): Boolean =
+    b.blockHash.nonEmpty &&
+      b.sig.nonEmpty &&
+      b.sigAlgorithm.nonEmpty &&
+      b.shardId.nonEmpty &&
+      b.postStateHash.nonEmpty
 }
