@@ -95,11 +95,15 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
   ): F[Option[Seq[ConsumeCandidate[C, A]]]] =
     for {
       channelToIndexedDataList <- channels.traverse { c: C =>
-                                   for {
-                                     seqDatum <- store.getData(c)
-                                     filteredDatumWithIndexList <- seqDatum.zipWithIndex.toList
-                                                                    .filterA(matches(comm))
-                                   } yield c -> filteredDatumWithIndexList.toSeq
+                                   store
+                                     .getData(c)
+                                     .flatMap(
+                                       _.iterator.zipWithIndex
+                                       // Convert to immutable.Seq because of defined Traversable instance
+                                         .to[immutable.Seq]
+                                         .filterA(matches(comm))
+                                     )
+                                     .map(c -> _)
                                  }
       result <- extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
                  .map(_.sequence)
