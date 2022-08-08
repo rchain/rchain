@@ -10,11 +10,12 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Serialize}
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.JavaConverters._
-import scala.collection.SortedSet
+import scala.collection.{immutable, SortedSet}
 import scala.concurrent.ExecutionContext
 
 class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
@@ -168,32 +169,27 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
               comm.consume == source
           }.toSeq),
       c =>
-        for {
-          seqDatum          <- store.getData(c)
-          datumWithIndexSeq = seqDatum.iterator.zipWithIndex.toSeq
-          extendedDatumWithIndexSeq = if (c == channel)
-            (Datum(data, persist, produceRef), -1) +: datumWithIndexSeq
-          else datumWithIndexSeq
-          filteredExtendedDatumWithIndexSeq <- extendedDatumWithIndexSeq.toList.filterA(
-                                                matches(comm)
-                                              )
-        } yield (c, filteredExtendedDatumWithIndexSeq)
+        store
+          .getData(c)
+          // Convert to immutable.Seq because of defined Traversable instance
+          .map(_.iterator.zipWithIndex.to[immutable.Seq])
+          .flatMap { datums =>
+            (if (c == channel) (Datum(data, persist, produceRef), -1) +: datums else datums)
+              .filterA(matches(comm))
+              .map(_.to[Seq])
+          }
+          .map((c, _))
     )
 
   private[this] def matches(comm: COMM)(datumWithIndex: (Datum[A], _)): F[Boolean] = {
     val datum: Datum[A] = datumWithIndex._1
     def wasRepeatedEnoughTimes: F[Boolean] =
-      for {
-        counter <- produceCounter.get
-      } yield {
+      produceCounter.get.map { counter =>
         if (!datum.persist) {
           comm.timesRepeated(datum.source) === counter(datum.source)
         } else true
       }
-
-    for {
-      wasEnough <- wasRepeatedEnoughTimes
-    } yield comm.produces.contains(datum.source) && wasEnough
+    Sync[F].delay(comm.produces.contains(datum.source)) &&^ wasRepeatedEnoughTimes
   }
 
   private[this] def handleMatch(

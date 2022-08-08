@@ -1,6 +1,6 @@
 package coop.rchain.rspace.trace
 
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.hashing.StableHashProvider._
@@ -25,7 +25,7 @@ final case class COMM(
 ) extends Event
 
 object COMM {
-  def apply[F[_]: Concurrent: ContextShift, C, A](
+  def apply[F[_]: Sync, C, A](
       dataCandidates: Seq[ConsumeCandidate[C, A]],
       consumeRef: Consume,
       peeks: SortedSet[Int],
@@ -34,7 +34,7 @@ object COMM {
     for {
       produceRefs <- Sync[F].delay(
                       dataCandidates
-                        .map(_.datum.source)(Seq.canBuildFrom)
+                        .map(_.datum.source)
                         .sortBy(p => (p.channelsHash, p.hash, p.persistent))
                     )
       counters <- produceCounters(produceRefs)
