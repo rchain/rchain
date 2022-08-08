@@ -15,11 +15,9 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.{BlockMetadata, BlockVersion}
 import coop.rchain.models.syntax._
+import coop.rchain.models.{BlockMetadata, BlockVersion}
 import coop.rchain.shared._
-
-import scala.util.{Success, Try}
 
 // TODO: refactor all validation functions to separate logging from actual validation logic
 object Validate {
@@ -38,20 +36,6 @@ object Validate {
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
   /* Validation of block with logging included */
-
-  def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
-    signatureVerifiers
-      .get(b.sigAlgorithm)
-      .map(verify => {
-        Try(verify(b.blockHash.toByteArray, b.sig.toByteArray, b.sender.toByteArray)) match {
-          case Success(true) => true.pure
-          case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
-        }
-      }) getOrElse {
-      for {
-        _ <- Log[F].warn(ignore(b, s"signature algorithm ${b.sigAlgorithm} is unsupported."))
-      } yield false
-    }
 
   def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
     if (b.blockHash.isEmpty) {

@@ -122,13 +122,8 @@ class ValidateTest
         rsa              = "RSA"
         block0           = chain(0).copy(sigAlgorithm = unknownAlgorithm)
         block1           = chain(1).copy(sigAlgorithm = rsa)
-        _                <- Validate.blockSignature[Task](block0) shouldBeF false
-        _ = log.warns.last
-          .contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
-          true
-        )
-        _      <- Validate.blockSignature[Task](block1) shouldBeF false
-        result = log.warns.last.contains(s"signature algorithm $rsa is unsupported") should be(true)
+        _                = BlockValidationLogic.blockSignature(block0) shouldBe false
+        result           = BlockValidationLogic.blockSignature(block1) shouldBe false
       } yield result
   }
 
@@ -147,9 +142,7 @@ class ValidateTest
         block4       <- signedBlock(chain, 4).map(_.copy(sig = invalidKey))
         block5       <- signedBlock(chain, 5).map(_.copy(sig = block0.sig)) //wrong sig
         blocks       = Vector(block0, block1, block2, block3, block4, block5)
-        _            <- blocks.existsM[Task](Validate.blockSignature[Task]) shouldBeF false
-        _            = log.warns.size should be(blocks.length)
-        result       = log.warns.forall(_.contains("signature is invalid")) should be(true)
+        result       = blocks.exists(BlockValidationLogic.blockSignature) shouldBe false
       } yield result
   }
 
@@ -163,7 +156,7 @@ class ValidateTest
                       val chainWithSender = chain.map(_.copy(sender = pk.bytes.toByteString))
                       for {
                         block  <- signedBlock(chainWithSender, i)
-                        result <- Validate.blockSignature[Task](block)
+                        result = BlockValidationLogic.blockSignature(block)
                       } yield result
                     }
         _      = condition should be(true)
