@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import cats.syntax.all._
 import coop.rchain.casper.Validate.signatureVerifiers
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockVersion
@@ -25,4 +26,11 @@ object BlockValidationLogic {
       b.shardId.nonEmpty &&
       b.postStateHash.nonEmpty
   def version(b: BlockMessage): Boolean = BlockVersion.Supported.contains(b.version)
+
+  def futureTransaction(b: BlockMessage): ValidBlockProcessing =
+    b.state.deploys
+      .map(_.deploy)
+      .find(_.data.validAfterBlockNumber > b.blockNumber)
+      .as(BlockStatus.containsFutureDeploy.asLeft[ValidBlock])
+      .getOrElse(BlockStatus.valid.asRight[InvalidBlock])
 }

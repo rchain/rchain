@@ -56,7 +56,7 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
       _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
-      _ <- EitherT(Validate.futureTransaction(block))
+      _ = BlockValidationLogic.futureTransaction(block)
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
@@ -144,24 +144,6 @@ object Validate {
                  } yield BlockStatus.invalidBlockNumber.asLeft[ValidBlock]
                }
     } yield status
-
-  def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
-    val blockNumber       = b.blockNumber
-    val deploys           = b.state.deploys.map(_.deploy)
-    val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber > blockNumber)
-    maybeFutureDeploy
-      .traverse { futureDeploy =>
-        Log[F]
-          .warn(
-            ignore(
-              b,
-              s"block contains an future deploy with valid after block number of ${futureDeploy.data.validAfterBlockNumber}: ${futureDeploy.data.term}"
-            )
-          )
-          .as(BlockStatus.containsFutureDeploy)
-      }
-      .map(maybeError => maybeError.toLeft(BlockStatus.valid))
-  }
 
   def transactionExpiration[F[_]: Monad: Log](
       b: BlockMessage,

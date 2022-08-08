@@ -12,7 +12,6 @@ import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.crypto.PrivateKey
@@ -247,7 +246,7 @@ class ValidateTest
         block <- createGenesis[Task](
                   deploys = Seq(deploy.copy(deploy = updatedDeployData))
                 )
-        status <- Validate.futureTransaction[Task](block)
+        status = BlockValidationLogic.futureTransaction(block)
         _      = status should be(Right(Valid))
       } yield ()
   }
@@ -265,7 +264,7 @@ class ValidateTest
         blockWithFutureDeploy <- createGenesis[Task](
                                   deploys = Seq(deploy.copy(deploy = updatedDeployData))
                                 )
-        status <- Validate.futureTransaction[Task](blockWithFutureDeploy)
+        status = BlockValidationLogic.futureTransaction(blockWithFutureDeploy)
         _      = status should be(Left(ContainsFutureDeploy))
       } yield ()
   }
