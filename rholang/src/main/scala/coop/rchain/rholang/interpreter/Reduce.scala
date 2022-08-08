@@ -1436,17 +1436,10 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     def split(baseExpr: Expr, sep: Expr): M[Expr] =
       (baseExpr.exprInstance, sep.exprInstance) match {
         case (GString(string), GString(sepStr)) =>
-          val split = string.split(sepStr)
-          charge[M](toListCost(split.size) + splitCost(string, sepStr, split.size)) >>
-            Expr(
-              EListBody(
-                EList(
-                  split.toSeq
-                    .map(t => Par(exprs = Seq(GString(t))): Par)
-                )
-              )
-            ).pure[M]
-
+          for {
+            segments <- Sync[M].delay(string.split(sepStr))
+            _        <- charge[M](toListCost(segments.size) + splitCost(string, sepStr, segments.size))
+          } yield EList(segments.toVector.map(GString(_): Par))
         case (other, _) =>
           MethodNotDefined("split", other.typ).raiseError[M, Expr]
       }
@@ -1458,7 +1451,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
               .whenA(args.length != 1)
 
         baseExpr <- evalSingleExpr(p)
-        sep      <- evalSingleExpr(args(0))
+        sep      <- evalSingleExpr(args.head)
 
         result <- split(baseExpr, sep)
       } yield result
