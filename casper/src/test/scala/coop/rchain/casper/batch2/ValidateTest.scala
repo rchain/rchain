@@ -181,42 +181,6 @@ class ValidateTest
       } yield ()
   }
 
-  "Future deploy validation" should "work" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData = deploy.deploy.data
-        updatedDeployData = Signed(
-          deployData.copy(validAfterBlockNumber = -1),
-          Secp256k1,
-          ConstructDeploy.defaultSec
-        )
-        block <- createGenesis[Task](
-                  deploys = Seq(deploy.copy(deploy = updatedDeployData))
-                )
-        status = BlockValidationLogic.futureTransaction(block)
-        _      = status should be(Right(Valid))
-      } yield ()
-  }
-
-  "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData = deploy.deploy.data
-        updatedDeployData = Signed(
-          deployData.copy(validAfterBlockNumber = Long.MaxValue),
-          Secp256k1,
-          ConstructDeploy.defaultSec
-        )
-        blockWithFutureDeploy <- createGenesis[Task](
-                                  deploys = Seq(deploy.copy(deploy = updatedDeployData))
-                                )
-        status = BlockValidationLogic.futureTransaction(blockWithFutureDeploy)
-        _      = status should be(Left(ContainsFutureDeploy))
-      } yield ()
-  }
-
   "Deploy expiration validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {

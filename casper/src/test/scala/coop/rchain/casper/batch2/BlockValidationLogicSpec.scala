@@ -2,10 +2,12 @@ package coop.rchain.casper.batch2
 
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.InvalidBlock.ContainsFutureDeploy
+import coop.rchain.casper.ValidBlock.Valid
+import coop.rchain.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.{BlockValidationLogic, ValidatorIdentity}
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockVersion
 import coop.rchain.models.blockImplicits.{arbBlockMessage, getRandomBlock}
@@ -102,8 +104,33 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     result shouldBe true
   }
 
+  "Future deploy validation" should "work" in {
+    val deploy = createDeploy(-1L)
+    val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
+    val status = BlockValidationLogic.futureTransaction(block)
+
+    status shouldBe Right(Valid)
+  }
+
+  it should "not accept blocks with a deploy for a future block number" in {
+    val deploy = createDeploy(Long.MaxValue)
+    val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
+    val status = BlockValidationLogic.futureTransaction(block)
+
+    status shouldBe Left(ContainsFutureDeploy)
+  }
+
   private def signedBlock(privateKey: PrivateKey, publicKey: PublicKey): BlockMessage =
     ValidatorIdentity(privateKey).signBlock(
       getRandomBlock(setValidator = publicKey.bytes.toByteString.some)
     )
+
+  private def createDeploy(validAfterBlockNumber: Long): Signed[DeployData] = {
+    val deploy = ConstructDeploy.sourceDeployNow("Nil")
+    Signed(
+      deploy.data.copy(validAfterBlockNumber = validAfterBlockNumber),
+      Secp256k1,
+      ConstructDeploy.defaultSec
+    )
+  }
 }
