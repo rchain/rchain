@@ -248,17 +248,4 @@ object Validate {
       }
     }
   }
-
-  /**
-    * All of deploys must have greater or equal phloPrice then minPhloPrice
-    */
-  def phloPrice[F[_]: Log: Concurrent](
-      b: BlockMessage,
-      minPhloPrice: Long
-  ): F[ValidBlockProcessing] =
-    if (b.state.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
-      BlockStatus.valid.asRight[InvalidBlock].pure
-    } else {
-      BlockStatus.containsLowCostDeploy.asLeft[ValidBlock].pure
-    }
 }

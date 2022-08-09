@@ -183,7 +183,7 @@ object MultiParentCasper {
 
         // This validation is only to punish validator which accepted lower price deploys.
         // And this can happen if not configured correctly.
-        status <- EitherT(Validate.phloPrice(block, minPhloPrice))
+        status <- EitherT(Sync[F].delay(BlockValidationLogic.phloPrice(block, minPhloPrice)))
                    .recoverWith {
                      case _ =>
                        val warnToLog = EitherT.liftF[F, InvalidBlock, Unit](

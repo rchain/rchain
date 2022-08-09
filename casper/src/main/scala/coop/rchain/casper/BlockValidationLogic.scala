@@ -58,4 +58,17 @@ object BlockValidationLogic {
   }
 
   def blockHash(b: BlockMessage): Boolean = b.blockHash == ProtoUtil.hashBlock(b)
+
+  /**
+    * All of deploys must have greater or equal phloPrice then minPhloPrice
+    */
+  def phloPrice(
+      b: BlockMessage,
+      minPhloPrice: Long
+  ): ValidBlockProcessing =
+    if (b.state.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
+      BlockStatus.valid.asRight[InvalidBlock]
+    } else {
+      BlockStatus.containsLowCostDeploy.asLeft[ValidBlock]
+    }
 }
