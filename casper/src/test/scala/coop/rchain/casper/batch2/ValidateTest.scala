@@ -18,7 +18,6 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockVersion
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.models.syntax._
@@ -513,19 +512,6 @@ class ValidateTest
     }
   }
 
-  "Block version validation" should "allow supported versions" in {
-    implicit val aBlock = arbBlockMessage
 
-    forAll { (block: BlockMessage, version: Int) =>
-      val blockWithVersion = block.copy(version = version)
-
-      // Expected one of hard-coded block versions supported by this version of RNode software
-      val expectedValid = BlockVersion.Supported.contains(version)
-      // Actual validation
-      val actualValid = BlockValidationLogic.version(blockWithVersion)
-
-      actualValid shouldBe expectedValid
-    }
-  }
 
 }
