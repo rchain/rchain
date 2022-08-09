@@ -2,7 +2,7 @@ package coop.rchain.casper.batch2
 
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.InvalidBlock.ContainsFutureDeploy
+import coop.rchain.casper.InvalidBlock.{ContainsExpiredDeploy, ContainsFutureDeploy}
 import coop.rchain.casper.ValidBlock.Valid
 import coop.rchain.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
@@ -132,5 +132,19 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
       Secp256k1,
       ConstructDeploy.defaultSec
     )
+  }
+
+  "Deploy expiration validation" should "work" in {
+    val deploy = createDeploy(-1L)
+    val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
+    val status = BlockValidationLogic.transactionExpiration(block, expirationThreshold = 10)
+    status shouldBe Right(Valid)
+  }
+
+  it should "not accept blocks with a deploy that is expired" in {
+    val deploy = createDeploy(Long.MinValue)
+    val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
+    val status = BlockValidationLogic.transactionExpiration(block, expirationThreshold = 10)
+    status shouldBe Left(ContainsExpiredDeploy)
   }
 }

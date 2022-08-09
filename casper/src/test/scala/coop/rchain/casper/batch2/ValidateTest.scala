@@ -14,7 +14,7 @@ import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util._
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.signatures.{Secp256k1, Signed}
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -178,39 +178,6 @@ class ValidateTest
         _       = s1 shouldBe Right(Valid)
         s2      <- Validate.blockNumber[Task](b3.copy(blockNumber = 4))
         _       = s2 shouldBe Left(InvalidBlockNumber)
-      } yield ()
-  }
-
-  "Deploy expiration validation" should "work" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploy <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        block <- createGenesis[Task](
-                  deploys = Seq(deploy)
-                )
-        status = BlockValidationLogic.transactionExpiration(block, expirationThreshold = 10)
-        _      = status should be(Right(Valid))
-      } yield ()
-  }
-
-  "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData = deploy.deploy.data
-        updatedDeployData = Signed(
-          deployData.copy(validAfterBlockNumber = Long.MinValue),
-          Secp256k1,
-          ConstructDeploy.defaultSec
-        )
-        blockWithExpiredDeploy <- createGenesis[Task](
-                                   deploys = Seq(deploy.copy(deploy = updatedDeployData))
-                                 )
-        status = BlockValidationLogic.transactionExpiration(
-          blockWithExpiredDeploy,
-          expirationThreshold = 10
-        )
-        _ = status should be(Left(ContainsExpiredDeploy))
       } yield ()
   }
 
