@@ -10,6 +10,17 @@ import coop.rchain.models.syntax._
 import scala.util.{Success, Try}
 
 object BlockValidationLogic {
+  def version(b: BlockMessage): Boolean = BlockVersion.Supported.contains(b.version)
+
+  def blockHash(b: BlockMessage): Boolean = b.blockHash == ProtoUtil.hashBlock(b)
+
+  def formatOfFields(b: BlockMessage): Boolean =
+    b.blockHash.nonEmpty &&
+      b.sig.nonEmpty &&
+      b.sigAlgorithm.nonEmpty &&
+      b.shardId.nonEmpty &&
+      b.postStateHash.nonEmpty
+
   def blockSignature(b: BlockMessage): Boolean =
     signatureVerifiers
       .get(b.sigAlgorithm)
@@ -19,14 +30,6 @@ object BlockValidationLogic {
           case _             => false
         }
       })
-
-  def formatOfFields(b: BlockMessage): Boolean =
-    b.blockHash.nonEmpty &&
-      b.sig.nonEmpty &&
-      b.sigAlgorithm.nonEmpty &&
-      b.shardId.nonEmpty &&
-      b.postStateHash.nonEmpty
-  def version(b: BlockMessage): Boolean = BlockVersion.Supported.contains(b.version)
 
   def futureTransaction(b: BlockMessage): ValidBlockProcessing =
     b.state.deploys
@@ -44,7 +47,9 @@ object BlockValidationLogic {
       .getOrElse(BlockStatus.valid.asRight[InvalidBlock])
   }
 
-  // Validator should only process deploys from its own shard with shard names in ASCII characters only
+  /**
+    * Validator should only process deploys from its own shard with shard names in ASCII characters only
+    */
   def deploysShardIdentifier(
       b: BlockMessage,
       shardId: String
@@ -56,8 +61,6 @@ object BlockValidationLogic {
       BlockStatus.invalidDeployShardId.asLeft[ValidBlock]
     }
   }
-
-  def blockHash(b: BlockMessage): Boolean = b.blockHash == ProtoUtil.hashBlock(b)
 
   /**
     * All of deploys must have greater or equal phloPrice then minPhloPrice
