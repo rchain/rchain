@@ -30,7 +30,7 @@ object Validate {
       "secp256k1" -> Secp256k1.verify
     )
 
-  def ignore(b: BlockMessage, reason: String): String =
+  private def ignore(b: BlockMessage, reason: String): String =
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
   /* Validation of block with logging included */
