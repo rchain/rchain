@@ -490,28 +490,4 @@ class ValidateTest
         _ = BlockValidationLogic.formatOfFields(genesis.copy(postStateHash = ByteString.EMPTY)) shouldBe false
       } yield ()
   }
-
-  "Block hash format validation" should "fail on invalid hash" in {
-    implicit val aBlock = arbBlockMessage
-
-    forAll { (block: BlockMessage) =>
-      val hash           = ProtoUtil.hashBlock(block)
-      val blockValidHash = block.copy(blockHash = hash)
-
-      // Test valid block hash
-      val hashValid = BlockValidationLogic.blockHash(blockValidHash)
-
-      hashValid shouldBe true
-
-      val blockInValidHash = block.copy(blockHash = ByteString.copyFromUtf8("123"))
-
-      // Test invalid block hash
-      val hashInValid = BlockValidationLogic.blockHash(blockInValidHash)
-
-      hashInValid shouldBe false
-    }
-  }
-
-
-
 }
