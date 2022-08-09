@@ -360,7 +360,7 @@ message EMatches {
 /**
  * String interpolation
  *
- * `"Hello, {name}" %% {"name": "Bob"}` denotes `"Hello, Bob"`
+ * `"Hello, ${name}" %% {"name": "Bob"}` denotes `"Hello, Bob"`
  */
 message EPercentPercent {
     Par p1 = 1 [(scalapb.field).no_box = true];

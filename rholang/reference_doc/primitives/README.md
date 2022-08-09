@@ -11,7 +11,7 @@ Rholang's integers are 64-bit signed, represented internally as two's compliment
 | Integer Min Value | -9223372036854775808 |
 
 #### Arithmetic
-Integers support basic arithmetic operations natively, and other operations are being written in the [standard library](https://github.com/JoshOrndorff/librho/UnsafeMath)
+Integers support basic arithmetic operations natively
 
 ```rholang
 new stdout(`rho:io:stdout`) in {
@@ -26,6 +26,9 @@ new stdout(`rho:io:stdout`) in {
 
   // Integer Division
   stdout!(-90 / 6) |
+
+  // Modular arithmetic + remainder
+  stdout!(15 % 10) |
 
   // Watchout for overflow
   stdout!(9223372036854775800 + 10) |
@@ -83,11 +86,22 @@ new someNameCh, lookup(`rho:registry:lookup`) in {
 ```
 
 
-### Strings?
+### Strings
 Strings are covered in detail under [data structures](../data_structures). Here are a few basics
+
+#### Concatenation
 
 ```rholang
 new stdout(`rho:io:stdout`) in {
   stdout!("String" ++ "Concatenation")|
 }
+```
+
+#### Interpolation
+
+```rholang
+new stdout(`rho:io:stdout`) in {
+  stdout!("${a} + ${b}" %% {"a": 19, "b": "23", "c": true})
+}
+// prints "19 + 23 + true" to stdout
 ```
