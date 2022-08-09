@@ -7,7 +7,7 @@ import scala.collection.compat.immutable.LazyList
 import scala.collection.mutable
 import scala.math.Numeric.LongIsIntegral
 
-object DagMergingLogic {
+object ConflictResolutionLogic {
 
   /** All items in dependency chains. */
   def withDependencies[D](of: Set[D], dependencyMap: Map[D, Set[D]]): Set[D] = {
@@ -84,18 +84,6 @@ object DagMergingLogic {
       concurrentRoots.toList.sortBy { case (k, v) => (-v.size, k) }.map { case (k, v) => v + k }
     partitionScope(sorted)
   }
-
-  /** All items in the conflict scope. */
-  def conflictScope[B](latestMessages: Set[B], fringeMessages: Set[B], seen: B => Set[B]): Set[B] =
-    latestMessages ++ latestMessages.flatMap(seen) -- fringeMessages -- fringeMessages.flatMap(seen)
-
-  /** All items in the final scope. */
-  def finalScope[B: Ordering](
-      latestFringe: Set[B],
-      lowestFringe: Set[B],
-      seen: B => Set[B]
-  ): Set[B] =
-    latestFringe.flatMap(seen) -- lowestFringe.flatMap(seen) ++ latestFringe
 
   /** Relation map sufficient for merge set. */
   def computeRelationMapForMergeSet[D](
@@ -225,15 +213,25 @@ object DagMergingLogic {
     }
   }
 
-  /** Find deploys to reject from conflict set. */
+  /** Compute resolution for conflict set. */
   def resolveConflictSet[D: Ordering, CH](
       conflictSet: Set[D],
-      dependencyMap: Map[D, Set[D]],
-      conflictsMap: Map[D, Set[D]],
+      acceptedFinally: Set[D],
+      rejectedFinally: Set[D],
+      // deploys
       cost: D => Long,
+      // relations
+      conflictsMap: Map[D, Set[D]],
+      dependencyMap: Map[D, Set[D]],
+      // support for mergeable
       mergeableDiffs: Map[D, Map[CH, Long]],
       initMergeableValues: Map[CH, Long]
-  ): Set[D] = {
+  ): (Set[D], Set[D]) = {
+    val enforceRejected = withDependencies(
+      incompatibleWithFinal(acceptedFinally, rejectedFinally, conflictsMap, dependencyMap),
+      dependencyMap
+    )
+    val conflictSetCompatible = conflictSet -- enforceRejected
     // conflict map accounting for dependencies
     val fullConflictsMap = conflictsMap.mapValues(vs => vs ++ withDependencies(vs, dependencyMap))
     // find rejection combinations possible
@@ -247,43 +245,7 @@ object DagMergingLogic {
       mergeableDiffs
     )
     // find optimal rejection
-    computeOptimalRejection(mergeableOverflowRejectionOptions, cost)
-  }
-
-  /** Compute merge for the DAG. */
-  def resolveDag[B: Ordering, D: Ordering, CH, S](
-      // DAG
-      latestMessages: Set[B],
-      seen: B => Set[B],
-      // finalization
-      latestFringe: Set[B],
-      acceptedFinally: Set[D],
-      rejectedFinally: Set[D],
-      // deploys
-      deploysIndex: Map[B, Set[D]],
-      cost: D => Long,
-      // relations
-      conflictsMap: Map[D, Set[D]],
-      dependencyMap: Map[D, Set[D]],
-      // support for mergeable
-      mergeableDiffs: Map[D, Map[CH, Long]],
-      initMergeableValues: Map[CH, Long]
-  ): (Set[D], Set[D]) = {
-    val enforceRejected = withDependencies(
-      incompatibleWithFinal(acceptedFinally, rejectedFinally, conflictsMap, dependencyMap),
-      dependencyMap
-    )
-    // conflict set without deploys conflicting with finalization
-    val conflictSet           = conflictScope(latestMessages, latestFringe, seen).flatMap(deploysIndex)
-    val conflictSetCompatible = conflictSet -- enforceRejected
-    val resolved = resolveConflictSet(
-      conflictSetCompatible,
-      dependencyMap,
-      conflictsMap,
-      cost,
-      mergeableDiffs,
-      initMergeableValues
-    )
+    val resolved = computeOptimalRejection(mergeableOverflowRejectionOptions, cost)
     (conflictSetCompatible -- resolved, resolved ++ enforceRejected)
   }
 }

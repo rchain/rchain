@@ -1,11 +1,11 @@
 package coop.rchain.sdk.merging
-import coop.rchain.sdk.dag.merging.DagMergingLogic._
+import coop.rchain.sdk.dag.merging.ConflictResolutionLogic._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.Checkers
 import cats.syntax.all._
 
-class DagMergingLogicSpec extends AnyFlatSpec with Matchers with Checkers {
+class ConflictResolutionLogicSpec extends AnyFlatSpec with Matchers with Checkers {
   "withDependencies" should "emit element and all dependencies." in {
     val dependentsMap = Map(1 -> Set(3, 9), 3 -> Set(5), 5 -> Set(6), 4 -> Set(6))
     val rejects       = withDependencies(Set(1), dependentsMap)

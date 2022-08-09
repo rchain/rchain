@@ -2,7 +2,8 @@ package coop.rchain.casper.blocks
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.blockstorage.dag.{BlockDagStorage, Finalizer}
+import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.models.BlockHash.BlockHash
@@ -29,11 +30,10 @@ final class BlockDagStorageOps[F[_]](
                           (Set[BlockHash](), block.postStateHash).pure[F]
                         } else {
                           for {
-                            dag       <- bds.getRepresentation
-                            dagMsgSt  = dag.dagMessageState
-                            finalizer = Finalizer(dagMsgSt.msgMap)
-                            parents   = block.justifications.map(dagMsgSt.msgMap).toSet
-                            fringe    = finalizer.latestFringe(parents).map(_.id)
+                            dag      <- bds.getRepresentation
+                            dagMsgSt = dag.dagMessageState
+                            parents  = block.justifications.map(dagMsgSt.msgMap).toSet
+                            fringe   = dagMsgSt.msgMap.latestFringe(parents).map(_.id)
                             fringeState = if (fringe.isEmpty) {
                               RuntimeManager.emptyStateHashFixed.toBlake2b256Hash
                             } else
