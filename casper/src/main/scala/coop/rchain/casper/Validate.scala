@@ -24,7 +24,6 @@ object Validate {
   type Data      = Array[Byte]
   type Signature = Array[Byte]
 
-  val DRIFT                                 = 15000 // 15 seconds
   implicit private val logSource: LogSource = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
     Map(
