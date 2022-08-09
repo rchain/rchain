@@ -12,7 +12,6 @@ import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
@@ -470,24 +469,5 @@ class ValidateTest
           } yield result
         }
       } yield result
-  }
-
-  "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
-    _ => implicit blockDagStorage =>
-      val context  = buildGenesis()
-      val (sk, pk) = context.validatorKeyPairs.head
-      for {
-        dag    <- blockDagStorage.getRepresentation
-        sender = ByteString.copyFrom(pk.bytes)
-        seqNum = getLatestSeqNum(sender, dag) + 1L
-        genesis = ValidatorIdentity(sk)
-          .signBlock(context.genesisBlock.copy(seqNum = seqNum))
-        _ = BlockValidationLogic.formatOfFields(genesis) shouldBe true
-        _ = BlockValidationLogic.formatOfFields(genesis.copy(blockHash = ByteString.EMPTY)) shouldBe false
-        _ = BlockValidationLogic.formatOfFields(genesis.copy(sig = ByteString.EMPTY)) shouldBe false
-        _ = BlockValidationLogic.formatOfFields(genesis.copy(sigAlgorithm = "")) shouldBe false
-        _ = BlockValidationLogic.formatOfFields(genesis.copy(shardId = "")) shouldBe false
-        _ = BlockValidationLogic.formatOfFields(genesis.copy(postStateHash = ByteString.EMPTY)) shouldBe false
-      } yield ()
   }
 }

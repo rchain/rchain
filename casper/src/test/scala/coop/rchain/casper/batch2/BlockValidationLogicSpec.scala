@@ -1,11 +1,14 @@
 package coop.rchain.casper.batch2
 
+import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockValidationLogic
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.util.GenesisBuilder.randomValidatorKeyPairs
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.{BlockValidationLogic, ValidatorIdentity}
 import coop.rchain.models.BlockVersion
-import coop.rchain.models.blockImplicits.arbBlockMessage
+import coop.rchain.models.blockImplicits.{arbBlockMessage, getRandomBlock}
+import coop.rchain.models.syntax._
 import org.scalacheck.Arbitrary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -45,5 +48,19 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
 
       hashInValid shouldBe false
     }
+  }
+
+  "Field format validation" should "succeed on a valid block and fail on empty fields" in {
+    val (privateKey, _) = randomValidatorKeyPairs.take(1).toList.head
+    val genesis = ValidatorIdentity(privateKey).signBlock(
+      getRandomBlock(setValidator = privateKey.bytes.toByteString.some)
+    )
+
+    BlockValidationLogic.formatOfFields(genesis) shouldBe true
+    BlockValidationLogic.formatOfFields(genesis.copy(blockHash = ByteString.EMPTY)) shouldBe false
+    BlockValidationLogic.formatOfFields(genesis.copy(sig = ByteString.EMPTY)) shouldBe false
+    BlockValidationLogic.formatOfFields(genesis.copy(sigAlgorithm = "")) shouldBe false
+    BlockValidationLogic.formatOfFields(genesis.copy(shardId = "")) shouldBe false
+    BlockValidationLogic.formatOfFields(genesis.copy(postStateHash = ByteString.EMPTY)) shouldBe false
   }
 }
