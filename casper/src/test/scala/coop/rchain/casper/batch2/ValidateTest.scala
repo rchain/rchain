@@ -181,7 +181,7 @@ class ValidateTest
       } yield ()
   }
 
-  it should "return false for non-sequential numbering" in withStorage {
+  "Sequence number validation" should "return false for non-sequential numbering" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         chain <- createChain[Task](2)
