@@ -1,7 +1,7 @@
 package coop.rchain.p2p
 
-import cats._
-import cats.effect._
+import cats.Applicative
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
@@ -58,12 +58,16 @@ object EffectsTestInstances {
       RPConf(local, networkId, Some(local), defaultTimeout, 20, clearConnections)
     )
 
-  class TransportLayerStub[F[_]: Sync: Applicative] extends TransportLayer[F] {
+  class TransportLayerStub[F[_]: Sync] extends TransportLayer[F] {
+    import java.util.concurrent.LinkedBlockingQueue
+
     case class Request(peer: PeerNode, msg: Protocol)
     type Responses = PeerNode => Protocol => CommErr[Unit]
     var reqresp: Option[Responses] = None
     var requests: List[Request]    = List.empty[Request]
-    val lock                       = SyncVarOps.create[TransportLayerStub[F]](this)
+    // TODO: Replacement for SyncVar (legacy code should be replaced with Mockito mocks)
+    val lock = new LinkedBlockingQueue[Unit](1)
+    lock.put(())
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
@@ -71,7 +75,7 @@ object EffectsTestInstances {
     def atomically[A](operation: => A): A = {
       lock.take()
       val result = operation
-      lock.put(this)
+      lock.put(())
       result
     }
 
