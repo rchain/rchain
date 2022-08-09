@@ -111,56 +111,6 @@ class ValidateTest
     } yield result
   }
 
-  "Block signature validation" should "return false on unknown algorithms" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        chain            <- createChain[Task](2)
-        unknownAlgorithm = "unknownAlgorithm"
-        rsa              = "RSA"
-        block0           = chain(0).copy(sigAlgorithm = unknownAlgorithm)
-        block1           = chain(1).copy(sigAlgorithm = rsa)
-        _                = BlockValidationLogic.blockSignature(block0) shouldBe false
-        result           = BlockValidationLogic.blockSignature(block1) shouldBe false
-      } yield result
-  }
-
-  it should "return false on invalid secp256k1 signatures" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      implicit val (sk, _) = Secp256k1.newKeyPair
-      for {
-        chain        <- createChain[Task](6)
-        (_, wrongPk) = Secp256k1.newKeyPair
-        empty        = ByteString.EMPTY
-        invalidKey   = "abcdef1234567890".unsafeHexToByteString
-        block0       <- signedBlock(chain, 0).map(_.copy(sender = empty))
-        block1       <- signedBlock(chain, 1).map(_.copy(sender = invalidKey))
-        block2       <- signedBlock(chain, 2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))
-        block3       <- signedBlock(chain, 3).map(_.copy(sig = empty))
-        block4       <- signedBlock(chain, 4).map(_.copy(sig = invalidKey))
-        block5       <- signedBlock(chain, 5).map(_.copy(sig = block0.sig)) //wrong sig
-        blocks       = Vector(block0, block1, block2, block3, block4, block5)
-        result       = blocks.exists(BlockValidationLogic.blockSignature) shouldBe false
-      } yield result
-  }
-
-  it should "return true on valid secp256k1 signatures" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val n                 = 6
-      implicit val (sk, pk) = Secp256k1.newKeyPair
-      for {
-        chain <- createChain[Task](n)
-        condition <- (0 until n).toList.forallM[Task] { i =>
-                      val chainWithSender = chain.map(_.copy(sender = pk.bytes.toByteString))
-                      for {
-                        block  <- signedBlock(chainWithSender, i)
-                        result = BlockValidationLogic.blockSignature(block)
-                      } yield result
-                    }
-        _      = condition should be(true)
-        result = log.warns should be(Nil)
-      } yield result
-  }
-
   "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {

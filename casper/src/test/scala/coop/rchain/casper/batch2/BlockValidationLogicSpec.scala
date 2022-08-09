@@ -3,9 +3,10 @@ package coop.rchain.casper.batch2
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.GenesisBuilder.randomValidatorKeyPairs
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.{BlockValidationLogic, ValidatorIdentity}
+import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockVersion
 import coop.rchain.models.blockImplicits.{arbBlockMessage, getRandomBlock}
 import coop.rchain.models.syntax._
@@ -51,10 +52,8 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
   }
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in {
-    val (privateKey, _) = randomValidatorKeyPairs.take(1).toList.head
-    val genesis = ValidatorIdentity(privateKey).signBlock(
-      getRandomBlock(setValidator = privateKey.bytes.toByteString.some)
-    )
+    val (privateKey, publicKey) = Secp256k1.newKeyPair
+    val genesis                 = signedBlock(privateKey, publicKey)
 
     BlockValidationLogic.formatOfFields(genesis) shouldBe true
     BlockValidationLogic.formatOfFields(genesis.copy(blockHash = ByteString.EMPTY)) shouldBe false
@@ -63,4 +62,48 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     BlockValidationLogic.formatOfFields(genesis.copy(shardId = "")) shouldBe false
     BlockValidationLogic.formatOfFields(genesis.copy(postStateHash = ByteString.EMPTY)) shouldBe false
   }
+
+  // TODO: This test doesn't make sense because the signing is done by the algorithm in the ValidatorIdentity.
+  //  The algorithm specified for the block is not used
+  "Block signature validation" should "return false on unknown algorithms" in {
+    val blockUnknownAlg = getRandomBlock().copy(sigAlgorithm = "unknownAlgorithm")
+    val blockRsaAlg     = getRandomBlock().copy(sigAlgorithm = "RSA")
+
+    BlockValidationLogic.blockSignature(blockUnknownAlg) shouldBe false
+    BlockValidationLogic.blockSignature(blockRsaAlg) shouldBe false
+  }
+
+  it should "return false on invalid secp256k1 signatures" in {
+    val (privateKey, publicKey) = Secp256k1.newKeyPair
+    val (_, wrongPk)            = Secp256k1.newKeyPair
+    val empty                   = ByteString.EMPTY
+    val invalidKey              = "abcdef1234567890".unsafeHexToByteString
+
+    val block0 = signedBlock(privateKey, publicKey).copy(sender = empty)
+    val block1 = signedBlock(privateKey, publicKey).copy(sender = invalidKey)
+    val block2 =
+      signedBlock(privateKey, publicKey).copy(sender = ByteString.copyFrom(wrongPk.bytes))
+    val block3 = signedBlock(privateKey, publicKey).copy(sig = empty)
+    val block4 = signedBlock(privateKey, publicKey).copy(sig = invalidKey)
+    val block5 = signedBlock(privateKey, publicKey).copy(sig = block0.sig) // wrong sig
+    val blocks = Vector(block0, block1, block2, block3, block4, block5)
+
+    blocks.exists(BlockValidationLogic.blockSignature) shouldBe false
+  }
+
+  it should "return true on valid secp256k1 signatures" in {
+    val n                       = 6
+    val (privateKey, publicKey) = Secp256k1.newKeyPair
+    val result = (0 until n).foldLeft(true) {
+      case (res, _) =>
+        val block = signedBlock(privateKey, publicKey)
+        BlockValidationLogic.blockSignature(block) && res
+    }
+    result shouldBe true
+  }
+
+  private def signedBlock(privateKey: PrivateKey, publicKey: PublicKey): BlockMessage =
+    ValidatorIdentity(privateKey).signBlock(
+      getRandomBlock(setValidator = publicKey.bytes.toByteString.some)
+    )
 }
