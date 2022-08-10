@@ -11,7 +11,7 @@ import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.merger.{EventLogIndex, EventLogMergingLogic}
-import coop.rchain.sdk.dag.merging.DagMergingLogic
+import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import monix.eval.Task
@@ -93,12 +93,12 @@ class MergingCases extends AnyFlatSpec with Matchers {
               ): Int = 1
             }
             val dependencyMap =
-              DagMergingLogic.computeDependencyMap(
+              ConflictResolutionLogic.computeDependencyMap(
                 idxs.toSet,
                 idxs.toSet,
                 EventLogMergingLogic.depends
               )
-            DagMergingLogic.computeGreedyNonIntersectingBranches[EventLogIndex](
+            ConflictResolutionLogic.computeGreedyNonIntersectingBranches[EventLogIndex](
               idxs.toSet,
               dependencyMap
             )

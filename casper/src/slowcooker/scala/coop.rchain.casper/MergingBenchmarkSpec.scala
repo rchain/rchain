@@ -5,7 +5,7 @@ import coop.rchain.casper.MergingBenchmarkSpec.random
 import coop.rchain.casper.merging.{DeployChainIndex, DeployIdWithCost}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.{EventLogIndex, StateChange}
-import coop.rchain.sdk.dag.merging.DagMergingLogic.computeRejectionOptions
+import coop.rchain.sdk.dag.merging.ConflictResolutionLogic.computeRejectionOptions
 import coop.rchain.shared.Stopwatch
 import org.scalatest.flatspec.AnyFlatSpec
 

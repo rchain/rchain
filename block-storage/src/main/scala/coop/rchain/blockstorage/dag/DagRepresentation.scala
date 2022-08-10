@@ -1,6 +1,7 @@
 package coop.rchain.blockstorage.dag
 
 import cats.syntax.all._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
@@ -27,18 +28,15 @@ final case class DagRepresentation(
     // In-memory cache for fringe data store (it should only include working range of blocks needed for finalization)
     fringeStates: Map[Set[BlockHash], FringeData]
 ) {
-  // TODO: pick highest block from fringe until LFB is replaced with fringe completely
-  lazy val lastFinalizedBlockHash: Option[BlockHash] =
-    dagMessageState.latestFringe.toList.sortBy(_.height).lastOption.map(_.id)
+  lazy val latestFringe: Set[Message[BlockHash, Validator]] = dagMessageState.latestFringe
 
-  lazy val latestFringe: Set[BlockHash] = dagMessageState.latestFringe.map(_.id)
-
-  lazy val finalizedBlocksSet: Set[BlockHash] = {
-    val latestFringe = dagMessageState.latestFringe
-    latestFringe.flatMap(_.seen)
-  }
+  lazy val finalizedBlocksSet: Set[BlockHash] = latestFringe.flatMap(_.seen)
 
   lazy val latestBlockNumber: Long = heightMap.lastOption.map { case (h, _) => h + 1 }.getOrElse(0L)
+
+  // TODO: pick highest block from fringe until LFB is replaced with fringe completely
+  lazy val lastFinalizedBlockHash: Option[BlockHash] =
+    latestFringe.toList.sortBy(_.height).lastOption.map(_.id)
 
   def contains(blockHash: BlockHash): Boolean =
     blockHash.size == BlockHash.Length && dagSet.contains(blockHash)

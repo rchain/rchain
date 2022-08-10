@@ -1,6 +1,7 @@
 package coop.rchain.blockstorage.dag
 
 import cats.syntax.all._
+import coop.rchain.blockstorage.syntax._
 
 import scala.collection.compat.immutable.LazyList
 
@@ -166,7 +167,7 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
       } yield fringe
 
     // Latest fringe seen from justifications
-    val parentFringe = latestFringe(justifications)
+    val parentFringe = msgMap.latestFringe(justifications)
 
     // Find top most fringe
     // - multiple fringes can be finalized at once
@@ -174,26 +175,4 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
 
     (parentFringe, newFringeOpt)
   }
-
-  /**
-    * Latest fringe seen from justifications
-    * - can be empty which means first layer is the first message from each sender
-    */
-  // TODO: should fringes read bonds map from each round if multiple are finalized???
-  def latestFringe(justifications: Set[Message[M, S]]): Set[Message[M, S]] =
-    justifications.toList
-      .maximumByOption(_.fringe.map(msgMap).toList.map(_.height).maximumOption.getOrElse(-1L))
-      .map(_.fringe)
-      .getOrElse(Set())
-      .map(msgMap)
-
-  /**
-    * Lowest fringe for input messages
-    */
-  def lowestFringe(msgs: Set[Message[M, S]]): Set[Message[M, S]] =
-    msgs.toList
-      .minimumByOption(_.fringe.map(msgMap).toList.map(_.height).minimumOption.getOrElse(-1L))
-      .map(_.fringe)
-      .getOrElse(Set())
-      .map(msgMap)
 }

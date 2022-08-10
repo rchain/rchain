@@ -7,7 +7,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
-import coop.rchain.casper.merging.{BlockHashDagMerger, BlockIndex, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockIndex, DeployChainIndex, MergeScope}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.rholang.RuntimeDeployResult.UserDeployRuntimeResult
 import coop.rchain.casper.rholang.RuntimeManager
@@ -23,7 +23,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import coop.rchain.models.syntax._
-import coop.rchain.sdk.dag.merging.DagMergingLogic
+import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
 
 trait ComputeMerge {
 
@@ -171,11 +171,13 @@ trait ComputeMerge {
                     s"${rejectRight}, ${deployIds}, ${rightDeployIds}, ${leftDeployIds}"
                 )
             }
-            r <- BlockHashDagMerger.merge[F](
-                  Set(lBlock, rBlock).map(_.blockHash),
-                  Set(bBlock.blockHash),
+            ms = MergeScope(
+              Set(bBlock.blockHash),
+              Set(lBlock, rBlock).map(_.blockHash)
+            )
+            r <- MergeScope.merge[F](
+                  ms,
                   baseCheckpoint.root,
-                  BlockHashDagMerger(dag.dagMessageState.msgMap),
                   dag.fringeStates,
                   historyRepo,
                   indices(_: BlockHash).pure,
