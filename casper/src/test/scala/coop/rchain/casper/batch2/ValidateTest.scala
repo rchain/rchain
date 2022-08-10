@@ -27,7 +27,7 @@ import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.testing.scalatest.MonixTaskTest
-import org.mockito.IdiomaticMockito
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.mockito.cats.IdiomaticMockitoCats
 import org.scalatest._
 import org.scalatest.flatspec.AsyncFlatSpec
@@ -46,7 +46,8 @@ class ValidateTest
     with BlockDagStorageFixture
     with ScalaCheckPropertyChecks
     with IdiomaticMockito
-    with IdiomaticMockitoCats {
+    with IdiomaticMockitoCats
+    with ArgumentMatchersSugar {
   import InvalidBlock._
   import ValidBlock._
 
@@ -126,7 +127,6 @@ class ValidateTest
 
   "Block number validation" should "only accept 0 as the number for a block with no parents" in {
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
-    bds.lookup(genesis.blockHash) returnsF BlockMetadata.fromBlock(genesis).some
 
     for {
       _ <- Validate.blockNumber[Task](genesis.copy(blockNumber = 1)) shouldBeF
@@ -134,40 +134,51 @@ class ValidateTest
       _ <- Validate.blockNumber[Task](genesis) shouldBeF Right(Valid)
       _ = log.warns.size shouldBe 1
       _ = log.warns.head.contains("not zero, but block has no parents") shouldBe true
-    } yield ()
+    } yield verifyNoMoreInteractions(bds)
   }
 
-  it should "return false for non-sequential numbering" ignore {
-    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
+  it should "return false for non-sequential numbering" in {
+    val genesis = getRandomBlock(setJustifications = Seq.empty.some)
+    val block = getRandomBlock(
+      setJustifications = Seq(genesis.blockHash).some,
+      setBlockNumber = (genesis.blockNumber + 1L).some
+    )
+
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    bds.lookup(genesis.blockHash) returnsF BlockMetadata.fromBlock(genesis).some
 
     for {
-      chain <- createChain[Task](2)
-      block = chain(1)
-      _ <- Validate
-            .blockNumber[Task](block.copy(blockNumber = 17)) shouldBeF Left(
-            InvalidBlockNumber
-          )
+      _ <- Validate.blockNumber[Task](block.copy(blockNumber = 17)) shouldBeF
+            Left(InvalidBlockNumber)
       _ <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
-      _ = log.warns.size should be(1)
-      _ = log.warns.head.contains("is not one more than maximum parent number") should be(
-        true
-      )
-    } yield ()
+      _ = log.warns.size shouldBe 1
+      _ = log.warns.head.contains("is not one more than maximum parent number") shouldBe true
+    } yield bds.lookup(genesis.blockHash) wasCalled twice
   }
 
-  it should "return true for sequential numbering" ignore {
-    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
+  it should "return true for sequential numbering" in {
+    val genesis = getRandomBlock(setJustifications = Seq.empty.some)
+
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    bds.lookup(genesis.blockHash) returnsF BlockMetadata.fromBlock(genesis).some
 
     val n = 6
+    val chain = (0 until n).foldLeft(Vector(genesis)) {
+      case (chain, _) =>
+        val block = getRandomBlock(
+          setJustifications = Seq(chain.last.blockHash).some,
+          setBlockNumber = (chain.last.blockNumber + 1L).some
+        )
+        bds.lookup(block.blockHash) returnsF BlockMetadata.fromBlock(block).some
+        chain :+ block
+    }
+
     for {
-      chain <- createChain[Task](n)
       _ <- chain.forallM[Task] { b =>
             Validate.blockNumber[Task](b).map(_ == Right(Valid))
           } shouldBeF true
-      _ = log.warns should be(Nil)
-    } yield ()
+      _ = log.warns shouldBe Nil
+    } yield bds.lookup(*) wasCalled n.times
   }
 
   it should "correctly validate a multi-parent block where the parents have different block numbers" ignore {
