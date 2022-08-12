@@ -56,13 +56,13 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     Sync[F].raiseError(new IllegalStateException(errorMsg)).unlessA(predicate)
 
   protected[this] val eventLog: Ref[F, EventLog] = Ref.unsafe(Seq.empty)
-  protected[this] val produceCounter: SyncVar[Map[Produce, Int]] =
-    create[Map[Produce, Int]](Map.empty.withDefaultValue(0))
+  protected[this] val produceCounter: Ref[F, Map[Produce, Int]] =
+    Ref.unsafe(Map.empty[Produce, Int].withDefaultValue(0))
 
-  protected[this] def produceCounters(produceRefs: Seq[Produce]): Map[Produce, Int] =
-    produceRefs
-      .map(p => p -> produceCounter.get(p))
-      .toMap
+  protected[this] def produceCounters(produceRefs: Seq[Produce]): F[Map[Produce, Int]] =
+    for {
+      counter <- produceCounter.get
+    } yield produceRefs.map(p => p -> counter(p)).toMap
 
   private val lockF = new ConcurrentTwoStepLockF[F, Blake2b256Hash](MetricsSource)
 
@@ -85,11 +85,9 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
 
   protected[this] val logger: Logger
 
-  private[this] val installs: SyncVar[Installs[F, C, P, A, K]] = {
-    val installs = new SyncVar[Installs[F, C, P, A, K]]()
-    installs.put(Map.empty)
-    installs
-  }
+  // TODO: provide ref instance in the constructor
+  private[this] val installs: Ref[F, Installs[F, C, P, A, K]] =
+    Ref.unsafe(Map.empty[Seq[C], Install[F, P, A, K]])
 
   def historyRepo: HistoryRepository[F, C, P, A, K] = historyRepositoryAtom.get()
 
@@ -173,12 +171,9 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
 
   def restoreInstalls(): F[Unit] =
     /*spanF.trace(restoreInstallsSpanLabel)*/
-    installs.get.toList
-      .traverse {
-        case (channels, Install(patterns, continuation)) =>
-          install(channels, patterns, continuation)
-      }
-      .as(())
+    installs.get.flatMap(_.toList.traverse_ {
+      case (channels, Install(patterns, continuation)) => install(channels, patterns, continuation)
+    })
 
   override def consume(
       channels: Seq[C],
@@ -285,11 +280,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
         result <- options match {
                    case None =>
                      for {
-                       _ <- syncF.delay {
-                             installs.update(
-                               _.updated(channels, Install(patterns, continuation))
-                             )
-                           }
+                       _ <- installs.update(_.updated(channels, Install(patterns, continuation)))
                        _ <- store.installContinuation(
                              channels,
                              WaitingContinuation(
@@ -322,8 +313,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       nextHistory   <- historyRepositoryAtom.get().reset(root)
       _             = historyRepositoryAtom.set(nextHistory)
       _             <- eventLog.set(Seq.empty)
-      _             = produceCounter.take()
-      _             = produceCounter.put(Map.empty.withDefaultValue(0))
+      _             <- produceCounter.set(Map.empty.withDefaultValue(0))
       historyReader <- nextHistory.getHistoryReader(root)
       _             <- createNewHotStore(historyReader)
       _             <- restoreInstalls()
@@ -348,8 +338,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     for {
       cache    <- storeAtom.get().snapshot
       log      <- eventLog.getAndSet(Seq.empty)
-      pCounter = produceCounter.take()
-      _        = produceCounter.put(Map.empty.withDefaultValue(0))
+      pCounter <- produceCounter.getAndSet(Map.empty.withDefaultValue(0))
     } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
 
   override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
@@ -360,8 +349,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
         hotStore      <- HotStore(checkpoint.cacheSnapshot, historyReader.base)
         _             = storeAtom.set(hotStore)
         _             <- eventLog.set(checkpoint.log)
-        _             = produceCounter.take()
-        _             = produceCounter.put(checkpoint.produceCounter)
+        _             <- produceCounter.set(checkpoint.produceCounter)
       } yield ()
     }
 
