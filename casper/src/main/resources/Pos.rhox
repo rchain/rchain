@@ -104,17 +104,17 @@ in {
   registryLookup!(`rho:lang:listOps`, *listOpsCh) |
   registryLookup!(`rho:lang:treeHashMap`, *treeHashMapCh) |
   registryLookup!(`rho:rchain:multiSigRevVault`, *multiSigRevVaultCh) |
-  registryLookup!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
-  registryLookup!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
-  for (@(_, RevVault)         <- revVaultCh &
-       @(_, ListOps)          <- listOpsCh &
-       @(_, TreeHashMap)      <- treeHashMapCh &
-       @(_, MultiSigRevVault) <- multiSigRevVaultCh &
-       @(_, configPublicKeyCheck)       <- configPublicKeyCheckCh) {
+  registryLookup!(`rho:registry:systemContractManager`, *systemContractManagerCh) |
+  registryLookup!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh) |
+  for (@(_, RevVault)             <- revVaultCh &
+       @(_, ListOps)              <- listOpsCh &
+       @(_, TreeHashMap)          <- treeHashMapCh &
+       @(_, MultiSigRevVault)     <- multiSigRevVaultCh &
+       @(_, configPublicKeyCheck) <- configPublicKeyCheckCh) {
     new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh,
         initialActiveCh, createUnfVault, moveInitialBondCh
     in {
-      let posVaultPubKey <- "$$posVaultPubKey$$"in {
+      let posVaultPubKey <- "$$posVaultPubKey$$" in {
       // Creates the auth key and Rev vault associated with the PoS contract.
         new posPkCh in {
           @RevVault!("deployerAuthKey", *posId, *posDeployerAuthKeyCh) |
@@ -137,17 +137,17 @@ in {
         contract createUnfVault(ret, @pubkey) = {
           new unf, unfAddrRet, createRetCh, unfVaultHandle in {
             revAddressOps!("fromUnforgeable", *unf, *unfAddrRet) |
-            for (@unfAddr <- unfAddrRet){
+            for (@unfAddr <- unfAddrRet) {
               @RevVault!("findOrCreate", unfAddr, *createRetCh) |
-              for (@(true, vault) <- createRetCh){
+              for (@(true, vault) <- createRetCh) {
                 contract unfVaultHandle(@"transfer", @targetAddress, @amount, deployerID, transferRet) = {
                   new checkResultRet in  {
                     checkAuth!(pubkey, *deployerID, *checkResultRet) |
-                    for (@res <- checkResultRet){
+                    for (@res <- checkResultRet) {
                       if (res) {
                         new unfAuthKeyCh in {
                           @RevVault!("unforgeableAuthKey", *unf, *unfAuthKeyCh) |
-                          for (@unfAuthKey <- unfAuthKeyCh){
+                          for (@unfAuthKey <- unfAuthKeyCh) {
                             @vault!("transfer", targetAddress, amount, unfAuthKey, *transferRet)
                           }
                         }
@@ -162,25 +162,26 @@ in {
             }
           }
         } |
+        // calculate public key bytes from deployerId
         contract checkAuth(@key, deployerId, ret) = {
           new deployerPubKeyBytesCh, DeployerIdOps(`rho:rchain:deployerId:ops`) in {
             DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
             for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
-              ret!(deployerPubKeyBytes ==  key.hexToBytes())
+              ret!(deployerPubKeyBytes == key.hexToBytes())
             }
           }
         } |
         createUnfVault!(*posVaultCh, *posVaultPubKey) |
-        for (@(posVaultUnf, posVaultAddr, posVault, humanControlHandle) <- posVaultCh){
-          for (@posDeployerRevAddress <- posDeployerRevAddressCh;
-              @posDeployerAuthKey    <- posDeployerAuthKeyCh)  {
+        for (@(posVaultUnf, posVaultAddr, posVault, humanControlHandle) <- posVaultCh) {
+          for (@posDeployerRevAddress <- posDeployerRevAddressCh &
+               @posDeployerAuthKey    <- posDeployerAuthKeyCh)  {
             for (@(true, (coopMultiVault, coopMultiVaultAddr, coopVaultHd)) <<- coopVaultCh) {
               // Creates PoS Rev vault with sum of initial bonds.
               new bondSumCh in {
                 @ListOps!("fold", $$initialBonds$$.toList(), 0, *sumFromPair, *bondSumCh) |
                 for (@bondSum <- bondSumCh) {
-                  @RevVault!("createWithBalance", posDeployerRevAddress, bondSum, *posDeployerVaultCh)|
-                  for (@(true, posDeployerVault)  <- posDeployerVaultCh) {
+                  @RevVault!("createWithBalance", posDeployerRevAddress, bondSum, *posDeployerVaultCh) |
+                  for (@(true, posDeployerVault) <- posDeployerVaultCh) {
                     // move all the fund from deployer addr to POS unforgeable vault
                     @posDeployerVault!("transfer", posVaultAddr, bondSum, posDeployerAuthKey, *moveInitialBondCh)
                   }
@@ -188,31 +189,28 @@ in {
               } |
               // Selects the initial active validators.
               pickActiveValidators!($$initialBonds$$.toList(), *initialActiveCh) |
-              for (@initialActive     <- initialActiveCh;
-                  @(true, _) <- moveInitialBondCh) {
+              for (@initialActive <- initialActiveCh &
+                   @(true, _)     <- moveInitialBondCh) {
                 new stateCh, rewardsInfo, calTotalActiveBonds,
-                    accumulateSndNum, accumulateFstOfSndArg, accumulateItemInState in {
-                  epochBlockNumberCh!(Nil)|
+                    accumulateSndNum, accumulateFstOfSndArg, accumulateItemInState
+                in {
+                  epochBlockNumberCh!($$epochLength$$) |
                   // bondingWhiteListCh store Map[PublicKey, Int]
                   bondingWhiteListCh!({}) |
                   // Initializes PoS state structure.
                   stateCh!({
-                    // Map[PublicKey, Int] - each validator stake
-                    "allBonds"        : $$initialBonds$$,
-                    // Set[PublicKey]     - the active validators
-                    "activeValidators": initialActive,
-                    // Map[PublicKey, (Int, Int)] - The validators who issued a withdraw request , finished validating jobs and not active.
-                    //                              When the validator reachs the quantinue length, it would be removed in the map and
-                    //                              pos would transfer back all the original bond and rewards back to validator vault.
-                    //                              Value(Int, Int) represents (original bond + reward, quantinue length)
-                    "withdrawers"     : {},
-                    // Map[PublicKey, Int]
-                    "committedRewards" : {},
-                    // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends
-                    "pendingWithdrawers": {},
-                    "randomImages"    : {},
-                    "randomNumbers"   : {},
+                    "allBonds"           : $$initialBonds$$,  // Map[PublicKey, Int] - each validator stake
+                    "activeValidators"   : initialActive,     // Set[PublicKey] - the active validators
+                    "committedRewards"   : {},                // Map[PublicKey, Int]
+                    "pendingWithdrawers" : {},                // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends
+                    "randomImages"       : {},                // TODO not currently used
+                    "randomNumbers"      : {},                // TODO not currently used
+                    "withdrawers"        : {},                // Map[PublicKey, (Int, Int)] - The validators who issued a withdraw request, finished validating jobs and not active.
+                                                              // When the validator reachs the quantinue length, it would be removed in the map and
+                                                              // pos would transfer back all the original bond and rewards back to validator vault.
+                                                              // Value(Int, Int) represents (original bond + reward, quantinue length)
                   }) |
+                  // TODO
                   contract rewardsInfo(retCh) = {
                     new posBalanceCh, totalActiveBondCh, totalBondCh, totalWithdrawCh, committedRewardsCh in {
                       @posVault!("balance", *posBalanceCh) |
@@ -220,20 +218,24 @@ in {
                       calTotalActiveBonds!(*totalActiveBondCh) |
                       accumulateItemInState!(*totalWithdrawCh, "withdrawers", *accumulateFstOfSndArg) |
                       accumulateItemInState!(*committedRewardsCh, "committedRewards", *accumulateSndNum) |
-                      for (@posBalance <- posBalanceCh; @totalBond <- totalBondCh; @activeBonds <- totalActiveBondCh;
-                          @totalWithdraw <- totalWithdrawCh; @totalCommittedRewards <- committedRewardsCh){
+                      for (@posBalance            <- posBalanceCh &
+                           @totalBond             <- totalBondCh &
+                           @activeBonds           <- totalActiveBondCh &
+                           @totalWithdraw         <- totalWithdrawCh &
+                           @totalCommittedRewards <- committedRewardsCh) {
                         for (@state <<- stateCh) {
-                          retCh!((posBalance , totalBond , activeBonds, totalWithdraw, totalCommittedRewards, state.get("allBonds"), state.get("activeValidators")))
+                          retCh!((posBalance, totalBond, activeBonds, totalWithdraw, totalCommittedRewards, state.get("allBonds"), state.get("activeValidators")))
                         }
                       }
                     }
                   } |
+                  // TODO
                   contract calTotalActiveBonds(returnCh) = {
                     new computeSum in {
-                      for (@state <<- stateCh){
+                      for (@state <<- stateCh) {
                         @ListOps!("fold", state.get("allBonds").toList(), 0, *computeSum, *returnCh) |
                         contract computeSum(@(pk, bondAmount), @acc, resultCh) = {
-                          if (state.get("activeValidators").contains(pk)){
+                          if (state.get("activeValidators").contains(pk)) {
                             resultCh!(acc + bondAmount)
                           } else {
                             resultCh!(acc)
@@ -249,18 +251,22 @@ in {
                     resultCh!(acc + amount)
                   } |
                   contract accumulateItemInState(returnCh, @stateKey, accumulateAlgo) = {
-                    for (@state <<- stateCh){
+                    for (@state <<- stateCh) {
                       @ListOps!("fold", state.get(stateKey).toList(), 0, *accumulateAlgo, *returnCh)
                     }
                   }|
+                  // -----------------------
+                  // ----- PoS methods -----
+                  // -----------------------
+                  // TODO
                   contract PoS(@"getCurrentEpochRewards", returnCh) = {
                     new rewardCh, computeReward in {
-                      rewardsInfo!(*rewardCh)|
-                      for (@(posBalance, totalBond, activeBonds, totalWithdraw, totalCommittedRewards, bondsMap, activeValidatorsSet) <- rewardCh){
+                      rewardsInfo!(*rewardCh) |
+                      for (@(posBalance, totalBond, activeBonds, totalWithdraw, totalCommittedRewards, bondsMap, activeValidatorsSet) <- rewardCh) {
                         @ListOps!("fold", bondsMap.toList(), {}, *computeReward, *returnCh) |
                         contract computeReward(@(pk, bonds), @acc,  outCh) = {
                           //  someAmount / minimumBond to reduce the possibility on overflow long
-                          if (activeValidatorsSet.contains(pk)){
+                          if (activeValidatorsSet.contains(pk)) {
                             outCh!(acc.set(pk, (posBalance - totalBond - totalWithdraw - totalCommittedRewards) * (bonds / $$minimumBond$$) / (activeBonds / $$minimumBond$$)))
                           } else {
                             outCh!(acc.set(pk, 0))
@@ -269,10 +275,11 @@ in {
                       }
                     }
                   } |
+                  // TODO
                   contract PoS(@"getRewards", returnCh) = {
                     new currentEpochRewardCh, accumulateReward in {
                       for (@state <<- stateCh) {
-                        PoS!("getCurrentEpochRewards", *currentEpochRewardCh)|
+                        PoS!("getCurrentEpochRewards", *currentEpochRewardCh) |
                         for (@currentEpochReward <- currentEpochRewardCh) {
                           @ListOps!("fold", currentEpochReward.toList(), state.get("committedRewards"), *accumulateReward, *returnCh) |
                           contract accumulateReward(@(pk, reward), @acc, outCh) = {
@@ -315,36 +322,52 @@ in {
                   contract PoS(@"getInitialPosVault", returnCh) = {
                     returnCh!((posVaultAddr, posVault))
                   } |
+                  // TODO adjustable?
                   // Exposes epochLength parameter to PoSTest.
                   contract PoS(@"getEpochLength", returnCh) = {
                     returnCh!($$epochLength$$)
+                  } |
+                  // TODO
+                  contract PoS(@"getEpochBlockNumber", returnCh) = {
+                    for (@epochBlockNumber <<- epochBlockNumberCh) {
+                      returnCh!(epochBlockNumber)
+                    }
                   } |
                   // Exposes quarantineLength parameter to PoSTest.
                   contract PoS(@"getQuarantineLength", returnCh) = {
                     returnCh!($$quarantineLength$$)
                   } |
-                  contract PoS(@"setEpochBlockNumber", @deployerId, @blockNumber, ret) = {
+                  // checks the authority of deployerId and type of newEpochBlockNumber
+                  // - if pubKey from deployerId != posVaultPubKey, fail due to lack of authority
+                  // - if newEpochBlockNumber is not an integer, fail due to incompatible type
+                  contract PoS(@"setEpochBlockNumber", @deployerId, @newEpochBlockNumber, ret) = {
                     new authRet in {
-                      checkAuth!(*posVaultPubKey, deployerId, *authRet)|
-                      for (@isValid <- authRet){
-                        if (isValid){
-                          for (@oldValue <- epochBlockNumberCh){
-                            epochBlockNumberCh!(blockNumber) |
-                            ret!((true, Nil))
+                      checkAuth!(*posVaultPubKey, deployerId, *authRet) |
+                      for (@isValid <- authRet) {
+                        match newEpochBlockNumber {
+                          Int => {
+                            if (isValid) {
+                              for (_ <- epochBlockNumberCh) {
+                                epochBlockNumberCh!(newEpochBlockNumber) |
+                                ret!((true, Nil))
+                              }
+                            } else {
+                              ret!((false, "Invalid authority to set PoS epoch block number"))
+                            }
                           }
-                        } else {
-                          ret!((false, "You have no permissions to set epoch blockNumber"))
+                          _ => { ret!((false, "PoS epoch block number must be an integer")) }
                         }
                       }
                     }
                   } |
+                  // TODO
                   contract PoS(@"addBondingRequest", @deployerId, @publicKey, @stake, ret) = {
                     new authRet in {
-                      checkAuth!(*posVaultPubKey, deployerId, *authRet)|
-                      for (@isValid <- authRet){
-                        if (isValid){
-                          for (@bondingWhiteList <- bondingWhiteListCh){
-                            bondingWhiteListCh!(bondingWhiteList.set(publicKey, stake))|
+                      checkAuth!(*posVaultPubKey, deployerId, *authRet) |
+                      for (@isValid <- authRet) {
+                        if (isValid) {
+                          for (@bondingWhiteList <- bondingWhiteListCh) {
+                            bondingWhiteListCh!(bondingWhiteList.set(publicKey, stake)) |
                             ret!((true, Nil))
                           }
                         } else {
@@ -353,15 +376,18 @@ in {
                       }
                     }
                   } |
+                  // TODO
                   contract PoS(@"removeBondingRequest", @deployerId, @publicKey, ret) = {
                     new authRet in {
-                      checkAuth!(*posVaultPubKey, deployerId, *authRet)|
-                      for (@isValid <- authRet){
-                        if (isValid){
-                          for (@bondingWhiteList <- bondingWhiteListCh){
-                            if (bondingWhiteList.contains(publicKey)){
-                              bondingWhiteListCh!(bondingWhiteList.delete(publicKey))|
-                              ret!((true, Nil))
+                      checkAuth!(*posVaultPubKey, deployerId, *authRet) |
+                      for (@isValid <- authRet) {
+                        if (isValid) {
+                          for (@bondingWhiteList <<- bondingWhiteListCh) {
+                            if (bondingWhiteList.contains(publicKey)) {
+                              for (_ <- bondingWhiteListCh) {
+                                bondingWhiteListCh!(bondingWhiteList.delete(publicKey)) |
+                                ret!((true, Nil))
+                              }
                             } else {
                               ret!((false, "The public key you provide is not in bonding white list"))
                             }
@@ -377,16 +403,17 @@ in {
                     @humanControlHandle!("transfer", targetAddress, amount, deployerID, transferRet)
                   } |
                   // Returns current state elements on `ret`.
-                  for (ret <- @(*PoS, "extractState")){
+                  for (ret <- @(*PoS, "extractState")) {
                     for (@state <<- stateCh) {
                       ret!({
-                        "state"     : state,
-                        "coopVault" : (coopMultiVault, coopMultiVaultAddr, coopVaultHd),
-                        "posVault"  : (posVaultUnf, posVaultAddr, posVault, humanControlHandle),
-                        "currentDeployerData"   : *currentDeployerData
+                        "state"               : state,
+                        "coopVault"           : (coopMultiVault, coopMultiVaultAddr, coopVaultHd),
+                        "posVault"            : (posVaultUnf, posVaultAddr, posVault, humanControlHandle),
+                        "currentDeployerData" : *currentDeployerData
                       })
                     }
                   } |
+                  // TODO
                   contract @(*PoS, "securityCheck")(@deployerId, ret) = {
                     @configPublicKeyCheck!(deployerId, *ret)
                   } |
@@ -400,8 +427,8 @@ in {
                       DeployerIdOps!("pubKeyBytes", deployerId, *deployerPubKeyBytesCh) |
                       for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
                         for (@state, resultCh <- processCh &
-                            @userPk          <- userCh) {
-                          for (@bondingWhiteList <<- bondingWhiteListCh){
+                             @userPk          <- userCh) {
+                          for (@bondingWhiteList <<- bondingWhiteListCh) {
                             if (state.get("allBonds").contains(userPk)) {
                               resultCh!(state, (false, "Public key is already bonded."))
                             } else if (amount < $$minimumBond$$) {
@@ -410,7 +437,7 @@ in {
                               resultCh!(state, (false, "Bond is greater than maximum!"))
                             } else if (not bondingWhiteList.contains(deployerPubKeyBytes.bytesToHex())) {
                               resultCh!(state, (false, "The deployer is not in bonding white list!"))
-                            } else if (bondingWhiteList.getOrElse(deployerPubKeyBytes.bytesToHex(), Nil) != amount){
+                            } else if (bondingWhiteList.getOrElse(deployerPubKeyBytes.bytesToHex(), Nil) != amount) {
                               resultCh!(state, (false, "The bonding amount is not equal the number in bonding white list!"))
                             } else {
                               // Transfers user's bond amount to the PoS vault.
@@ -442,9 +469,9 @@ in {
                       runMVar!(*stateCh, *processCh, *returnCh) |
                       getBlockData!(*blockDataCh) |
                       getUser!(deployerId, *userCh) |
-                      for (@state, resultCh   <- processCh &
-                          @userPk            <- userCh &
-                          @blockNumber, _ <- blockDataCh) {
+                      for (@state, resultCh <- processCh &
+                           @userPk          <- userCh &
+                           @blockNumber, _  <- blockDataCh) {
                         if (state.get("allBonds").contains(userPk)) {
                           // The withdrawal goes into effect at the start of the next epoch.
                           resultCh!(
@@ -469,7 +496,7 @@ in {
                         if (isValid) {
                           new depositCh in {
                             deposit!(deployerId, amount, posVaultAddr, *depositCh) |
-                            for (@depositResult <- depositCh){
+                            for (@depositResult <- depositCh) {
                               match depositResult {
                                 (true, _) => {
                                   currentDeployerData!((deployerId, amount)) |
@@ -495,7 +522,7 @@ in {
                       sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
                       for (@isValid <- isValidTokenCh) {
                         if (isValid) {
-                          for (@(deployerId, initialPaymentAmount) <- currentDeployerData){
+                          for (@(deployerId, initialPaymentAmount) <- currentDeployerData) {
                             if (refundAmount > 0) {
                               new revAddressCh, transferCh in {
                                 revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
@@ -542,7 +569,8 @@ in {
                                   // - update state
                                   valBondCh!(state.get("allBonds").get(slashedValidator)) |
                                   @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
-                                  for (@valBond <- valBondCh ; @posAuthKey <- posAuthKeyCh) {
+                                  for (@valBond    <- valBondCh &
+                                       @posAuthKey <- posAuthKeyCh) {
                                     // Transfers slashed funds from PoS vault to Coop vault, then updates state.
                                     new transferDoneCh in {
                                       @posVault!(
@@ -557,13 +585,13 @@ in {
                                         // Sets slashed validator's committed rewards and bond to 0 in state.
                                         // Moves slashed validator to withdrawers map with no quarantine period.
                                         stateUpdateCh!({
-                                          "allBonds"        : state.get("allBonds").set(slashedValidator, 0),
-                                          "activeValidators": state.get("activeValidators").delete(slashedValidator),
-                                          "committedRewards" : state.get("committedRewards").delete(slashedValidator),
-                                          "withdrawers"     : state.get("withdrawers"),
-                                          "pendingWithdrawers": state.get("pendingWithdrawers"),
-                                          "randomImages"    : state.get("randomImages"),
-                                          "randomNumbers"   : state.get("randomNumbers")
+                                          "allBonds"           : state.get("allBonds").set(slashedValidator, 0),
+                                          "activeValidators"   : state.get("activeValidators").delete(slashedValidator),
+                                          "committedRewards"   : state.get("committedRewards").delete(slashedValidator),
+                                          "withdrawers"        : state.get("withdrawers"),
+                                          "pendingWithdrawers" : state.get("pendingWithdrawers"),
+                                          "randomImages"       : state.get("randomImages"),
+                                          "randomNumbers"      : state.get("randomNumbers")
                                         },
                                         (true, Nil))
                                       }
@@ -586,11 +614,13 @@ in {
                           if (isValid) {
                             new blockDataCh, getBlockData(`rho:block:data`) in {
                               getBlockData!(*blockDataCh) |
-                              for (@epochBlockNumber <<- epochBlockNumberCh){
+                              for (@epochBlockNumber <<- epochBlockNumberCh) {
                                 for (@blockNumber, _ <- blockDataCh) {
-                                  if (epochBlockNumber != blockNumber) {
-                                    // Epoch change does not occur.
-                                    ackCh!((true, "Current block is not epoch block"))
+                                  if (epochBlockNumber > blockNumber ||
+                                        epochBlockNumber < blockNumber && (blockNumber - epochBlockNumber) % $$epochLength$$ != 0) {
+                                    // Epoch change does not occur
+                                    // return (blockNumber, epochBlockNumber, $$epochLength$$)
+                                    ackCh!((true, "(${1}, ${2}, ${3})" %% {"1" : blockNumber, "2" : epochBlockNumber, "3" : $$epochLength$$}))
                                   } else {
                                     // Epoch change occurs.
                                     new payWithdrawer, removeQuarantinedWithdrawers,
@@ -599,7 +629,7 @@ in {
                                         newValidatorsCh, removeQuarantinedCh, currentEpochRewardCh,
                                         commitCurrentEpochRewards, updatedRewardsCh, movePendingWithdrawCh, movePendingWithdrawer
                                     in {
-                                      PoS!("getCurrentEpochRewards", * currentEpochRewardCh) |
+                                      PoS!("getCurrentEpochRewards", *currentEpochRewardCh) |
                                       for (@currentRewards <- currentEpochRewardCh) {
                                         runMVar!(*stateCh, *stateProcessCh, *ackCh) |
                                         for (@state, stateUpdateCh <- stateProcessCh) {
@@ -610,7 +640,7 @@ in {
                                             // 3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers`
                                             // when pendingWithdrawers is not empty, remove the validator in `allBonds`
                                             movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
-                                            for (@newMovedPendingState <- movePendingWithdrawCh){
+                                            for (@newMovedPendingState <- movePendingWithdrawCh) {
                                               // 4. When the block number reaches the quantinue of `withdrawers` ,
                                               //  transfer the corresponding bonds+ rewards to the corresponding validator from posVault.
                                               // 5. update `pendingWithdrawers` to empty Map {}.
@@ -631,9 +661,9 @@ in {
                                         new vaultCh, revAddressCh, createCh, posAuthKeyCh in {
                                           revAddressOps!("fromPublicKey", pk, *revAddressCh) |
                                           @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
-                                          for (@toRevAddress <- revAddressCh; @posAuthKey <- posAuthKeyCh) {
+                                          for (@toRevAddress <- revAddressCh & @posAuthKey <- posAuthKeyCh) {
                                             @RevVault!("findOrCreate", toRevAddress, *createCh) |
-                                            for (@_ <- createCh){
+                                            for (@_ <- createCh) {
                                               @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
                                             }
                                           }
@@ -805,7 +835,7 @@ in {
   } | 
   for (@(_, systemContractManager) <- systemContractManagerCh) {
     @systemContractManager!("createDispatcher", *PoS, *dispatcherCh) |
-    for (posDispatcher <- dispatcherCh){
+    for (posDispatcher <- dispatcherCh) {
       // Inserts signed write-only pos dispatcher contract into the registry
       rs!(
         (9223372036854775807, bundle+{*posDispatcher}),
