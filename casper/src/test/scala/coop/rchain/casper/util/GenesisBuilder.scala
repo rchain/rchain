@@ -2,22 +2,22 @@ package coop.rchain.casper.util
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockRandomSeed, ValidatorIdentity}
+import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.models.syntax._
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper.rholang.RuntimeManager
+import coop.rchain.casper.rholang.{BlockRandomSeed, RuntimeManager}
 import coop.rchain.casper.util.ConstructDeploy._
-import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import monix.eval.Task
@@ -27,6 +27,7 @@ import scala.collection.compat.immutable.LazyList
 import scala.collection.mutable
 
 object GenesisBuilder {
+
   val randomValidatorKeyPairs                  = LazyList.continually(Secp256k1.newKeyPair)
   val (randomValidatorSks, randomValidatorPks) = randomValidatorKeyPairs.unzip
 
@@ -196,8 +197,10 @@ object GenesisBuilder {
       blockStore      <- BlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
-      _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)
-    } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory)).unsafeRunSync
+      // Add genesis block to DAG
+      _ <- blockDagStorage.insertGenesis(genesis)
+    } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory))
+      .runSyncUnsafe()
   }
 
   case class GenesisContext(

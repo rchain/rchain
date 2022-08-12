@@ -16,7 +16,7 @@ object BondingUtil {
     ConstructDeploy
       .sourceDeployNowF(
         s"""
-         |new retCh, PosCh, rl(`rho:registry:lookup`), stdout(`rho:io:stdout`), deployerId(`rho:rchain:deployerId`) in {
+         |new retCh, PosCh, rl(`rho:registry:lookup`), deployerId(`rho:rchain:deployerId`) in {
          |  rl!(`rho:rchain:pos`, *PosCh) |
          |  for(@(_, Pos) <- PosCh) {
          |    @Pos!("bond", *deployerId, $amount, *retCh)
@@ -36,7 +36,7 @@ object BondingUtil {
     ConstructDeploy
       .sourceDeployNowF(
         s"""
-           |new retCh, PosCh, rl(`rho:registry:lookup`), stdout(`rho:io:stdout`), deployerId(`rho:rchain:deployerId`) in {
+           |new retCh, PosCh, rl(`rho:registry:lookup`), deployerId(`rho:rchain:deployerId`) in {
            |  rl!(`rho:rchain:pos`, *PosCh) |
            |  for(@(_, Pos) <- PosCh) {
            |    @Pos!("addBondingRequest", *deployerId, "$newValidatorPubkey", $amount, *retCh)
