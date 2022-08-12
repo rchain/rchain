@@ -34,6 +34,7 @@ let @posPubKey, @posVaultPubKey <-
       test_bonding_fails_if_removed_from_whitelist,
       test_bonding_fails_if_stake_is_not_the_same_as_whitelist,
       test_epoch_change_on_setting_epoch_block,
+      test_pos_params_only_updated_with_proper_authority_and_type,
       getPosBalance, getCoopBalance,
       closeBlock,
       makeDeployerId(`rho:test:deployerId:make`),
@@ -47,13 +48,13 @@ let @posPubKey, @posVaultPubKey <-
       rl!(`rho:lang:listOps`, *ListOpsCh) |
       rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
       makeSysAuthToken!(*sysAuthTokenCh) |
-      for(@(_, RhoSpec)  <- RhoSpecCh &
-          @(_, PoS)      <- PoSCh &
-          @(_, RevVault) <- RevVaultCh &
-          @posRevAddress <- posRevAddressCh &
-          @(_, ListOps)  <- ListOpsCh &
-          @sysAuthToken  <- sysAuthTokenCh  & 
-          posVaultDeploerId <- deployerIdCh) {
+      for(@(_, RhoSpec)      <- RhoSpecCh &
+          @(_, PoS)          <- PoSCh &
+          @(_, RevVault)     <- RevVaultCh &
+          @posRevAddress     <- posRevAddressCh &
+          @(_, ListOps)      <- ListOpsCh &
+          @sysAuthToken      <- sysAuthTokenCh  & 
+          posVaultDeployerId <- deployerIdCh) {
         stdlog!("info", {"posRevAddress" : posRevAddress}) |
         @PoS!("getInitialPosVault", *posVaultCh) |
         for (@(posAddr, posVault) <- posVaultCh) {
@@ -76,8 +77,9 @@ let @posPubKey, @posVaultPubKey <-
               ("bonding fails if the requester is removed in the white list", *test_bonding_fails_if_removed_from_whitelist),
               ("bonding fails if the bonding request is not euqal to the stake in white list", *test_bonding_fails_if_stake_is_not_the_same_as_whitelist),
               // TODO we should reimplement the random test in the future when it is available
-              ("commited random matches its image", *test_commit_random),
-              ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
+              // ("commited random matches its image", *test_commit_random),
+              ("slashing transfers funds appropriately", *test_slashing_vaults_and_state),
+              ("PoS params fail to update with invalid authority and types", *test_pos_params_only_updated_with_proper_authority_and_type)
             ]
           ) |
 
@@ -123,30 +125,144 @@ let @posPubKey, @posVaultPubKey <-
           } |
           // Tests that close block finishes on non epoch change block number and on epoch change block number.
           contract test_close_block_finishes(rhoSpec, _, ackCh) = {
-            new close1Ch, close2Ch, setBlockData(`rho:test:block:data:set`),
-                initialBlockDataCh, finalBlockDataCh, epochCh
+            new closeCh, setBlockData(`rho:test:block:data:set`),
+                blockDataCh, epochLengthCh, epochBlockNumberCh
             in {
-              @PoS!("getEpochLength", *epochCh) |
-              for (@epochLength <- epochCh) {
+              @PoS!("getEpochLength", *epochLengthCh) |
+              @PoS!("getEpochBlockNumber", *epochBlockNumberCh) |
+              for (@epochLength <- epochLengthCh & @epochBlockNumber <- epochBlockNumberCh) {
                 // non epoch change closeBlock
-                setBlockData!("blockNumber", 1, *initialBlockDataCh) |
-                for (_ <- initialBlockDataCh) {
-                  closeBlock!(*close1Ch) |
-                  for (@closeRes <- close1Ch) {
+                setBlockData!("blockNumber", 1, *blockDataCh) |
+                for (_ <- blockDataCh) {
+                  closeBlock!(*closeCh) |
+                  for (@closeRes1 <- closeCh) {
                     // epoch change closeBlock
-                    setBlockData!("blockNumber", epochLength, *finalBlockDataCh) |
-                    for (_ <- finalBlockDataCh) {
-                      closeBlock!(*close2Ch) |
-                      for (@closeRes2 <- close2Ch) {
-                        rhoSpec!("assertMany",
-                          [
-                            ((closeRes.nth(0), "==", true), "no epoch on block number 1"),
-                            // TODO use other ways to assert instead of string for non epoch result
-                            ((closeRes.nth(1), "==", "Current block is not epoch block"), "no epoch on block number 1"),
-                            ((closeRes2.nth(1), "==", Nil), "epoch should happen in epoch block")
-                          ],
-                          *ackCh
-                        )
+                    setBlockData!("blockNumber", epochLength, *blockDataCh) |
+                    for (_ <- blockDataCh) {
+                      closeBlock!(*closeCh) |
+                      for (@closeRes2 <- closeCh) {
+                        // non epoch change closeBlock
+                        setBlockData!("blockNumber", epochLength + 1, *blockDataCh) |
+                        for (_ <- blockDataCh) {
+                          closeBlock!(*closeCh) |
+                          for (@closeRes3 <- closeCh) {
+                            // epoch change closeBlock
+                            setBlockData!("blockNumber", 2 * epochLength, *blockDataCh) |
+                            for (_ <- blockDataCh) {
+                              closeBlock!(*closeCh) |
+                              for (@closeRes4 <- closeCh) {
+                                let @expect1 <- "(${1}, ${2}, ${3})" %% {"1" : 1, "2" : epochBlockNumber, "3" : epochLength} &
+                                    @expect2 <- "(${1}, ${2}, ${3})" %% {"1" : epochLength + 1, "2" : epochBlockNumber, "3" : epochLength}
+                                in {
+                                  rhoSpec!("assertMany",
+                                    [
+                                      ((closeRes1.nth(0), "==", true), "no epoch on block number: 1"),
+                                      ((closeRes2.nth(0), "==", true), "epoch change on block number: epochLength"),
+                                      ((closeRes3.nth(0), "==", true), "no epoch on block number: epochLength + 1"),
+                                      ((closeRes4.nth(0), "==", true), "epoch change on block number: 2 * epochLength"),
+                                      ((closeRes1.nth(1), "==", expect1), "no epoch on non epoch block"),
+                                      ((closeRes2.nth(1), "==", Nil), "epoch on epoch block"),
+                                      ((closeRes3.nth(1), "==", expect2), "no epoch on non epoch block"),
+                                      ((closeRes4.nth(1), "==", Nil), "epoch on epoch block"),
+                                    ],
+                                    *ackCh
+                                  )
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } |
+          // test the PoS "setEpochBlockNumber" method
+          contract test_epoch_change_on_setting_epoch_block(rhoSpec, _, ackCh) = {
+            new closeCh, setBlockData(`rho:test:block:data:set`),
+                epochBlockCh, epochLengthCh, blockDataCh, blockDataCh, setEpochRet
+            in {
+              let @targetEpochBlock <- 1234 in {
+                // first get the initial epoch block number to reset later
+                @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                @PoS!("getEpochLength", *epochLengthCh) |
+                // non epoch change closeBlock
+                setBlockData!("blockNumber", targetEpochBlock, *blockDataCh) |
+                for (_                  <- blockDataCh &
+                     @initialEpochBlock <- epochBlockCh &
+                     @epochLength       <- epochLengthCh) {
+                  closeBlock!(*closeCh) |
+                  for (@closeRes1 <- closeCh) {
+                    // epoch change closeBlock
+                    @PoS!("setEpochBlockNumber", *posVaultDeployerId, targetEpochBlock, *setEpochRet) |
+                    for (_ <- setEpochRet) {
+                      @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                      closeBlock!(*closeCh) |
+                      for (@closeRes2 <- closeCh & @finalEpochBlock <- epochBlockCh) {
+                        // reset epoch block number to initial
+                        @PoS!("setEpochBlockNumber", *posVaultDeployerId, initialEpochBlock, *setEpochRet) |
+                        setBlockData!("blockNumber", 1, *blockDataCh) |
+                        for (_ <- setEpochRet & _ <- blockDataCh) {
+                          let @expect <- "(${1}, ${2}, ${3})" %% {"1" : targetEpochBlock, "2" : initialEpochBlock, "3" : epochLength} in {
+                            rhoSpec!("assertMany",
+                              [
+                                ((finalEpochBlock, "==", targetEpochBlock), "setting epoch block with correct deployId changes the number"),
+                                ((closeRes1.nth(0), "==", true), "first closeBlock works"),
+                                ((closeRes2.nth(0), "==", true), "second closeBlock works"),                              
+                                ((closeRes1.nth(1), "==", expect), "epoch block would not happen before setting epoch block number"),
+                                ((closeRes2.nth(1), "==", Nil), "epoch block would happen after setting epoch block number"),
+                              ],
+                              *ackCh
+                            )
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }              
+            }
+          } |
+          // test setting PoS parameters with invalid deploy id and invalid types
+          contract test_pos_params_only_updated_with_proper_authority_and_type(rhoSpec, _, ackCh) = {
+            new epochBlockCh, setEpochRet, setupCh in {
+              prepareUser!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", *setupCh) |
+              for (_, _, _, @userDeployerId <- setupCh) {
+                @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                // user attempts to set epoch block number - should be denied
+                @PoS!("setEpochBlockNumber", userDeployerId, 42, *setEpochRet) |
+                for (@setRes1 <- setEpochRet & @epochBlock0 <- epochBlockCh) {
+                  // pos attempts to set Nil epoch block number - should be denied
+                  @PoS!("setEpochBlockNumber", *posVaultDeployerId, Nil, *setEpochRet) |
+                  @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                  for (@setRes2 <- setEpochRet & @epochBlock1 <- epochBlockCh) {
+                    // pos attempts to set string epoch block number - should be denied
+                    @PoS!("setEpochBlockNumber", *posVaultDeployerId, "42", *setEpochRet) |
+                    @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                    for (@setRes3 <- setEpochRet & @epochBlock2 <- epochBlockCh) {
+                      // pos attempts to set list epoch block number - should be denied
+                      @PoS!("setEpochBlockNumber", *posVaultDeployerId, [42], *setEpochRet) |
+                      @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                      for (@setRes4 <- setEpochRet & @epochBlock3 <- epochBlockCh) {
+                        @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                        for (@epochBlock4 <- epochBlockCh) {
+                          rhoSpec!("assertMany",
+                            [
+                              ((setRes1.nth(0), "==", false), "set epoch block number should be denied for non-Pos identity"),
+                              ((setRes2.nth(0), "==", false), "set epoch block number should be denied for Nil"),
+                              ((setRes3.nth(0), "==", false), "set epoch block number should be denied for string"),
+                              ((setRes4.nth(0), "==", false), "set epoch block number should be denied for list"),
+                              ((setRes1.nth(1), "==", "Invalid authority to set PoS epoch block number"), "get authority error message"),
+                              ((setRes2.nth(1), "==", "PoS epoch block number must be an integer"), "get type error message 1"),
+                              ((setRes3.nth(1), "==", "PoS epoch block number must be an integer"), "get type error message 2"),
+                              ((setRes4.nth(1), "==", "PoS epoch block number must be an integer"), "get type error message 3"),
+                              ((Set(epochBlock1, epochBlock2, epochBlock3, epochBlock4), "==", Set(epochBlock0)), "epoch block number should not change"),
+                            ],
+                            *ackCh
+                          )
+                        }
                       }
                     }
                   }
@@ -155,37 +271,6 @@ let @posPubKey, @posVaultPubKey <-
             }
           } |
 
-          contract test_epoch_change_on_setting_epoch_block(rhoSpec, _, ackCh) = {
-            new close1Ch, close2Ch, setBlockData(`rho:test:block:data:set`),
-                initialBlockDataCh, finalBlockDataCh, setEpochRet
-            in {
-              // non epoch change closeBlock
-              let @targetEpochBlockNumber <- 1234 in {
-                setBlockData!("blockNumber", targetEpochBlockNumber, *initialBlockDataCh) |
-                for (_ <- initialBlockDataCh) {
-                  closeBlock!(*close1Ch) |
-                  for (@closeRes <- close1Ch) {
-                    // epoch change closeBlock
-                    @PoS!("setEpochBlockNumber", *posVaultDeploerId, targetEpochBlockNumber, *setEpochRet) |
-                    for (@setEpochRes <- setEpochRet) {
-                      closeBlock!(*close2Ch) |
-                      for (@closeRes2 <- close2Ch) {
-                        rhoSpec!("assertMany",
-                          [
-                            ((setEpochRes.nth(0), "==", true), "Settomg epoch block with correct deployId should work"),
-                            // TODO use other ways to assert instead of string for non epoch result
-                            ((closeRes.nth(1), "==", "Current block is not epoch block"), "epoch block would not happen before setting epoch block number"),
-                            ((closeRes2.nth(1), "==", Nil), "epoch block would happen after setting epoch block number"),
-                          ],
-                          *ackCh
-                        )
-                      }
-                    }
-                  }
-                }
-              }              
-            }
-          } |
           // Tests that a user's bond is added to the bonds map properly and all balances change accordingly.
           contract test_bonding_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, retCh, initialPosBalanceCh, finalPosBalanceCh,
@@ -202,15 +287,15 @@ let @posPubKey, @posVaultPubKey <-
                   @userVault!("balance", *initialUserBalanceCh) |
                   @PoS!("getBonds", *initialBondsCh) |
                   @PoS!("addBondingRequest", 
-                        *posVaultDeploerId, 
+                        *posVaultDeployerId, 
                         "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111", 
                         bondAmt, 
                         *addBondReqCh) |
                   for (@initialPosBalance  <- initialPosBalanceCh &
-                      @initialUserBalance <- initialUserBalanceCh &
-                      @initialCoopBalance <- initialCoopBalanceCh &
-                      @initialBonds       <- initialBondsCh &
-                      @addBondingReqRes   <- addBondReqCh) {
+                       @initialUserBalance <- initialUserBalanceCh &
+                       @initialCoopBalance <- initialCoopBalanceCh &
+                       @initialBonds       <- initialBondsCh &
+                       @addBondingReqRes   <- addBondReqCh) {
                     @PoS!("bond", userDeployerId, bondAmt, *retCh) |
                     for (@bondRes <- retCh) {
                       @PoS!("getBonds", *finalBondsCh) |
@@ -219,10 +304,10 @@ let @posPubKey, @posVaultPubKey <-
                       @userVault!("balance", *finalUserBalanceCh) |
                       @PoS!("getRewards", *rewardsCh) |
                       for (@finalPosBalance  <- finalPosBalanceCh &
-                          @finalUserBalance <- finalUserBalanceCh &
-                          @finalCoopBalance <- finalCoopBalanceCh &
-                          @finalBonds       <- finalBondsCh &
-                          @rewards          <- rewardsCh) {
+                           @finalUserBalance <- finalUserBalanceCh &
+                           @finalCoopBalance <- finalCoopBalanceCh &
+                           @finalBonds       <- finalBondsCh &
+                           @rewards          <- rewardsCh) {
                         rhoSpec!("assertMany",
                           [
                             ((addBondingReqRes.nth(0), "==", true), "add bonding request should be true"),
@@ -266,7 +351,6 @@ let @posPubKey, @posVaultPubKey <-
                 @PoS!("getRewards", *initialRewardsCh) |
                 @PoS!("getQuarantineLength", *quarantineCh) |
                 @PoS!("getEpochLength", *epochCh) |
-
                 for (@initialPosBalance  <- initialPosBalanceCh &
                      @initialUserBalance <- initialUserBalanceCh &
                      @initialBonds       <- initialBondsCh &
@@ -276,15 +360,15 @@ let @posPubKey, @posVaultPubKey <-
                   // block number is set for after a quarantine period so this validator will appear in the initial and final bonds map in test_validator_is_paid_after_withdraw
                   let @(bondAmt, blockNumber) <- (100, 2 * epochLength * quarantineLength) in  {
                     @PoS!("addBondingRequest", 
-                      *posVaultDeploerId, 
+                      *posVaultDeployerId, 
                       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 
                       bondAmt, 
                       *addBondReqCh) |
-                    for (@addBondRes <- addBondReqCh){
+                    for (@addBondRes <- addBondReqCh) {
                       @PoS!("bond", userDeployerId, bondAmt, *bondCh) |
                       setBlockData!("blockNumber", blockNumber, *blockDataCh) |
                       for (@bondRes <- bondCh &
-                            _          <- blockDataCh) {
+                            _       <- blockDataCh) {
                         @PoS!("withdraw", userDeployerId, *withdrawCh) |
                         for (_ <- withdrawCh) {
                           closeBlock!(*closeBlockCh) |
@@ -296,11 +380,11 @@ let @posPubKey, @posVaultPubKey <-
                             @PoS!("getWithdrawers", *withdrawersCh) |
                             quarantinePeriodCh!(quarantineLength + epochLength * (1 + blockNumber / epochLength)) |
                             for (@finalPosBalance  <- finalPosBalanceCh &
-                                  @finalUserBalance <- finalUserBalanceCh &
-                                  @finalBonds       <- finalBondsCh &
-                                  @finalRewards     <- finalRewardsCh &
-                                  @withdrawers      <- withdrawersCh &
-                                  @quarantinePeriod <- quarantinePeriodCh) {
+                                 @finalUserBalance <- finalUserBalanceCh &
+                                 @finalBonds       <- finalBondsCh &
+                                 @finalRewards     <- finalRewardsCh &
+                                 @withdrawers      <- withdrawersCh &
+                                 @quarantinePeriod <- quarantinePeriodCh) {
                               rhoSpec!("assertMany",
                                 [
                                   ((addBondRes.nth(0), "==", true), "add bonding request should be true"),
@@ -349,11 +433,11 @@ let @posPubKey, @posVaultPubKey <-
                      @quarantineLength        <- quarantineCh) {
                   let @(bondAmt, chargeAmt, refundAmt, blockNumber)<- (100, 100, 0, 1) in {
                     @PoS!("addBondingRequest", 
-                      *posVaultDeploerId, 
+                      *posVaultDeployerId, 
                       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 
                       bondAmt, 
                       *addBondReqCh) |
-                    for (@addBondRes <- addBondReqCh){
+                    for (@addBondRes <- addBondReqCh) {
                       @PoS!("bond", validatorDeployerId, bondAmt, *bondCh) |
                       for (@bondRes <- bondCh) {
                         stdlog!("info", ("successfully bond.")) |
@@ -364,7 +448,7 @@ let @posPubKey, @posVaultPubKey <-
                             @PoS!("chargeDeploy", userDeployerId, chargeAmt, sysAuthToken, *chargeCh) |
                             @PoS!("refundDeploy", refundAmt, sysAuthToken, *refundCh) |
                             for (@(true, _) <- chargeCh &
-                                @(true, _) <- refundCh){
+                                 @(true, _) <- refundCh) {
                               closeBlock!(*closeBlockCh) |
                               for (_ <- closeBlockCh) {
                                 @PoS!("getRewards", *rewardsCh) |
@@ -376,7 +460,7 @@ let @posPubKey, @posVaultPubKey <-
                                     stdlog!("info", ("Successfully set block number",  blockNumber)) |
                                     @PoS!("getWithdrawers", *withdrawersCh) |
                                     for (_                   <- blockDataCh &
-                                        @initialWithdrawers <- withdrawersCh) {
+                                         @initialWithdrawers <- withdrawersCh) {
                                       @PoS!("withdraw", validatorDeployerId, *withdrawCh) |
                                       for (@(true, _) <- withdrawCh) {
                                         stdlog!("info", ("Successfully withdraw bbbb....")) |
@@ -388,13 +472,13 @@ let @posPubKey, @posVaultPubKey <-
                                               @PoS!("getPendingWithdrawer", *withdrawersCh) |
                                               @validatorVault!("balance", *intermediateValidatorBalanceCh) |
                                               for (@intermediateWithdrawers      <- withdrawersCh &
-                                                  @intermediateValidatorBalance <- intermediateValidatorBalanceCh) {
+                                                   @intermediateValidatorBalance <- intermediateValidatorBalanceCh) {
                                                 // Sets blockNumber to the soonest epoch change after quarantine period is finished.
                                                 if (quarantineLength % epochLength == 0) {
                                                   setBlockData!("blockNumber", quarantinePeriod, *blockDataCh) |
                                                   stdlog!("info", ("Set block number",  quarantinePeriod))
                                                 } else {
-                                                  setBlockData!("blockNumber", quarantinePeriod + epochLength - (quarantineLength % epochLength), *blockDataCh)|
+                                                  setBlockData!("blockNumber", quarantinePeriod + epochLength - (quarantineLength % epochLength), *blockDataCh) |
                                                   stdlog!("info", ("Set block number not 0",  quarantinePeriod + epochLength - (quarantineLength % epochLength)))
                                                 } |
                                                 for (_ <- blockDataCh) {
@@ -404,8 +488,8 @@ let @posPubKey, @posVaultPubKey <-
                                                     @PoS!("getBonds", *finalBondsCh) |
                                                     @PoS!("getWithdrawers", *withdrawersCh) |
                                                     for (@finalBonds            <- finalBondsCh &
-                                                        @finalWithdrawers      <- withdrawersCh &
-                                                        @finalValidatorBalance <- finalValidatorBalanceCh) {
+                                                         @finalWithdrawers      <- withdrawersCh &
+                                                         @finalValidatorBalance <- finalValidatorBalanceCh) {
                                                       stdlog!("info", ("validator rewards", validatorReward, finalValidatorBalance, initialValidatorBalance)) |
                                                       rhoSpec!("assertMany",
                                                         [
@@ -442,7 +526,7 @@ let @posPubKey, @posVaultPubKey <-
               }
             }
           } |
-          //
+          // TODO comment
           contract test_multiple_bonding_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, initialPosBalanceCh, finalPosBalanceCh,
                 user1BondCh, user2BondCh, initialBondsCh, finalBondsCh,
@@ -463,16 +547,16 @@ let @posPubKey, @posVaultPubKey <-
                      @initialBonds        <- initialBondsCh) {
                   let @(user1Bond, user2Bond) <- (100, 200) in {
                     @PoS!("addBondingRequest", 
-                      *posVaultDeploerId, 
+                      *posVaultDeployerId, 
                       "2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222", 
                       user1Bond, 
                       *addBondReqCh1) |
                     @PoS!("addBondingRequest", 
-                      *posVaultDeploerId, 
+                      *posVaultDeployerId, 
                       "3333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333", 
                       user2Bond, 
                       *addBondReqCh2) |
-                    for (@addBondRes1 <- addBondReqCh1 & @addBondRes2 <- addBondReqCh2 ){
+                    for (@addBondRes1 <- addBondReqCh1 & @addBondRes2 <- addBondReqCh2 ) {
                       @PoS!("bond", user1DeployerId, user1Bond, *user1BondCh) |
                       for (@bondRes1 <- user1BondCh) {
                         stdlog!("info", "first bond") |
@@ -488,10 +572,10 @@ let @posPubKey, @posVaultPubKey <-
                               @user1Vault!("balance", *finalUser1BalanceCh) |
                               @user2Vault!("balance", *finalUser2BalanceCh) |
                               for (@finalPosBalance   <- finalPosBalanceCh &
-                                    @finalUser1Balance <- finalUser1BalanceCh &
-                                    @finalUser2Balance <- finalUser2BalanceCh &
-                                    @finalCoopBalance  <- finalCoopBalanceCh &
-                                    @finalBonds        <- finalBondsCh) {
+                                   @finalUser1Balance <- finalUser1BalanceCh &
+                                   @finalUser2Balance <- finalUser2BalanceCh &
+                                   @finalCoopBalance  <- finalCoopBalanceCh &
+                                   @finalBonds        <- finalBondsCh) {
                                 rhoSpec!("assertMany",
                                   [
                                     ((addBondRes1.nth(0), "==", true), "add bonding user1 request should be true"),
@@ -532,11 +616,11 @@ let @posPubKey, @posVaultPubKey <-
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
                 let @(validatorBond, userCharge, userRefund) <- (100, 100, 0) in {
                   @PoS!("addBondingRequest", 
-                    *posVaultDeploerId, 
+                    *posVaultDeployerId, 
                     "4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444", 
                     validatorBond, 
                     *addBondReqCh) |
-                  for (@addBondRes <- addBondReqCh){
+                  for (@addBondRes <- addBondReqCh) {
                     @PoS!("bond", validatorDeployerId, validatorBond, *setupCh) |
                     for (@bondRes <- setupCh) {
                       closeBlock!(*closeBlockCh) |
@@ -549,10 +633,10 @@ let @posPubKey, @posVaultPubKey <-
                         @PoS!("getBonds", *initialBondsCh) |
                         @PoS!("getActiveValidators", *initialActiveCh) |
                         for (@initialPosBalance   <- initialPosBalanceCh &
-                              @initialUser1Balance <- initialUser1BalanceCh &
-                              @initialRewards      <- initialRewardsCh &
-                              @initialBonds        <- initialBondsCh &
-                              @initialActives      <- initialActiveCh) {
+                             @initialUser1Balance <- initialUser1BalanceCh &
+                             @initialRewards      <- initialRewardsCh &
+                             @initialBonds        <- initialBondsCh &
+                             @initialActives      <- initialActiveCh) {
                           stdlog!("info", ("bonding distribution and actives before precharge and refund", initialBonds, initialActives, initialRewards)) |
                           @PoS!("chargeDeploy", userDeployerId, userCharge, sysAuthToken, *retCh0) |
                           @PoS!("refundDeploy", userRefund, sysAuthToken, *retCh1) |
@@ -564,8 +648,8 @@ let @posPubKey, @posVaultPubKey <-
                               @userVault!("balance", *finalUser1BalanceCh) |
                               @PoS!("getRewards", *finalRewardsCh) |
                               for (@finalPosBalance   <- finalPosBalanceCh &
-                                    @finalUser1Balance <- finalUser1BalanceCh &
-                                    @finalRewards      <- finalRewardsCh) {
+                                   @finalUser1Balance <- finalUser1BalanceCh &
+                                   @finalRewards      <- finalRewardsCh) {
                                 stdlog!("info", ("Final rewards", finalRewards)) |
                                 @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
                                 contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
@@ -606,7 +690,7 @@ let @posPubKey, @posVaultPubKey <-
               }
             }
           } |
-
+          // TODO comment
           contract test_refund_succeeds(rhoSpec, _, ackCh) = {
             new prepareUserAck,
                 bondAck,
@@ -621,37 +705,41 @@ let @posPubKey, @posVaultPubKey <-
             in {
               prepareUser!("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", *prepareUserAck) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- prepareUserAck) {
-                let @(validatorBond, userCharge, userRefund) <- (100, 100, 50) in {
+                let @validatorBond <- 100 &
+                    @userCharge <- 100 &
+                    @userRefund <- 50
+                in {
                   @PoS!("addBondingRequest", 
-                    *posVaultDeploerId, 
+                    *posVaultDeployerId, 
                     "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", 
                     validatorBond, 
-                    *addBondReqCh) |
+                    *addBondReqCh
+                  ) |
                   for (@addBondRes <- addBondReqCh) {
                     @PoS!("bond", validatorDeployerId, validatorBond, *bondAck) |
                     for (@bondRes <- bondAck) {
                       closeBlock!(*closeBlockAck) |
                       prepareUser!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", *prepareUserAck) |
                       for (_, _, @userVault, @userDeployerId <- prepareUserAck &
-                            _                                 <- closeBlockAck) {
+                           _                                 <- closeBlockAck) {
                         getPosBalance!(*posBalanceCh) |
                         @userVault!("balance", *userBalanceCh) |
                         @PoS!("getRewards", *rewardsCh) |
                         for (@initialPosBalance  <- posBalanceCh &
-                              @initialUserBalance <- userBalanceCh &
-                              @initialRewards     <- rewardsCh) {
+                             @initialUserBalance <- userBalanceCh &
+                             @initialRewards     <- rewardsCh) {
                           @PoS!("chargeDeploy", userDeployerId, userCharge, sysAuthToken, *chargeDeployAck) |
                           @PoS!("refundDeploy", userRefund, sysAuthToken, *refundDeployAck) |
                           for (@(true, _) <- chargeDeployAck &
-                                @(true, _) <- refundDeployAck) {
+                               @(true, _) <- refundDeployAck) {
                             closeBlock!(*closeBlockAck) |
                             for (_ <- closeBlockAck) {
                               getPosBalance!(*posBalanceCh) |
                               @userVault!("balance", *userBalanceCh) |
                               @PoS!("getRewards", *rewardsCh) |
                               for (@finalPosBalance  <- posBalanceCh &
-                                    @finalUserBalance <- userBalanceCh &
-                                    @finalRewards     <- rewardsCh) {
+                                   @finalUserBalance <- userBalanceCh &
+                                   @finalRewards     <- rewardsCh) {
                                 @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
                                 contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
                                   resultCh!(acc.set(pk, finalReward - initialRewards.getOrElse(pk, 0)))
@@ -699,7 +787,7 @@ let @posPubKey, @posVaultPubKey <-
           contract test_bonding_fails_if_bond_too_small(rhoSpec, _, ackCh) = {
             test_bonding_failure!(*rhoSpec, "7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777", -1, "Bond is less than minimum!", *ackCh)
           } |
-
+          // TODO comment
           contract test_bonding_fails_if_already_bonded(rhoSpec, _, ackCh) = {
             new setupCh, initialBondsCh, bond1Ch, bond2Ch, bondsCh,
                 finalRewardsCh, initialRewardsCh,
@@ -709,17 +797,17 @@ let @posPubKey, @posVaultPubKey <-
               for (_, _, _, @userDeployerId <- setupCh) {
                 let @(userBond1, userBond2) <- (150, 100) in {
                   @PoS!("addBondingRequest", 
-                    *posVaultDeploerId, 
+                    *posVaultDeployerId, 
                     "8888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888", 
                     userBond1, 
                     *addBondReqCh) |
-                  for (@addBondRes <- addBondReqCh){
+                  for (@addBondRes <- addBondReqCh) {
                     @PoS!("bond", userDeployerId, userBond1, *bond1Ch) |
                     for (@(bond1Result, _) <- bond1Ch) {
                       @PoS!("getBonds", *initialBondsCh) |
                       @PoS!("getRewards", *initialRewardsCh) |
                       for (@initialBonds   <- initialBondsCh &
-                            @initialRewards <- initialRewardsCh) {
+                           @initialRewards <- initialRewardsCh) {
                         @PoS!("bond", userDeployerId, userBond2, *bond2Ch) |
                         for (@(bond2Result, msg2) <- bond2Ch) {
                           @PoS!("getBonds", *bondsCh) |
@@ -743,7 +831,7 @@ let @posPubKey, @posVaultPubKey <-
               }
             }
           } |
-
+          // TODO comment
           contract test_bonding_failure(rhoSpec, @pk, @transferAmount, @expectedMsg, ackCh) = {
             new setupCh, retCh, bondsCh,
                 finalRewardsCh, initialRewardsCh, addBondReqCh in {
@@ -754,11 +842,12 @@ let @posPubKey, @posVaultPubKey <-
                 for (@initialBonds   <- bondsCh &
                      @initialRewards <- initialRewardsCh) {
                   @PoS!("addBondingRequest", 
-                    *posVaultDeploerId, 
+                    *posVaultDeployerId, 
                     pk, 
                     transferAmount, 
-                    *addBondReqCh) |
-                  for (@addBondRes <- addBondReqCh){
+                    *addBondReqCh
+                  ) |
+                  for (@addBondRes <- addBondReqCh) {
                     @PoS!("bond", deployerId, transferAmount, *retCh) |
                     for (@(result, msg) <- retCh) {
                       @PoS!("getBonds", *bondsCh) |
@@ -778,7 +867,7 @@ let @posPubKey, @posVaultPubKey <-
               }
             }
           } |
-
+          // TODO comment
           contract test_dont_reward_inactive_validators(rhoSpec, _, ackCh) = {
             new setupCh, closeBlockCh, chargeCh,
                 refundCh, finalRewardsCh, addBondReqCh
@@ -786,11 +875,11 @@ let @posPubKey, @posVaultPubKey <-
               prepareUser!("9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
                 @PoS!("addBondingRequest", 
-                  *posVaultDeploerId, 
+                  *posVaultDeployerId, 
                   "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", 
                   100, 
                   *addBondReqCh) |
-                for (@addBondRes <- addBondReqCh){
+                for (@addBondRes <- addBondReqCh) {
                   @PoS!("bond", validatorDeployerId, 100, *setupCh) |
                   for (@bondRes <- setupCh) {
                     prepareUser!("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", *setupCh) |
@@ -798,7 +887,7 @@ let @posPubKey, @posVaultPubKey <-
                       @PoS!("chargeDeploy", user1DeployerId, 100, sysAuthToken, *chargeCh) |
                       @PoS!("refundDeploy", 10, sysAuthToken, *refundCh) |
                       for (@(true, _) <- chargeCh &
-                          @(true, _) <- refundCh) {
+                           @(true, _) <- refundCh) {
                         closeBlock!(*closeBlockCh) |
                         for (_ <- closeBlockCh) {
                           @PoS!("getRewards", *finalRewardsCh) |
@@ -820,7 +909,7 @@ let @posPubKey, @posVaultPubKey <-
               }
             }
           } |
-
+          // TODO comment
           contract test_bonding_fails_if_not_in_whitelist(rhoSpec, _, ackCh) = {
             new setupCh, bondRetCh in {
               prepareUser!("1212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212", *setupCh) |
@@ -836,23 +925,24 @@ let @posPubKey, @posVaultPubKey <-
                 } 
               }
             }
-          } | 
-
+          } |
+          // TODO comment
           contract test_bonding_fails_if_removed_from_whitelist(rhoSpec, _, ackCh) = {
             new setupCh, addBondReqCh, removeBondReqCh, bondRetCh in {
               prepareUser!("1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
                 @PoS!("addBondingRequest", 
-                  *posVaultDeploerId, 
+                  *posVaultDeployerId, 
                   "1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", 
                   100, 
-                  *addBondReqCh) |
-                for (@addBondRes <- addBondReqCh){
+                  *addBondReqCh
+                ) |
+                for (@addBondRes <- addBondReqCh) {
                   @PoS!("removeBondingRequest", 
-                    *posVaultDeploerId, 
+                    *posVaultDeployerId, 
                     "1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", 
-                    *removeBondReqCh)|
-                  for (@removeRes <- removeBondReqCh){
+                    *removeBondReqCh) |
+                  for (@removeRes <- removeBondReqCh) {
                     @PoS!("bond", validatorDeployerId, 100, *bondRetCh) |
                     for (@bondRes <- bondRetCh) {
                       rhoSpec!("assertMany",
@@ -869,17 +959,19 @@ let @posPubKey, @posVaultPubKey <-
               }
             }
           } |
-
+          // TODO comment
           contract test_bonding_fails_if_stake_is_not_the_same_as_whitelist(rhoSpec, _, ackCh) = {
             new setupCh, addBondReqCh, bondRetCh in {
               prepareUser!("1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414", *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
-                @PoS!("addBondingRequest", 
-                  *posVaultDeploerId, 
+                @PoS!(
+                  "addBondingRequest", 
+                  *posVaultDeployerId, 
                   "1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414", 
                   100, 
-                  *addBondReqCh) |
-                for (@addBondRes <- addBondReqCh){
+                  *addBondReqCh
+                ) |
+                for (@addBondRes <- addBondReqCh) {
                   @PoS!("bond", validatorDeployerId, 200, *bondRetCh) |
                   for (@bondRes <- bondRetCh) {
                     rhoSpec!("assertMany",
@@ -895,15 +987,15 @@ let @posPubKey, @posVaultPubKey <-
             }
           } | 
           contract getPosBalance(retCh) = {
-              @posVault!("balance", *retCh)
+            @posVault!("balance", *retCh)
           } |
 
           contract closeBlock(ackCh) = {
             new ackCh0, activeValidatorsCh, setBlockData(`rho:test:block:data:set`), blockDataSet in {
               @PoS!("closeBlock", sysAuthToken, *ackCh0) |
-              for (@ack              <- ackCh0) {
+              for (@ack <- ackCh0) {
                 @PoS!("getActiveValidators", *activeValidatorsCh) |
-                for (@activeValidators <- activeValidatorsCh){
+                for (@activeValidators <- activeValidatorsCh) {
                   // For testing we need one of the active validators to be the block sender
                   setBlockData!("sender", activeValidators.toList().nth(0), *blockDataSet) |
                   for (_ <- blockDataSet) {
@@ -930,13 +1022,11 @@ let @posPubKey, @posVaultPubKey <-
               prepareUser!("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
                 @PoS!("revealRandom", validatorDeployerId, "FF".hexToBytes(), *retCh) |
-
                 computeHash!("00".hexToBytes(), *hash00Ch) |
                 computeHash!("FF".hexToBytes(), *hashFFCh) |
-
                 for (@result0 <- retCh &
-                     @hash00 <- hash00Ch &
-                     @hashFF <- hashFFCh) {
+                     @hash00  <- hash00Ch &
+                     @hashFF  <- hashFFCh) {
                   @PoS!("commitRandomImage", validatorDeployerId, hash00, *retCh) |
                   for (@result1 <- retCh) {
                     @PoS!("commitRandomImage", validatorDeployerId, hashFF, *retCh) |
@@ -993,8 +1083,8 @@ let @posPubKey, @posVaultPubKey <-
                             @PoS!("getRewards", *initialRewardsCh) |
                             @userVault!("balance", *initialUserBalanceCh) |
                             for (@initialUserBalance <- initialUserBalanceCh &
-                                  @initialRewards     <- initialRewardsCh &
-                                  @initialPosBalance  <- initialPosBalanceCh) {
+                                 @initialRewards     <- initialRewardsCh &
+                                 @initialPosBalance  <- initialPosBalanceCh) {
                               @PoS!("slash", slashedValidator, sysAuthToken, *slashCh) |
                               for (@(true, _) <- slashCh) {
                                 @PoS!("getBonds", *finalBondsCh) |
@@ -1004,12 +1094,12 @@ let @posPubKey, @posVaultPubKey <-
                                 @PoS!("getWithdrawers", *withdrawersCh) |
                                 getCoopBalance!(*finalCoopBalanceCh) |
                                 for (@finalPosBalance  <- finalPosBalanceCh &
-                                      @finalUserBalance <- finalUserBalanceCh &
-                                      @finalBonds       <- finalBondsCh &
-                                      @finalRewards     <- finalRewardsCh &
-                                      @withdrawers      <- withdrawersCh &
-                                      @finalCoopBalance <- finalCoopBalanceCh) {
-                                  stdlog!("info", (initialBonds, finalBonds,slashedValidator)) |
+                                     @finalUserBalance <- finalUserBalanceCh &
+                                     @finalBonds       <- finalBondsCh &
+                                     @finalRewards     <- finalRewardsCh &
+                                     @withdrawers      <- withdrawersCh &
+                                     @finalCoopBalance <- finalCoopBalanceCh) {
+                                  stdlog!("info", (initialBonds, finalBonds, slashedValidator)) |
                                   rhoSpec!("assertMany",
                                     [
                                       ((finalBonds, "==", initialBonds.set(slashedValidator, 0)), "Slashed validator's bond is reduced to 0"),
