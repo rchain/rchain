@@ -182,7 +182,7 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
               .filterA(matches(comm))
               .map(_.to[Seq])
           }
-          .map((c, _))
+          .map(c -> _)
     )
 
   private[this] def matches(comm: COMM)(datumWithIndex: (Datum[A], _)): F[Boolean] = {
