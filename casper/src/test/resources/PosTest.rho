@@ -36,7 +36,7 @@ let @posPubKey, @posVaultPubKey <-
       test_epoch_change_on_setting_epoch_block,
       test_pos_params_only_updated_with_proper_authority_and_type,
       getPosBalance, getCoopBalance,
-      closeBlock,
+      closeBlock, fmt_expect, getPosData,
       makeDeployerId(`rho:test:deployerId:make`),
       bondWithAddingBondingRequest,
       deployerIdCh
@@ -87,6 +87,14 @@ let @posPubKey, @posVaultPubKey <-
             retCh!({})
           } |
 
+          contract fmt_expect(@a, @b, @c, retCh) = {
+            if (b == Nil) {
+              retCh!("(${a}, Nil, ${c})" %% { "a": a, "c": c})
+            } else {
+              retCh!("(${a}, ${b}, ${c})" %% { "a": a, "b": b, "c": c})
+            }
+          } |
+
           contract prepareUser(@pk, retCh) = {
             stdlog!("info", ("preparing user ", pk)) |
             new deployerIdCh, revAddrCh, vaultCh
@@ -128,45 +136,53 @@ let @posPubKey, @posVaultPubKey <-
             new closeCh, setBlockData(`rho:test:block:data:set`),
                 blockDataCh, epochLengthCh, epochBlockNumberCh
             in {
-              @PoS!("getEpochLength", *epochLengthCh) |
-              @PoS!("getEpochBlockNumber", *epochBlockNumberCh) |
-              for (@epochLength <- epochLengthCh & @epochBlockNumber <- epochBlockNumberCh) {
-                // non epoch change closeBlock
-                setBlockData!("blockNumber", 1, *blockDataCh) |
-                for (_ <- blockDataCh) {
-                  closeBlock!(*closeCh) |
-                  for (@closeRes1 <- closeCh) {
-                    // epoch change closeBlock
-                    setBlockData!("blockNumber", epochLength, *blockDataCh) |
-                    for (_ <- blockDataCh) {
-                      closeBlock!(*closeCh) |
-                      for (@closeRes2 <- closeCh) {
-                        // non epoch change closeBlock
-                        setBlockData!("blockNumber", epochLength + 1, *blockDataCh) |
-                        for (_ <- blockDataCh) {
-                          closeBlock!(*closeCh) |
-                          for (@closeRes3 <- closeCh) {
-                            // epoch change closeBlock
-                            setBlockData!("blockNumber", 2 * epochLength, *blockDataCh) |
-                            for (_ <- blockDataCh) {
-                              closeBlock!(*closeCh) |
-                              for (@closeRes4 <- closeCh) {
-                                let @expect1 <- "(${1}, ${2}, ${3})" %% {"1" : 1, "2" : epochBlockNumber, "3" : epochLength} &
-                                    @expect2 <- "(${1}, ${2}, ${3})" %% {"1" : epochLength + 1, "2" : epochBlockNumber, "3" : epochLength}
-                                in {
-                                  rhoSpec!("assertMany",
-                                    [
-                                      ((closeRes1.nth(0), "==", true), "no epoch on block number: 1"),
-                                      ((closeRes2.nth(0), "==", true), "epoch change on block number: epochLength"),
-                                      ((closeRes3.nth(0), "==", true), "no epoch on block number: epochLength + 1"),
-                                      ((closeRes4.nth(0), "==", true), "epoch change on block number: 2 * epochLength"),
-                                      ((closeRes1.nth(1), "==", expect1), "no epoch on non epoch block"),
-                                      ((closeRes2.nth(1), "==", Nil), "epoch on epoch block"),
-                                      ((closeRes3.nth(1), "==", expect2), "no epoch on non epoch block"),
-                                      ((closeRes4.nth(1), "==", Nil), "epoch on epoch block"),
-                                    ],
-                                    *ackCh
-                                  )
+              let @initBlock        <- 1 &
+                  @targetEpochBlock <- 42
+              in {
+                @PoS!("getEpochLength", *epochLengthCh) |
+                // set epoch block number to targetEpochBlock
+                @PoS!("setEpochBlockNumber", *posVaultDeployerId, targetEpochBlock, *epochBlockNumberCh) |
+                for (@epochLength <- epochLengthCh & @setRes <- epochBlockNumberCh) {
+                  // non epoch change closeBlock - initBlock != targetEpochBlock
+                  setBlockData!("blockNumber", initBlock, *blockDataCh) |
+                  for (_ <- blockDataCh) {
+                    closeBlock!(*closeCh) |
+                    for (@closeRes1 <- closeCh) {
+                      // epoch change closeBlock
+                      setBlockData!("blockNumber", targetEpochBlock, *blockDataCh) |
+                      for (_ <- blockDataCh) {
+                        closeBlock!(*closeCh) |
+                        for (@closeRes2 <- closeCh) {
+                          // non epoch change closeBlock
+                          setBlockData!("blockNumber", epochLength + targetEpochBlock - 1, *blockDataCh) |
+                          for (_ <- blockDataCh) {
+                            closeBlock!(*closeCh) |
+                            for (@closeRes3 <- closeCh) {
+                              // epoch change closeBlock
+                              setBlockData!("blockNumber", epochLength + targetEpochBlock, *blockDataCh) |
+                              for (_ <- blockDataCh) {
+                                closeBlock!(*closeCh) |
+                                for (@closeRes4 <- closeCh) {
+                                  new expCh1, expCh2 in {
+                                    fmt_expect!(initBlock, targetEpochBlock, epochLength, *expCh1) | // expect1 == closeRes1.nth(1)
+                                    fmt_expect!(epochLength + targetEpochBlock - 1, targetEpochBlock, epochLength, *expCh2) | // expect2 == closeRes3.nth(1)
+                                    for (@expect1 <- expCh1 & @expect2 <- expCh2) {
+                                      rhoSpec!("assertMany",
+                                        [
+                                          ((setRes, "==", (true, Nil)), "set epoch block number succeeds"),
+                                          ((closeRes1.nth(0), "==", true), "no epoch on init block"),
+                                          ((closeRes2.nth(0), "==", true), "epoch change on block number: epochLength"),
+                                          ((closeRes3.nth(0), "==", true), "no epoch on block number: epochLength + "),
+                                          ((closeRes4.nth(0), "==", true), "epoch change on block number: targetEpochBlock + epochLength"),
+                                          ((closeRes1.nth(1), "==", expect1), "no epoch on non epoch block 1"),
+                                          ((closeRes2.nth(1), "==", Nil), "epoch on epoch block 1"),
+                                          ((closeRes3.nth(1), "==", expect2), "no epoch on non epoch block 2"),
+                                          ((closeRes4.nth(1), "==", Nil), "epoch on epoch block 2"),
+                                        ],
+                                        *ackCh
+                                      )
+                                    }
+                                  }
                                 }
                               }
                             }
@@ -185,7 +201,7 @@ let @posPubKey, @posVaultPubKey <-
                 epochBlockCh, epochLengthCh, blockDataCh, blockDataCh, setEpochRet
             in {
               let @targetEpochBlock <- 1234 in {
-                // first get the initial epoch block number to reset later
+                // first get the initial epoch block number to reset later - should be Nil
                 @PoS!("getEpochBlockNumber", *epochBlockCh) |
                 @PoS!("getEpochLength", *epochLengthCh) |
                 // non epoch change closeBlock
@@ -203,9 +219,10 @@ let @posPubKey, @posVaultPubKey <-
                       for (@closeRes2 <- closeCh & @finalEpochBlock <- epochBlockCh) {
                         // reset epoch block number to initial
                         @PoS!("setEpochBlockNumber", *posVaultDeployerId, initialEpochBlock, *setEpochRet) |
-                        setBlockData!("blockNumber", 1, *blockDataCh) |
-                        for (_ <- setEpochRet & _ <- blockDataCh) {
-                          let @expect <- "(${1}, ${2}, ${3})" %% {"1" : targetEpochBlock, "2" : initialEpochBlock, "3" : epochLength} in {
+                        for (_ <- setEpochRet) {
+                          // format expect
+                          fmt_expect!(targetEpochBlock, initialEpochBlock, epochLength, *blockDataCh) |
+                          for (@expect <- blockDataCh) {
                             rhoSpec!("assertMany",
                               [
                                 ((finalEpochBlock, "==", targetEpochBlock), "setting epoch block with correct deployId changes the number"),
@@ -231,34 +248,34 @@ let @posPubKey, @posVaultPubKey <-
               prepareUser!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", *setupCh) |
               for (_, _, _, @userDeployerId <- setupCh) {
                 @PoS!("getEpochBlockNumber", *epochBlockCh) |
-                // user attempts to set epoch block number - should be denied
+                // non-pos attempts to set epoch block number - should fail
                 @PoS!("setEpochBlockNumber", userDeployerId, 42, *setEpochRet) |
                 for (@setRes1 <- setEpochRet & @epochBlock0 <- epochBlockCh) {
-                  // pos attempts to set Nil epoch block number - should be denied
-                  @PoS!("setEpochBlockNumber", *posVaultDeployerId, Nil, *setEpochRet) |
                   @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                  // pos attempts to set string epoch block number - should fail
+                  @PoS!("setEpochBlockNumber", *posVaultDeployerId, "42", *setEpochRet) |
                   for (@setRes2 <- setEpochRet & @epochBlock1 <- epochBlockCh) {
-                    // pos attempts to set string epoch block number - should be denied
-                    @PoS!("setEpochBlockNumber", *posVaultDeployerId, "42", *setEpochRet) |
                     @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                    // pos attempts to set list epoch block number - should fail
+                    @PoS!("setEpochBlockNumber", *posVaultDeployerId, [42], *setEpochRet) |
                     for (@setRes3 <- setEpochRet & @epochBlock2 <- epochBlockCh) {
-                      // pos attempts to set list epoch block number - should be denied
-                      @PoS!("setEpochBlockNumber", *posVaultDeployerId, [42], *setEpochRet) |
                       @PoS!("getEpochBlockNumber", *epochBlockCh) |
+                      // pos setsepoch block number to Nil - should succeed
+                      @PoS!("setEpochBlockNumber", *posVaultDeployerId, Nil, *setEpochRet) |
                       for (@setRes4 <- setEpochRet & @epochBlock3 <- epochBlockCh) {
                         @PoS!("getEpochBlockNumber", *epochBlockCh) |
                         for (@epochBlock4 <- epochBlockCh) {
                           rhoSpec!("assertMany",
                             [
-                              ((setRes1.nth(0), "==", false), "set epoch block number should be denied for non-Pos identity"),
-                              ((setRes2.nth(0), "==", false), "set epoch block number should be denied for Nil"),
-                              ((setRes3.nth(0), "==", false), "set epoch block number should be denied for string"),
-                              ((setRes4.nth(0), "==", false), "set epoch block number should be denied for list"),
+                              ((setRes1.nth(0), "==", false), "set epoch block number should fail for non-Pos identity"),
+                              ((setRes2.nth(0), "==", false), "set epoch block number should fail for string"),
+                              ((setRes3.nth(0), "==", false), "set epoch block number should fail for list"),
+                              ((setRes4.nth(0), "==", true), "set epoch block number should succeed for Nil"),
                               ((setRes1.nth(1), "==", "Invalid authority to set PoS epoch block number"), "get authority error message"),
-                              ((setRes2.nth(1), "==", "PoS epoch block number must be an integer"), "get type error message 1"),
-                              ((setRes3.nth(1), "==", "PoS epoch block number must be an integer"), "get type error message 2"),
-                              ((setRes4.nth(1), "==", "PoS epoch block number must be an integer"), "get type error message 3"),
-                              ((Set(epochBlock1, epochBlock2, epochBlock3, epochBlock4), "==", Set(epochBlock0)), "epoch block number should not change"),
+                              ((setRes2.nth(1), "==", "PoS epoch block number must be an integer or Nil"), "get type error message 1"),
+                              ((setRes3.nth(1), "==", "PoS epoch block number must be an integer or Nil"), "get type error message 2"),
+                              ((setRes4.nth(1), "==", Nil), "set epoch block number to Nil"),
+                              ((Set(epochBlock1, epochBlock2, epochBlock3), "==", Set(epochBlock0)), "epoch block number should not change"),
                             ],
                             *ackCh
                           )
@@ -328,76 +345,136 @@ let @posPubKey, @posVaultPubKey <-
               }
             }
           } |
+          contract getPosData(userBalanceCh, userVault, posBalanceCh, bondsCh, rewardsCh) = {
+            getPosBalance!(*posBalanceCh) |
+            userVault!("balance", *userBalanceCh) |
+            @PoS!("getBonds", *bondsCh) |
+            @PoS!("getRewards", *rewardsCh)
+          } |
           // Tests that when a user requests to bond, they are added to the bond map with the appropriate bond stake.
           // Rewards shouldn't change with a bond request because these funds are just accumulated into the PoS vault during closeBlock.
           // The user's balance should decrease by the bond amount after their bonding request is processed.
           // After withdrawing, the validator should be moved to the withdrawers map with the appropriate quarantine period.
           // Caution: there is interaction between this test and test_withdraw_succeeds because block numbers are manipulated.
           contract test_withdraw_succeeds(rhoSpec, _, ackCh) = {
-            new setupCh, bondCh,
-                initialPosBalanceCh, finalPosBalanceCh,
-                initialUserBalanceCh, finalUserBalanceCh,
-                initialRewardsCh, finalRewardsCh,
-                initialBondsCh, finalBondsCh,
-                withdrawCh, closeBlockCh, quarantineCh, epochCh, quarantinePeriodCh,
-                withdrawersCh, setBlockData(`rho:test:block:data:set`), blockDataCh, 
-                addBondReqCh
+            new setupCh, bondCh, posBalanceCh,
+                userBalanceCh, rewardsCh, bondsCh,
+                withdrawCh, closeBlockCh, quarantineCh, epochCh,
+                withdrawersCh, setBlockData(`rho:test:block:data:set`),
+                blockDataCh, addBondReqCh, epochBlockCh, pWithdrawersCh
             in {
               prepareUser!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", *setupCh) |
-              for (@userPubKey, _, @userVault, @userDeployerId <- setupCh) {
-                getPosBalance!(*initialPosBalanceCh) |
-                @userVault!("balance", *initialUserBalanceCh) |
-                @PoS!("getBonds", *initialBondsCh) |
-                @PoS!("getRewards", *initialRewardsCh) |
-                @PoS!("getQuarantineLength", *quarantineCh) |
-                @PoS!("getEpochLength", *epochCh) |
-                for (@initialPosBalance  <- initialPosBalanceCh &
-                     @initialUserBalance <- initialUserBalanceCh &
-                     @initialBonds       <- initialBondsCh &
-                     @initialRewards     <- initialRewardsCh &
-                     @epochLength        <- epochCh &
-                     @quarantineLength   <- quarantineCh) {
-                  // block number is set for after a quarantine period so this validator will appear in the initial and final bonds map in test_validator_is_paid_after_withdraw
-                  let @(bondAmt, blockNumber) <- (100, 2 * epochLength * quarantineLength) in  {
-                    @PoS!("addBondingRequest", 
-                      *posVaultDeployerId, 
-                      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 
-                      bondAmt, 
-                      *addBondReqCh) |
-                    for (@addBondRes <- addBondReqCh) {
-                      @PoS!("bond", userDeployerId, bondAmt, *bondCh) |
-                      setBlockData!("blockNumber", blockNumber, *blockDataCh) |
-                      for (@bondRes <- bondCh &
-                            _       <- blockDataCh) {
-                        @PoS!("withdraw", userDeployerId, *withdrawCh) |
-                        for (_ <- withdrawCh) {
-                          closeBlock!(*closeBlockCh) |
-                          for (@(true, _) <- closeBlockCh) {
-                            @PoS!("getBonds", *finalBondsCh) |
-                            getPosBalance!(*finalPosBalanceCh) |
-                            @userVault!("balance", *finalUserBalanceCh) |
-                            @PoS!("getRewards", *finalRewardsCh) |
-                            @PoS!("getWithdrawers", *withdrawersCh) |
-                            quarantinePeriodCh!(quarantineLength + epochLength * (1 + blockNumber / epochLength)) |
-                            for (@finalPosBalance  <- finalPosBalanceCh &
-                                 @finalUserBalance <- finalUserBalanceCh &
-                                 @finalBonds       <- finalBondsCh &
-                                 @finalRewards     <- finalRewardsCh &
-                                 @withdrawers      <- withdrawersCh &
-                                 @quarantinePeriod <- quarantinePeriodCh) {
-                              rhoSpec!("assertMany",
-                                [
-                                  ((addBondRes.nth(0), "==", true), "add bonding request should be true"),
-                                  ((bondRes.nth(0), "==", true), "the bonding result should be true"),
-                                  ((finalBonds, "==", initialBonds), "user is not in the bond map after withdraw"),
-                                  ((finalRewards, "==", initialRewards.set(userPubKey, 0)), "rewards don't change for bonding"),
-                                  ((finalUserBalance, "==", initialUserBalance - bondAmt), "user balance should change by bond amount"),
-                                  ((finalPosBalance, "==", initialPosBalance + bondAmt), "pos balance should change by bond amount"),
-                                  ((true, "==", withdrawers.contains(userPubKey)), "withdrawer is moved to withdrawers map"),
-                                  (((bondAmt, quarantinePeriod), "==", withdrawers.get(userPubKey)), "withdrawer state has correct quarantine period and bonds after withdrawing from pos")
-                                ],
-                                *ackCh
-                              )
+              for (@userPubKey, _, userVault, @userDeployerId <- setupCh) {
+                let @initBlock <- 1 in {
+                  @PoS!("getEpochLength", *epochCh) |
+                  @PoS!("getQuarantineLength", *quarantineCh) |
+                  setBlockData!("blockNumber", initBlock, *blockDataCh) |
+                  getPosData!(*userBalanceCh, *userVault, *posBalanceCh, *bondsCh, *rewardsCh) |
+                  for (@posBalance0 <- posBalanceCh &
+                       @balance0    <- userBalanceCh &
+                       @bonds0      <- bondsCh &
+                       @rewards0    <- rewardsCh &
+                       @epochLength <- epochCh &
+                       @qLength     <- quarantineCh &
+                       _            <- blockDataCh) {
+                    let @bondAmt <- 100 &
+                        // assumes withdraw occurs in initBlock
+                        @qPeriod <- qLength + epochLength * (1 + initBlock / epochLength)
+                    in {
+                      @PoS!("addBondingRequest", 
+                        *posVaultDeployerId, 
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 
+                        bondAmt, 
+                        *addBondReqCh) |
+                      for (@addBondRes <- addBondReqCh) {
+                        // bond in initBlock
+                        @PoS!("bond", userDeployerId, bondAmt, *bondCh) |
+                        for (@bondRes <- bondCh) {
+                          // get intermediate PoS data
+                          getPosData!(*userBalanceCh, *userVault, *posBalanceCh, *bondsCh, *rewardsCh) |
+                          for (@bonds1      <- bondsCh &
+                               @rewards1    <- rewardsCh &
+                               @balance1    <- userBalanceCh &
+                               @posBalance1 <- posBalanceCh) {
+                            // withdraw in initBlock
+                            @PoS!("withdraw", userDeployerId, *withdrawCh) |
+                            for (_ <- withdrawCh) {
+                              // user should not be in withdrawers map
+                              // user should be in pending withdrawers map
+                              @PoS!("getWithdrawers", *withdrawersCh) |
+                              @PoS!("getPendingWithdrawers", *pWithdrawersCh) |
+                              for (@withdrawers1 <- withdrawersCh & @pWithdrawers1 <- pWithdrawersCh) {
+                                // set epoch block number to before quarantine expiry
+                                @PoS!("setEpochBlockNumber", *posVaultDeployerId, qPeriod - 1, *epochBlockCh) |
+                                // epoch change before quarantine expiry
+                                // user should remain in withdrawers map
+                                // user should not be in pending withdrawers map
+                                setBlockData!("blockNumber", qPeriod - 1, *blockDataCh) |
+                                for (_ <- blockDataCh & _ <- epochBlockCh) {
+                                  closeBlock!(*closeBlockCh) |
+                                  for (@(true, _) <- closeBlockCh) {
+                                    @PoS!("getWithdrawers", *withdrawersCh) |
+                                    @PoS!("getPendingWithdrawers", *pWithdrawersCh) |
+                                    getPosData!(*userBalanceCh, *userVault, *posBalanceCh, *bondsCh, *rewardsCh) |
+                                    for (@posBalance2   <- posBalanceCh &
+                                         @balance2      <- userBalanceCh &
+                                         @bonds2        <- bondsCh &
+                                         @rewards2      <- rewardsCh &
+                                         @withdrawers2  <- withdrawersCh &
+                                         @pWithdrawers2 <- pWithdrawersCh) {
+                                      @PoS!("setEpochBlockNumber", *posVaultDeployerId, qPeriod + 1, *epochBlockCh) |
+                                      // epoch change after quarantine expiry
+                                      // user should not be in withdrawers map
+                                      setBlockData!("blockNumber", qPeriod + 1, *blockDataCh) |
+                                      for (_ <- blockDataCh & _ <- epochBlockCh) {
+                                        closeBlock!(*closeBlockCh) |
+                                        for (@(true, _) <- closeBlockCh) {
+                                          @PoS!("getWithdrawers", *withdrawersCh) |
+                                          getPosData!(*userBalanceCh, *userVault, *posBalanceCh, *bondsCh, *rewardsCh) |
+                                          for (@posBalance3  <- posBalanceCh &
+                                               @balance3     <- userBalanceCh &
+                                               @bonds3       <- bondsCh &
+                                               @rewards3     <- rewardsCh &
+                                               @withdrawers3 <- withdrawersCh) {
+                                            rhoSpec!("assertMany",
+                                              [
+                                                // bonding assertions
+                                                ((addBondRes.nth(0), "==", true), "add bonding request succeeds"),
+                                                ((bondRes.nth(0), "==", true), "the bonding result is true"),
+                                                // bonds map assertions
+                                                ((bonds0, "==", bonds3), "user is not in the bond map after withdraw"),
+                                                ((bonds0.contains(userPubKey), "==", false), "user is not in the bonds map before bond"),
+                                                ((bonds1.get(userPubKey), "==", bondAmt), "user has correct bond in bonds map before withdraw"),
+                                                ((bonds2.contains(userPubKey), "==", false), "user has correct bond in bonds map after withdraw, before quarantine expiry"),
+                                                ((bonds3.contains(userPubKey), "==", false), "user is not in the bond map after quarantine expiry"),
+                                                // rewards assertions
+                                                ((rewards0, "==", rewards3), "rewards don't change for bonding"),
+                                                ((rewards0.contains(userPubKey), "==", false), "user is not in rewards0 map"),
+                                                ((rewards1.get(userPubKey), "==", 0), "user should be in rewards1 map with 0 rewards"),
+                                                ((rewards2.get(userPubKey), "==", 0), "user should be in rewards2 map with 0 rewards"),
+                                                ((rewards3.contains(userPubKey), "==", false), "user should not be in final rewards map"),
+                                                // user balance assertions
+                                                ((balance0, "==", balance3), "user receives bond after quarantine expiry"),
+                                                ((balance1, "==", balance0 - bondAmt), "user balance decreases by bond amount once bonded"),
+                                                ((balance2, "==", balance1), "user balance remains the same before quarantine expiry"),
+                                                // pos balance assertions
+                                                ((posBalance0, "==", posBalance3), "pos balance returns to original once user withdraws"),
+                                                ((posBalance1, "==", posBalance0 + bondAmt), "pos balance increases by bond amount once user bonds"),
+                                                ((posBalance2, "==", posBalance1), "pos balance remains the same before user withdraws"),
+                                                // withdrawers map assertions
+                                                ((pWithdrawers1.get(userPubKey), "==", qPeriod), "withdrawer state has correct quarantine period before withdrawing from pos"),
+                                                ((pWithdrawers2.contains(userPubKey), "==", false), "withdrawer is moved from pending to withdrawers map"),
+                                                ((withdrawers1.contains(userPubKey), "==", false), "withdrawer is removed from withdrawers map after withdraw"),
+                                              ],
+                                              *ackCh
+                                            )
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
                             }
                           }
                         }
@@ -419,7 +496,7 @@ let @posPubKey, @posVaultPubKey <-
                 setBlockData(`rho:test:block:data:set`),
                 blockDataCh, rewardsCh, validatorRewardCh,
                 intermediateValidatorBalanceCh, withdrawersCh, 
-                addBondReqCh
+                addBondReqCh, epochBlockCh
             in {
               prepareUser!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", *setupCh) |
               for (@validatorPubKey, _, @validatorVault, @validatorDeployerId <- setupCh) {
@@ -457,7 +534,7 @@ let @posPubKey, @posVaultPubKey <-
                                   validatorRewardCh!(rewards.getOrElse(validatorPubKey, 0)) |
                                   for (@validatorReward <- validatorRewardCh) {
                                     setBlockData!("blockNumber", blockNumber, *blockDataCh) |
-                                    stdlog!("info", ("Successfully set block number",  blockNumber)) |
+                                    stdlog!("info", ("Successfully set block number", blockNumber)) |
                                     @PoS!("getWithdrawers", *withdrawersCh) |
                                     for (_                   <- blockDataCh &
                                          @initialWithdrawers <- withdrawersCh) {
@@ -469,19 +546,15 @@ let @posPubKey, @posVaultPubKey <-
                                             setBlockData!("blockNumber", quarantinePeriod - 1, *blockDataCh) |
                                             for (_ <- blockDataCh) {
                                               stdlog!("info", ("Successfully set block number",  quarantinePeriod - 1)) |
-                                              @PoS!("getPendingWithdrawer", *withdrawersCh) |
+                                              @PoS!("getPendingWithdrawers", *withdrawersCh) |
                                               @validatorVault!("balance", *intermediateValidatorBalanceCh) |
                                               for (@intermediateWithdrawers      <- withdrawersCh &
                                                    @intermediateValidatorBalance <- intermediateValidatorBalanceCh) {
-                                                // Sets blockNumber to the soonest epoch change after quarantine period is finished.
-                                                if (quarantineLength % epochLength == 0) {
-                                                  setBlockData!("blockNumber", quarantinePeriod, *blockDataCh) |
-                                                  stdlog!("info", ("Set block number",  quarantinePeriod))
-                                                } else {
-                                                  setBlockData!("blockNumber", quarantinePeriod + epochLength - (quarantineLength % epochLength), *blockDataCh) |
-                                                  stdlog!("info", ("Set block number not 0",  quarantinePeriod + epochLength - (quarantineLength % epochLength)))
-                                                } |
-                                                for (_ <- blockDataCh) {
+                                                // epoch change after quarantine expiry
+                                                @PoS!("setEpochBlockNumber", *posVaultDeployerId, quarantinePeriod, *epochBlockCh) |
+                                                setBlockData!("blockNumber", quarantinePeriod, *blockDataCh) |
+                                                for (_ <- blockDataCh & _ <- epochBlockCh) {
+                                                  stdlog!("info", ("Epoch block number set", quarantinePeriod)) |
                                                   closeBlock!(*closeBlockCh) |
                                                   for (_ <- closeBlockCh) {
                                                     @validatorVault!("balance", *finalValidatorBalanceCh) |
