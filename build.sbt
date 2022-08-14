@@ -346,6 +346,13 @@ lazy val node = (project in file("node"))
         ExecCmd("CMD", "run")
       )
     },
+    Docker / dockerBuildCommand := Seq(
+      "docker",
+      "buildx",
+      "build",
+      ".",
+      "--platform=linux/amd64" //"--platform=linux/amd64,linux/arm64"
+    ),
     // Replace unsupported character `+`
     Docker / version := { version.value.replace("+", "__") },
     Docker / mappings ++= {
