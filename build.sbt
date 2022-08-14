@@ -3,6 +3,7 @@ import BNFC._
 import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
+import Secp256k1._
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
 
@@ -221,12 +222,11 @@ lazy val crypto = (project in file("crypto"))
       bouncyProvCastle,
       scalacheck,
       kalium,
-      secp256k1Java,
       scodecBits
     ),
     fork := true
   )
-  .dependsOn(shared)
+  .dependsOn(shared, secp256k1)
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)
@@ -524,6 +524,29 @@ lazy val rspaceBench = (project in file("rspace-bench"))
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace % "test->test", rholang % "test->test", models % "test->test")
 
+import scala.sys.process._
+lazy val secp256k1 =
+  (project in file("secp256k1"))
+    .settings(
+      commonSettings,
+      libraryDependencies ++= (commonDependencies :+ guava),
+      pullNativeLibs := {
+        if (java.nio.file.Files.notExists(new File(linux_x86_x64_local).toPath)) {
+          println("Missing linux_x86_64 native library, downloading...")
+          url(linux_x86_x64_remote) #> file(linux_x86_x64_local) !
+        }
+        if (java.nio.file.Files.notExists(new File(osx_x86_x64_local).toPath)) {
+          println("Missing osx_x86_64 native library, downloading...")
+          url(osx_x86_x64_remote) #> file(osx_x86_x64_local) !
+        }
+        if (java.nio.file.Files.notExists(new File(osx_aarch64_local).toPath)) {
+          println("Missing osx_arm_64 native library, downloading...")
+          url(osx_aarch64_remote) #> file(osx_aarch64_local) !
+        }
+      },
+      Compile / compile := ((Compile / compile) dependsOn pullNativeLibs).value
+    )
+
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
@@ -540,5 +563,6 @@ lazy val rchain = (project in file("."))
     rspace,
     rspaceBench,
     shared,
-    sdk
+    sdk,
+    secp256k1
   )
