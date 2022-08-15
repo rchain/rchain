@@ -217,7 +217,7 @@ object BlockReceiver {
 
     // Check if block should be stored
     def checkIfKnown(b: BlockMessage): F[Boolean] = {
-      val isStored = BlockStore[F].contains(b.blockHash)
+      val isStored = BlockDagStorage[F].getRepresentation.map(_.contains(b.blockHash))
       val isTooOld = BlockDagStorage[F].getRepresentation.map { dag =>
         dag.heightMap.headOption.map(_._1).getOrElse(-1L) > b.blockNumber
       }
@@ -246,7 +246,10 @@ object BlockReceiver {
               _ <- BlockStore[F].put(block)
               parents <- block.justifications
                           .traverse { hash =>
-                            BlockStore[F].contains(hash).not.map((hash, _))
+                            BlockDagStorage[F].getRepresentation
+                              .map(_.contains(hash))
+                              .not
+                              .map((hash, _))
                           }
               pendingRequests <- state.modify(_.endStored(block.blockHash, parents))
 
