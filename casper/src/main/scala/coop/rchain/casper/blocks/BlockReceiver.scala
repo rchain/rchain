@@ -267,11 +267,9 @@ object BlockReceiver {
                                      BlockStore[F].contains(hash) &&^ dag.contains(hash).pure.not
                                    }
               _ <- unvalidatedParents.traverse { hash =>
-                    state.modify(_.beginStored(hash)) *>
-                      state.modify(_.endStored(hash, List.empty)) *>
+                    state.update(_.beginStored(hash)._1.endStored(hash, List.empty)._1) *>
                       receiverOutputQueue.enqueue1(hash)
                   }
-
               _ <- receiverOutputQueue.enqueue1(block.blockHash).whenA(hasAllDeps)
             } yield ()
           for {
