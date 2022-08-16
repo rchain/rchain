@@ -217,7 +217,7 @@ object BlockReceiver {
 
     // Check if block should be stored
     def checkIfKnown(b: BlockMessage): F[Boolean] = {
-      val isStored = BlockDagStorage[F].getRepresentation.map(_.contains(b.blockHash))
+      val isStored = BlockStore[F].contains(b.blockHash)
       val isTooOld = BlockDagStorage[F].getRepresentation.map { dag =>
         dag.heightMap.headOption.map(_._1).getOrElse(-1L) > b.blockNumber
       }
@@ -246,10 +246,7 @@ object BlockReceiver {
               _ <- BlockStore[F].put(block)
               parents <- block.justifications
                           .traverse { hash =>
-                            BlockDagStorage[F].getRepresentation
-                              .map(_.contains(hash))
-                              .not
-                              .map((hash, _))
+                            BlockStore[F].contains(hash).not.map((hash, _))
                           }
               pendingRequests <- state.modify(_.endStored(block.blockHash, parents))
 
@@ -263,6 +260,17 @@ object BlockReceiver {
               dag <- BlockDagStorage[F].getRepresentation
               hasAllDeps = pendingRequests.isEmpty &&
                 block.justifications.forall(dag.contains)
+
+              // If replay was interrupted, block was stored but not validated or added to the DAG.
+              // Validation needs to be restarted for such blocks
+              unvalidatedParents <- block.justifications.filterA { hash =>
+                                     BlockStore[F].contains(hash) &&^ dag.contains(hash).pure.not
+                                   }
+              _ <- unvalidatedParents.traverse { hash =>
+                    state.modify(_.beginStored(hash)) *>
+                      state.modify(_.endStored(hash, List.empty)) *>
+                      receiverOutputQueue.enqueue1(hash)
+                  }
 
               _ <- receiverOutputQueue.enqueue1(block.blockHash).whenA(hasAllDeps)
             } yield ()

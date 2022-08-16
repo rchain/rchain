@@ -228,7 +228,7 @@ class NodeRunning[F[_]
     * Check if block is stored in the BlockStore
     */
   private def checkBlockReceived(hash: BlockHash): F[Boolean] =
-    BlockDagStorage[F].getRepresentation.map(_.contains(hash))
+    BlockStore[F].contains(hash)
 
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case h: BlockHashMessage =>
