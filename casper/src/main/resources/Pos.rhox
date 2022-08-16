@@ -211,7 +211,7 @@ in {
                                                               // pos would transfer back all the original bond and rewards back to validator vault.
                                                               // Value(Int, Int) represents (original bond + reward, quantinue length)
                   }) |
-                  // TODO
+                  // returns tuple of all rewards info on retCh
                   contract rewardsInfo(retCh) = {
                     new posBalanceCh, totalActiveBondCh, totalBondCh, totalWithdrawCh, committedRewardsCh in {
                       @posVault!("balance", *posBalanceCh) |
@@ -277,7 +277,7 @@ in {
                       }
                     }
                   } |
-                  // TODO
+                  // folds over the committes rewards with the current epoch rewards
                   contract PoS(@"getRewards", returnCh) = {
                     new currentEpochRewardCh, accumulateReward in {
                       for (@state <<- stateCh) {
@@ -340,15 +340,30 @@ in {
                   } |
                   // checks the authority of deployerId and type of newEpochBlockNumber, then sets epochBlockNumber to newEpochBlockNumber
                   contract PoS(@"setEpochBlockNumber", @deployerId, @newEpochBlockNumber, ret) = {
-                    new authRet in {
+                    new authRet, blockDataCh, getBlockData(`rho:block:data`) in {
+                      getBlockData!(*blockDataCh) |
                       checkAuth!(*posVaultPubKey, deployerId, *authRet) |
-                      for (@isValid <- authRet) {
+                      for (@isValid <- authRet & @blockNumber, _ <- blockDataCh) {
                         if (isValid) {
                           match newEpochBlockNumber {
-                            {Int \/ Nil} => {
+                            Nil => {
                               for (_ <- epochBlockNumberCh) {
-                                epochBlockNumberCh!(newEpochBlockNumber) |
+                                epochBlockNumberCh!(Nil) |
                                 ret!((true, Nil))
+                              }
+                            }
+                            Int => {
+                              // can't set in the past
+                              if (newEpochBlockNumber < blockNumber) {
+                                ret!((false,
+                                  "new PoS epoch block number ${1} cannot come before current block ${2}"
+                                    %% {"1": newEpochBlockNumber, "2": blockNumber}
+                                ))
+                              } else {
+                                for (_ <- epochBlockNumberCh) {
+                                  epochBlockNumberCh!(newEpochBlockNumber) |
+                                  ret!((true, Nil))
+                                }
                               }
                             }
                             _ => { ret!((false, "PoS epoch block number must be an integer or Nil")) }
@@ -412,7 +427,8 @@ in {
                       })
                     }
                   } |
-                  // TODO
+                  // checks that deployerId corresponds to Coop pubKey
+                  // defined in Registry.rho
                   contract @(*PoS, "securityCheck")(@deployerId, ret) = {
                     @configPublicKeyCheck!(deployerId, *ret)
                   } |
@@ -622,19 +638,22 @@ in {
                                       ackCh!((true, "(${1}, Nil, ${3})" %% { "1" : blockNumber, "3" : $$epochLength$$ }))
                                     }
                                     Int => {
-                                      if (epochBlockNumber > blockNumber || epochBlockNumber < blockNumber && (blockNumber - epochBlockNumber) % $$epochLength$$ != 0) {
+                                      if (epochBlockNumber != blockNumber) {
                                         // epoch change does not occur
                                         ackCh!((true, "(${1}, ${2}, ${3})" %% { "1" : blockNumber, "2" : epochBlockNumber, "3" : $$epochLength$$ }))
                                       } else {
                                         // epoch change occurs
                                         new payWithdrawer, removeQuarantinedWithdrawers,
-                                            stateProcessCh, paymentDoneCh,
-                                            accDepositsDoneCh, commitRewardsCh,
+                                            stateProcessCh, paymentDoneCh, movePendingWithdrawer,
+                                            accDepositsDoneCh, commitRewardsCh, movePendingWithdrawCh,
                                             newValidatorsCh, removeQuarantinedCh, currentEpochRewardCh,
-                                            commitCurrentEpochRewards, updatedRewardsCh, movePendingWithdrawCh, movePendingWithdrawer
+                                            commitCurrentEpochRewards, updatedRewardsCh
                                         in {
+                                          // reset epoch block number to Nil on epoch change
+                                          epochBlockNumberCh!(Nil) |
                                           PoS!("getCurrentEpochRewards", *currentEpochRewardCh) |
-                                          for (@currentRewards <- currentEpochRewardCh) {
+                                          for (@currentRewards <- currentEpochRewardCh &
+                                               _               <- epochBlockNumberCh) {
                                             runMVar!(*stateCh, *stateProcessCh, *ackCh) |
                                             for (@state, stateUpdateCh <- stateProcessCh) {
                                               // 1. Calculate all the validator current epoch rewards based on active validator bonding proportion
@@ -653,6 +672,7 @@ in {
                                                     // 6. Pick new `activeValidators`
                                                     pickActiveValidators!(newMovedPendingState.get("allBonds").toList(), *newValidatorsCh) |
                                                     for (@newValidators <- newValidatorsCh) {
+                                                      // returns (true, Nil) on ackCh
                                                       stateUpdateCh!(newRemovedQuantinueState.set("activeValidators", newValidators), (true, Nil))
                                                     }
                                                   }
@@ -673,30 +693,46 @@ in {
                                               }
                                             }
                                           } |
+                                          // takes accumulated rewards and stores in state.committedRewards
+                                          // only executed during an epoch change closeBlock
                                           contract commitCurrentEpochRewards(@state, @currentRewards, returnCh) = {
                                             new accumulate in {
                                               @ListOps!("fold", currentRewards.toList(), state, *accumulate, *returnCh) |
                                               contract accumulate(@(pk, reward), @updatedState, resultCh) = {
-                                                resultCh!(updatedState.set("committedRewards",
-                                                                            updatedState.get("committedRewards").set(pk, updatedState.get("committedRewards").getOrElse(pk, 0) + reward)))
+                                                resultCh!(
+                                                  updatedState.set("committedRewards",
+                                                    updatedState
+                                                      .get("committedRewards")
+                                                      .set(pk, updatedState.get("committedRewards").getOrElse(pk, 0) + reward)
+                                                  )
+                                                )
                                               }
                                             }
                                           } |
+                                          // moves all pending withdrawers to withdrawers map
+                                          // deletes the corresponding withdrawer bonds from the bonds map
+                                          // only executed during an epoch change closeBlock
                                           contract movePendingWithdrawer(@state, returnCh) = {
                                             new movePending in {
                                               @ListOps!("fold", state.get("pendingWithdrawers").toList(), state, *movePending, *returnCh) |
                                               contract movePending(@(pk, quarantine), @updatedState, resultCh) = {
-                                                resultCh!(updatedState
-                                                          .set("withdrawers", updatedState.get("withdrawers").set(pk, (updatedState.get("allBonds").get(pk), quarantine)))
-                                                          .set("allBonds", updatedState.get("allBonds").delete(pk))
-                                                          .set("pendingWithdrawers", updatedState.get("pendingWithdrawers").delete(pk))
-                                                          )
+                                                let @bonds <- updatedState.get("allBonds") in {
+                                                  resultCh!(
+                                                    updatedState
+                                                      .set("withdrawers", 
+                                                        updatedState.get("withdrawers")
+                                                                    .set(pk, (bonds.get(pk), quarantine)))
+                                                      .set("allBonds", updatedState.get("allBonds").delete(pk))
+                                                      .set("pendingWithdrawers", updatedState.get("pendingWithdrawers").delete(pk))
+                                                  )
+                                                }
                                               }
                                             }
                                           } |
                                           // Checks withdrawer's quarantine period against current block number,
                                           // then computes their payment, removes them from the bonds and withdrawers maps, and
                                           // updates the committed rewards map.
+                                          // only executed during an epoch change closeBlock
                                           contract removeQuarantinedWithdrawers(@currentBlockNumber, @state, returnCh) = {
                                             new quarantinedValidatorsCh, validatorsToWithdrawListCh,
                                                 isQuarantineFinished, notWithdrawn, payWithdraw,
@@ -714,10 +750,11 @@ in {
                                                 for (@_ <- payRet) {
                                                   @ListOps!("fold", quarantinedValidators, state, *computeRemove, *returnCh) |
                                                   contract computeRemove(@(pk, (bonds, quarantine)), @updatedState, resultCh) = {
-                                                    resultCh!(updatedState
-                                                              .set("committedRewards", updatedState.get("committedRewards").delete(pk))
-                                                              .set("withdrawers", updatedState.get("withdrawers").delete(pk))
-                                                              )
+                                                    resultCh!(
+                                                      updatedState
+                                                        .set("committedRewards", updatedState.get("committedRewards").delete(pk))
+                                                        .set("withdrawers", updatedState.get("withdrawers").delete(pk))
+                                                    )
                                                   }
                                                 }
                                               } |
