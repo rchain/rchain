@@ -109,7 +109,7 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
     val status = BlockValidationLogic.futureTransaction(block)
 
-    status shouldBe Right(Valid)
+    status shouldBe true
   }
 
   it should "not accept blocks with a deploy for a future block number" in {
@@ -117,7 +117,7 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
     val status = BlockValidationLogic.futureTransaction(block)
 
-    status shouldBe Left(ContainsFutureDeploy)
+    status shouldBe false
   }
 
   private def signedBlock(privateKey: PrivateKey, publicKey: PublicKey): BlockMessage =
@@ -138,13 +138,13 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     val deploy = createDeploy(-1L)
     val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
     val status = BlockValidationLogic.transactionExpiration(block, expirationThreshold = 10)
-    status shouldBe Right(Valid)
+    status shouldBe true
   }
 
   it should "not accept blocks with a deploy that is expired" in {
     val deploy = createDeploy(Long.MinValue)
     val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
     val status = BlockValidationLogic.transactionExpiration(block, expirationThreshold = 10)
-    status shouldBe Left(ContainsExpiredDeploy)
+    status shouldBe false
   }
 }

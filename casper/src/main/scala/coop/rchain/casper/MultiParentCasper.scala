@@ -183,17 +183,13 @@ object MultiParentCasper {
 
         // This validation is only to punish validator which accepted lower price deploys.
         // And this can happen if not configured correctly.
-        status <- EitherT(Sync[F].delay(BlockValidationLogic.phloPrice(block, minPhloPrice)))
-                   .recoverWith {
-                     case _ =>
-                       val warnToLog = EitherT.liftF[F, InvalidBlock, Unit](
-                         Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
-                       )
-                       val asValid = EitherT.rightT[F, InvalidBlock](BlockStatus.valid)
-                       warnToLog *> asValid
-                   }
-                   .as(blockMetadata)
-                   .leftMap(e => (blockMetadata, e))
+        status <- {
+          val warnToLog = EitherT.liftF[F, InvalidBlock, Unit](
+            Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
+          )
+          (warnToLog.whenA(!BlockValidationLogic.phloPrice(block, minPhloPrice)) *>
+            EitherT.rightT[F, InvalidBlock](blockMetadata)).leftMap(e => (blockMetadata, e))
+        }
         _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
       } yield status
 
