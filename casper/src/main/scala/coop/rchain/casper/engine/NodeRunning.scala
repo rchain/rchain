@@ -230,9 +230,15 @@ class NodeRunning[F[_]
   private def checkBlockReceived(hash: BlockHash): F[Boolean] =
     BlockStore[F].contains(hash)
 
+  /**
+    * Check if block is added to the DAG
+    */
+  private def checkBlockValidated(hash: BlockHash): F[Boolean] =
+    BlockDagStorage[F].getRepresentation.map(_.contains(hash))
+
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case h: BlockHashMessage =>
-      handleBlockHashMessage(peer, h)(checkBlockReceived)
+      handleBlockHashMessage(peer, h)(checkBlockValidated)
 
     case b: BlockMessage =>
       for {
@@ -246,7 +252,7 @@ class NodeRunning[F[_]
                   )
                   .whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))
             }
-        _ <- checkBlockReceived(b.blockHash).ifM(
+        _ <- checkBlockValidated(b.blockHash).ifM(
               Log[F].debug(
                 s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"

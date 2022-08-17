@@ -46,7 +46,7 @@ class BlockReceiverEffectsSpec
           outList <- outStream.take(1).compile.toList
         } yield {
           bs.put(Seq((block.blockHash, block))) wasCalled once
-          bs.contains(Seq(block.blockHash)) wasCalled once
+          bs.contains(Seq(block.blockHash)) wasCalled twice
           br.ackReceived(block.blockHash) wasCalled once
           dagStorageWasNotModified(bds)
           outList shouldBe List(block.blockHash)
@@ -136,7 +136,7 @@ class BlockReceiverEffectsSpec
         bs.put(Seq((a2.blockHash, a2))) wasCalled once
 
         val bsContainsCaptor = ArgCaptor[Seq[BlockHash]]
-        bs.contains(bsContainsCaptor) wasCalled 4.times
+        bs.contains(bsContainsCaptor) wasCalled 6.times
         bsContainsCaptor.values should contain allOf (Seq(a1.blockHash), Seq(a2.blockHash))
 
         br.ackReceived(a1.blockHash) wasCalled once
