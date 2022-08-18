@@ -178,7 +178,7 @@ final case class BlockReceiverState[MId: Show] private (
 object BlockReceiver {
   def apply[F[_]: Concurrent: BlockStore: BlockDagStorage: BlockRetriever: Log](
       state: Ref[F, BlockReceiverState[BlockHash]],
-      incomingBlocksStream: Stream[F, BlockMessage],
+      incomingBlocksQueue: Queue[F, BlockMessage],
       finishedProcessingStream: Stream[F, BlockMessage],
       confShardName: String
   ): F[Stream[F, BlockHash]] = {
@@ -216,32 +216,23 @@ object BlockReceiver {
     }
 
     // Check if block should be stored
-    def checkIfKnown(b: BlockMessage): F[Boolean] = {
-      val isStored = BlockStore[F].contains(b.blockHash)
-      val isTooOld = BlockDagStorage[F].getRepresentation.map { dag =>
+    def checkIfKnown(b: BlockMessage): F[Boolean] =
+      BlockDagStorage[F].getRepresentation.map { dag =>
         dag.heightMap.headOption.map(_._1).getOrElse(-1L) > b.blockNumber
       }
-      isStored ||^ isTooOld
-    }
 
     def requestMissingDependencies(deps: Set[BlockHash]): F[Unit] =
       deps.toList.traverse_(
         BlockRetriever[F].admitHash(_, admitHashReason = BlockRetriever.MissingDependencyRequested)
       )
 
-    def sendToValidate(hashes: List[BlockHash], receiverOutputQueue: Queue[F, BlockHash]): F[Unit] =
-      hashes.traverse { hash =>
-        state.update(_.beginStored(hash)._1.endStored(hash, List.empty)._1) *>
-          receiverOutputQueue.enqueue1(hash)
-      }.void
-
-    def toValidate(hash: BlockHash): F[Boolean] =
-      BlockStore[F].contains(hash) &&^
-        BlockDagStorage[F].getRepresentation.map(!_.contains(hash))
+    def sendToValidate(hashes: List[BlockHash]): F[Unit] = hashes.traverse_ { hash =>
+      BlockStore[F].getUnsafe(hash).flatMap(incomingBlocksQueue.enqueue1)
+    }
 
     // Process incoming blocks
     def incomingBlocks(receiverOutputQueue: Queue[F, BlockHash]) =
-      incomingBlocksStream
+      incomingBlocksQueue.dequeue
         .evalFilterAsyncUnorderedProcBounded { block =>
           // Filter (ignore) blocks that are not of interest (pass integrity check, incorrect shard or version, ...)
           checkIfOfInterest(block).flatTap(logMalformed(block).unlessA(_))
@@ -254,8 +245,7 @@ object BlockReceiver {
             for {
               // Save block to block store, resolve parents to request
               blockStored <- BlockStore[F].contains(block.blockHash)
-              _ <- (BlockStore[F].put(block) *> BlockRetriever[F].ackReceived(block.blockHash))
-                    .whenA(!blockStored)
+              _           <- BlockStore[F].put(block).whenA(!blockStored)
 
               parents <- block.justifications
                           .traverse { hash =>
@@ -263,21 +253,22 @@ object BlockReceiver {
                           }
               pendingRequests <- state.modify(_.endStored(block.blockHash, parents))
 
+              // Notify BlockRetriever of finished validation of block
+              _ <- BlockRetriever[F].ackReceived(block.blockHash)
+
               // Check if block have all dependencies in the DAG
               dag        <- BlockDagStorage[F].getRepresentation
               hasAllDeps = block.justifications.forall(dag.contains)
 
               // If replay was interrupted, block was stored but not validated or added to the DAG.
               // Validation needs to be restarted for such blocks
-              parentsToValidate <- block.justifications.filterA(toValidate)
+              parentsToValidate <- block.justifications.filterA(notValidated[F])
 
               _ <- if (hasAllDeps) {
                     receiverOutputQueue.enqueue1(block.blockHash)
                   } else {
                     requestMissingDependencies(pendingRequests).whenA(pendingRequests.nonEmpty) *>
-                      sendToValidate(parentsToValidate, receiverOutputQueue).whenA(
-                        parentsToValidate.nonEmpty
-                      )
+                      sendToValidate(parentsToValidate).whenA(parentsToValidate.nonEmpty)
                   }
             } yield ()
           for {
@@ -307,4 +298,7 @@ object BlockReceiver {
       outQueue.dequeue concurrently incomingBlocks(outQueue) concurrently validatedBlocks(outQueue)
     }
   }
+
+  def notValidated[F[_]: Concurrent: BlockStore: BlockDagStorage](hash: BlockHash): F[Boolean] =
+    BlockStore[F].contains(hash) &&^ BlockDagStorage[F].getRepresentation.map(!_.contains(hash))
 }

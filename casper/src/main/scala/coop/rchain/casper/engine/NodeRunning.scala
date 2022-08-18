@@ -8,7 +8,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
-import coop.rchain.casper.blocks.BlockRetriever
+import coop.rchain.casper.blocks.{BlockReceiver, BlockRetriever}
 import coop.rchain.casper.protocol.{CommUtil, _}
 import coop.rchain.casper.syntax._
 import coop.rchain.comm.PeerNode
@@ -230,15 +230,9 @@ class NodeRunning[F[_]
   private def checkBlockReceived(hash: BlockHash): F[Boolean] =
     BlockStore[F].contains(hash)
 
-  /**
-    * Check if block is added to the DAG
-    */
-  private def checkBlockValidated(hash: BlockHash): F[Boolean] =
-    BlockDagStorage[F].getRepresentation.map(_.contains(hash))
-
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case h: BlockHashMessage =>
-      handleBlockHashMessage(peer, h)(checkBlockValidated)
+      handleBlockHashMessage(peer, h)(checkBlockReceived)
 
     case b: BlockMessage =>
       for {
@@ -252,7 +246,7 @@ class NodeRunning[F[_]
                   )
                   .whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))
             }
-        _ <- checkBlockValidated(b.blockHash).ifM(
+        _ <- checkBlockReceived(b.blockHash).ifM(
               Log[F].debug(
                 s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
@@ -273,7 +267,20 @@ class NodeRunning[F[_]
         dag <- BlockDagStorage[F].getRepresentation
         res <- handleHasBlockRequest(peer, hbr)(dag.contains(_).pure[F])
       } yield res
-    case HasBlock(blockHash) => handleHasBlockMessage(peer, blockHash)(checkBlockReceived)
+    case HasBlock(blockHash) =>
+      val processKnownBlock =
+        for {
+          blockNotValidated <- BlockReceiver.notValidated(blockHash)
+          _ <- (BlockStore[F].getUnsafe(blockHash) >>= incomingBlocksQueue.enqueue1)
+                .whenA(blockNotValidated)
+        } yield ()
+      val logProcess = Log[F].debug(
+        s"Incoming HasBlockMessage ${PrettyPrinter.buildString(blockHash)} from ${peer.endpoint.host}"
+      )
+      val requestUnknownBlock = BlockRetriever[F]
+        .admitHash(blockHash, peer.some, BlockRetriever.HasBlockMessageReceived)
+
+      checkBlockReceived(blockHash).ifM(processKnownBlock, logProcess >> requestUnknownBlock.void)
 
     case ForkChoiceTipRequest => handleForkChoiceTipRequest(peer)
 
