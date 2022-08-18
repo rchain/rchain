@@ -91,7 +91,7 @@ object MultiParentCasper {
       // If new fringe is finalized, merge it
       newFringeResult <- newFringeHashes.traverse { fringe =>
                           val (mScope, baseOpt) =
-                            MergeScope.fromDag(fringe, prevFringeHashes, msgMap)
+                            MergeScope.fromDag(fringe, prevFringeHashes, dag.childMap, msgMap)
                           for {
                             baseStateOpt <- baseOpt.traverse { h =>
                                              BlockStore[F]
@@ -128,10 +128,13 @@ object MultiParentCasper {
                                        .map(_.postStateHash)
                                        .map(x => (x.toBlake2b256Hash, Set.empty[ByteString]))
                                    case _ =>
-                                     val lms    = dag.dagMessageState.latestMsgs.map(_.id)
-                                     val msgMap = dag.dagMessageState.msgMap
                                      val (mScope, baseOpt) =
-                                       MergeScope.fromDag(lms, prevFringeHashes, msgMap)
+                                       MergeScope.fromDag(
+                                         parentHashes,
+                                         newFringe,
+                                         dag.childMap,
+                                         msgMap
+                                       )
                                      for {
                                        baseStateOpt <- baseOpt.traverse { h =>
                                                         BlockStore[F]
@@ -140,13 +143,12 @@ object MultiParentCasper {
                                                       }
                                        r <- MergeScope.merge(
                                              mScope,
-                                             baseStateOpt.getOrElse(prevFringeState),
+                                             baseStateOpt.getOrElse(fringeState),
                                              dag.fringeStates,
                                              RuntimeManager[F].getHistoryRepo,
                                              BlockIndex.getBlockIndex[F](_)
                                            )
                                      } yield r
-
                                  }
       (preStateHash, csRejectedDeploys) = conflictScopeMergeResult
 
