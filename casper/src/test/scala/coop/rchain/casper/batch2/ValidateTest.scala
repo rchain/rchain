@@ -14,7 +14,7 @@ import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util._
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -110,6 +110,13 @@ class ValidateTest
       result = ValidatorIdentity(sk).signBlock(block.copy(seqNum = seqNum))
     } yield result
   }
+
+  private def singleBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
+      deploy: Signed[DeployData]
+  ): F[BlockMessage] =
+    createChain[F](0).map(
+      _.head.copy(state = RholangState(List(ProcessedDeploy.empty(deploy)), List.empty))
+    )
 
   "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -254,6 +261,38 @@ class ValidateTest
             ) shouldBeF Left(InvalidSequenceNumber)
         result = log.warns.size should be(1)
       } yield result
+  }
+
+  it should "be wrong for invalid shardId" in withStorage {
+    implicit blockStore =>
+      implicit blockDagStorage =>
+        // shardId by default is empty string
+        val deployWrongShard = ConstructDeploy.sourceDeployNow("Nil")
+        for {
+          blockWrongShard <- singleBlock[Task](deployWrongShard)
+          _ <- Validate.blockSummary[Task](blockWrongShard, "root", 0) shouldBeF
+                Left(InvalidDeployShardId)
+        } yield ()
+  }
+
+  it should "be wrong for future deploy" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val deployFuture = ConstructDeploy.sourceDeployNow("Nil", vabn = Long.MaxValue)
+      for {
+        blockFutureDeploy <- singleBlock[Task](deployFuture)
+        _ <- Validate.blockSummary[Task](blockFutureDeploy, "", 0) shouldBeF
+              Left(ContainsFutureDeploy)
+      } yield ()
+  }
+
+  it should "be wrong for expired deploy" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val deployExpired = ConstructDeploy.sourceDeployNow("Nil")
+      for {
+        blockExpiredDeploy <- singleBlock[Task](deployExpired)
+        _ <- Validate.blockSummary[Task](blockExpiredDeploy, "", 0) shouldBeF
+              Left(ContainsExpiredDeploy)
+      } yield ()
   }
 
   "Justification regression validation" should "return valid for proper justifications and justification regression detected otherwise" in withStorage {

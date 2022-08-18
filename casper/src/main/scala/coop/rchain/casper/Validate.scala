@@ -39,7 +39,10 @@ object Validate {
       block: BlockMessage,
       shardId: String,
       expirationThreshold: Int
-  ): F[ValidBlockProcessing] =
+  ): F[ValidBlockProcessing] = {
+    def validate(f: => Boolean, errorStatus: InvalidBlock): EitherT[F, InvalidBlock, ValidBlock] =
+      EitherT.fromOption(Option(BlockStatus.valid).filter(_ => f), errorStatus)
+
     (for {
       // First validate justifications because they are basis for all other validation
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
@@ -52,14 +55,21 @@ object Validate {
       _ <- EitherT(Validate.blockNumber(block))
       // Deploys validation
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
-      _ = BlockValidationLogic.deploysShardIdentifier(block, shardId)
+      _ <- validate(
+            BlockValidationLogic.deploysShardIdentifier(block, shardId),
+            BlockStatus.invalidDeployShardId
+          )
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
-      _ = BlockValidationLogic.futureTransaction(block)
+      _ <- validate(BlockValidationLogic.futureTransaction(block), BlockStatus.containsFutureDeploy)
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
-      _ = BlockValidationLogic.transactionExpiration(block, expirationThreshold)
+      _ <- validate(
+            BlockValidationLogic.transactionExpiration(block, expirationThreshold),
+            BlockStatus.containsExpiredDeploy
+          )
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
       s <- EitherT(Validate.repeatDeploy(block, expirationThreshold))
     } yield s).value
+  }
 
   /**
     * Validate no deploy with the same sig has been produced in the chain
