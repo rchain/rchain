@@ -2,8 +2,6 @@ package coop.rchain.casper.batch2
 
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.InvalidBlock.{ContainsExpiredDeploy, ContainsFutureDeploy}
-import coop.rchain.casper.ValidBlock.Valid
 import coop.rchain.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.{BlockValidationLogic, ValidatorIdentity}
@@ -53,16 +51,16 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     }
   }
 
-  "Field format validation" should "succeed on a valid block and fail on empty fields" in {
-    val (privateKey, publicKey) = Secp256k1.newKeyPair
-    val genesis                 = signedBlock(privateKey, publicKey)
+  "Field format validation" should "check that main fields are not empty" in {
+    forAll { b: BlockMessage =>
+      val expected = b.blockHash.nonEmpty &&
+        b.sig.nonEmpty &&
+        b.sigAlgorithm.nonEmpty &&
+        b.shardId.nonEmpty &&
+        b.postStateHash.nonEmpty
 
-    BlockValidationLogic.formatOfFields(genesis) shouldBe true
-    BlockValidationLogic.formatOfFields(genesis.copy(blockHash = ByteString.EMPTY)) shouldBe false
-    BlockValidationLogic.formatOfFields(genesis.copy(sig = ByteString.EMPTY)) shouldBe false
-    BlockValidationLogic.formatOfFields(genesis.copy(sigAlgorithm = "")) shouldBe false
-    BlockValidationLogic.formatOfFields(genesis.copy(shardId = "")) shouldBe false
-    BlockValidationLogic.formatOfFields(genesis.copy(postStateHash = ByteString.EMPTY)) shouldBe false
+      BlockValidationLogic.formatOfFields(b) shouldBe expected
+    }
   }
 
   // TODO: This test doesn't make sense because the signing is done by the algorithm in the ValidatorIdentity.
