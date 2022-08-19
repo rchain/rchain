@@ -203,12 +203,8 @@ object Proposer {
         // create block
         _ <- Log[F].info(s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})")
         result <- BlockCreator(validatorIdentity, shardId).create(
-                   preStateHash,
-                   parentHashes,
-                   finalBonds,
+                   preState,
                    preState.fringeRejectedDeploys,
-                   nextBlockNum,
-                   nextSeqNum,
                    deploys,
                    toSlash,
                    changeEpoch,

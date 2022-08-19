@@ -2,9 +2,11 @@ package coop.rchain.casper.blocks.proposer
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.casper.merging.ParentsMergedState
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy, RholangState}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
@@ -12,32 +14,33 @@ import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeMana
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockVersion
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 
 final case class BlockCreator(id: ValidatorIdentity, shardId: String) {
   type StateTransitionResult = (StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
 
   def create[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
-      preStateHash: Blake2b256Hash,
-      parents: Set[BlockHash],
-      bondsMap: Map[Validator, Long],
+      preState: ParentsMergedState,
       finalization: Set[DeployId], // deploys that are rejected on finalization done by the block being created
-      blockNum: Long,
-      seqNum: Long,
       deploys: Seq[DeployId],
-      toSlash: Set[Validator],
-      changeEpoch: Boolean,
-      suppressAttestation: Boolean
+      toSlash: Set[Validator] = Set.empty,
+      changeEpoch: Boolean = false,
+      suppressAttestation: Boolean = true
   ): F[BlockCreatorResult] = {
-    val creatorsPk    = id.publicKey
-    val blockData     = BlockData(blockNum, creatorsPk, seqNum)
-    val shouldPropose = deploys.nonEmpty || toSlash.nonEmpty || changeEpoch
+    val preStateHash      = preState.preStateHash
+    val parents           = preState.justifications.map(_.blockHash)
+    val bondsMap          = preState.fringeBondsMap
+    val blockNum          = preState.justifications.map(_.blockNum).max + 1
+    val creatorsPk        = id.publicKey
+    val creatorsId        = ByteString.copyFrom(creatorsPk.bytes)
+    val creatorsLatestOpt = preState.justifications.find(_.sender == creatorsId)
+    val seqNum            = creatorsLatestOpt.map(_.seqNum + 1).getOrElse(0L)
+    val blockData         = BlockData(blockNum, creatorsPk, seqNum)
+    val shouldPropose     = deploys.nonEmpty || toSlash.nonEmpty || changeEpoch
 
     def propose: F[StateTransitionResult] = {
       val rand = BlockRandomSeed.randomGenerator(shardId, blockNum, creatorsPk, preStateHash)

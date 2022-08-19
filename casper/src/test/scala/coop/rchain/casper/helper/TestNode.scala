@@ -169,23 +169,11 @@ case class TestNode[F[_]: Concurrent: Timer](
                 _   = assert(res.isRight, s"Deploy error ${deploy} with\n ${res.left}")
               } yield ()
           )
-      preState          <- MultiParentCasper.getPreStateForNewBlock[F]
-      creatorsPk        = validatorIdOpt.get.publicKey
-      creatorsId        = ByteString.copyFrom(creatorsPk.bytes)
-      creatorsLatestOpt = preState.justifications.find(_.sender == creatorsId)
-      nextSeqNum        = creatorsLatestOpt.map(_.seqNum + 1).getOrElse(0L)
-      nextBlockNum      = preState.justifications.map(_.blockNum).max + 1
+      preState <- MultiParentCasper.getPreStateForNewBlock[F]
       createBlockResult <- BlockCreator(validatorIdOpt.get, shardName).create(
-                            preState.preStateHash,
-                            preState.justifications.map(_.blockHash),
-                            preState.fringeBondsMap,
+                            preState,
                             preState.rejectedDeploys,
-                            nextBlockNum,
-                            nextSeqNum,
-                            deployDatums.map(_.sig),
-                            Set(),
-                            false,
-                            true
+                            deployDatums.map(_.sig)
                           )
     } yield (createBlockResult, preState)
 
@@ -195,25 +183,12 @@ case class TestNode[F[_]: Concurrent: Timer](
   // This method assumes that block will be created successfully
   def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
-      _                 <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])
-      preState          <- MultiParentCasper.getPreStateForNewBlock[F]
-      preState          <- MultiParentCasper.getPreStateForNewBlock[F]
-      creatorsPk        = validatorIdOpt.get.publicKey
-      creatorsId        = ByteString.copyFrom(creatorsPk.bytes)
-      creatorsLatestOpt = preState.justifications.find(_.sender == creatorsId)
-      nextSeqNum        = creatorsLatestOpt.map(_.seqNum + 1).getOrElse(0L)
-      nextBlockNum      = preState.justifications.map(_.blockNum).max + 1
+      _        <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])
+      preState <- MultiParentCasper.getPreStateForNewBlock[F]
       createBlockResult <- BlockCreator(validatorIdOpt.get, shardName).create(
-                            preState.preStateHash,
-                            preState.justifications.map(_.blockHash),
-                            preState.fringeBondsMap,
+                            preState,
                             preState.rejectedDeploys,
-                            nextBlockNum,
-                            nextSeqNum,
-                            deployDatums.map(_.sig),
-                            Set(),
-                            false,
-                            true
+                            deployDatums.map(_.sig)
                           )
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
