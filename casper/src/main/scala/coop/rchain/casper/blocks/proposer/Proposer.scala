@@ -160,11 +160,10 @@ object Proposer {
           val msgMap = dag.dagMessageState.msgMap
           parentHashes.flatMap(msgMap(_).seen) -- preState.fringe.flatMap(msgMap(_).seen)
         }
+        hasDeploys = (b: BlockMessage) => b.state.systemDeploys.nonEmpty || b.state.deploys.nonEmpty
         nothingToFinalize = conflictSet.toList
           .traverse(BlockStore[F].getUnsafe)
-          .map(_.forall { b =>
-            b.state.systemDeploys.isEmpty && b.state.deploys.isEmpty
-          })
+          .map(!_.exists(hasDeploys))
         waitingForSupermajorityToAttest = {
           val newlySeen = creatorsLatestOpt
             .map { prev =>
@@ -173,8 +172,7 @@ object Proposer {
             }
             .getOrElse(Set())
           newlySeen.toList.traverse(BlockStore[F].getUnsafe).map { newBlocks =>
-            val newStateTransition =
-              newBlocks.exists(b => b.state.systemDeploys.nonEmpty || b.state.deploys.nonEmpty)
+            val newStateTransition = newBlocks.exists(hasDeploys)
             val attestationStake =
               preStateBonds.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
             !newStateTransition && attestationStake * 3 < preStateBonds.values.toList.sum * 2
