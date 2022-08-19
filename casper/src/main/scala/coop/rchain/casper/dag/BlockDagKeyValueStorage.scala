@@ -153,12 +153,12 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       curState: DagMessageState[BlockHash, Validator],
       childMap: Map[BlockHash, Set[BlockHash]]
   ): F[Unit] = {
-    val newLPF = dbPruneFringe(newState, childMap)
-    val curLPF = dbPruneFringe(curState, childMap)
-    val toPune = (newState.msgMap.between(newLPF, curLPF) ++ curLPF).map(_.id)
+    val newLPF  = dbPruneFringe(newState, childMap)
+    val curLPF  = dbPruneFringe(curState, childMap)
+    val toPrune = (newState.msgMap.between(newLPF, curLPF) ++ curLPF).map(_.id)
 
-    toPune.toList.foreach(BlockIndex.cache.remove)
-    Log[F].info(s"Pruned ${toPune.size} merging indices, new size: ${BlockIndex.cache.size}")
+    toPrune.toList.foreach(BlockIndex.cache.remove)
+    Log[F].info(s"Pruned ${toPrune.size} merging indices, new size: ${BlockIndex.cache.size}")
   }
 
   override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
