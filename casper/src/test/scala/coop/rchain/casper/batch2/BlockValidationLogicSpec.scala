@@ -96,20 +96,14 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     }
   }
 
-  "Future deploy validation" should "work" in {
-    val deploy = createDeploy(-1L)
-    val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
-    val status = BlockValidationLogic.futureTransaction(block)
+  "Future deploy validation" should "check that vabn does not exceed the block number" in {
+    // vabn = valid after block number
+    forAll(Gen.oneOf(-1L, 0L, 1L)) { vabn: Long =>
+      val deploy = createDeploy(vabn)
+      val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
 
-    status shouldBe true
-  }
-
-  it should "not accept blocks with a deploy for a future block number" in {
-    val deploy = createDeploy(Long.MaxValue)
-    val block  = getRandomBlock(setDeploys = Seq(ProcessedDeploy.empty(deploy)).some)
-    val status = BlockValidationLogic.futureTransaction(block)
-
-    status shouldBe false
+      BlockValidationLogic.futureTransaction(block) shouldBe (vabn <= block.blockNumber)
+    }
   }
 
   private def signedBlock(privateKey: PrivateKey, publicKey: PublicKey): BlockMessage =
