@@ -19,6 +19,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
+import coop.rchain.sdk.casper.Stake
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
@@ -170,7 +171,9 @@ object Proposer {
             val newStateTransition = newBlocks.exists(hasDeploys)
             val attestationStake =
               preStateBonds.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
-            !newStateTransition && attestationStake * 3 < preStateBonds.values.toList.sum * 2
+            val preStateBondsStake = preStateBonds.values.toList.sum
+
+            !newStateTransition && Stake.notPrevails(attestationStake, preStateBondsStake)
           }
         }
         suppressAttestation <- nothingToFinalize ||^ waitingForSupermajorityToAttest
