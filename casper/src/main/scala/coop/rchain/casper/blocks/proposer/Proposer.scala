@@ -181,20 +181,6 @@ object Proposer {
           }
         }
         suppressAttestation <- nothingToFinalize ||^ waitingForSupermajorityToAttest
-//        // push dummy deploy if needed
-//        p <- BlockDagStorage[F].pooledDeploys
-//        _ <- dummyDeployOpt
-//              .traverse {
-//                case (privateKey, term) =>
-//                  val deployData = ConstructDeploy.sourceDeployNow(
-//                    source = term,
-//                    sec = privateKey,
-//                    vabn = nextBlockNum - 1,
-//                    shardId = shardId
-//                  )
-//                  BlockDagStorage[F].addDeploy(deployData)
-//              }
-//              .whenA(p.isEmpty)
         // user deploys
         pooled <- BlockDagStorage[F].pooledDeploys
         pooledOk <- pooled.toList
