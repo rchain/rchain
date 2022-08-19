@@ -10,7 +10,8 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockVersion
 import coop.rchain.models.blockImplicits.{arbBlockMessage, getRandomBlock}
 import coop.rchain.models.syntax._
-import org.scalacheck.Arbitrary
+import org.scalacheck.Arbitrary._
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -73,33 +74,26 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     BlockValidationLogic.blockSignature(blockRsaAlg) shouldBe false
   }
 
-  it should "return false on invalid secp256k1 signatures" in {
+  it should "return true on valid secp256k1 signatures and false otherwise" in {
     val (privateKey, publicKey) = Secp256k1.newKeyPair
-    val (_, wrongPk)            = Secp256k1.newKeyPair
-    val empty                   = ByteString.EMPTY
-    val invalidKey              = "abcdef1234567890".unsafeHexToByteString
+    val block                   = signedBlock(privateKey, publicKey)
 
-    val block0 = signedBlock(privateKey, publicKey).copy(sender = empty)
-    val block1 = signedBlock(privateKey, publicKey).copy(sender = invalidKey)
-    val block2 =
-      signedBlock(privateKey, publicKey).copy(sender = ByteString.copyFrom(wrongPk.bytes))
-    val block3 = signedBlock(privateKey, publicKey).copy(sig = empty)
-    val block4 = signedBlock(privateKey, publicKey).copy(sig = invalidKey)
-    val block5 = signedBlock(privateKey, publicKey).copy(sig = block0.sig) // wrong sig
-    val blocks = Vector(block0, block1, block2, block3, block4, block5)
+    val emptyBSGen   = Gen.const(ByteString.EMPTY)
+    val wrongBSGen   = Gen.listOf(arbByte.arbitrary).map(_.toArray.toByteString)
+    val newPubKeyGen = Gen.resultOf[Unit, PublicKey](_ => Secp256k1.newKeyPair._2)
+    val wrongSenderGen =
+      Gen.oneOf(newPubKeyGen, emptyBSGen.map(PublicKey.apply), wrongBSGen.map(PublicKey.apply))
+    val wrongSigGen = Gen.oneOf(emptyBSGen, wrongBSGen)
 
-    blocks.exists(BlockValidationLogic.blockSignature) shouldBe false
-  }
+    forAll(arbBool.arbitrary, arbBool.arbitrary, wrongSenderGen, wrongSigGen) {
+      (senderCorrect: Boolean, sigCorrect: Boolean, wrongPubKey: PublicKey, wrongSig: ByteString) =>
+        val sender = if (senderCorrect) publicKey else wrongPubKey
+        val sig    = if (sigCorrect) block.sig else wrongSig
 
-  it should "return true on valid secp256k1 signatures" in {
-    val n                       = 6
-    val (privateKey, publicKey) = Secp256k1.newKeyPair
-    val result = (0 until n).foldLeft(true) {
-      case (res, _) =>
-        val block = signedBlock(privateKey, publicKey)
-        BlockValidationLogic.blockSignature(block) && res
+        BlockValidationLogic.blockSignature(
+          block.copy(sender = sender.bytes.toByteString, sig = sig)
+        ) shouldBe (senderCorrect && sigCorrect)
     }
-    result shouldBe true
   }
 
   "Future deploy validation" should "work" in {
