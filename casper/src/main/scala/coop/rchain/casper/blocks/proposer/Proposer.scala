@@ -1,6 +1,5 @@
 package coop.rchain.casper.blocks.proposer
 
-import cats.data.OptionT
 import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
@@ -17,10 +16,11 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax._
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.syntax._
-import coop.rchain.models.syntax._
 import coop.rchain.shared.{Log, Time}
 
 sealed abstract class ProposerResult
@@ -155,21 +155,16 @@ object Proposer {
         changeEpoch = epochLength % nextBlockNum == 0
         // attestation
         // no need to attest if nothing meaningful to finalize.
-        dag <- BlockDagStorage[F].getRepresentation
-        conflictSet = {
-          val msgMap = dag.dagMessageState.msgMap
-          parentHashes.flatMap(msgMap(_).seen) -- preState.fringe.flatMap(msgMap(_).seen)
-        }
-        hasDeploys = (b: BlockMessage) => b.state.systemDeploys.nonEmpty || b.state.deploys.nonEmpty
+        dag         <- BlockDagStorage[F].getRepresentation
+        seen        = (hash: BlockHash) => dag.dagMessageState.msgMap(hash).seen
+        conflictSet = parentHashes.flatMap(seen) -- preState.fringe.flatMap(seen)
+        hasDeploys  = (b: BlockMessage) => b.state.systemDeploys.nonEmpty || b.state.deploys.nonEmpty
         nothingToFinalize = conflictSet.toList
           .traverse(BlockStore[F].getUnsafe)
           .map(!_.exists(hasDeploys))
         waitingForSupermajorityToAttest = {
           val newlySeen = creatorsLatestOpt
-            .map { prev =>
-              prev.justifications.flatMap(dag.dagMessageState.msgMap(_).seen) --
-                parentHashes.flatMap(dag.dagMessageState.msgMap(_).seen)
-            }
+            .map(_.justifications.flatMap(seen) -- parentHashes.flatMap(seen))
             .getOrElse(Set())
           newlySeen.toList.traverse(BlockStore[F].getUnsafe).map { newBlocks =>
             val newStateTransition = newBlocks.exists(hasDeploys)
