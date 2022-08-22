@@ -2,9 +2,31 @@
 
 //requires Pos, RhoSpec
 
-let @posPubKey, @posVaultPubKey <-
-  "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),
-  "04a7808009ad157bec658c8d35055f21f34dc866566d2f4b874600bb8782c20af9ae2cf90420e6f0a9c683358aea1b659d344737481fc0957de4e63485d044ee80".hexToBytes()
+let
+  @posPubKey, @posVaultPubKey <-
+    "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),
+    "04a7808009ad157bec658c8d35055f21f34dc866566d2f4b874600bb8782c20af9ae2cf90420e6f0a9c683358aea1b659d344737481fc0957de4e63485d044ee80".hexToBytes() &
+  @user0, @user1, @user2, @user3, @user4, @user5, @user6, @user7, @user8, @user9,
+  @userA, @userB, @userC, @userD, @userE, @userF, @user12, @user13, @user14 <-
+    "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+    "3333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
+    "5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555",
+    "6666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666",
+    "7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777",
+    "8888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888",
+    "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "1212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212",
+    "1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313",
+    "1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414"
  in {
     new
       rl(`rho:registry:lookup`),
@@ -237,7 +259,7 @@ let @posPubKey, @posVaultPubKey <-
           // test setting PoS parameters with invalid deploy id and invalid types
           contract test_pos_params_only_updated_with_proper_authority_and_type(rhoSpec, _, ackCh) = {
             new epochBlockCh, setEpochRet, setupCh, setBlockData(`rho:test:block:data:set`), blockDataCh in {
-              prepareUser!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", *setupCh) |
+              prepareUser!(userF, *setupCh) |
               for (_, _, _, @userDeployerId <- setupCh) {
                 // non-pos attempts to set epoch block number - should fail
                 @PoS!("getEpochBlockNumber", *epochBlockCh) |
@@ -310,18 +332,14 @@ let @posPubKey, @posVaultPubKey <-
                 initialBondsCh, finalBondsCh, rewardsCh,
                 addBondReqCh
             in {
-              prepareUser!("1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111", *setupCh) |
+              prepareUser!(user1, *setupCh) |
               for (@userPubKey, _, @userVault, @userDeployerId <- setupCh) {
                 let @bondAmt <- 100  in {
                   getPosBalance!(*initialPosBalanceCh) |
                   getCoopBalance!(*initialCoopBalanceCh) |
                   @userVault!("balance", *initialUserBalanceCh) |
                   @PoS!("getBonds", *initialBondsCh) |
-                  @PoS!("addBondingRequest", 
-                        *posVaultDeployerId, 
-                        "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111", 
-                        bondAmt, 
-                        *addBondReqCh) |
+                  @PoS!("addBondingRequest", *posVaultDeployerId, user1, bondAmt, *addBondReqCh) |
                   for (@initialPosBalance  <- initialPosBalanceCh &
                        @initialUserBalance <- initialUserBalanceCh &
                        @initialCoopBalance <- initialCoopBalanceCh &
@@ -379,7 +397,7 @@ let @posPubKey, @posVaultPubKey <-
             in {
               set_context!(*blockDataCh) |
               for (_ <- blockDataCh) {
-                prepareUser!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", *setupCh) |
+                prepareUser!(userA, *setupCh) |
                 for (@userPubKey, _, userVault, @userDeployerId <- setupCh) {
                   let @initBlock <- 1 in {
                     @PoS!("getEpochLength", *epochCh) |
@@ -397,11 +415,7 @@ let @posPubKey, @posVaultPubKey <-
                           // assumes withdraw occurs in initBlock
                           @qPeriod <- qLength + epochLength * (1 + initBlock / epochLength)
                       in {
-                        @PoS!("addBondingRequest", 
-                          *posVaultDeployerId, 
-                          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 
-                          bondAmt, 
-                          *addBondReqCh) |
+                        @PoS!("addBondingRequest", *posVaultDeployerId, userA, bondAmt, *addBondReqCh) |
                         for (@addBondRes <- addBondReqCh) {
                           // bond in initBlock
                           @PoS!("bond", userDeployerId, bondAmt, *bondCh) |
@@ -517,7 +531,7 @@ let @posPubKey, @posVaultPubKey <-
             in {
               set_context!(*blockDataCh) |
               for (_ <- blockDataCh) {
-                prepareUser!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", *setupCh) |
+                prepareUser!(userB, *setupCh) |
                 for (@validatorPubKey, _, @validatorVault, @validatorDeployerId <- setupCh) {
                   @validatorVault!("balance", *initialValidatorBalanceCh) |
                   @PoS!("getBonds", *initialBondsCh) |
@@ -528,18 +542,14 @@ let @posPubKey, @posVaultPubKey <-
                        @epochLength             <- epochCh &
                        @quarantineLength        <- quarantineCh) {
                     let @(bondAmt, chargeAmt, refundAmt, blockNumber)<- (100, 100, 0, 1) in {
-                      @PoS!("addBondingRequest", 
-                        *posVaultDeployerId, 
-                        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 
-                        bondAmt, 
-                        *addBondReqCh) |
+                      @PoS!("addBondingRequest", *posVaultDeployerId, userB, bondAmt, *addBondReqCh) |
                       for (@addBondRes <- addBondReqCh) {
                         @PoS!("bond", validatorDeployerId, bondAmt, *bondCh) |
                         for (@bondRes <- bondCh) {
                           stdlog!("info", ("successfully bond.")) |
                           closeBlock!(*closeBlockCh) |
                           for (_ <- closeBlockCh) {
-                            prepareUser!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", *setupCh) |
+                            prepareUser!(userC, *setupCh) |
                             for (@userPubKey, _, @userVault, @userDeployerId <- setupCh) {
                               @PoS!("chargeDeploy", userDeployerId, chargeAmt, sysAuthToken, *chargeCh) |
                               @PoS!("refundDeploy", refundAmt, sysAuthToken, *refundCh) |
@@ -621,13 +631,13 @@ let @posPubKey, @posVaultPubKey <-
           } |
           contract test_multiple_bonding_succeeds(rhoSpec, _, ackCh) = {
             new setupCh, initialPosBalanceCh, finalPosBalanceCh,
-                user1BondCh, user2BondCh, initialBondsCh, finalBondsCh,
+                user2BondCh, user3BondCh, initialBondsCh, finalBondsCh,
                 initialUser1BalanceCh, finalUser1BalanceCh,
                 initialUser2BalanceCh, finalUser2BalanceCh,
                 initialCoopBalanceCh, finalCoopBalanceCh,
                 addBondReqCh1, addBondReqCh2
             in {
-              prepareUser!("2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222", *setupCh) |
+              prepareUser!(user2, *setupCh) |
               for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh) {
                 getPosBalance!(*initialPosBalanceCh) |
                 getCoopBalance!(*initialCoopBalanceCh) |
@@ -637,27 +647,19 @@ let @posPubKey, @posVaultPubKey <-
                      @initialUser1Balance <- initialUser1BalanceCh &
                      @initialCoopBalance  <- initialCoopBalanceCh &
                      @initialBonds        <- initialBondsCh) {
-                  let @(user1Bond, user2Bond) <- (100, 200) in {
-                    @PoS!("addBondingRequest", 
-                      *posVaultDeployerId, 
-                      "2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222", 
-                      user1Bond, 
-                      *addBondReqCh1) |
-                    @PoS!("addBondingRequest", 
-                      *posVaultDeployerId, 
-                      "3333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333", 
-                      user2Bond, 
-                      *addBondReqCh2) |
+                  let @(user2Bond, user3Bond) <- (100, 200) in {
+                    @PoS!("addBondingRequest", *posVaultDeployerId, user2, user2Bond, *addBondReqCh1) |
+                    @PoS!("addBondingRequest", *posVaultDeployerId, user3, user3Bond, *addBondReqCh2) |
                     for (@addBondRes1 <- addBondReqCh1 & @addBondRes2 <- addBondReqCh2 ) {
-                      @PoS!("bond", user1DeployerId, user1Bond, *user1BondCh) |
-                      for (@bondRes1 <- user1BondCh) {
+                      @PoS!("bond", user1DeployerId, user2Bond, *user2BondCh) |
+                      for (@bondRes1 <- user2BondCh) {
                         stdlog!("info", "first bond") |
-                        prepareUser!("3333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333", *setupCh) |
+                        prepareUser!(user3, *setupCh) |
                         for (@user2PubKey, _, @user2Vault, @user2DeployerId <- setupCh) {
                           @user2Vault!("balance", *initialUser2BalanceCh) |
                           for (@initialUser2Balance <- initialUser2BalanceCh) {
-                            @PoS!("bond", user2DeployerId, user2Bond, *user2BondCh) |
-                            for (@bondRes2 <- user2BondCh) {
+                            @PoS!("bond", user2DeployerId, user3Bond, *user3BondCh) |
+                            for (@bondRes2 <- user3BondCh) {
                               @PoS!("getBonds", *finalBondsCh) |
                               getPosBalance!(*finalPosBalanceCh) |
                               getCoopBalance!(*finalCoopBalanceCh) |
@@ -670,18 +672,18 @@ let @posPubKey, @posVaultPubKey <-
                                    @finalBonds        <- finalBondsCh) {
                                 rhoSpec!("assertMany",
                                   [
-                                    ((addBondRes1.nth(0), "==", true), "add bonding user1 request should be true"),
-                                    ((bondRes1.nth(0), "==", true), "the bonding user1 result should be true"),
-                                    ((addBondRes2.nth(0), "==", true), "add bonding user2 request should be true"),
-                                    ((bondRes2.nth(0), "==", true), "the bonding user2 result should be true"),
-                                    ((0, "==", initialBonds.getOrElse(user1PubKey, 0)), "user1's bond is not expected in the initial map"),
-                                    ((0, "==", initialBonds.getOrElse(user2PubKey, 0)), "user2's bond is not expected in the initial map"),
-                                    ((user1Bond, "==", finalBonds.get(user1PubKey)), "user1's bond is expected in the final map"),
-                                    ((user2Bond, "==", finalBonds.get(user2PubKey)), "user2's bond is expected in the final map"),
-                                    ((user1Bond, "==", initialUser1Balance - finalUser1Balance), "user1's account decreases as expected"),
-                                    ((user2Bond, "==", initialUser2Balance - finalUser2Balance), "user2's account decreases as expected"),
+                                    ((addBondRes1.nth(0), "==", true), "add bonding user2 request should be true"),
+                                    ((bondRes1.nth(0), "==", true), "the bonding user2 result should be true"),
+                                    ((addBondRes2.nth(0), "==", true), "add bonding user3 request should be true"),
+                                    ((bondRes2.nth(0), "==", true), "the bonding user3 result should be true"),
+                                    ((0, "==", initialBonds.getOrElse(user1PubKey, 0)), "user2's bond is not expected in the initial map"),
+                                    ((0, "==", initialBonds.getOrElse(user2PubKey, 0)), "user3's bond is not expected in the initial map"),
+                                    ((user2Bond, "==", finalBonds.get(user1PubKey)), "user2's bond is expected in the final map"),
+                                    ((user3Bond, "==", finalBonds.get(user2PubKey)), "user3's bond is expected in the final map"),
+                                    ((user2Bond, "==", initialUser1Balance - finalUser1Balance), "user2's account decreases as expected"),
+                                    ((user3Bond, "==", initialUser2Balance - finalUser2Balance), "user3's account decreases as expected"),
                                     ((finalCoopBalance, "==", initialCoopBalance), "Coop vault balance does not change"),
-                                    ((user1Bond + user2Bond, "==", finalPosBalance - initialPosBalance), "the PoS account increases as expected")
+                                    ((user2Bond + user3Bond, "==", finalPosBalance - initialPosBalance), "the PoS account increases as expected")
                                   ],
                                   *ackCh
                                 )
@@ -706,18 +708,14 @@ let @posPubKey, @posVaultPubKey <-
             in {
               set_context!(*blockDataCh) |
               for (_ <- blockDataCh) {
-                prepareUser!("4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444", *setupCh) |
+                prepareUser!(user4, *setupCh) |
                 for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
                   let @validatorBond, <- 100 &
                       @userCharge <- 100 &
                       @userRefund <- 0 &
                       @blockNumber <- 42
                   in {
-                    @PoS!("addBondingRequest", 
-                      *posVaultDeployerId, 
-                      "4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444", 
-                      validatorBond, 
-                      *addBondReqCh) |
+                    @PoS!("addBondingRequest", *posVaultDeployerId, user4, validatorBond, *addBondReqCh) |
                     for (@addBondRes <- addBondReqCh) {
                       @PoS!("bond", validatorDeployerId, validatorBond, *setupCh) |
                       for (@bondRes <- setupCh) {
@@ -726,7 +724,7 @@ let @posPubKey, @posVaultPubKey <-
                         setBlockData!("blockNumber", blockNumber, *blockDataCh) |
                         for (_ <- setEpochRet & _ <- blockDataCh) {
                           closeBlock!(*closeBlockCh) |
-                          prepareUser!("5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", *setupCh) |
+                          prepareUser!(user5, *setupCh) |
                           for (_, _, @userVault, @userDeployerId <- setupCh & _ <- closeBlockCh) {
                             getPosBalance!(*initialPosBalanceCh) |
                             @userVault!("balance", *initialUser1BalanceCh) |
@@ -812,19 +810,14 @@ let @posPubKey, @posVaultPubKey <-
             in {
               set_context!(*blockDataCh) |
               for (_ <- blockDataCh) {
-                prepareUser!("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", *prepareUserAck) |
+                prepareUser!(userD, *prepareUserAck) |
                 for (@validatorPubKey, _, _, @validatorDeployerId <- prepareUserAck) {
                   let @validatorBond <- 100 &
                       @userCharge <- 100 &
                       @userRefund <- 50 &
                       @blockNumber <- 42
                   in {
-                    @PoS!("addBondingRequest", 
-                      *posVaultDeployerId, 
-                      "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", 
-                      validatorBond, 
-                      *addBondReqCh
-                    ) |
+                    @PoS!("addBondingRequest", *posVaultDeployerId, userD, validatorBond, *addBondReqCh) |
                     for (@addBondRes <- addBondReqCh) {
                       @PoS!("bond", validatorDeployerId, validatorBond, *bondAck) |
                       for (@bondRes <- bondAck) {
@@ -833,7 +826,7 @@ let @posPubKey, @posVaultPubKey <-
                         setBlockData!("blockNumber", blockNumber, *blockDataCh) |
                         for (_ <- setEpochRet & _ <- blockDataCh) {
                           closeBlock!(*closeBlockAck) |
-                          prepareUser!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", *prepareUserAck) |
+                          prepareUser!(userE, *prepareUserAck) |
                           for (_, _, @userVault, @userDeployerId <- prepareUserAck &
                                _                                 <- closeBlockAck) {
                             getPosBalance!(*posBalanceCh) |
@@ -904,25 +897,21 @@ let @posPubKey, @posVaultPubKey <-
           } |
 
           contract test_bonding_fails_if_deposit_fails(rhoSpec, _, ackCh) = {
-            test_bonding_failure!(*rhoSpec, "6666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666666", 20000, "Bond deposit failed: Insufficient funds", *ackCh)
+            test_bonding_failure!(*rhoSpec, user6, 20000, "Bond deposit failed: Insufficient funds", *ackCh)
           } |
 
           contract test_bonding_fails_if_bond_too_small(rhoSpec, _, ackCh) = {
-            test_bonding_failure!(*rhoSpec, "7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777", -1, "Bond is less than minimum!", *ackCh)
+            test_bonding_failure!(*rhoSpec, user7, -1, "Bond is less than minimum!", *ackCh)
           } |
           contract test_bonding_fails_if_already_bonded(rhoSpec, _, ackCh) = {
             new setupCh, initialBondsCh, bond1Ch, bond2Ch, bondsCh,
                 finalRewardsCh, initialRewardsCh,
                 addBondReqCh
             in {
-              prepareUser!("8888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888", *setupCh) |
+              prepareUser!(user8, *setupCh) |
               for (_, _, _, @userDeployerId <- setupCh) {
                 let @(userBond1, userBond2) <- (150, 100) in {
-                  @PoS!("addBondingRequest", 
-                    *posVaultDeployerId, 
-                    "8888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888", 
-                    userBond1, 
-                    *addBondReqCh) |
+                  @PoS!("addBondingRequest", *posVaultDeployerId, user8, userBond1, *addBondReqCh) |
                   for (@addBondRes <- addBondReqCh) {
                     @PoS!("bond", userDeployerId, userBond1, *bond1Ch) |
                     for (@(bond1Result, _) <- bond1Ch) {
@@ -962,12 +951,7 @@ let @posPubKey, @posVaultPubKey <-
                 @PoS!("getRewards", *initialRewardsCh) |
                 for (@initialBonds   <- bondsCh &
                      @initialRewards <- initialRewardsCh) {
-                  @PoS!("addBondingRequest", 
-                    *posVaultDeployerId, 
-                    pk, 
-                    transferAmount, 
-                    *addBondReqCh
-                  ) |
+                  @PoS!("addBondingRequest", *posVaultDeployerId, pk, transferAmount, *addBondReqCh) |
                   for (@addBondRes <- addBondReqCh) {
                     @PoS!("bond", deployerId, transferAmount, *retCh) |
                     for (@(result, msg) <- retCh) {
@@ -992,17 +976,13 @@ let @posPubKey, @posVaultPubKey <-
             new setupCh, closeBlockCh, chargeCh,
                 refundCh, finalRewardsCh, addBondReqCh
             in {
-              prepareUser!("9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", *setupCh) |
+              prepareUser!(user9, *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
-                @PoS!("addBondingRequest", 
-                  *posVaultDeployerId, 
-                  "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", 
-                  100, 
-                  *addBondReqCh) |
+                @PoS!("addBondingRequest", *posVaultDeployerId, user9, 100, *addBondReqCh) |
                 for (@addBondRes <- addBondReqCh) {
                   @PoS!("bond", validatorDeployerId, 100, *setupCh) |
                   for (@bondRes <- setupCh) {
-                    prepareUser!("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", *setupCh) |
+                    prepareUser!(user0, *setupCh) |
                     for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh) {
                       @PoS!("chargeDeploy", user1DeployerId, 100, sysAuthToken, *chargeCh) |
                       @PoS!("refundDeploy", 10, sysAuthToken, *refundCh) |
@@ -1031,7 +1011,7 @@ let @posPubKey, @posVaultPubKey <-
           } |
           contract test_bonding_fails_if_not_in_whitelist(rhoSpec, _, ackCh) = {
             new setupCh, bondRetCh in {
-              prepareUser!("1212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212121212", *setupCh) |
+              prepareUser!(user12, *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
                 @PoS!("bond", validatorDeployerId, 100, *bondRetCh) |
                 for (@bondRes <- bondRetCh) {
@@ -1047,19 +1027,11 @@ let @posPubKey, @posVaultPubKey <-
           } |
           contract test_bonding_fails_if_removed_from_whitelist(rhoSpec, _, ackCh) = {
             new setupCh, addBondReqCh, removeBondReqCh, bondRetCh in {
-              prepareUser!("1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", *setupCh) |
+              prepareUser!(user13, *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
-                @PoS!("addBondingRequest", 
-                  *posVaultDeployerId, 
-                  "1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", 
-                  100, 
-                  *addBondReqCh
-                ) |
+                @PoS!("addBondingRequest", *posVaultDeployerId, user13, 100, *addBondReqCh) |
                 for (@addBondRes <- addBondReqCh) {
-                  @PoS!("removeBondingRequest", 
-                    *posVaultDeployerId, 
-                    "1313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313", 
-                    *removeBondReqCh) |
+                  @PoS!("removeBondingRequest", *posVaultDeployerId, user13, *removeBondReqCh) |
                   for (@removeRes <- removeBondReqCh) {
                     @PoS!("bond", validatorDeployerId, 100, *bondRetCh) |
                     for (@bondRes <- bondRetCh) {
@@ -1079,15 +1051,9 @@ let @posPubKey, @posVaultPubKey <-
           } |
           contract test_bonding_fails_if_stake_is_not_the_same_as_whitelist(rhoSpec, _, ackCh) = {
             new setupCh, addBondReqCh, bondRetCh in {
-              prepareUser!("1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414", *setupCh) |
+              prepareUser!(user14, *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
-                @PoS!(
-                  "addBondingRequest", 
-                  *posVaultDeployerId, 
-                  "1414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414", 
-                  100, 
-                  *addBondReqCh
-                ) |
+                @PoS!("addBondingRequest", *posVaultDeployerId, user14, 100, *addBondReqCh) |
                 for (@addBondRes <- addBondReqCh) {
                   @PoS!("bond", validatorDeployerId, 200, *bondRetCh) |
                   for (@bondRes <- bondRetCh) {
@@ -1136,7 +1102,7 @@ let @posPubKey, @posVaultPubKey <-
             new setupCh, closeBlockCh, retCh,
                 finalRewardsCh, computeHash(`rho:crypto:keccak256Hash`), hash00Ch, hashFFCh
             in {
-              prepareUser!("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", *setupCh) |
+              prepareUser!(userD, *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
                 @PoS!("revealRandom", validatorDeployerId, "FF".hexToBytes(), *retCh) |
                 computeHash!("00".hexToBytes(), *hash00Ch) |
@@ -1180,7 +1146,7 @@ let @posPubKey, @posVaultPubKey <-
                 initialRewardsCh, finalRewardsCh,
                 initialBondsCh, finalBondsCh
             in {
-              prepareUser!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", *setupCh) |
+              prepareUser!(userB, *setupCh) |
               for (_, _, @userVault, @userDeployerId <- setupCh) {
                 @PoS!("getActiveValidators", *activeValidatorsCh) |
                 @PoS!("getBonds", *initialBondsCh) |
