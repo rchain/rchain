@@ -15,14 +15,13 @@ import coop.rchain.rspace.ReportingRspace.{
 }
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.SyncVarOps._
+import coop.rchain.rspace.trace._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
-import scala.concurrent.{ExecutionContext, SyncVar}
+import scala.concurrent.ExecutionContext
 
 /**
   * ReportingRspace works exactly like how ReplayRspace works. It can replay the deploy and try to find if the

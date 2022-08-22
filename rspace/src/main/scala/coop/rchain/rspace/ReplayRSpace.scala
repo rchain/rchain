@@ -9,13 +9,13 @@ import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.SyncVarOps._
+import coop.rchain.rspace.trace._
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Serialize}
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.JavaConverters._
-import scala.collection.SortedSet
+import scala.collection.{immutable, SortedSet}
 import scala.concurrent.ExecutionContext
 
 class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
@@ -63,18 +63,8 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
                       _.fold(storeWaitingContinuation(channels, wk)) {
                         case (_, dataCandidates) =>
                           for {
-                            commRef <- logComm(
-                                        dataCandidates,
-                                        channels,
-                                        wk,
-                                        COMM(
-                                          dataCandidates,
-                                          consumeRef,
-                                          peeks,
-                                          produceCounters _
-                                        ),
-                                        consumeCommLabel
-                                      )
+                            comm    <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
+                            commRef <- logComm(dataCandidates, channels, wk, comm, consumeCommLabel)
                             _ <- assertF(
                                   comms.contains(commRef),
                                   s"COMM Event $commRef was not contained in the trace $comms"
@@ -107,7 +97,12 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       channelToIndexedDataList <- channels.traverse { c: C =>
                                    store
                                      .getData(c)
-                                     .map(_.iterator.zipWithIndex.filter(matches(comm)).toSeq)
+                                     .flatMap(
+                                       _.iterator.zipWithIndex
+                                       // Convert to immutable.Seq because of defined Traversable instance
+                                         .to[immutable.Seq]
+                                         .filterA(matches(comm))
+                                     )
                                      .map(c -> _)
                                  }
       result <- extractDataCandidates(channels.zip(patterns), channelToIndexedDataList.toMap, Nil)
@@ -180,27 +175,25 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       c =>
         store
           .getData(c)
-          .map(_.iterator.zipWithIndex.toSeq)
-          .map(
-            as => {
-              c -> {
-                if (c == channel)
-                  (Datum(data, persist, produceRef), -1) +: as
-                else as
-              }.filter {
-                matches(comm)
-              }
-            }
-          )
+          // Convert to immutable.Seq because of defined Traversable instance
+          .map(_.iterator.zipWithIndex.to[immutable.Seq])
+          .flatMap { datums =>
+            (if (c == channel) (Datum(data, persist, produceRef), -1) +: datums else datums)
+              .filterA(matches(comm))
+              .map(_.to[Seq])
+          }
+          .map(c -> _)
     )
 
-  private[this] def matches(comm: COMM)(datumWithIndex: (Datum[A], _)): Boolean = {
+  private[this] def matches(comm: COMM)(datumWithIndex: (Datum[A], _)): F[Boolean] = {
     val datum: Datum[A] = datumWithIndex._1
-    def wasRepeatedEnoughTimes: Boolean =
-      if (!datum.persist) {
-        comm.timesRepeated(datum.source) === produceCounter.get(datum.source)
-      } else true
-    comm.produces.contains(datum.source) && wasRepeatedEnoughTimes
+    def wasRepeatedEnoughTimes: F[Boolean] =
+      produceCounter.get.map { counter =>
+        if (!datum.persist) {
+          comm.timesRepeated(datum.source) === counter(datum.source)
+        } else true
+      }
+    Sync[F].delay(comm.produces.contains(datum.source)) &&^ wasRepeatedEnoughTimes
   }
 
   private[this] def handleMatch(
@@ -214,13 +207,8 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       dataCandidates
     ) = pc
     for {
-      commRef <- logComm(
-                  dataCandidates,
-                  channels,
-                  wk,
-                  COMM(dataCandidates, consumeRef, peeks, produceCounters _),
-                  produceCommLabel
-                )
+      comm    <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
+      commRef <- logComm(dataCandidates, channels, wk, comm, produceCommLabel)
       _ <- assertF(
             comms.contains(commRef),
             s"COMM Event $commRef was not contained in the trace $comms"
@@ -278,10 +266,10 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       channel: C,
       data: A,
       persist: Boolean
-  ): F[Produce] = syncF.delay {
-    if (!persist) produceCounter.update(_.putAndIncrementCounter(produceRef))
-    produceRef
-  }
+  ): F[Produce] =
+    for {
+      _ <- produceCounter.update(_.putAndIncrementCounter(produceRef)).whenA(!persist)
+    } yield produceRef
 
   private[this] def getCommOrCandidate[Candidate](
       comms: Seq[COMM],

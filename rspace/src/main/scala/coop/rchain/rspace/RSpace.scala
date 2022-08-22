@@ -11,7 +11,6 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{ConsumeCandidate, Datum, ProduceCandidate, WaitingContinuation}
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.SyncVarOps._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
 import monix.execution.atomic.AtomicAny
@@ -61,19 +60,9 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
         result <- options.fold(storeWaitingContinuation(channels, wk))(
                    dataCandidates =>
                      for {
-                       _ <- logComm(
-                             dataCandidates,
-                             channels,
-                             wk,
-                             COMM(
-                               dataCandidates,
-                               consumeRef,
-                               peeks,
-                               produceCounters _
-                             ),
-                             consumeCommLabel
-                           )
-                       _ <- storePersistentData(dataCandidates, peeks)
+                       comm <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
+                       _    <- logComm(dataCandidates, channels, wk, comm, consumeCommLabel)
+                       _    <- storePersistentData(dataCandidates, peeks)
                        _ <- Log[F].debug(
                              s"consume: data found for <patterns: $patterns> at <channels: $channels>"
                            )
@@ -165,16 +154,11 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     ) = pc
 
     for {
-      _ <- logComm(
-            dataCandidates,
-            channels,
-            wk,
-            COMM(dataCandidates, consumeRef, peeks, produceCounters _),
-            produceCommLabel
-          )
-      _ <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
-      _ <- removeMatchedDatumAndJoin(channels, dataCandidates)
-      _ <- Log[F].debug(s"produce: matching continuation found at <channels: $channels>")
+      comm <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
+      _    <- logComm(dataCandidates, channels, wk, comm, produceCommLabel)
+      _    <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
+      _    <- removeMatchedDatumAndJoin(channels, dataCandidates)
+      _    <- Log[F].debug(s"produce: matching continuation found at <channels: $channels>")
     } yield wrapResult(channels, wk, consumeRef, dataCandidates)
   }
 
@@ -205,12 +189,10 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       data: A,
       persist: Boolean
   ): F[Produce] =
-    eventLog
-      .update(produceRef +: _)
-      .as {
-        if (!persist) produceCounter.update(_.putAndIncrementCounter(produceRef))
-        produceRef
-      }
+    for {
+      _ <- eventLog.update(produceRef +: _)
+      _ <- produceCounter.update(_.putAndIncrementCounter(produceRef)).whenA(!persist)
+    } yield produceRef
 
   override def createCheckpoint(): F[Checkpoint] = spanF.withMarks("create-checkpoint") {
     for {
@@ -220,8 +202,7 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
                     }
       _             = historyRepositoryAtom.set(nextHistory)
       log           <- eventLog.getAndSet(Seq.empty)
-      _             = produceCounter.take()
-      _             = produceCounter.put(Map.empty.withDefaultValue(0))
+      _             <- produceCounter.set(Map.empty.withDefaultValue(0))
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       _             <- createNewHotStore(historyReader)
       _             <- restoreInstalls()

@@ -34,6 +34,7 @@ object BlockIndex {
     val cached = BlockIndex.cache.get(blockHash).map(_.pure)
     cached.getOrElse {
       for {
+        _            <- coop.rchain.shared.Log.log[F].info(s"Cache miss. Indexing ${blockHash.show}.")
         b            <- BlockStore[F].getUnsafe(blockHash)
         preState     = b.preStateHash
         postState    = b.postStateHash
@@ -49,6 +50,7 @@ object BlockIndex {
                        RuntimeManager[F].getHistoryRepo,
                        mergeableChs
                      )
+        _ = BlockIndex.cache.putIfAbsent(blockHash, blockIndex)
       } yield blockIndex
     }
   }
