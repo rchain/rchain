@@ -2,7 +2,7 @@ package coop.rchain.blockstorage.dag
 
 import cats.syntax.all._
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.sdk.casper.Stake
+import coop.rchain.sdk.consensus.Stake
 
 import scala.collection.compat.immutable.LazyList
 
@@ -131,7 +131,7 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
     // Total stake
     val totalStake = bondsMap.values.toSeq.sum
     // Calculate if 2/3 of stake supporting next layer
-    Stake.prevails(fullPartitionStake, totalStake)
+    Stake.isSuperMajority(fullPartitionStake, totalStake)
   }
 
   /**

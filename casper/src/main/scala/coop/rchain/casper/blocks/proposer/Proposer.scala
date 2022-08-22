@@ -19,7 +19,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
-import coop.rchain.sdk.casper.Stake
+import coop.rchain.sdk.consensus.Stake
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
@@ -173,7 +173,7 @@ object Proposer {
               preStateBonds.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
             val preStateBondsStake = preStateBonds.values.toList.sum
 
-            !newStateTransition && Stake.notPrevails(attestationStake, preStateBondsStake)
+            !(newStateTransition || Stake.isSuperMajority(attestationStake, preStateBondsStake))
           }
         }
         suppressAttestation <- nothingToFinalize ||^ waitingForSupermajorityToAttest
