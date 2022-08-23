@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{BlockMessage, DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.{BlockValidationLogic, ValidatorIdentity}
-import coop.rchain.crypto.signatures.{Secp256k1, Signed}
+import coop.rchain.crypto.signatures.{Secp256k1, Secp256k1Eth, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockVersion
 import coop.rchain.models.blockImplicits.{arbBlockMessage, getRandomBlock}
@@ -64,14 +64,30 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
     }
   }
 
-  // TODO: This test doesn't make sense because the signing is done by the algorithm in the ValidatorIdentity.
-  //  The algorithm specified for the block is not used
-  "Block signature validation" should "return false on unknown algorithms" in {
-    val blockUnknownAlg = getRandomBlock().copy(sigAlgorithm = "unknownAlgorithm")
-    val blockRsaAlg     = getRandomBlock().copy(sigAlgorithm = "RSA")
+  "Block signature algorithm" should "change only specific fields" in {
+    val (privateKey, publicKey) = Secp256k1.newKeyPair
+    val block                   = signedBlock(privateKey, publicKey)
 
-    BlockValidationLogic.blockSignature(blockUnknownAlg) shouldBe false
-    BlockValidationLogic.blockSignature(blockRsaAlg) shouldBe false
+    // Only blockHash, sig and sigAlgorithm fields are affected when signing
+    def clean(b: BlockMessage): BlockMessage =
+      b.copy(blockHash = ByteString.EMPTY, sig = ByteString.EMPTY, sigAlgorithm = "")
+
+    forAll(Gen.oneOf(Secp256k1.name, Secp256k1Eth.name)) { alg: String =>
+      val reSignedBlock = ValidatorIdentity(publicKey, privateKey, alg).signBlock(block)
+      clean(block) shouldBe clean(reSignedBlock)
+    }
+  }
+
+  "Block signature validation" should "return false on unknown algorithms" in {
+    val (privateKey, publicKey) = Secp256k1.newKeyPair
+    val sigAlgorithm            = Secp256k1.name
+    val block                   = signedBlock(privateKey, publicKey)
+
+    val sigAlgorithmGen = Gen.oneOf(Secp256k1.name, Secp256k1Eth.name, "unknownAlgorithm", "RSA")
+
+    forAll(sigAlgorithmGen) { alg: String =>
+      BlockValidationLogic.blockSignature(block.copy(sigAlgorithm = alg)) shouldBe (alg == sigAlgorithm)
+    }
   }
 
   it should "return true on valid secp256k1 signatures and false otherwise" in {
