@@ -40,7 +40,7 @@ object Validate {
       shardId: String,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
-    def validate(f: => Boolean, errorStatus: InvalidBlock): EitherT[F, InvalidBlock, ValidBlock] =
+    def validate(f: Boolean, errorStatus: => InvalidBlock): EitherT[F, InvalidBlock, ValidBlock] =
       EitherT.fromOption(Option(BlockStatus.valid).filter(_ => f), errorStatus)
 
     (for {
