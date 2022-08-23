@@ -35,7 +35,7 @@ final case class BlockCreator(id: ValidatorIdentity, shardId: String) {
     val bondsMap          = preState.fringeBondsMap
     val blockNum          = preState.justifications.map(_.blockNum).max + 1
     val creatorsPk        = id.publicKey
-    val creatorsId        = ByteString.copyFrom(creatorsPk.bytes)
+    val creatorsId        = creatorsPk.bytes.toByteString
     val creatorsLatestOpt = preState.justifications.find(_.sender == creatorsId)
     val seqNum            = creatorsLatestOpt.map(_.seqNum + 1).getOrElse(0L)
     val blockData         = BlockData(blockNum, creatorsPk, seqNum)

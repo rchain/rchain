@@ -157,7 +157,7 @@ object Proposer {
         // attestation
         // no need to attest if nothing meaningful to finalize.
         dag         <- BlockDagStorage[F].getRepresentation
-        seen        = (hash: BlockHash) => dag.dagMessageState.msgMap(hash).seen
+        seen        = dag.dagMessageState.msgMap(_: BlockHash).seen
         conflictSet = parentHashes.flatMap(seen) -- preState.fringe.flatMap(seen)
         hasDeploys  = (b: BlockMessage) => b.state.systemDeploys.nonEmpty || b.state.deploys.nonEmpty
         nothingToFinalize = conflictSet.toList
