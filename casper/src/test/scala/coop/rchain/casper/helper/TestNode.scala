@@ -170,11 +170,8 @@ case class TestNode[F[_]: Concurrent: Timer](
               } yield ()
           )
       preState <- MultiParentCasper.getPreStateForNewBlock[F]
-      createBlockResult <- BlockCreator(validatorIdOpt.get, shardName).create(
-                            preState,
-                            preState.rejectedDeploys,
-                            deployDatums.map(_.sig)
-                          )
+      createBlockResult <- BlockCreator(validatorIdOpt.get, shardName)
+                            .create(preState, deployDatums.map(_.sig))
     } yield (createBlockResult, preState)
 
   def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
@@ -185,11 +182,8 @@ case class TestNode[F[_]: Concurrent: Timer](
     for {
       _        <- deployDatums.toList.traverse(MultiParentCasper.deploy[F])
       preState <- MultiParentCasper.getPreStateForNewBlock[F]
-      createBlockResult <- BlockCreator(validatorIdOpt.get, shardName).create(
-                            preState,
-                            preState.rejectedDeploys,
-                            deployDatums.map(_.sig)
-                          )
+      createBlockResult <- BlockCreator(validatorIdOpt.get, shardName)
+                            .create(preState, deployDatums.map(_.sig))
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case err        => new Throwable(s"failed creating block: $err").raiseError

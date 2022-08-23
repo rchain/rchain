@@ -25,7 +25,6 @@ final case class BlockCreator(id: ValidatorIdentity, shardId: String) {
 
   def create[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       preState: ParentsMergedState,
-      finalization: Set[DeployId], // deploys that are rejected on finalization done by the block being created
       deploys: Seq[DeployId],
       toSlash: Set[Validator] = Set.empty,
       changeEpoch: Boolean = false,
@@ -41,6 +40,9 @@ final case class BlockCreator(id: ValidatorIdentity, shardId: String) {
     val seqNum            = creatorsLatestOpt.map(_.seqNum + 1).getOrElse(0L)
     val blockData         = BlockData(blockNum, creatorsPk, seqNum)
     val shouldPropose     = deploys.nonEmpty || toSlash.nonEmpty || changeEpoch
+
+    // deploys that are rejected on finalization done by the block being created
+    val finalization = preState.fringeRejectedDeploys
 
     def propose: F[StateTransitionResult] = {
       val rand = BlockRandomSeed.randomGenerator(shardId, blockNum, creatorsPk, preStateHash)
