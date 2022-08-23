@@ -1,5 +1,6 @@
 package coop.rchain.casper.blocks.proposer
 
+import cats.data.OptionT
 import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
@@ -188,18 +189,24 @@ object Proposer {
                          (future.pure ||^ expired.pure ||^ replayAttack).not
                      }
                      .map(_.map(_._1))
-        deploys <- for {
-                    dummy <- dummyDeployOpt.traverse {
-                              case (privateKey, term) =>
-                                val deployData = ConstructDeploy.sourceDeployNow(
-                                  source = term,
-                                  sec = privateKey,
-                                  vabn = nextBlockNum - 1,
-                                  shardId = shardId
-                                )
-                                BlockDagStorage[F].addDeploy(deployData).as(List(deployData.sig))
-                            }
-                  } yield Option(pooledOk).filter(_.nonEmpty).orElse(dummy).getOrElse(List.empty)
+        deploys <- {
+          val dummy = dummyDeployOpt
+            .traverse {
+              case (privateKey, term) =>
+                val deployData = ConstructDeploy.sourceDeployNow(
+                  source = term,
+                  sec = privateKey,
+                  vabn = nextBlockNum - 1,
+                  shardId = shardId
+                )
+                BlockDagStorage[F].addDeploy(deployData).as(List(deployData.sig))
+            }
+          OptionT
+            .whenF(pooledOk.nonEmpty)(pooledOk.pure)
+            .orElseF(dummy)
+            .value
+            .map(_.getOrElse(List()))
+        }
         // create block
         _ <- Log[F].info(s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})")
         result <- BlockCreator(validatorIdentity, shardId).create(
