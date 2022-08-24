@@ -18,7 +18,8 @@ class ISpaceStub[F[_]: Applicative, C, P, A, K] extends ISpace[F, C, P, A, K] {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      peeks: SortedSet[Int]
+      peeks: SortedSet[Int],
+      repeated: Boolean
   ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]] = ???
 
   override def install(
@@ -30,7 +31,8 @@ class ISpaceStub[F[_]: Applicative, C, P, A, K] extends ISpace[F, C, P, A, K] {
   override def produce(
       channel: C,
       data: A,
-      persist: Boolean
+      persist: Boolean,
+      repeated: Boolean
   ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]] = ???
 
   override def createCheckpoint(): F[Checkpoint] = ???

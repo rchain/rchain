@@ -42,34 +42,29 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       continuation: K,
       persist: Boolean,
       peeks: SortedSet[Int],
-      consumeRef: Consume
-  ): F[MaybeActionResult] =
-    Span[F].traceI("locked-consume") {
-      for {
-        _ <- Log[F].debug(
-              s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
-            )
-        _                    <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
-        channelToIndexedData <- fetchChannelToIndexData(channels)
-        options <- extractDataCandidates(
-                    channels.zip(patterns),
-                    channelToIndexedData,
-                    Nil
-                  ).map(_.sequence)
-        wk = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
-        result <- options.fold(storeWaitingContinuation(channels, wk))(
-                   dataCandidates =>
-                     for {
-                       comm <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
-                       _    <- logComm(dataCandidates, channels, wk, comm, consumeCommLabel)
-                       _    <- storePersistentData(dataCandidates, peeks)
-                       _ <- Log[F].debug(
-                             s"consume: data found for <patterns: $patterns> at <channels: $channels>"
-                           )
-                     } yield wrapResult(channels, wk, consumeRef, dataCandidates)
-                 )
-      } yield result
-    }
+      consumeRef: Consume,
+      repeated: Boolean
+  ): F[MaybeActionResult] = {
+    val logFound =
+      Log[F].debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
+    val logStarted =
+      Log[F].debug(
+        s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
+      )
+    val doConsume = for {
+      _                    <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
+      channelToIndexedData <- fetchChannelToIndexData(channels)
+      options              <- extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
+      wk                   = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+      storeIfNew           = if (repeated) NoActionResult.pure else storeWaitingContinuation(channels, wk)
+      r <- options.sequence.fold(storeIfNew) { candidates =>
+            storeIfNew.whenA(persist) >>
+              mkComm(channels, wk, candidates, None, _ => ().pure[F]) <* logFound
+          }
+    } yield r
+
+    Span[F].traceI("locked-consume")(doConsume) <* logStarted
+  }
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -90,24 +85,26 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       channel: C,
       data: A,
       persist: Boolean,
-      produceRef: Produce
-  ): F[MaybeActionResult] =
-    Span[F].traceI("locked-produce") {
-      for {
-        //TODO fix double join fetch
-        groupedChannels <- store.getJoins(channel)
-        _ <- Log[F].debug(
-              s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
-            )
-        _ <- logProduce(produceRef, channel, data, persist)
-        extracted <- extractProduceCandidate(
-                      groupedChannels,
-                      channel,
-                      Datum(data, persist, produceRef)
-                    )
-        r <- extracted.fold(storeData(channel, data, persist, produceRef))(processMatchFound)
-      } yield r
-    }
+      produceRef: Produce,
+      repeated: Boolean
+  ): F[MaybeActionResult] = Span[F].traceI("locked-produce") {
+    for {
+      //TODO fix double join fetch
+      joins        <- store.getJoins(channel)
+      _            <- Log[F].debug(s"produce: searching for matching continuations at <joins: $joins>")
+      _            <- logProduce(produceRef, channel, data, persist)
+      candidateOpt <- extractProduceCandidate(joins, channel, Datum(data, persist, produceRef))
+      storeIfNew = if (repeated) NoActionResult.pure
+      else storeData(channel, data, persist, produceRef)
+
+      r <- candidateOpt.fold(storeIfNew) {
+            case ProduceCandidate(channels, wk, continuationIndex, candidates) =>
+              val peeking = wk.peeks.nonEmpty
+              storeIfNew.whenA(peeking || persist) >>
+                mkComm(channels, wk, candidates, continuationIndex.some, _ => ().pure[F])
+          }
+    } yield r
+  }
 
   /*
    * Find produce candidate
@@ -142,25 +139,6 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
           }
           .map(c -> _)
     )
-
-  private[this] def processMatchFound(
-      pc: ProduceCandidate[C, P, A, K]
-  ): F[MaybeActionResult] = {
-    val ProduceCandidate(
-      channels,
-      wk @ WaitingContinuation(_, _, persistK, peeks, consumeRef),
-      continuationIndex,
-      dataCandidates
-    ) = pc
-
-    for {
-      comm <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
-      _    <- logComm(dataCandidates, channels, wk, comm, produceCommLabel)
-      _    <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
-      _    <- removeMatchedDatumAndJoin(channels, dataCandidates)
-      _    <- Log[F].debug(s"produce: matching continuation found at <channels: $channels>")
-    } yield wrapResult(channels, wk, consumeRef, dataCandidates)
-  }
 
   protected override def logComm(
       dataCandidates: Seq[ConsumeCandidate[C, A]],

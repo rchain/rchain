@@ -34,7 +34,8 @@ trait Tuplespace[F[_], C, P, A, K] {
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      peeks: SortedSet[Int] = SortedSet.empty
+      peeks: SortedSet[Int] = SortedSet.empty,
+      repeated: Boolean = false
   ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
@@ -63,7 +64,8 @@ trait Tuplespace[F[_], C, P, A, K] {
   def produce(
       channel: C,
       data: A,
-      persist: Boolean
+      persist: Boolean,
+      repeated: Boolean = false
   ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[A])]]

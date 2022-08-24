@@ -66,15 +66,17 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
   private def produce(
       chan: Par,
       data: ListParWithRandom,
-      persistent: Boolean
+      persistent: Boolean,
+      repeated: Boolean = false
   ): M[Unit] =
     updateMergeableChannels(chan) *>
-      space.produce(chan, data, persist = persistent) >>= { produceResult =>
-      continue(
-        unpackOptionWithPeek(produceResult),
-        produce(chan, data, persistent),
-        persistent
-      )
+      space.produce(chan, data, persist = persistent, repeated = repeated) >>= { result =>
+      // repeat produce if persistent or has been peeked (so still active in a tuple space)
+      val hasBeenPeeked = unpackOptionWithPeek(result).exists(_._3)
+      val shouldRepeat  = persistent || hasBeenPeeked
+      val repeatOp      = produce(chan, data, persistent, repeated = true)
+
+      continue(unpackOptionWithPeek(result), shouldRepeat.guard[Option].as(repeatOp))
     }
 
   /**
@@ -88,38 +90,35 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       binds: Seq[(BindPattern, Par)],
       body: ParWithRandom,
       persistent: Boolean,
-      peek: Boolean
-  ): M[Unit] = {
+      peek: Boolean,
+      repeated: Boolean = false
+  ): M[Unit] = Sync[M].defer {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
+    val updateMergeables                                = sources.toList.traverse(updateMergeableChannels)
+    val doConsume = space.consume(
+      sources.toList,
+      patterns.toList,
+      TaggedContinuation(ParBody(body)),
+      persist = persistent,
+      peeks = if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int],
+      repeated = repeated
+    )
+    // repeat consume if persistent
+    val shouldRepeat = persistent
+    val repeatOp     = consume(binds, body, persistent, peek, repeated = true)
 
-    sources.toList.traverse(updateMergeableChannels) *>
-      space.consume(
-        sources.toList,
-        patterns.toList,
-        TaggedContinuation(ParBody(body)),
-        persist = persistent,
-        if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
-      ) >>= { consumeResult =>
-      continue(
-        unpackOptionWithPeek(consumeResult),
-        consume(binds, body, persistent, peek),
-        persistent
-      )
-    }
+    doConsume.flatMap { result =>
+      continue(unpackOptionWithPeek(result), shouldRepeat.guard[Option].as(repeatOp))
+    } <* updateMergeables
   }
 
-  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean): M[Unit] =
+  private[this] def continue(res: Application, repeatOpOpt: Option[M[Unit]]): M[Unit] =
     res match {
-      case Some((continuation, dataList, _)) if persistent =>
-        dispatchAndRun(continuation, dataList)(
-          repeatOp
-        )
-      case Some((continuation, dataList, peek)) if peek =>
-        dispatchAndRun(continuation, dataList)(
-          producePeeks(dataList): _*
-        )
       case Some((continuation, dataList, _)) =>
-        dispatch(continuation, dataList)
+        repeatOpOpt
+          .map(dispatchAndRun(continuation, dataList)(_)) // if repeat operation is defined - run it concurrently with continuation
+          .getOrElse(dispatch(continuation, dataList))    // or just proceed with continuation
+
       case None => Sync[M].unit
     }
 
@@ -137,18 +136,6 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     continuation,
     dataList.map(_._2)
   )
-
-  private[this] def producePeeks(
-      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
-  ): Seq[M[Unit]] =
-    dataList
-      .withFilter {
-        case (_, _, _, persist) => !persist
-      }
-      .map {
-        case (chan, _, removedData, _) =>
-          produce(chan, removedData, persistent = false)
-      }
 
   /* Collect mergeable channels */
 

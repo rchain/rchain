@@ -45,38 +45,42 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       continuation: K,
       persist: Boolean,
       peeks: SortedSet[Int],
-      consumeRef: Consume
+      consumeRef: Consume,
+      repeated: Boolean
   ): F[MaybeActionResult] =
     Span[F].traceI("locked-consume") {
       for {
         _ <- logF.debug(
               s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
             )
-        _  <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
-        wk = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+        _          <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
+        wk         = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+        storeIfNew = if (repeated) NoActionResult.pure else storeWaitingContinuation(channels, wk)
         r <- replayData
               .get(consumeRef)
-              .fold(storeWaitingContinuation(channels, wk))(
+              .fold(storeIfNew)(
                 comms =>
-                  getCommAndConsumeCandidates(channels, patterns, comms.iterator().asScala.toList)
-                    .flatMap {
-                      _.fold(storeWaitingContinuation(channels, wk)) {
-                        case (_, dataCandidates) =>
+                  getCommAndConsumeCandidates(
+                    channels,
+                    patterns,
+                    comms.iterator().asScala.toList.sortBy(_.peeks.isEmpty)
+                  ).flatMap {
+                    _.fold(storeIfNew) {
+                      case (_, dataCandidates) =>
+                        def eff(comm: COMM): F[Unit] =
                           for {
-                            comm    <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
-                            commRef <- logComm(dataCandidates, channels, wk, comm, consumeCommLabel)
-                            _ <- assertF(
-                                  comms.contains(commRef),
-                                  s"COMM Event $commRef was not contained in the trace $comms"
-                                )
-                            _ <- storePersistentData(dataCandidates, peeks)
                             _ <- logF.debug(
                                   s"consume: data found for <patterns: $patterns> at <channels: $channels>"
                                 )
-                            _ <- removeBindingsFor(commRef)
-                          } yield wrapResult(channels, wk, consumeRef, dataCandidates)
-                      }
+                            _ <- assertF(
+                                  comms.contains(comm),
+                                  s"COMM Event $comm was not contained in the trace $comms"
+                                )
+                            _ <- removeBindingsFor(comm)
+                          } yield ()
+                        storeIfNew.whenA(persist) >> mkComm(channels, wk, dataCandidates, None, eff)
                     }
+                  }
               )
       } yield r
     }
@@ -113,7 +117,8 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       channel: C,
       data: A,
       persist: Boolean,
-      produceRef: Produce
+      produceRef: Produce,
+      repeated: Boolean
   ): F[MaybeActionResult] =
     Span[F].traceI("locked-produce") {
       for {
@@ -122,9 +127,11 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
               s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
             )
         _ <- logProduce(produceRef, channel, data, persist)
+        storeIfNew = if (repeated) NoActionResult.pure
+        else storeData(channel, data, persist, produceRef)
+
         result <- replayData.get(produceRef) match {
-                   case None =>
-                     storeData(channel, data, persist, produceRef)
+                   case None => storeIfNew
                    case Some(comms) =>
                      getCommOrProduceCandidate(
                        channel,
@@ -134,8 +141,23 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
                        produceRef,
                        groupedChannels
                      ).flatMap(
-                       _.fold(storeData(channel, data, persist, produceRef)) {
-                         case (_, pc) => handleMatch(pc, comms)
+                       _.fold(storeIfNew) {
+                         case (
+                             _,
+                             ProduceCandidate(channels, wk, continuationIndex, dataCandidates)
+                             ) =>
+                           def eff(commRef: COMM): F[Unit] =
+                             assertF(
+                               comms.contains(commRef),
+                               s"COMM Event $commRef was not contained in the trace $comms"
+                             ) >> removeBindingsFor(commRef)
+                           val peeking = wk.peeks.nonEmpty
+
+                           logF.debug(
+                             s"produce: matching continuation found at <channels: ${channels}>"
+                           ) >>
+                             storeIfNew.whenA(peeking || persist) >>
+                             mkComm(channels, wk, dataCandidates, continuationIndex.some, eff)
                        }
                      )
                  }
@@ -194,30 +216,6 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
         } else true
       }
     Sync[F].delay(comm.produces.contains(datum.source)) &&^ wasRepeatedEnoughTimes
-  }
-
-  private[this] def handleMatch(
-      pc: ProduceCandidate[C, P, A, K],
-      comms: Multiset[COMM]
-  ): F[MaybeActionResult] = {
-    val ProduceCandidate(
-      channels,
-      wk @ WaitingContinuation(_, _, persistK, peeks, consumeRef),
-      continuationIndex,
-      dataCandidates
-    ) = pc
-    for {
-      comm    <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
-      commRef <- logComm(dataCandidates, channels, wk, comm, produceCommLabel)
-      _ <- assertF(
-            comms.contains(commRef),
-            s"COMM Event $commRef was not contained in the trace $comms"
-          )
-      _ <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
-      _ <- removeMatchedDatumAndJoin(channels, dataCandidates)
-      _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
-      _ <- removeBindingsFor(commRef)
-    } yield wrapResult(channels, wk, consumeRef, dataCandidates)
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))

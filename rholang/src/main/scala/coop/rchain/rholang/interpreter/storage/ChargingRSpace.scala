@@ -52,7 +52,8 @@ object ChargingRSpace {
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation,
           persist: Boolean,
-          peeks: SortedSet[Int] = SortedSet.empty[Int]
+          peeks: SortedSet[Int] = SortedSet.empty[Int],
+          repeated: Boolean
       ): F[
         Option[
           (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
@@ -69,7 +70,8 @@ object ChargingRSpace {
                       patterns,
                       continuation,
                       persist,
-                      peeks
+                      peeks,
+                      repeated
                     )
           id <- consumeId(continuation)
           _  <- handleResult(consRes, Consume(id, persist, channels.size))
@@ -85,7 +87,8 @@ object ChargingRSpace {
       override def produce(
           channel: Par,
           data: ListParWithRandom,
-          persist: Boolean
+          persist: Boolean,
+          repeated: Boolean
       ): F[
         Option[
           (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
@@ -93,7 +96,7 @@ object ChargingRSpace {
       ] =
         for {
           _       <- charge[F](storageCostProduce(channel, data).copy(operation = "produces storage"))
-          prodRes <- space.produce(channel, data, persist)
+          prodRes <- space.produce(channel, data, persist, repeated)
           _       <- handleResult(prodRes, Produce(data.randomState, persist))
         } yield prodRes
 

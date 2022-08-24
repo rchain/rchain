@@ -40,6 +40,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   type MaybeActionResult     = Option[(ContResult[C, P, K], Seq[Result[C, A]])]
   type CandidateChannels     = Seq[C]
 
+  val NoActionResult = none[(ContResult[C, P, K], Seq[Result[C, A]])]
+
   implicit class MapOps(underlying: Map[Produce, Int]) {
     def putAndIncrementCounter(elem: Produce): Map[Produce, Int] =
       underlying
@@ -153,22 +155,6 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       _ <- Log[F].debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
-  protected[this] def storePersistentData(
-      dataCandidates: Seq[ConsumeCandidate[C, A]],
-      peeks: SortedSet[Int]
-  ): F[List[Unit]] =
-    dataCandidates.toList
-      .sortBy(_.datumIndex)(Ordering[Int].reverse)
-      .traverse {
-        case ConsumeCandidate(
-            candidateChannel,
-            Datum(_, persistData, _),
-            _,
-            dataIndex
-            ) =>
-          store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
-      }
-
   def restoreInstalls(): F[Unit] =
     /*spanF.trace(restoreInstallsSpanLabel)*/
     installs.get.flatMap(_.toList.traverse_ {
@@ -180,7 +166,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
-      peeks: SortedSet[Int] = SortedSet.empty
+      peeks: SortedSet[Int] = SortedSet.empty,
+      repeated: Boolean
   ): F[MaybeActionResult] =
     ContextShift[F].evalOn(scheduler) {
       if (channels.isEmpty) {
@@ -201,7 +188,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
                        continuation,
                        persist,
                        peeks,
-                       consumeRef
+                       consumeRef,
+                       repeated
                      )
                    }
         } yield result).timer(consumeTimeCommLabel)(Metrics[F], MetricsSource)
@@ -213,19 +201,21 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       continuation: K,
       persist: Boolean,
       peeks: SortedSet[Int],
-      consumeRef: Consume
+      consumeRef: Consume,
+      repeated: Boolean
   ): F[MaybeActionResult]
 
   override def produce(
       channel: C,
       data: A,
-      persist: Boolean
+      persist: Boolean,
+      repeated: Boolean
   ): F[MaybeActionResult] =
     ContextShift[F].evalOn(scheduler) {
       (for {
         produceRef <- Sync[F].delay(Produce(channel, data, persist))
         result <- produceLockF(channel)(
-                   lockedProduce(channel, data, persist, produceRef)
+                   lockedProduce(channel, data, persist, produceRef, repeated)
                  )
       } yield result).timer(produceTimeCommLabel)(Metrics[F], MetricsSource)
     }
@@ -234,7 +224,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       channel: C,
       data: A,
       persist: Boolean,
-      produceRef: Produce
+      produceRef: Produce,
+      repeated: Boolean
   ): F[MaybeActionResult]
 
   override def install(
@@ -356,7 +347,6 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   def wrapResult(
       channels: Seq[C],
       wk: WaitingContinuation[P, K],
-      consumeRef: Consume,
       dataCandidates: Seq[ConsumeCandidate[C, A]]
   ): MaybeActionResult =
     Some(
@@ -372,21 +362,6 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
           .map(dc => Result(dc.channel, dc.datum.a, dc.removedDatum, dc.datum.persist))
       )
     )
-
-  def removeMatchedDatumAndJoin(
-      channels: Seq[C],
-      dataCandidates: Seq[ConsumeCandidate[C, A]]
-  ): F[Seq[Unit]] =
-    dataCandidates
-      .sortBy(_.datumIndex)(Ordering[Int].reverse)
-      .traverse {
-        case ConsumeCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) => {
-          store
-            .removeDatum(candidateChannel, dataIndex)
-            .whenA(dataIndex >= 0 && !persistData) >>
-            store.removeJoin(candidateChannel, channels)
-        }
-      }
 
   protected[this] def runMatcherForChannels(
       groupedChannels: Seq[CandidateChannels],
@@ -441,4 +416,39 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       data: A,
       persist: Boolean
   ): F[Produce]
+
+  // Execute comm event between consume (wk) and sequence of produces (candidates)
+  def mkComm(
+      join: Seq[C], // TODO this is available in wk.source, but wk stores Blake hashes (???)
+      wk: WaitingContinuation[P, K],
+      candidates: Seq[ConsumeCandidate[C, A]],
+      wkIndex: Option[Int] = None, // this is None for comm started by consume of index of waiting continuation for produce,
+      replayEffect: COMM => F[Unit]
+  ): F[MaybeActionResult] =
+    for {
+      comm <- COMM(candidates, wk.source, wk.peeks, produceCounters _)
+      _    <- logComm(candidates, join, wk, comm, consumeCommLabel)
+      (datumsToRemove, joinsToRemove) = candidates.collect {
+        case ConsumeCandidate(channel, Datum(_, persistent, _), _, datumIdx) =>
+          val removeDatum = {
+            val peeked = wk.peeks.nonEmpty //.contains(datumIdx)
+            !persistent && !peeked
+          }
+          // do not remove datum if persistent, remove join if consume is the last WK on a join
+          (
+            removeDatum.guard[Option].as((channel, datumIdx)),
+            (!wk.persist && wkIndex.contains(0)).guard[Option].as((channel, join))
+          )
+      }.unzip
+      wkToRemove = (!wk.persist).guard[Option] *> wkIndex.map(join -> _)
+      // TODO why Index -1 out of bounds when removing datum ?
+      datumsNo0 = datumsToRemove.flatten.filter { case (_, idx) => idx >= 0 }
+      _         <- storeCommChanges(datumsNo0, wkToRemove, joinsToRemove.flatten)
+      _         <- replayEffect(comm)
+    } yield wrapResult(join, wk, candidates)
+
+  def storeCommChanges(datums: Seq[(C, Int)], wks: Option[(Seq[C], Int)], joins: Seq[(C, Seq[C])]) =
+    wks.traverse_((store.removeContinuation _).tupled) >>
+      joins.traverse_((store.removeJoin _).tupled) >>
+      datums.traverse_((store.removeDatum _).tupled)
 }
