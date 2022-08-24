@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
+import coop.rchain.casper.blocks.proposer.BlockCreatorResult.created
 import coop.rchain.casper.protocol.{BlockMessage, CommUtil}
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.syntax._
@@ -134,6 +135,22 @@ object Proposer {
       } yield maxSeqNum.getOrElse(-1)
 
     def createBlock(validatorIdentity: ValidatorIdentity): F[BlockCreatorResult] =
+//      for {
+//        badBlock <- BlockStore[F]
+//                     .getUnsafe(
+//                       "6fcd3117091491bc656460dc7e2532cce2cef3f255b6885bcc4bca6a92ba00ff".unsafeHexToByteString
+//                     )
+//        goodBlock <- BlockStore[F]
+//                      .getUnsafe(
+//                        "a5bb832a145dc1cd0c4e35fab2a36e61ba8c9c360044279a949fee0501edc9a5".unsafeHexToByteString
+//                      )
+//
+//        _ <- Log[F].info(s"Bad block the state from good block")
+//        s = goodBlock.state
+//
+//        b = badBlock.copy(state = s)
+//        _ <- Log[F].info(s"Loading ${b.blockHash.show}")
+//      } yield created(b)
       for {
         // merge pre state
         preState <- MultiParentCasper.getPreStateForNewBlock

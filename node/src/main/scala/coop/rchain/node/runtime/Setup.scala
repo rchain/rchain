@@ -161,7 +161,7 @@ object Setup {
           (isAsync: Boolean) =>
             for {
               d <- Deferred[F, ProposerResult]
-              _ <- proposerQueue.enqueue1((isAsync, d))
+              _ <- proposerQueue.enqueue1((true, d))
               r <- d.get
             } yield r
         )

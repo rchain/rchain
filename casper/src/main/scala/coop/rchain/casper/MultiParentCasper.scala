@@ -44,6 +44,14 @@ object MultiParentCasper {
 
       parentHashes = latestMsgs.map(_.id)
 
+//      badBlock <- BlockStore[F]
+//                   .getUnsafe(
+//                     "6fcd3117091491bc656460dc7e2532cce2cef3f255b6885bcc4bca6a92ba00ff".unsafeHexToByteString
+//                   )
+//      parentHashes = badBlock.justifications.toSet
+
+//      _ <- Log[F].info(s"DEBUGGING with  justifications: ${parentHashes.map(_.show.take(6))}")
+
       preState <- getPreStateForParents(parentHashes)
     } yield preState
 
@@ -150,6 +158,37 @@ object MultiParentCasper {
                                              RuntimeManager[F].getHistoryRepo,
                                              BlockIndex.getBlockIndex[F](_)
                                            )
+//                                       r <- {
+//                                         val r = MergeScope.merge(
+//                                           mScope,
+//                                           baseStateOpt.getOrElse(fringeState),
+//                                           dag.fringeStates,
+//                                           RuntimeManager[F].getHistoryRepo,
+//                                           BlockIndex.getBlockIndex[F](_)
+//                                         )
+//                                         fs2.Stream
+//                                           .repeatEval(r)
+//                                           .map(_._1)
+//                                           .zipWithPrevious
+//                                           .evalTap {
+//                                             case v @ (pOpt, c) =>
+//                                               assert(pOpt.forall(_ == c), v).pure
+//                                             //                  new Exception(s"${pOpt.get} != $c").raiseError.whenA(pOpt.exists(_ != c)) <*
+//                                             //                    ().pure[F]
+//                                           }
+//                                           .zipWithIndex
+//                                           .evalTap {
+//                                             case ((_, h), idx) =>
+//                                               Log[F].info(
+//                                                 s"$idx try -> OK (${PrettyPrinter.buildString(
+//                                                   h.toByteString
+//                                                 )})"
+//                                               )
+//                                           }
+//                                           .map(v => (v._1._2, Set.empty[ByteString]))
+//                                           .compile
+//                                           .lastOrError
+//                                       }
                                        _ <- Log[F].info(
                                              s"PH ${parentHashes.map(_.show.take(2))}. " +
                                                s"Merging FS:CC ${mScope.finalScope.size} ${mScope.conflictScope.size}. " +

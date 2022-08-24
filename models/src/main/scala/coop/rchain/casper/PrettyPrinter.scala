@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import cats.implicits.toShow
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.signatures.Signed
@@ -17,6 +18,7 @@ object PrettyPrinter {
       case _               => "Unknown consensus protocol message"
     }
 
+  import coop.rchain.models.syntax._
   private def buildString(b: BlockMessage, short: Boolean): String =
     if (short) {
       s"#${b.blockNumber} ${buildString(b.blockHash)} by ${buildString(b.sender)}"
@@ -25,7 +27,7 @@ object PrettyPrinter {
         s"sender: ${buildString(b.sender)}, " +
         s"state: ${buildString(b.postStateHash)}, " +
         s"shard: ${limit(b.shardId, maxLength = 10)}, " +
-        s"justifications: ${buildString(b.justifications)}"
+        s"justifications: ${b.justifications.map(_.show)}"
     }
 
   def buildString(bh: BlockHashMessage): String =

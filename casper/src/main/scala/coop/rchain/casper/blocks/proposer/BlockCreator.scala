@@ -2,10 +2,17 @@ package coop.rchain.casper.blocks.proposer
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy, RholangState}
+import coop.rchain.casper.protocol.{
+  BlockMessage,
+  ProcessedDeploy,
+  ProcessedSystemDeploy,
+  RholangState
+}
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.rholang.sysdeploys.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
@@ -74,36 +81,65 @@ final case class BlockCreator(id: ValidatorIdentity, shardId: String) {
       if (shouldPropose) propose.map(_.some)
       else (!suppressAttestation).guard[Option].traverse(_ => attest)
 
-    postState.map {
-      case None                                                            => BlockCreatorResult.noNewDeploys
-      case Some((postStateHash, processedDeploys, processedSystemDeploys)) =>
-        // Create block and calculate block hash
-        val state = RholangState(processedDeploys.toList, processedSystemDeploys.toList)
-        val unsignedBlock = ProtoUtil.unsignedBlockProto(
-          version = BlockVersion.Current,
-          shardId,
-          blockData.blockNumber,
-          creatorsPk,
-          blockData.seqNum,
-          preStateHash.toByteString,
-          postStateHash,
-          parents.toList,
-          bondsMap,
-          finalization,
-          state
-        )
+    postState
+      .map {
+        case None                                                            => BlockCreatorResult.noNewDeploys
+        case Some((postStateHash, processedDeploys, processedSystemDeploys)) =>
+          // Create block and calculate block hash
+          val state = RholangState(processedDeploys.toList, processedSystemDeploys.toList)
+          val unsignedBlock = ProtoUtil.unsignedBlockProto(
+            version = BlockVersion.Current,
+            shardId,
+            blockData.blockNumber,
+            creatorsPk,
+            blockData.seqNum,
+            preStateHash.toByteString,
+            postStateHash,
+            parents.toList,
+            bondsMap,
+            finalization,
+            state
+          )
 
-        // Sign a block (hash should not be changed)
-        val signedBlock = id.signBlock(unsignedBlock)
+          // Sign a block (hash should not be changed)
+          val signedBlock = id.signBlock(unsignedBlock)
 
-        // This check is temporary until signing function will re-hash the block
-        val unsignedHash = PrettyPrinter.buildString(unsignedBlock.blockHash)
-        val signedHash   = PrettyPrinter.buildString(signedBlock.blockHash)
-        assert(
-          unsignedBlock.blockHash == signedBlock.blockHash,
-          s"Signed block has different block hash unsigned: $unsignedHash, signed: $signedHash."
-        )
-        BlockCreatorResult.created(signedBlock)
-    }
+          // This check is temporary until signing function will re-hash the block
+          val unsignedHash = PrettyPrinter.buildString(unsignedBlock.blockHash)
+          val signedHash   = PrettyPrinter.buildString(signedBlock.blockHash)
+          assert(
+            unsignedBlock.blockHash == signedBlock.blockHash,
+            s"Signed block has different block hash unsigned: $unsignedHash, signed: $signedHash."
+          )
+          BlockCreatorResult.created(signedBlock)
+      }
+      .flatTap {
+        case Created(b) => {
+          import coop.rchain.blockstorage.syntax._
+          BlockStore[F].put(b) >> Log[F].info(s"Block created: ${showBlock(b)}")
+        }
+        case _ => ().pure[F]
+      }
   }
+
+  def showBlock(b: BlockMessage): String =
+    s"""
+       |hash: ${b.blockHash.show}
+       |blockNumber: ${b.blockNumber}
+       |seqNum: ${b.seqNum}
+       |rejectedDeploys: ${b.rejectedDeploys.map(_.show.take(4))}
+       |rejectedBlocks: ${b.rejectedBlocks.map(_.show.take(4))}
+       |rejectedSenders: ${b.rejectedSenders.map(_.show.take(4))}
+       |preStateHash: ${b.preStateHash.show}
+       |postStateHash: ${b.postStateHash.show}
+       |justifications: ${b.justifications.map(_.show.take(6))}
+       |bonds: ${b.bonds.map { case (k, v) => k.show.take(2) -> v }}
+       |shardId: ${b.shardId}}
+       |sender: ${b.sender.show}}
+       |sig: ${b.sig.show}}
+       |version: ${b.version}}
+       |sigAlgorithm: ${b.sigAlgorithm}}
+       |events: ${b.state.deploys.map(d => d.deploy.sig.show.take(4) -> d.deployLog.size)}}
+       |sys events: ${b.state.systemDeploys.map(d => d.eventList.size)}}
+       |""".stripMargin
 }
