@@ -74,6 +74,9 @@ class BlockValidationLogicSpec extends AnyFlatSpec with Matchers with ScalaCheck
 
     forAll(Gen.oneOf(Secp256k1.name, Secp256k1Eth.name)) { alg: String =>
       val reSignedBlock = ValidatorIdentity(publicKey, privateKey, alg).signBlock(block)
+
+      // For different signing algorithms blocks should be different, but irrelevant fields should match
+      (block == reSignedBlock) shouldBe (alg == Secp256k1.name)
       clean(block) shouldBe clean(reSignedBlock)
     }
   }
