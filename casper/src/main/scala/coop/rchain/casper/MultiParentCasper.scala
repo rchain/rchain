@@ -110,8 +110,10 @@ object MultiParentCasper {
                               finalizedState.toByteString
                             )
                             rejectedDeploysStr = PrettyPrinter.buildString(rejected)
-                            msgFinalized       = s"Finalized fringe state: $finalizedStateStr, rejectedDeploys: $rejectedDeploysStr"
-                            _                  <- Log[F].info(msgFinalized)
+                            msgFinalized = s"PH ${parentHashes.map(_.show.take(2))}. " +
+                              s"Finalized fringe state: $finalizedStateStr, rejectedDeploys: $rejectedDeploysStr. " +
+                              s"FS:CC ${mScope.finalScope.size} ${mScope.conflictScope.size}"
+                            _ <- Log[F].info(msgFinalized)
                           } yield result
                         }
       (fringeState, rejectedDeploys) = newFringeResult getOrElse (prevFringeState, prevFringeRejectedDeploys)
@@ -147,6 +149,11 @@ object MultiParentCasper {
                                              dag.fringeStates,
                                              RuntimeManager[F].getHistoryRepo,
                                              BlockIndex.getBlockIndex[F](_)
+                                           )
+                                       _ <- Log[F].info(
+                                             s"PH ${parentHashes.map(_.show.take(2))}. " +
+                                               s"Merging FS:CC ${mScope.finalScope.size} ${mScope.conflictScope.size}. " +
+                                               s"Fringe state ${baseStateOpt.getOrElse(fringeState).toByteString.show.take(6)}"
                                            )
                                      } yield r
                                  }

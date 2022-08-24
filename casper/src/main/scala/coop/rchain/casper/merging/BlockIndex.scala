@@ -1,5 +1,6 @@
 package coop.rchain.casper.merging
 
+import cats.data.OptionT
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
@@ -31,8 +32,8 @@ object BlockIndex {
   def getBlockIndex[F[_]: Concurrent: RuntimeManager: BlockStore](
       blockHash: BlockHash
   ): F[BlockIndex] = {
-    val cached = BlockIndex.cache.get(blockHash).map(_.pure)
-    cached.getOrElse {
+    val cached = OptionT(Concurrent[F].delay(BlockIndex.cache.get(blockHash)))
+    cached.getOrElseF {
       for {
         _            <- coop.rchain.shared.Log.log[F].info(s"Cache miss. Indexing ${blockHash.show}.")
         b            <- BlockStore[F].getUnsafe(blockHash)

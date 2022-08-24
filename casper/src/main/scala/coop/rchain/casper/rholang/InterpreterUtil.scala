@@ -81,10 +81,12 @@ object InterpreterUtil {
                    ).pure[F]
                  }
       blockStr          = PrettyPrinter.buildString(block, short = true)
+      pstStateStr       = preState.preStateHash.toByteString.show.take(6)
       fringeRejectedStr = PrettyPrinter.buildString(preState.fringeRejectedDeploys)
       rejectedStr       = PrettyPrinter.buildString(preState.rejectedDeploys)
-      infoMsg           = s"Computed parents post state for block $blockStr, fringe rejections: $fringeRejectedStr, rejections: $rejectedStr"
-      _                 <- Log[F].info(infoMsg)
+      infoMsg = s"Computed parents post state $pstStateStr for block $blockStr, " +
+        s"fringe rejections: $fringeRejectedStr, rejections: $rejectedStr"
+      _ <- Log[F].info(infoMsg)
 
       computedPreStateHash = preState.preStateHash.toByteString
       rejectedDeployIds    = preState.fringeRejectedDeploys

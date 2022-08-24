@@ -15,7 +15,7 @@ trait ByteStringSyntax {
   implicit def ordering: Ordering[ByteString] =
     Ordering.by((b: ByteString) => b.toByteArray.toIterable)
 
-  implicit val show = new Show[ByteString] {
+  implicit val showByteString = new Show[ByteString] {
     def show(validator: ByteString): String = validator.toHexString
   }
 }
