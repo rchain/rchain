@@ -17,10 +17,12 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax._
+import coop.rchain.sdk.consensus.Stake
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.syntax._
-import coop.rchain.models.syntax._
 import coop.rchain.shared.{Log, Time}
 
 sealed abstract class ProposerResult
@@ -155,46 +157,27 @@ object Proposer {
         changeEpoch = epochLength % nextBlockNum == 0
         // attestation
         // no need to attest if nothing meaningful to finalize.
-        dag <- BlockDagStorage[F].getRepresentation
-        conflictSet = {
-          val msgMap = dag.dagMessageState.msgMap
-          parentHashes.flatMap(msgMap(_).seen) -- preState.fringe.flatMap(msgMap(_).seen)
-        }
+        dag         <- BlockDagStorage[F].getRepresentation
+        seen        = dag.dagMessageState.msgMap(_: BlockHash).seen
+        conflictSet = parentHashes.flatMap(seen) -- preState.fringe.flatMap(seen)
+        hasDeploys  = (b: BlockMessage) => b.state.systemDeploys.nonEmpty || b.state.deploys.nonEmpty
         nothingToFinalize = conflictSet.toList
           .traverse(BlockStore[F].getUnsafe)
-          .map(_.forall { b =>
-            b.state.systemDeploys.isEmpty && b.state.deploys.isEmpty
-          })
+          .map(!_.exists(hasDeploys))
         waitingForSupermajorityToAttest = {
           val newlySeen = creatorsLatestOpt
-            .map { prev =>
-              prev.justifications.flatMap(dag.dagMessageState.msgMap(_).seen) --
-                parentHashes.flatMap(dag.dagMessageState.msgMap(_).seen)
-            }
+            .map(_.justifications.flatMap(seen) -- parentHashes.flatMap(seen))
             .getOrElse(Set())
           newlySeen.toList.traverse(BlockStore[F].getUnsafe).map { newBlocks =>
-            val newStateTransition =
-              newBlocks.exists(b => b.state.systemDeploys.nonEmpty || b.state.deploys.nonEmpty)
+            val newStateTransition = newBlocks.exists(hasDeploys)
             val attestationStake =
               preStateBonds.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
-            !newStateTransition && attestationStake * 3 < preStateBonds.values.toList.sum * 2
+            val preStateBondsStake = preStateBonds.values.toList.sum
+
+            !(newStateTransition || Stake.isSuperMajority(attestationStake, preStateBondsStake))
           }
         }
         suppressAttestation <- nothingToFinalize ||^ waitingForSupermajorityToAttest
-//        // push dummy deploy if needed
-//        p <- BlockDagStorage[F].pooledDeploys
-//        _ <- dummyDeployOpt
-//              .traverse {
-//                case (privateKey, term) =>
-//                  val deployData = ConstructDeploy.sourceDeployNow(
-//                    source = term,
-//                    sec = privateKey,
-//                    vabn = nextBlockNum - 1,
-//                    shardId = shardId
-//                  )
-//                  BlockDagStorage[F].addDeploy(deployData)
-//              }
-//              .whenA(p.isEmpty)
         // user deploys
         pooled <- BlockDagStorage[F].pooledDeploys
         pooledOk <- pooled.toList
@@ -219,7 +202,7 @@ object Proposer {
                 BlockDagStorage[F].addDeploy(deployData).as(List(deployData.sig))
             }
           OptionT
-            .fromOption(pooledOk.nonEmpty.guard[Option].as(pooledOk))
+            .whenF(pooledOk.nonEmpty)(pooledOk.pure)
             .orElseF(dummy)
             .value
             .map(_.getOrElse(List()))
@@ -227,12 +210,7 @@ object Proposer {
         // create block
         _ <- Log[F].info(s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})")
         result <- BlockCreator(validatorIdentity, shardId).create(
-                   preStateHash,
-                   parentHashes,
-                   finalBonds,
-                   preState.fringeRejectedDeploys,
-                   nextBlockNum,
-                   nextSeqNum,
+                   preState,
                    deploys,
                    toSlash,
                    changeEpoch,
