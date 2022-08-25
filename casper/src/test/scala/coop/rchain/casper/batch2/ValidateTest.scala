@@ -126,6 +126,8 @@ class ValidateTest
     )
 
   "Block number validation" should "only accept 0 as the number for a block with no parents" in {
+    val genesis = getRandomBlock(setJustifications = Seq.empty.some)
+
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
 
     for {
@@ -267,9 +269,6 @@ class ValidateTest
             Left(InvalidRepeatDeploy)
     } yield ()
   }
-
-  val genesisContext = GenesisBuilder.buildGenesis()
-  val genesis        = genesisContext.genesisBlock
 
   // Creates a block with an invalid block number and sequence number
   "Block summary validation" should "short circuit after first invalidity" ignore {
