@@ -62,18 +62,17 @@ class ValidateTest
     timeEff.reset()
   }
 
-  def createChain[F[_]: Sync: Time: BlockStore: BlockDagStorage](
-      length: Int,
-      bonds: Map[Validator, Long] = Map.empty
-  ): F[Vector[BlockMessage]] =
-    for {
-      genesis <- createGenesis[F](bonds = bonds)
-      blocks <- (1 to length).toList.foldLeftM(Vector(genesis)) {
-                 case (chain, _) =>
-                   createBlock[F](justifications = Seq(chain.last.blockHash), bonds = bonds)
-                     .map(chain :+ _)
-               }
-    } yield blocks
+  private def createChain(n: Int) = {
+    val genesis = getRandomBlock(setJustifications = Seq.empty.some)
+    (0 until n).foldLeft(Vector(genesis)) {
+      case (chain, _) =>
+        val block = getRandomBlock(
+          setJustifications = Seq(chain.last.blockHash).some,
+          setBlockNumber = (chain.last.blockNumber + 1L).some
+        )
+        chain :+ block
+    }
+  }
 
   def createChainWithRoundRobinValidators[F[_]: Sync: Time: BlockStore: BlockDagStorage](
       length: Int,
@@ -118,12 +117,8 @@ class ValidateTest
     } yield result
   }
 
-  private def singleBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
-      deploy: Signed[DeployData]
-  ): F[BlockMessage] =
-    createChain[F](0).map(
-      _.head.copy(state = RholangState(List(ProcessedDeploy.empty(deploy)), List.empty))
-    )
+  private def singleBlock(deploy: Signed[DeployData]): BlockMessage =
+    createChain(0).head.copy(state = RholangState(List(ProcessedDeploy.empty(deploy)), List.empty))
 
   "Block number validation" should "only accept 0 as the number for a block with no parents" in {
     val genesis = getRandomBlock(setJustifications = Seq.empty.some)
@@ -197,31 +192,28 @@ class ValidateTest
 
     def genSender(id: Int) = List.fill(65)(id.toByte).toArray.toByteString
 
+    val v1 = genSender(1)
+    val v2 = genSender(2)
+
     for {
-      genesis <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
-      v1      = genSender(1)
-      v2      = genSender(2)
-      b1      <- createBlockWithNumber(v1)
-      b2      <- createBlockWithNumber(v2)
-      b3      <- createBlockWithNumber(v2, Seq(b1, b2))
-      s1      <- Validate.blockNumber[Task](b3)
-      _       = s1 shouldBe Right(Valid)
-      s2      <- Validate.blockNumber[Task](b3.copy(blockNumber = 4))
-      _       = s2 shouldBe Left(InvalidBlockNumber)
+      b1 <- createBlockWithNumber(v1)
+      b2 <- createBlockWithNumber(v2)
+      b3 <- createBlockWithNumber(v2, Seq(b1, b2))
+      s1 <- Validate.blockNumber[Task](b3)
+      _  = s1 shouldBe Right(Valid)
+      s2 <- Validate.blockNumber[Task](b3.copy(blockNumber = 4))
+      _  = s2 shouldBe Left(InvalidBlockNumber)
     } yield ()
   }
 
   "Sequence number validation" should "return false for non-sequential numbering" ignore {
-    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
 
+    val block = createChain(2)(1)
+
     for {
-      chain <- createChain[Task](2)
-      block = chain(1)
-      _ <- Validate
-            .sequenceNumber[Task](block.copy(seqNum = 1)) shouldBeF Left(
-            InvalidSequenceNumber
-          )
+      _ <- Validate.sequenceNumber[Task](block.copy(seqNum = 1)) shouldBeF
+            Left(InvalidSequenceNumber)
       _ = log.warns.size shouldBe 1
     } yield ()
   }
@@ -248,12 +240,13 @@ class ValidateTest
     implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
 
+    val chain  = createChain(2)
+    val block  = chain(0)
+    val block2 = chain(1)
+
     for {
-      chain  <- createChain[Task](2)
-      block  = chain(0)
-      block2 = chain(1)
-      _      <- Validate.repeatDeploy[Task](block, 50) shouldBeF Right(Valid)
-      _      <- Validate.repeatDeploy[Task](block2, 50) shouldBeF Right(Valid)
+      _ <- Validate.repeatDeploy[Task](block, 50) shouldBeF Right(Valid)
+      _ <- Validate.repeatDeploy[Task](block2, 50) shouldBeF Right(Valid)
     } yield ()
   }
 
@@ -275,19 +268,13 @@ class ValidateTest
     implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
 
-    for {
-      chain <- createChain[Task](2)
-      block = chain(1)
+    val block       = createChain(2)(1)
+    val (sk, _)     = Secp256k1.newKeyPair
+    val signedBlock = ValidatorIdentity(sk).signBlock(block.copy(blockNumber = 17).copy(seqNum = 1))
 
-      (sk, pk) = Secp256k1.newKeyPair
-      signedBlock = ValidatorIdentity(sk).signBlock(
-        block.copy(blockNumber = 17).copy(seqNum = 1)
-      )
-      _ <- Validate.blockSummary[Task](
-            signedBlock,
-            "root",
-            Int.MaxValue
-          ) shouldBeF Left(InvalidSequenceNumber)
+    for {
+      _ <- Validate.blockSummary[Task](signedBlock, "root", Int.MaxValue) shouldBeF
+            Left(InvalidSequenceNumber)
       _ = log.warns.size shouldBe 1
     } yield ()
   }
@@ -298,8 +285,9 @@ class ValidateTest
 
     // shardId by default is empty string
     val deployWrongShard = ConstructDeploy.sourceDeployNow("Nil")
+    val blockWrongShard  = singleBlock(deployWrongShard)
+
     for {
-      blockWrongShard <- singleBlock[Task](deployWrongShard)
       _ <- Validate.blockSummary[Task](blockWrongShard, "root", 0) shouldBeF
             Left(InvalidDeployShardId)
     } yield ()
@@ -309,9 +297,10 @@ class ValidateTest
     implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
 
-    val deployFuture = ConstructDeploy.sourceDeployNow("Nil", vabn = Long.MaxValue)
+    val deployFuture      = ConstructDeploy.sourceDeployNow("Nil", vabn = Long.MaxValue)
+    val blockFutureDeploy = singleBlock(deployFuture)
+
     for {
-      blockFutureDeploy <- singleBlock[Task](deployFuture)
       _ <- Validate.blockSummary[Task](blockFutureDeploy, "", 0) shouldBeF
             Left(ContainsFutureDeploy)
     } yield ()
@@ -321,9 +310,10 @@ class ValidateTest
     implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
 
-    val deployExpired = ConstructDeploy.sourceDeployNow("Nil")
+    val deployExpired      = ConstructDeploy.sourceDeployNow("Nil")
+    val blockExpiredDeploy = singleBlock(deployExpired)
+
     for {
-      blockExpiredDeploy <- singleBlock[Task](deployExpired)
       _ <- Validate.blockSummary[Task](blockExpiredDeploy, "", 0) shouldBeF
             Left(ContainsExpiredDeploy)
     } yield ()
