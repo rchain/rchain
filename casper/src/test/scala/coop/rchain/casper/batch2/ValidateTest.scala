@@ -243,31 +243,39 @@ class ValidateTest
     }
   }
 
-  "Repeat deploy validation" should "return valid for empty blocks" ignore {
+  "Repeat deploy validation" should "return valid for empty blocks" in {
+    val block = getRandomBlock(setJustifications = Seq.empty.some)
+
     implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
 
-    val chain  = createChain(2)
-    val block  = chain(0)
-    val block2 = chain(1)
-
     for {
       _ <- Validate.repeatDeploy[Task](block, 50) shouldBeF Right(Valid)
-      _ <- Validate.repeatDeploy[Task](block2, 50) shouldBeF Right(Valid)
-    } yield ()
+    } yield {
+      verifyNoMoreInteractions(bs, bds)
+    }
   }
 
-  it should "not accept blocks with a repeated deploy" ignore {
+  it should "not accept blocks with a repeated deploy" in {
     implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
 
     for {
       deploy  <- ConstructDeploy.basicProcessedDeploy[Task](0)
-      genesis <- createGenesis[Task](deploys = Seq(deploy))
-      block1  <- createBlock[Task](justifications = Seq(genesis.blockHash), deploys = Seq(deploy))
+      genesis = getRandomBlock(setJustifications = Seq.empty.some, setDeploys = Seq(deploy).some)
+      block1 = getRandomBlock(
+        setJustifications = Seq(genesis.blockHash).some,
+        setDeploys = Seq(deploy).some
+      )
+      _ = bs.get(Seq(genesis.blockHash)) returnsF Seq(genesis.some)
+      _ = bds.lookup(genesis.blockHash) returnsF BlockMetadata.fromBlock(genesis).some
       _ <- Validate.repeatDeploy[Task](block1, 50) shouldBeF
             Left(InvalidRepeatDeploy)
-    } yield ()
+    } yield {
+      bs.get(Seq(genesis.blockHash)) wasCalled twice
+      bds.lookup(genesis.blockHash) wasCalled once
+      verifyNoMoreInteractions(bs, bds)
+    }
   }
 
   // Creates a block with an invalid block number and sequence number
