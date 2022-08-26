@@ -21,7 +21,6 @@ import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockMetadata, Validator}
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.testing.scalatest.MonixTaskTest
@@ -61,44 +60,53 @@ class ValidateTest
   }
 
   private def createChain(n: Int) = {
-    val genesis = getRandomBlock(setJustifications = Seq.empty.some)
+    val sender  = genSender(0)
+    val genesis = getRandomBlock(setJustifications = Seq.empty.some, setValidator = sender.some)
     (0 until n).foldLeft(Vector(genesis)) {
       case (chain, _) =>
         val block = getRandomBlock(
           setJustifications = Seq(chain.last.blockHash).some,
-          setBlockNumber = (chain.last.blockNumber + 1L).some
+          setBlockNumber = (chain.last.blockNumber + 1L).some,
+          setSeqNumber = (chain.last.seqNum + 1L).some,
+          setValidator = sender.some
         )
         chain :+ block
     }
   }
 
-  def createChainWithRoundRobinValidators[F[_]: Sync: Time: BlockStore: BlockDagStorage](
+  private def genSender(id: Int) = List.fill(Validator.Length)(id.toByte).toArray.toByteString
+
+  private def createChainWithRoundRobinValidators(
       length: Int,
       validatorLength: Int
-  ): F[Vector[BlockMessage]] = {
+  ): Vector[BlockMessage] = {
     val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
-    val validators               = List.fill(validatorLength)(generateValidator())
+    val validators               = (0 until validatorLength).map(genSender)
+
     (0 until length).toList
       .zip(validatorRoundRobinCycle)
-      .foldLeft(
-        for {
-          genesis             <- createGenesis[F]()
-          emptyLatestMessages <- HashMap.empty[Validator, BlockHash].pure[F]
-        } yield (Vector(genesis), genesis, emptyLatestMessages)
-      ) {
+      .foldLeft({
+        val genesis =
+          getRandomBlock(setJustifications = Seq.empty.some, setValidator = genSender(-1).some)
+        val emptyLatestMessages = HashMap.empty[Validator, BlockHash]
+        (Vector(genesis), emptyLatestMessages)
+      }) {
         case (acc, (_, validatorNum)) =>
-          val creator = validators(validatorNum)
-          for {
-            unwrappedAcc                   <- acc
-            (chain, block, latestMessages) = unwrappedAcc
-            bnext <- createBlock[F](
-                      creator = creator,
-                      justifications = latestMessages.values.toSeq
-                    )
-            latestMessagesNext = latestMessages.updated(bnext.sender, bnext.blockHash)
-          } yield (chain :+ bnext, bnext, latestMessagesNext)
+          val creator                 = validators(validatorNum)
+          val (chain, latestMessages) = acc
+          val nextBlock = getRandomBlock(
+            setJustifications = latestMessages.values.toSeq.some,
+            setSeqNumber = (chain
+              .filter(_.sender == creator)
+              .map(_.seqNum)
+              .maximumOption
+              .getOrElse(-1L) + 1L).some,
+            setValidator = creator.some
+          )
+          val latestMessagesNext = latestMessages.updated(nextBlock.sender, nextBlock.blockHash)
+          (chain :+ nextBlock, latestMessagesNext)
       }
-      .map(_._1)
+      ._1
   }
 
   private def singleBlock(deploy: Signed[DeployData]): BlockMessage =
@@ -169,8 +177,6 @@ class ValidateTest
   }
 
   it should "correctly validate a multi-parent block where the parents have different block numbers" in {
-    def genSender(id: Int) = List.fill(Validator.Length)(id.toByte).toArray.toByteString
-
     val v1 = genSender(1)
     val v2 = genSender(2)
 
@@ -196,34 +202,45 @@ class ValidateTest
     }
   }
 
-  "Sequence number validation" should "return false for non-sequential numbering" ignore {
-    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+  "Sequence number validation" should "return false for non-sequential numbering" in {
+    val chain   = createChain(2)
+    val genesis = chain(0)
+    val block   = chain(1)
 
-    val block = createChain(2)(1)
+    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    bds.lookup(genesis.blockHash) returnsF BlockMetadata.fromBlock(genesis).some
 
     for {
-      _ <- Validate.sequenceNumber[Task](block.copy(seqNum = 1)) shouldBeF
+      _ <- Validate.sequenceNumber[Task](block.copy(seqNum = 2)) shouldBeF
             Left(InvalidSequenceNumber)
       _ = log.warns.size shouldBe 1
-    } yield ()
+    } yield {
+      bds.lookup(genesis.blockHash) wasCalled once
+      verifyNoMoreInteractions(bds)
+    }
   }
 
-  it should "return true for sequential numbering" ignore {
-    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
-    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
-
-    val n              = 20
+  it should "return true for sequential numbering" in {
+    val blockCount     = 20
     val validatorCount = 3
+    val chain          = createChainWithRoundRobinValidators(blockCount, validatorCount)
+
+    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    chain.foreach(b => bds.lookup(b.blockHash) returnsF BlockMetadata.fromBlock(b).some)
+
     for {
-      chain <- createChainWithRoundRobinValidators[Task](n, validatorCount)
       _ <- chain.forallM[Task](
-            block =>
-              for {
-                result <- Validate.sequenceNumber[Task](block)
-              } yield result == Right(Valid)
+            block => Validate.sequenceNumber[Task](block).map(_ == Right(Valid))
           ) shouldBeF true
       _ = log.warns shouldBe Nil
-    } yield ()
+    } yield {
+      // DAG has 3 columns
+      // 1 * 3 * 1 (first layer to genesis) +
+      // 5 * 3 * 3 (current layer to previous) +
+      // 1 * 2 * 3 (last layer to previous) = 54
+      bds.lookup(*) wasCalled 54.times
+      verifyNoMoreInteractions(bds)
+    }
   }
 
   "Repeat deploy validation" should "return valid for empty blocks" ignore {
