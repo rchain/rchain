@@ -2,7 +2,6 @@ package coop.rchain.casper.batch2
 
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
@@ -13,22 +12,21 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder, ProtoUtil}
-import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.models.syntax._
+import coop.rchain.models.{BlockMetadata, Validator}
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.testing.scalatest.MonixTaskTest
-import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.mockito.cats.IdiomaticMockitoCats
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.scalatest._
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -136,7 +134,10 @@ class ValidateTest
       _ <- Validate.blockNumber[Task](block) shouldBeF Right(Valid)
       _ = log.warns.size shouldBe 1
       _ = log.warns.head.contains("is not one more than maximum parent number") shouldBe true
-    } yield bds.lookup(genesis.blockHash) wasCalled twice
+    } yield {
+      bds.lookup(genesis.blockHash) wasCalled twice
+      verifyNoMoreInteractions(bds)
+    }
   }
 
   it should "return true for sequential numbering" in {
@@ -161,35 +162,38 @@ class ValidateTest
             Validate.blockNumber[Task](b).map(_ == Right(Valid))
           } shouldBeF true
       _ = log.warns shouldBe Nil
-    } yield bds.lookup(*) wasCalled n.times
+    } yield {
+      bds.lookup(*) wasCalled n.times
+      verifyNoMoreInteractions(bds)
+    }
   }
 
-  it should "correctly validate a multi-parent block where the parents have different block numbers" ignore {
-    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
-    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
-
-    def createBlockWithNumber(
-        validator: Validator,
-        parents: Seq[BlockMessage] = Nil
-    ): Task[BlockMessage] =
-      for {
-        block <- createValidatorBlock(parents, validator, Map(), shardId = "")
-      } yield block
-
-    def genSender(id: Int) = List.fill(65)(id.toByte).toArray.toByteString
+  it should "correctly validate a multi-parent block where the parents have different block numbers" in {
+    def genSender(id: Int) = List.fill(Validator.Length)(id.toByte).toArray.toByteString
 
     val v1 = genSender(1)
     val v2 = genSender(2)
 
+    val b1 = getRandomBlock(setJustifications = Seq.empty.some, setValidator = v1.some)
+    val b2 = getRandomBlock(setJustifications = Seq.empty.some, setValidator = v2.some)
+    val b3 = getRandomBlock(
+      setJustifications = Seq(b1.blockHash, b2.blockHash).some,
+      setValidator = v2.some,
+      setBlockNumber = (b1.blockNumber + 1L).some
+    )
+
+    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    bds.lookup(b1.blockHash) returnsF BlockMetadata.fromBlock(b1).some
+    bds.lookup(b2.blockHash) returnsF BlockMetadata.fromBlock(b2).some
+
     for {
-      b1 <- createBlockWithNumber(v1)
-      b2 <- createBlockWithNumber(v2)
-      b3 <- createBlockWithNumber(v2, Seq(b1, b2))
-      s1 <- Validate.blockNumber[Task](b3)
-      _  = s1 shouldBe Right(Valid)
-      s2 <- Validate.blockNumber[Task](b3.copy(blockNumber = 4))
-      _  = s2 shouldBe Left(InvalidBlockNumber)
-    } yield ()
+      _ <- Validate.blockNumber[Task](b3) shouldBeF Right(Valid)
+      _ <- Validate.blockNumber[Task](b3.copy(blockNumber = 4)) shouldBeF Left(InvalidBlockNumber)
+    } yield {
+      bds.lookup(b1.blockHash) wasCalled twice
+      bds.lookup(b2.blockHash) wasCalled twice
+      verifyNoMoreInteractions(bds)
+    }
   }
 
   "Sequence number validation" should "return false for non-sequential numbering" ignore {
