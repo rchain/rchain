@@ -3,7 +3,7 @@ package coop.rchain.casper.batch2
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation}
 import coop.rchain.casper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -32,7 +32,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import java.nio.file.Files
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.{HashMap, SortedMap}
 
 class ValidateTest
     extends AsyncFlatSpec
@@ -111,6 +111,14 @@ class ValidateTest
 
   private def singleBlock(deploy: Signed[DeployData]): BlockMessage =
     createChain(0).head.copy(state = RholangState(List(ProcessedDeploy.empty(deploy)), List.empty))
+
+  private val emptyDag = DagRepresentation(
+    Set.empty,
+    Map.empty,
+    SortedMap.empty,
+    DagMessageState(),
+    Map.empty
+  )
 
   "Block number validation" should "only accept 0 as the number for a block with no parents" in {
     val genesis = getRandomBlock(setJustifications = Seq.empty.some)
@@ -279,59 +287,79 @@ class ValidateTest
   }
 
   // Creates a block with an invalid block number and sequence number
-  "Block summary validation" should "short circuit after first invalidity" ignore {
-    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
-    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
-
-    val block       = createChain(2)(1)
+  "Block summary validation" should "short circuit after first invalidity" in {
+    val chain       = createChain(2)
+    val genesis     = chain(0)
+    val block       = chain(1)
     val (sk, _)     = Secp256k1.newKeyPair
     val signedBlock = ValidatorIdentity(sk).signBlock(block.copy(blockNumber = 17).copy(seqNum = 1))
 
-    for {
-      _ <- Validate.blockSummary[Task](signedBlock, "root", Int.MaxValue) shouldBeF
-            Left(InvalidSequenceNumber)
-      _ = log.warns.size shouldBe 1
-    } yield ()
-  }
-
-  it should "be wrong for invalid shardId" ignore {
     implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
     implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    bds.lookup(genesis.blockHash) returnsF BlockMetadata.fromBlock(genesis).some
+    bds.getRepresentation returnsF emptyDag
 
+    for {
+      _ <- Validate.blockSummary[Task](signedBlock, "root", Int.MaxValue) shouldBeF
+            Left(InvalidBlockNumber)
+      _ = log.warns.size shouldBe 1
+    } yield {
+      bds.lookup(genesis.blockHash) wasCalled twice
+      bds.getRepresentation wasCalled once
+      verifyNoMoreInteractions(bs, bds)
+    }
+  }
+
+  it should "be wrong for invalid shardId" in {
     // shardId by default is empty string
     val deployWrongShard = ConstructDeploy.sourceDeployNow("Nil")
     val blockWrongShard  = singleBlock(deployWrongShard)
 
+    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
+    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    bds.getRepresentation returnsF emptyDag
+
     for {
       _ <- Validate.blockSummary[Task](blockWrongShard, "root", 0) shouldBeF
             Left(InvalidDeployShardId)
-    } yield ()
+    } yield {
+      bds.getRepresentation wasCalled once
+      verifyNoMoreInteractions(bs, bds)
+    }
   }
 
-  it should "be wrong for future deploy" ignore {
-    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
-    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
-
+  it should "be wrong for future deploy" in {
     val deployFuture      = ConstructDeploy.sourceDeployNow("Nil", vabn = Long.MaxValue)
     val blockFutureDeploy = singleBlock(deployFuture)
+
+    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
+    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    bds.getRepresentation returnsF emptyDag
 
     for {
       _ <- Validate.blockSummary[Task](blockFutureDeploy, "", 0) shouldBeF
             Left(ContainsFutureDeploy)
-    } yield ()
+    } yield {
+      bds.getRepresentation wasCalled once
+      verifyNoMoreInteractions(bs, bds)
+    }
   }
 
-  it should "be wrong for expired deploy" ignore {
-    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
-    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
-
+  it should "be wrong for expired deploy" in {
     val deployExpired      = ConstructDeploy.sourceDeployNow("Nil")
     val blockExpiredDeploy = singleBlock(deployExpired)
+
+    implicit val bs: BlockStore[Task]       = mock[BlockStore[Task]]
+    implicit val bds: BlockDagStorage[Task] = mock[BlockDagStorage[Task]]
+    bds.getRepresentation returnsF emptyDag
 
     for {
       _ <- Validate.blockSummary[Task](blockExpiredDeploy, "", 0) shouldBeF
             Left(ContainsExpiredDeploy)
-    } yield ()
+    } yield {
+      bds.getRepresentation wasCalled once
+      verifyNoMoreInteractions(bs, bds)
+    }
   }
 
   "Justification regression validation" should "return valid for proper justifications and justification regression detected otherwise" ignore {
