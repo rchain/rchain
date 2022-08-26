@@ -103,20 +103,6 @@ class ValidateTest
       .map(_._1)
   }
 
-  def signedBlock(
-      chain: Vector[BlockMessage],
-      i: Int
-  )(implicit sk: PrivateKey, blockDagStorage: BlockDagStorage[Task]): Task[BlockMessage] = {
-    val pk    = Secp256k1.toPublic(sk)
-    val block = chain(i)
-    for {
-      dag    <- blockDagStorage.getRepresentation
-      sender = ByteString.copyFrom(pk.bytes)
-      seqNum = getLatestSeqNum(sender, dag) + 1L
-      result = ValidatorIdentity(sk).signBlock(block.copy(seqNum = seqNum))
-    } yield result
-  }
-
   private def singleBlock(deploy: Signed[DeployData]): BlockMessage =
     createChain(0).head.copy(state = RholangState(List(ProcessedDeploy.empty(deploy)), List.empty))
 
