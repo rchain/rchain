@@ -188,7 +188,13 @@ class BlockReceiverEffectsSpec
 
       blockReceiver <- {
         implicit val (bsImp, brImp, bdsImp) = (bs, br, bds)
-        BlockReceiver(state, incomingBlockQueue, validatedBlocksStream, shardId)
+        BlockReceiver(
+          state,
+          incomingBlockStream,
+          validatedBlocksStream,
+          shardId,
+          incomingBlockQueue.enqueue1
+        )
       }
       res <- f(incomingBlockQueue, validatedBlocksQueue, blockReceiver, bs, br, bds)
     } yield res

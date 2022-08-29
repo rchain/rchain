@@ -169,6 +169,8 @@ object Setup {
 
       // Queue of received blocks from gRPC API
       incomingBlocksQueue <- Queue.unbounded[F, BlockMessage]
+      // Stream of blocks received over the network
+      incomingBlockStream = incomingBlocksQueue.dequeue
       // Queue of validated blocks, result of block processor
       validatedBlocksQueue <- Queue.unbounded[F, BlockMessage]
       // Validated blocks stream with auto-propose trigger
@@ -188,9 +190,10 @@ object Setup {
         implicit val (bs, bd, br) = (blockStore, blockDagStorage, blockRetriever)
         BlockReceiver[F](
           blockReceiverState,
-          incomingBlocksQueue,
+          incomingBlockStream,
           validatedBlocksStream,
-          conf.casper.shardName
+          conf.casper.shardName,
+          incomingBlocksQueue.enqueue1
         )
       }
       // Blocks from receiver with fork-choice tips request on idle

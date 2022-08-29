@@ -178,9 +178,10 @@ final case class BlockReceiverState[MId: Show] private (
 object BlockReceiver {
   def apply[F[_]: Concurrent: BlockStore: BlockDagStorage: BlockRetriever: Log](
       state: Ref[F, BlockReceiverState[BlockHash]],
-      incomingBlocksQueue: Queue[F, BlockMessage],
+      incomingBlocksStream: Stream[F, BlockMessage],
       finishedProcessingStream: Stream[F, BlockMessage],
-      confShardName: String
+      confShardName: String,
+      putToIncomingQueue: BlockMessage => F[Unit]
   ): F[Stream[F, BlockHash]] = {
 
     def blockStr(b: BlockMessage) = PrettyPrinter.buildString(b, short = true)
@@ -227,12 +228,12 @@ object BlockReceiver {
       )
 
     def sendToValidate(hashes: List[BlockHash]): F[Unit] = hashes.traverse_ { hash =>
-      BlockStore[F].getUnsafe(hash).flatMap(incomingBlocksQueue.enqueue1)
+      BlockStore[F].getUnsafe(hash).flatMap(putToIncomingQueue)
     }
 
     // Process incoming blocks
     def incomingBlocks(receiverOutputQueue: Queue[F, BlockHash]) =
-      incomingBlocksQueue.dequeue
+      incomingBlocksStream
         .evalFilterAsyncUnorderedProcBounded { block =>
           // Filter (ignore) blocks that are not of interest (pass integrity check, incorrect shard or version, ...)
           checkIfOfInterest(block).flatTap(logMalformed(block).unlessA(_))
@@ -245,7 +246,7 @@ object BlockReceiver {
             for {
               // Save block to block store, resolve parents to request
               blockStored <- BlockStore[F].contains(block.blockHash)
-              _           <- BlockStore[F].put(block).whenA(!blockStored)
+              _           <- BlockStore[F].put(block).unlessA(blockStored)
 
               parents <- block.justifications
                           .traverse { hash =>
