@@ -193,7 +193,8 @@ object Setup {
           blockReceiverState,
           incomingBlockStream,
           validatedBlocksStream,
-          conf.casper.shardName
+          conf.casper.shardName,
+          incomingBlocksQueue.enqueue1
         )
       }
       // Blocks from receiver with fork-choice tips request on idle

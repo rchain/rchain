@@ -97,20 +97,6 @@ class BlockReceiverEffectsSpec
       }
   }
 
-  it should "discard known block" in withEnv[Task]("root") {
-    case (incomingQueue, _, outStream, bs, br, bds) =>
-      for {
-        block <- addBlock[Task](bs)
-        _     <- incomingQueue.enqueue1(block)
-      } yield {
-        bs.put(Seq((block.blockHash, block))) wasCalled once
-        bs.contains(*) wasNever called
-        br.ackReceived(*) wasNever called
-        dagStorageWasNotModified(bds)
-        outStream should notEmit
-      }
-  }
-
   it should "pass to output blocks with resolved dependencies" in withEnv[Task]("root") {
     case (incomingQueue, validatedQueue, outStream, bs, br, bds) =>
       for {
@@ -136,7 +122,7 @@ class BlockReceiverEffectsSpec
         bs.put(Seq((a2.blockHash, a2))) wasCalled once
 
         val bsContainsCaptor = ArgCaptor[Seq[BlockHash]]
-        bs.contains(bsContainsCaptor) wasCalled 3.times
+        bs.contains(bsContainsCaptor) wasCalled 4.times
         bsContainsCaptor.values should contain allOf (Seq(a1.blockHash), Seq(a2.blockHash))
 
         br.ackReceived(a1.blockHash) wasCalled once
@@ -202,7 +188,13 @@ class BlockReceiverEffectsSpec
 
       blockReceiver <- {
         implicit val (bsImp, brImp, bdsImp) = (bs, br, bds)
-        BlockReceiver(state, incomingBlockStream, validatedBlocksStream, shardId)
+        BlockReceiver(
+          state,
+          incomingBlockStream,
+          validatedBlocksStream,
+          shardId,
+          incomingBlockQueue.enqueue1
+        )
       }
       res <- f(incomingBlockQueue, validatedBlocksQueue, blockReceiver, bs, br, bds)
     } yield res
@@ -224,11 +216,6 @@ class BlockReceiverEffectsSpec
     val block =
       makeDefaultBlock.copy(sender = pubKey.bytes.toByteString, justifications = justifications)
     ValidatorIdentity(privateKey).signBlock(block)
-  }
-
-  private def addBlock[F[_]: Sync](bs: BlockStore[F]): F[BlockMessage] = {
-    val block = makeBlock()
-    bs.put(Seq((block.blockHash, block))).as(block)
   }
 
   private def dagStorageWasNotModified[F[_]](bds: BlockDagStorage[F]) = {
