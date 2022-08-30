@@ -75,7 +75,7 @@ object MergeScope {
       genesisOpt.map(_.id)
     }
 
-    (MergeScope(fScopeIds, cScopeIds), baseMsg)
+    (MergeScope(fScopeIds, cScopeIds -- baseMsg.toSet), baseMsg)
   }
 
   def merge[F[_]: Concurrent: Log](
