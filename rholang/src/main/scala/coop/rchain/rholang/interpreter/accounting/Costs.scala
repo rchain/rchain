@@ -141,6 +141,9 @@ trait Costs {
   // if underlying string is shorter then the `to` value.
   def sliceCost(to: Int): Cost = Cost(to, "slice")
 
+  def splitCost(str: String, sep: String, found: Int): Cost =
+    Cost(str.getBytes.size + found * sep.length, "split")
+
   def takeCost(to: Int): Cost = Cost(to, "take")
 
   def toListCost(size: Int): Cost = Cost(size, "toList")

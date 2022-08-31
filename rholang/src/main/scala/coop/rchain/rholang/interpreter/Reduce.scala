@@ -1431,6 +1431,32 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       } yield result
   }
 
+  private[this] val split: Method = new Method() {
+
+    def split(baseExpr: Expr, sep: Expr): M[Expr] =
+      (baseExpr.exprInstance, sep.exprInstance) match {
+        case (GString(string), GString(sepStr)) =>
+          for {
+            segments <- Sync[M].delay(string.split(sepStr))
+            _        <- charge[M](toListCost(segments.size) + splitCost(string, sepStr, segments.size))
+          } yield EList(segments.toVector.map(GString(_): Par))
+        case (other, _) =>
+          MethodNotDefined("split", other.typ).raiseError[M, Expr]
+      }
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        _ <- MethodArgumentNumberMismatch("split", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
+
+        baseExpr <- evalSingleExpr(p)
+        sep      <- evalSingleExpr(args.head)
+
+        result <- split(baseExpr, sep)
+      } yield result
+  }
+
   private[this] val take: Method = new Method() {
     def take(baseExpr: Expr, n: Int): M[Par] =
       baseExpr.exprInstance match {
@@ -1587,6 +1613,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       "size"        -> size,
       "length"      -> length,
       "slice"       -> slice,
+      "split"       -> split,
       "take"        -> take,
       "toList"      -> toList,
       "toSet"       -> toSet,
