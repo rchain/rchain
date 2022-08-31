@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.{PrettyPrinter, Validate}
+import coop.rchain.casper.{BlockValidationLogic, PrettyPrinter}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
@@ -206,14 +206,14 @@ object BlockReceiver {
       // TODO: 1. validation and logging in these checks should be separated
       //       2. logging of these block should indicate that information cannot be trusted
       //           e.g. if block hash is invalid it cannot represent identity of a block
-      val validFormat = Validate.formatOfFields(b)
-      val validHash   = Validate.blockHash(b)
-      val validSig    = Validate.blockSignature(b)
+      val validFormat = BlockValidationLogic.formatOfFields(b)
+      val validHash   = BlockValidationLogic.blockHash(b)
+      val validSig    = BlockValidationLogic.blockSignature(b)
       // TODO: check sender to be valid bonded validator
       //  - not always possible because now are new blocks downloaded from DAG tips
       //    which in case of epoch change sender can be unknown
       // TODO: check valid version (possibly part of hash checking)
-      validFormat &&^ validShard &&^ validHash &&^ validSig
+      validShard &&^ (validFormat && validHash && validSig).pure
     }
 
     // Check if block should be stored

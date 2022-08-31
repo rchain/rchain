@@ -1,9 +1,9 @@
 package coop.rchain.casper
 
+import cats.Monad
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -15,11 +15,8 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.{BlockMetadata, BlockVersion}
-import coop.rchain.models.syntax._
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared._
-
-import scala.util.{Success, Try}
 
 // TODO: refactor all validation functions to separate logging from actual validation logic
 object Validate {
@@ -27,73 +24,25 @@ object Validate {
   type Data      = Array[Byte]
   type Signature = Array[Byte]
 
-  val DRIFT                                 = 15000 // 15 seconds
   implicit private val logSource: LogSource = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
     Map(
       "secp256k1" -> Secp256k1.verify
     )
 
-  def ignore(b: BlockMessage, reason: String): String =
+  private def ignore(b: BlockMessage, reason: String): String =
     s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
   /* Validation of block with logging included */
-
-  def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
-    signatureVerifiers
-      .get(b.sigAlgorithm)
-      .map(verify => {
-        Try(verify(b.blockHash.toByteArray, b.sig.toByteArray, b.sender.toByteArray)) match {
-          case Success(true) => true.pure
-          case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
-        }
-      }) getOrElse {
-      for {
-        _ <- Log[F].warn(ignore(b, s"signature algorithm ${b.sigAlgorithm} is unsupported."))
-      } yield false
-    }
-
-  def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
-    if (b.blockHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block hash is empty."))
-      } yield false
-    } else if (b.sig.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature is empty."))
-      } yield false
-    } else if (b.sigAlgorithm.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
-      } yield false
-    } else if (b.shardId.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
-      } yield false
-    } else if (b.postStateHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
-      } yield false
-    } else {
-      true.pure
-    }
-
-  def version[F[_]: Monad: Log](b: BlockMessage): F[Boolean] = {
-    val blockVersion = b.version
-    if (BlockVersion.Supported.contains(blockVersion)) {
-      true.pure
-    } else {
-      val versionsStr = BlockVersion.Supported.mkString(" or ")
-      val msg         = s"received block version $blockVersion is not the expected version $versionsStr."
-      Log[F].warn(ignore(b, msg)).as(false)
-    }
-  }
 
   def blockSummary[F[_]: Sync: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
       shardId: String,
       expirationThreshold: Int
-  ): F[ValidBlockProcessing] =
+  ): F[ValidBlockProcessing] = {
+    def validate(f: Boolean, errorStatus: => InvalidBlock): EitherT[F, InvalidBlock, ValidBlock] =
+      EitherT.fromOption(Option(BlockStatus.valid).filter(_ => f), errorStatus)
+
     (for {
       // First validate justifications because they are basis for all other validation
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
@@ -106,14 +55,21 @@ object Validate {
       _ <- EitherT(Validate.blockNumber(block))
       // Deploys validation
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
-      _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
+      _ <- validate(
+            BlockValidationLogic.deploysShardIdentifier(block, shardId),
+            BlockStatus.invalidDeployShardId
+          )
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
-      _ <- EitherT(Validate.futureTransaction(block))
+      _ <- validate(BlockValidationLogic.futureTransaction(block), BlockStatus.containsFutureDeploy)
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
-      _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
+      _ <- validate(
+            BlockValidationLogic.transactionExpiration(block, expirationThreshold),
+            BlockStatus.containsExpiredDeploy
+          )
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
       s <- EitherT(Validate.repeatDeploy(block, expirationThreshold))
     } yield s).value
+  }
 
   /**
     * Validate no deploy with the same sig has been produced in the chain
@@ -197,46 +153,6 @@ object Validate {
                }
     } yield status
 
-  def futureTransaction[F[_]: Monad: Log](b: BlockMessage): F[ValidBlockProcessing] = {
-    val blockNumber       = b.blockNumber
-    val deploys           = b.state.deploys.map(_.deploy)
-    val maybeFutureDeploy = deploys.find(_.data.validAfterBlockNumber > blockNumber)
-    maybeFutureDeploy
-      .traverse { futureDeploy =>
-        Log[F]
-          .warn(
-            ignore(
-              b,
-              s"block contains an future deploy with valid after block number of ${futureDeploy.data.validAfterBlockNumber}: ${futureDeploy.data.term}"
-            )
-          )
-          .as(BlockStatus.containsFutureDeploy)
-      }
-      .map(maybeError => maybeError.toLeft(BlockStatus.valid))
-  }
-
-  def transactionExpiration[F[_]: Monad: Log](
-      b: BlockMessage,
-      expirationThreshold: Int
-  ): F[ValidBlockProcessing] = {
-    val earliestAcceptableValidAfterBlockNumber = b.blockNumber - expirationThreshold
-    val deploys                                 = b.state.deploys.map(_.deploy)
-    val maybeExpiredDeploy =
-      deploys.find(_.data.validAfterBlockNumber <= earliestAcceptableValidAfterBlockNumber)
-    maybeExpiredDeploy
-      .traverse { expiredDeploy =>
-        Log[F]
-          .warn(
-            ignore(
-              b,
-              s"block contains an expired deploy with valid after block number of ${expiredDeploy.data.validAfterBlockNumber}: ${expiredDeploy.data.term}"
-            )
-          )
-          .as(BlockStatus.containsExpiredDeploy)
-      }
-      .map(maybeError => maybeError.toLeft(BlockStatus.valid))
-  }
-
   /**
     * Works with either efficient justifications or full explicit justifications.
     * Specifically, with efficient justifications, if a block B doesn't update its
@@ -263,39 +179,6 @@ object Validate {
                  } yield BlockStatus.invalidSequenceNumber.asLeft[ValidBlock]
                }
     } yield status
-
-  // Validator should only process deploys from its own shard with shard names in ASCII characters only
-  def deploysShardIdentifier[F[_]: Monad: Log](
-      b: BlockMessage,
-      shardId: String
-  ): F[ValidBlockProcessing] = {
-    assert(shardId.onlyAscii, "Shard name should contain only ASCII characters")
-    if (b.state.deploys.forall(_.deploy.data.shardId == shardId)) {
-      BlockStatus.valid.asRight[InvalidBlock].pure
-    } else {
-      for {
-        _ <- Log[F].warn(ignore(b, s"not for all deploys shard identifier is $shardId."))
-      } yield BlockStatus.invalidDeployShardId.asLeft[ValidBlock]
-    }
-  }
-
-  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] = {
-    val blockHashComputed = ProtoUtil.hashBlock(b)
-    if (b.blockHash == blockHashComputed)
-      true.pure
-    else {
-      val computedHashString = PrettyPrinter.buildString(blockHashComputed)
-      val hashString         = PrettyPrinter.buildString(b.blockHash)
-      for {
-        _ <- Log[F].warn(
-              ignore(
-                b,
-                s"block hash $hashString does not match to computed value $computedHashString."
-              )
-            )
-      } yield false
-    }
-  }
 
   /**
     * Justification regression check.
@@ -375,17 +258,4 @@ object Validate {
       }
     }
   }
-
-  /**
-    * All of deploys must have greater or equal phloPrice then minPhloPrice
-    */
-  def phloPrice[F[_]: Log: Concurrent](
-      b: BlockMessage,
-      minPhloPrice: Long
-  ): F[ValidBlockProcessing] =
-    if (b.state.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
-      BlockStatus.valid.asRight[InvalidBlock].pure
-    } else {
-      BlockStatus.containsLowCostDeploy.asLeft[ValidBlock].pure
-    }
 }

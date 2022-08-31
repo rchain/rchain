@@ -39,4 +39,6 @@ final class ByteStringOps(
 
   def toBlake2b256Hash: Blake2b256Hash = Blake2b256Hash.fromByteString(bs)
 
+  def nonEmpty: Boolean = !bs.isEmpty
+
 }
