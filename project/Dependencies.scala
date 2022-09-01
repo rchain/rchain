@@ -94,8 +94,6 @@ object Dependencies {
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.7"
   val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M4"
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.23"
-  // see https://jitpack.io/#rchain/secp256k1-java
-  val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.8"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
