@@ -12,14 +12,11 @@ import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.rholang.{BlockRandomSeed, InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockVersion
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.models.syntax._
@@ -114,62 +111,12 @@ class ValidateTest
     } yield result
   }
 
-  "Block signature validation" should "return false on unknown algorithms" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        chain            <- createChain[Task](2)
-        unknownAlgorithm = "unknownAlgorithm"
-        rsa              = "RSA"
-        block0           = chain(0).copy(sigAlgorithm = unknownAlgorithm)
-        block1           = chain(1).copy(sigAlgorithm = rsa)
-        _                <- Validate.blockSignature[Task](block0) shouldBeF false
-        _ = log.warns.last
-          .contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
-          true
-        )
-        _      <- Validate.blockSignature[Task](block1) shouldBeF false
-        result = log.warns.last.contains(s"signature algorithm $rsa is unsupported") should be(true)
-      } yield result
-  }
-
-  it should "return false on invalid secp256k1 signatures" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      implicit val (sk, _) = Secp256k1.newKeyPair
-      for {
-        chain        <- createChain[Task](6)
-        (_, wrongPk) = Secp256k1.newKeyPair
-        empty        = ByteString.EMPTY
-        invalidKey   = "abcdef1234567890".unsafeHexToByteString
-        block0       <- signedBlock(chain, 0).map(_.copy(sender = empty))
-        block1       <- signedBlock(chain, 1).map(_.copy(sender = invalidKey))
-        block2       <- signedBlock(chain, 2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))
-        block3       <- signedBlock(chain, 3).map(_.copy(sig = empty))
-        block4       <- signedBlock(chain, 4).map(_.copy(sig = invalidKey))
-        block5       <- signedBlock(chain, 5).map(_.copy(sig = block0.sig)) //wrong sig
-        blocks       = Vector(block0, block1, block2, block3, block4, block5)
-        _            <- blocks.existsM[Task](Validate.blockSignature[Task]) shouldBeF false
-        _            = log.warns.size should be(blocks.length)
-        result       = log.warns.forall(_.contains("signature is invalid")) should be(true)
-      } yield result
-  }
-
-  it should "return true on valid secp256k1 signatures" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val n                 = 6
-      implicit val (sk, pk) = Secp256k1.newKeyPair
-      for {
-        chain <- createChain[Task](n)
-        condition <- (0 until n).toList.forallM[Task] { i =>
-                      val chainWithSender = chain.map(_.copy(sender = pk.bytes.toByteString))
-                      for {
-                        block  <- signedBlock(chainWithSender, i)
-                        result <- Validate.blockSignature[Task](block)
-                      } yield result
-                    }
-        _      = condition should be(true)
-        result = log.warns should be(Nil)
-      } yield result
-  }
+  private def singleBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
+      deploy: Signed[DeployData]
+  ): F[BlockMessage] =
+    createChain[F](0).map(
+      _.head.copy(state = RholangState(List(ProcessedDeploy.empty(deploy)), List.empty))
+    )
 
   "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
@@ -241,74 +188,7 @@ class ValidateTest
       } yield ()
   }
 
-  "Future deploy validation" should "work" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData = deploy.deploy.data
-        updatedDeployData = Signed(
-          deployData.copy(validAfterBlockNumber = -1),
-          Secp256k1,
-          ConstructDeploy.defaultSec
-        )
-        block <- createGenesis[Task](
-                  deploys = Seq(deploy.copy(deploy = updatedDeployData))
-                )
-        status <- Validate.futureTransaction[Task](block)
-        _      = status should be(Right(Valid))
-      } yield ()
-  }
-
-  "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData = deploy.deploy.data
-        updatedDeployData = Signed(
-          deployData.copy(validAfterBlockNumber = Long.MaxValue),
-          Secp256k1,
-          ConstructDeploy.defaultSec
-        )
-        blockWithFutureDeploy <- createGenesis[Task](
-                                  deploys = Seq(deploy.copy(deploy = updatedDeployData))
-                                )
-        status <- Validate.futureTransaction[Task](blockWithFutureDeploy)
-        _      = status should be(Left(ContainsFutureDeploy))
-      } yield ()
-  }
-
-  "Deploy expiration validation" should "work" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploy <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        block <- createGenesis[Task](
-                  deploys = Seq(deploy)
-                )
-        status <- Validate.transactionExpiration[Task](block, expirationThreshold = 10)
-        _      = status should be(Right(Valid))
-      } yield ()
-  }
-
-  "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
-        deployData = deploy.deploy.data
-        updatedDeployData = Signed(
-          deployData.copy(validAfterBlockNumber = Long.MinValue),
-          Secp256k1,
-          ConstructDeploy.defaultSec
-        )
-        blockWithExpiredDeploy <- createGenesis[Task](
-                                   deploys = Seq(deploy.copy(deploy = updatedDeployData))
-                                 )
-        status <- Validate
-                   .transactionExpiration[Task](blockWithExpiredDeploy, expirationThreshold = 10)
-        _ = status should be(Left(ContainsExpiredDeploy))
-      } yield ()
-  }
-
-  it should "return false for non-sequential numbering" in withStorage {
+  "Sequence number validation" should "return false for non-sequential numbering" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
         chain <- createChain[Task](2)
@@ -381,6 +261,38 @@ class ValidateTest
             ) shouldBeF Left(InvalidSequenceNumber)
         result = log.warns.size should be(1)
       } yield result
+  }
+
+  it should "be wrong for invalid shardId" in withStorage {
+    implicit blockStore =>
+      implicit blockDagStorage =>
+        // shardId by default is empty string
+        val deployWrongShard = ConstructDeploy.sourceDeployNow("Nil")
+        for {
+          blockWrongShard <- singleBlock[Task](deployWrongShard)
+          _ <- Validate.blockSummary[Task](blockWrongShard, "root", 0) shouldBeF
+                Left(InvalidDeployShardId)
+        } yield ()
+  }
+
+  it should "be wrong for future deploy" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val deployFuture = ConstructDeploy.sourceDeployNow("Nil", vabn = Long.MaxValue)
+      for {
+        blockFutureDeploy <- singleBlock[Task](deployFuture)
+        _ <- Validate.blockSummary[Task](blockFutureDeploy, "", 0) shouldBeF
+              Left(ContainsFutureDeploy)
+      } yield ()
+  }
+
+  it should "be wrong for expired deploy" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val deployExpired = ConstructDeploy.sourceDeployNow("Nil")
+      for {
+        blockExpiredDeploy <- singleBlock[Task](deployExpired)
+        _ <- Validate.blockSummary[Task](blockExpiredDeploy, "", 0) shouldBeF
+              Left(ContainsExpiredDeploy)
+      } yield ()
   }
 
   "Justification regression validation" should "return valid for proper justifications and justification regression detected otherwise" in withStorage {
@@ -478,62 +390,4 @@ class ValidateTest
         }
       } yield result
   }
-
-  "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
-    _ => implicit blockDagStorage =>
-      val context  = buildGenesis()
-      val (sk, pk) = context.validatorKeyPairs.head
-      for {
-        dag    <- blockDagStorage.getRepresentation
-        sender = ByteString.copyFrom(pk.bytes)
-        seqNum = getLatestSeqNum(sender, dag) + 1L
-        genesis = ValidatorIdentity(sk)
-          .signBlock(context.genesisBlock.copy(seqNum = seqNum))
-        _ <- Validate.formatOfFields[Task](genesis) shouldBeF true
-        _ <- Validate.formatOfFields[Task](genesis.copy(blockHash = ByteString.EMPTY)) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.copy(sig = ByteString.EMPTY)) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.copy(sigAlgorithm = "")) shouldBeF false
-        _ <- Validate.formatOfFields[Task](genesis.copy(shardId = "")) shouldBeF false
-        _ <- Validate.formatOfFields[Task](
-              genesis.copy(postStateHash = ByteString.EMPTY)
-            ) shouldBeF false
-      } yield ()
-  }
-
-  "Block hash format validation" should "fail on invalid hash" in {
-    implicit val aBlock = arbBlockMessage
-
-    forAll { (block: BlockMessage) =>
-      val hash           = ProtoUtil.hashBlock(block)
-      val blockValidHash = block.copy(blockHash = hash)
-
-      // Test valid block hash
-      val hashValid = Validate.blockHash[Task](blockValidHash).runSyncUnsafe()
-
-      hashValid shouldBe true
-
-      val blockInValidHash = block.copy(blockHash = ByteString.copyFromUtf8("123"))
-
-      // Test invalid block hash
-      val hashInValid = Validate.blockHash[Task](blockInValidHash).runSyncUnsafe()
-
-      hashInValid shouldBe false
-    }
-  }
-
-  "Block version validation" should "allow supported versions" in {
-    implicit val aBlock = arbBlockMessage
-
-    forAll { (block: BlockMessage, version: Int) =>
-      val blockWithVersion = block.copy(version = version)
-
-      // Expected one of hard-coded block versions supported by this version of RNode software
-      val expectedValid = BlockVersion.Supported.contains(version)
-      // Actual validation
-      val actualValid = Validate.version[Task](blockWithVersion).runSyncUnsafe()
-
-      actualValid shouldBe expectedValid
-    }
-  }
-
 }
