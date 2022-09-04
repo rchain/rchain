@@ -1,8 +1,9 @@
 ## Building and running
 
-__Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
+Setup using _nix_ is suggested following these [nix](./nix) instruction for building and runningMove up and restate nixggggggg.
 
-Setup using _nix_ can be found in the [nix](./nix) directory.
+
+__Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
 * Java Development Kit (JDK), version 10. We recommend using the OpenJDK
