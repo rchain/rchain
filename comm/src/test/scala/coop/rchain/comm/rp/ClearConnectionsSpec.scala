@@ -139,7 +139,6 @@ class ClearConnectionsSpec
     new ConstApplicativeAsk(
       RPConf(
         clearConnections = ClearConnectionsConf(numOfConnectionsPinged),
-        defaultTimeout = 1.milli,
         local = peer("src"),
         networkId = networkId,
         bootstrap = None,

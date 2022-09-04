@@ -55,7 +55,7 @@ object EffectsTestInstances {
       clearConnections: ClearConnectionsConf = ClearConnectionsConf(1)
   ) =
     new ConstApplicativeAsk[F, RPConf](
-      RPConf(local, networkId, Some(local), defaultTimeout, 20, clearConnections)
+      RPConf(local, networkId, Some(local), 20, clearConnections)
     )
 
   class TransportLayerStub[F[_]: Sync] extends TransportLayer[F] {

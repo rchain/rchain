@@ -44,12 +44,11 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
     maxMessageSize: Int,
     packetChunkSize: Int,
     clientQueueSize: Int,
+    networkTimeout: FiniteDuration = 5.seconds,
     channelsMap: Ref[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]],
     ioScheduler: Scheduler
 )(implicit scheduler: Scheduler)
     extends TransportLayer[F] {
-
-  val DefaultSendTimeout: FiniteDuration = 5.seconds
 
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
@@ -138,7 +137,7 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
     } yield result).attempt.map(_.fold(e => Left(protocolException(e)), identity))
 
   def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
-    withClient(peer, DefaultSendTimeout)(GrpcTransport.send(_, peer, msg))
+    withClient(peer, networkTimeout)(GrpcTransport.send(_, peer, msg))
 
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
     Stream
@@ -163,7 +162,7 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
   ): F[Unit] = {
 
     def timeout(packet: Packet): FiniteDuration =
-      Math.max(packet.content.size().toLong * 5, DefaultSendTimeout.toMicros).micros
+      Math.max(packet.content.size().toLong * 5, networkTimeout.toMicros).micros
 
     PacketOps.restore[F](key, cache) >>= {
       case Right(packet) =>

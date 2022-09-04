@@ -43,7 +43,7 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
   implicit val blockRetriever = BlockRetriever.of[Task]
 
   val networkId = "nid"
-  val conf      = RPConf(local, networkId, null, null, 0, null)
+  val conf      = RPConf(local, networkId, None, 100, null)
 
   private def toBlockRequest(protocol: Protocol): BlockRequest =
     BlockRequest.from(convert[PacketTypeTag.BlockRequest.type](toPacket(protocol).right.get).get)

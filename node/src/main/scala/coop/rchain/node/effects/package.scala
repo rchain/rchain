@@ -43,6 +43,7 @@ package object effects {
       keyPath: Path,
       maxMessageSize: Int,
       packetChunkSize: Int,
+      networkTimeout: FiniteDuration,
       ioScheduler: Scheduler
   )(implicit scheduler: Scheduler): F[TransportLayer[F]] =
     Ref.of[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]](Map()) map { channels =>
@@ -55,6 +56,7 @@ package object effects {
         maxMessageSize,
         packetChunkSize,
         clientQueueSize = 100,
+        networkTimeout,
         channels,
         ioScheduler
       ): TransportLayer[F]
