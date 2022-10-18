@@ -26,11 +26,68 @@ VALIDATOR_B_PRIVATE = PrivateKey.from_hex("1f52d0bce0a92f5c79f2a88aae6d391ddf853
 def temp_rnode_data() -> Generator[str, None, None]:
     with tempfile.TemporaryDirectory() as temp_dir:
         with tarfile.open('resources/rnode_data/bootstrap') as tar:
-            tar.extractall(os.path.join(temp_dir, 'bootstrap'))
+            def is_within_directory(directory, target):
+                
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+            
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                
+                return prefix == abs_directory
+            
+            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+            
+                for member in tar.getmembers():
+                    member_path = os.path.join(path, member.name)
+                    if not is_within_directory(path, member_path):
+                        raise Exception("Attempted Path Traversal in Tar File")
+            
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
+                
+            
+            safe_extract(tar, os.path.join(temp_dir,"bootstrap"))
         with tarfile.open('resources/rnode_data/validatorA') as tar:
-            tar.extractall(os.path.join(temp_dir, 'validatorA'))
+            def is_within_directory(directory, target):
+                
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+            
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                
+                return prefix == abs_directory
+            
+            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+            
+                for member in tar.getmembers():
+                    member_path = os.path.join(path, member.name)
+                    if not is_within_directory(path, member_path):
+                        raise Exception("Attempted Path Traversal in Tar File")
+            
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
+                
+            
+            safe_extract(tar, os.path.join(temp_dir,"validatorA"))
         with tarfile.open('resources/rnode_data/validatorB') as tar:
-            tar.extractall(os.path.join(temp_dir, 'validatorB'))
+            def is_within_directory(directory, target):
+                
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+            
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                
+                return prefix == abs_directory
+            
+            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+            
+                for member in tar.getmembers():
+                    member_path = os.path.join(path, member.name)
+                    if not is_within_directory(path, member_path):
+                        raise Exception("Attempted Path Traversal in Tar File")
+            
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
+                
+            
+            safe_extract(tar, os.path.join(temp_dir,"validatorB"))
         yield temp_dir
 
 @pytest.mark.skip
