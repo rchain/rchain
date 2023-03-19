@@ -13,7 +13,7 @@ import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil, ParBuilderUtil, PrettyPrinter}
 import coop.rchain.shared.{Log, Serialize}
-import monix.eval.{Coeval, Task}
+import monix.eval.{Eval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.Assertions
@@ -198,7 +198,7 @@ class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Ma
          |""".stripMargin
 
     isolateStackOverflow {
-      val ast = Compiler[Coeval].sourceToADT(rho).value()
+      val ast = Compiler[Eval].sourceToADT(rho).value()
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime[Task](tmpPrefix).use { runtime =>
@@ -242,10 +242,10 @@ class AstTypeclassesStackSafetySpec extends AnyFlatSpec with Matchers {
       val encoded = Serialize[Par].encode(par)
       Serialize[Par].decode(encoded)
 
-      HashM[Par].hash[Coeval](par).value
+      HashM[Par].hash[Eval](par).value
       par.hashCode()
 
-      EqualM[Par].equal[Coeval](par, anotherPar).value
+      EqualM[Par].equal[Eval](par, anotherPar).value
       par == anotherPar
 
     }

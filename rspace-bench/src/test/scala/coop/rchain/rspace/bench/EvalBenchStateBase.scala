@@ -9,7 +9,7 @@ import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
-import monix.eval.{Coeval, Task}
+import monix.eval.{Eval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{Setup, TearDown}
 
@@ -36,7 +36,7 @@ trait EvalBenchStateBase {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
 
-    term = Compiler[Coeval].sourceToADT(resourceFileReader(rhoScriptSource)).runAttempt match {
+    term = Compiler[Eval].sourceToADT(resourceFileReader(rhoScriptSource)).runAttempt match {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }

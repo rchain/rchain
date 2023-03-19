@@ -10,7 +10,7 @@ import cats.{~>, Eq, Monad}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
 import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
-import monix.eval.Coeval
+import cats.Eval
 import org.scalacheck.{Arbitrary, Gen, Prop}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.funsuite.AnyFunSuite
@@ -25,7 +25,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   behavior of "StreamT"
 
   it must "allow for lazy computation of the stream's head and shape" in {
-    val stack  = StreamT.liftF[Coeval, Int](Coeval.delay(???))
+    val stack  = StreamT.liftF[Eval, Int](Eval.delay(???))
     val result = StreamT.run(stack)
 
     assertThrows[NotImplementedError] {
@@ -36,12 +36,12 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   it must "not trigger spurious evaluation of underlying stream for a lazy monad" in {
     val stream: Stream[Int] = Stream.cons(1, ???)
 
-    var step2: Coeval[Step[Coeval, Int]] = null
+    var step2: Eval[Step[Eval, Int]] = null
 
     noException shouldBe thrownBy {
       stream.head
-      val wrappedStep1 = StreamT.fromStream(Coeval.now(stream))
-      val step1        = wrappedStep1.next.value().asInstanceOf[SCons[Coeval, Int]]
+      val wrappedStep1 = StreamT.fromStream(Eval.now(stream))
+      val step1        = wrappedStep1.next.value().asInstanceOf[SCons[Eval, Int]]
       assert(step1.head == 1)
       val wrappedStep2 = step1.tail
       step2 = wrappedStep2.next
@@ -58,7 +58,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   }
 
   it must "be stacksafe for a stacksafe F when calling StreamT.run[F]" in {
-    val huge = hugeStream[Coeval](maxDepth - 1, StreamT.pure(maxDepth))
+    val huge = hugeStream[Eval](maxDepth - 1, StreamT.pure(maxDepth))
 
     assert(StreamT.run(huge).value() == Stream.range(1, maxDepth + 1))
   }
@@ -66,7 +66,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   it must "be stacksafe for a stacksafe F when calling StreamT.fromStream[F]" in {
     val reference = Stream.range(0, maxDepth)
 
-    val huge = StreamT.fromStream(Coeval.now(reference))
+    val huge = StreamT.fromStream(Eval.now(reference))
 
     assert(StreamT.run(huge).value() == reference)
   }
@@ -78,16 +78,16 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
       case _ => n.pure[F].flatMap(x => hugeFlatMap[F](x - 1))
     }
 
-    val huge = hugeFlatMap[StreamT[Coeval, *]](maxDepth)
+    val huge = hugeFlatMap[StreamT[Eval, *]](maxDepth)
 
     assert(StreamT.run(huge).value() == Stream(0))
   }
 
   it must "be stacksafe for a stacksafe F when calling MonoidK[StreamT[F, *]].combineK" in {
-    type StreamTCoeval[A] = StreamT[Coeval, A]
+    type StreamTEval[A] = StreamT[Eval, A]
 
-    val huge: StreamTCoeval[Int] = hugeStream(maxDepth - 1, StreamT.pure(maxDepth))
-    val reference                = Stream.range(1, maxDepth + 1)
+    val huge: StreamTEval[Int] = hugeStream(maxDepth - 1, StreamT.pure(maxDepth))
+    val reference              = Stream.range(1, maxDepth + 1)
 
     val combined = huge.combineK(huge)
 
@@ -95,12 +95,12 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   }
 
   it must "be stacksafe and lazy for a stacksafe F when calling dropTail" in {
-    type StreamTCoeval[A] = StreamT[Coeval, A]
+    type StreamTEval[A] = StreamT[Eval, A]
 
-    val reference                    = Stream(1)
-    val head: StreamTCoeval[Int]     = StreamT.fromStream(Coeval.now(reference))
-    val throwing: StreamTCoeval[Int] = StreamT.liftF[Coeval, Int](Coeval.delay(???))
-    val combined                     = head.combineK(throwing)
+    val reference                  = Stream(1)
+    val head: StreamTEval[Int]     = StreamT.fromStream(Eval.now(reference))
+    val throwing: StreamTEval[Int] = StreamT.liftF[Eval, Int](Eval.delay(???))
+    val combined                   = head.combineK(throwing)
 
     val noTail = StreamT.dropTail(combined)
 
@@ -114,7 +114,7 @@ class StreamTLawsSpec
     with AllInstances
     with AllSyntax {
 
-  type Safe[A]          = Coeval[A]
+  type Safe[A]          = Eval[A]
   type Err[A]           = EitherT[Safe, String, A]
   type Effect[A]        = WriterT[Err, String, A]
   type StreamTEffect[A] = StreamT[Effect, A]
@@ -125,7 +125,7 @@ class StreamTLawsSpec
     Arbitrary(for {
       s <- Arbitrary.arbitrary[String]
       a <- Arbitrary.arbitrary[A]
-    } yield WriterT[Err, String, A](EitherT.liftF(Coeval.now(s -> a))))
+    } yield WriterT[Err, String, A](EitherT.liftF(Eval.now(s -> a))))
 
   implicit def arbStreamEff[A: Arbitrary]: Arbitrary[StreamTEffect[A]] =
     Arbitrary(

@@ -3,7 +3,7 @@ import java.io.{PrintWriter, StringWriter}
 
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
-import monix.eval.Coeval
+import cats.Eval
 
 import scala.annotation.switch
 import scala.collection.immutable.{BitSet, HashSet}
@@ -86,9 +86,9 @@ trait PrettyInstances extends PrettyDerivation {
   implicit def prettyAlwaysEqual[A: Pretty]: Pretty[AlwaysEqual[A]] =
     fromWrapped(_.item, value => s"AlwaysEqual($value)")
 
-  implicit def prettyCoeval[A: Pretty]: Pretty[Coeval[A]] =
-    (value: Coeval[A], indentLevel: Int) =>
-      s"Coeval.now(${Pretty[A].pretty(value.value, indentLevel)}) /* was Coeval.${value.getClass.getSimpleName} */"
+  implicit def prettyEval[A: Pretty]: Pretty[Eval[A]] =
+    (value: Eval[A], indentLevel: Int) =>
+      s"Eval.now(${Pretty[A].pretty(value.value, indentLevel)}) /* was Eval.${value.getClass.getSimpleName} */"
 
   implicit val PrettyPar: Pretty[Par]   = gen[Par]
   implicit val PrettyExpr               = gen[Expr]

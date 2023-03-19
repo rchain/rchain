@@ -2,15 +2,15 @@ package coop.rchain.models
 
 import java.util.Objects
 
-import monix.eval.Coeval
+import cats.Eval
 
 import scala.collection.immutable.BitSet
 
-//locallyFree is of type Coeval to make use of memoization
+//locallyFree is of type Eval to make use of memoization
 final case class ParSet(
     ps: SortedParHashSet,
     connectiveUsed: Boolean,
-    locallyFree: Coeval[BitSet],
+    locallyFree: Eval[BitSet],
     remainder: Option[Var]
 ) {
 
@@ -29,7 +29,7 @@ object ParSet {
   def apply(
       ps: Seq[Par],
       connectiveUsed: Boolean,
-      locallyFree: Coeval[BitSet],
+      locallyFree: Eval[BitSet],
       remainder: Option[Var]
   ): ParSet =
     ParSet(SortedParHashSet(ps), connectiveUsed, locallyFree.memoize, remainder)
@@ -42,7 +42,7 @@ object ParSet {
     ParSet(
       shs,
       connectiveUsed(ps) || remainder.isDefined,
-      Coeval.delay(updateLocallyFree(shs)).memoize,
+      Eval.now(updateLocallyFree(shs)).memoize,
       remainder
     )
   }
