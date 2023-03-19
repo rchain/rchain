@@ -2,7 +2,7 @@ package coop.rchain.models
 
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.models.rholang.sorter.ordering._
-import monix.eval.Coeval
+import cats.Eval
 
 import scala.collection.GenTraversableOnce
 import scala.collection.immutable.HashMap
@@ -47,7 +47,7 @@ final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)
 
   override def hashCode(): Int = sortedList.hashCode()
 
-  private def sort(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
+  private def sort(par: Par): Par = Sortable[Par].sortMatch[Eval](par).map(_.term).value
 }
 
 object SortedParMap {

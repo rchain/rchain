@@ -2,7 +2,7 @@ package coop.rchain.rholang.build
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.compiler.Compiler
-import monix.eval.Coeval
+import cats.Eval
 import shapeless.HNil
 
 import scala.io.Source
@@ -12,7 +12,7 @@ abstract class CompiledRholangSource[Env](val code: String, val normalizerEnv: N
     implicit ev: ToEnvMap[Env]
 ) {
   val path: String
-  val term: Par = Compiler[Coeval].sourceToADT(code, normalizerEnv.toEnv).value()
+  val term: Par = Compiler[Eval].sourceToADT(code, normalizerEnv.toEnv).value
   final def env = normalizerEnv.toEnv
 }
 

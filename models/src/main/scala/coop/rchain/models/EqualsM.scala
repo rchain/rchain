@@ -8,7 +8,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
-import monix.eval.Coeval
+import cats.Eval
 
 import scala.Function.tupled
 import scala.collection.immutable.BitSet
@@ -100,7 +100,7 @@ object EqualM extends EqualMDerivation {
 
   }
 
-  implicit def coevalEqual[A: EqualM]: EqualM[Coeval[A]] = by(_.value)
+  implicit def EvalEqual[A: EqualM]: EqualM[Eval[A]] = by(_.value)
 
   implicit val ParEqual: EqualM[Par] = gen[Par]
   implicit val ExprEqual             = gen[Expr]

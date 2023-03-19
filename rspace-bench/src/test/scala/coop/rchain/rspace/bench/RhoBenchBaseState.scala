@@ -9,7 +9,7 @@ import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime, RholangCLI}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
-import monix.eval.{Coeval, Task}
+import monix.eval.{Eval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
@@ -61,13 +61,13 @@ abstract class RhoBenchBaseState {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
     setupTerm = setupRho.flatMap { p =>
-      Compiler[Coeval].sourceToADT(p).runAttempt match {
+      Compiler[Eval].sourceToADT(p).runAttempt match {
         case Right(par) => Some(par)
         case Left(err)  => throw err
       }
     }
 
-    term = Compiler[Coeval].sourceToADT(testedRho).runAttempt match {
+    term = Compiler[Eval].sourceToADT(testedRho).runAttempt match {
       case Right(par) => par
       case Left(err)  => throw err
     }

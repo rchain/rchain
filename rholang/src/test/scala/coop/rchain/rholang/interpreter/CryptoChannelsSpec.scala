@@ -237,7 +237,7 @@ class CryptoChannelsSpec
   }
 
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
-    *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
+    *  to push effect choice up until declaration site refactor to `Reduce[Eval]`
     */
   override type FixtureParam = RhoRuntime[Task]
 

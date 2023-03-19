@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.Descriptors.FieldDescriptor
 import com.google.protobuf.WireFormat.FieldType
 import com.google.protobuf.{ByteString, CodedOutputStream, Descriptors, MessageLite}
-import monix.eval.Coeval
+import cats.Eval
 import scalapb.WireType
 import scalapb.compiler.Types
 
@@ -14,19 +14,19 @@ import scala.collection.JavaConverters._
 
 object ProtoM {
 
-  def toByteArray(message: StacksafeMessage[_]): Coeval[Array[Byte]] =
+  def toByteArray(message: StacksafeMessage[_]): Eval[Array[Byte]] =
     for {
       size  <- message.serializedSizeM.get
       array = new Array[Byte](size)
       out   = CodedOutputStream.newInstance(array)
       _     <- ProtoM.writeTo(out, message)
-      _     <- Sync[Coeval].catchNonFatal { out.checkNoSpaceLeft() }
+      _     <- Sync[Eval].catchNonFatal { out.checkNoSpaceLeft() }
     } yield array
 
   def writeTo(
       out: CodedOutputStream,
       message: StacksafeMessage[_]
-  ): Coeval[Unit] = {
+  ): Eval[Unit] = {
     val companion       = message.companion
     val descriptor      = companion.javaDescriptor
     val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage[_]]
@@ -38,7 +38,7 @@ object ProtoM {
               val default    = defaultInstance.getFieldByNumber(f.getNumber)
               if (fieldValue != default)
                 writeField(out, fieldValue, f)
-              else ().pure[Coeval]
+              else ().pure[Eval]
             })
     } yield ()
   }
@@ -47,7 +47,7 @@ object ProtoM {
       out: CodedOutputStream,
       value: Any,
       field: FieldDescriptor
-  ): Coeval[Unit] =
+  ): Eval[Unit] =
     if (field.isRepeated) {
       writeRepeatedField(out, value, field)
     } else {
@@ -58,9 +58,9 @@ object ProtoM {
       out: CodedOutputStream,
       value: Any,
       field: FieldDescriptor
-  ): Coeval[Unit] =
+  ): Eval[Unit] =
     for {
-      _         <- raiseUnsupportedIf[Coeval](field.isPacked, "Packed fields are unsupported")
+      _         <- raiseUnsupportedIf[Eval](field.isPacked, "Packed fields are unsupported")
       container = value.asInstanceOf[Seq[Any]].toList
       _         <- container.traverse(writeSingleField(out, _, field))
     } yield ()
@@ -69,7 +69,7 @@ object ProtoM {
       out: CodedOutputStream,
       value: Any,
       field: Descriptors.FieldDescriptor
-  ): Coeval[Unit] =
+  ): Eval[Unit] =
     if (field.getLiteType == FieldType.MESSAGE) {
       for {
         _         <- writeTag(out, field, WireType.WIRETYPE_LENGTH_DELIMITED)
@@ -78,7 +78,7 @@ object ProtoM {
         _         <- writeTo(out, value.asInstanceOf[StacksafeMessage[_]])
       } yield ()
     } else if (field.getLiteType == FieldType.ENUM)
-      Sync[Coeval].raiseError(
+      Sync[Eval].raiseError(
         new UnsupportedOperationException(
           s"Enums are not supported, got $value of type ${value.getClass}"
         )
@@ -91,19 +91,19 @@ object ProtoM {
       out: CodedOutputStream,
       field: FieldDescriptor,
       wireType: Int
-  ): Coeval[Unit] =
-    Sync[Coeval].delay { out.writeTag(field.getNumber, wireType) }
+  ): Eval[Unit] =
+    Sync[Eval].delay { out.writeTag(field.getNumber, wireType) }
 
-  private def writeUInt32NoTag(out: CodedOutputStream, valueSize: Int): Coeval[Unit] =
-    Sync[Coeval].delay { out.writeUInt32NoTag(valueSize) }
+  private def writeUInt32NoTag(out: CodedOutputStream, valueSize: Int): Eval[Unit] =
+    Sync[Eval].delay { out.writeUInt32NoTag(valueSize) }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   private def writeScalarValue(
       value: Any,
       field: FieldDescriptor,
       out: CodedOutputStream
-  ): Coeval[Unit] =
-    Sync[Coeval].catchNonFatal {
+  ): Eval[Unit] =
+    Sync[Eval].catchNonFatal {
 
       import FieldDescriptor.Type._
 
@@ -137,7 +137,7 @@ object ProtoM {
 
   def serializedSize(
       message: StacksafeMessage[_]
-  ): Coeval[Int] = Coeval.defer {
+  ): Eval[Int] = Eval.defer {
     val companion       = message.companion
     val descriptor      = companion.javaDescriptor
     val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage[_]]
@@ -147,34 +147,34 @@ object ProtoM {
                      val default    = defaultInstance.getFieldByNumber(f.getNumber)
                      if (fieldValue != default)
                        fieldSize(fieldValue, f)
-                     else 0.pure[Coeval]
+                     else 0.pure[Eval]
                    })
     } yield fieldSizes.sum
   }
 
-  private def fieldSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
+  private def fieldSize(value: Any, field: Descriptors.FieldDescriptor): Eval[Int] =
     if (field.isRepeated) {
       repeatedSize(value, field)
     } else {
       singleFieldSize(value, field)
     }
 
-  private def repeatedSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
+  private def repeatedSize(value: Any, field: Descriptors.FieldDescriptor): Eval[Int] =
     for {
-      _ <- raiseUnsupportedIf[Coeval](field.isPacked, "Packed fields are unsupported")
+      _ <- raiseUnsupportedIf[Eval](field.isPacked, "Packed fields are unsupported")
 
       container = value.asInstanceOf[Seq[Any]].toList
       containerSize <- Types.fixedSize(field.getType) match {
                         case Some(size) =>
                           val tagSize = CodedOutputStream.computeTagSize(field.getNumber)
-                          ((size + tagSize) * container.size).pure[Coeval]
+                          ((size + tagSize) * container.size).pure[Eval]
                         case None =>
                           val elementSizes = container.traverse(singleFieldSize(_, field))
                           elementSizes.map(_.sum)
                       }
     } yield containerSize
 
-  private def singleFieldSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
+  private def singleFieldSize(value: Any, field: Descriptors.FieldDescriptor): Eval[Int] =
     if (field.getLiteType == FieldType.MESSAGE) {
       for {
         valueSize     <- value.asInstanceOf[StacksafeMessage[_]].serializedSizeM.get
@@ -182,7 +182,7 @@ object ProtoM {
         tagSize       = CodedOutputStream.computeTagSize(field.getNumber)
       } yield tagSize + valueSizeSize + valueSize
     } else if (field.getLiteType == FieldType.ENUM)
-      Sync[Coeval].raiseError(
+      Sync[Eval].raiseError(
         new UnsupportedOperationException(
           s"Enums are not supported, got $value of type ${value.getClass}"
         )
@@ -192,8 +192,8 @@ object ProtoM {
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  private def scalarValueSize(value: Any, field: FieldDescriptor): Coeval[Int] =
-    Sync[Coeval].catchNonFatal {
+  private def scalarValueSize(value: Any, field: FieldDescriptor): Eval[Int] =
+    Sync[Eval].catchNonFatal {
 
       import FieldDescriptor.Type._
       import com.google.protobuf.CodedOutputStream._

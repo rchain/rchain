@@ -23,7 +23,7 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.util.unpackOptionWithPeek
 import coop.rchain.shared.{Base16, Serialize}
-import monix.eval.Coeval
+import cats.Eval
 import scalapb.GeneratedMessage
 
 import scala.collection.SortedSet
@@ -1093,7 +1093,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
   private[this] val union: Method = new Method() {
 
-    def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
+    def locallyFreeUnion(base: Eval[BitSet], other: Eval[BitSet]): Eval[BitSet] =
       base.flatMap(b => other.map(o => b | o))
 
     def union(baseExpr: Expr, otherExpr: Expr): M[Expr] =
@@ -1506,7 +1506,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             ParSet(
               basePs,
               connectiveUsed,
-              locallyFree.get.pure[Coeval],
+              locallyFree.get.pure[Eval],
               remainder
             )
           ): Par).pure[M]
@@ -1528,7 +1528,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     def makeMap(
         ps: Seq[Par],
         connectiveUsed: Boolean,
-        locallyFree: Coeval[BitSet],
+        locallyFree: Eval[BitSet],
         remainder: Option[Var]
     ) = {
       val keyPairs = ps.map(RhoType.RhoTuple2.unapply)
@@ -1551,7 +1551,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         case ESetBody(ParSet(basePs, connectiveUsed, locallyFree, remainder)) =>
           makeMap(basePs.toSeq, connectiveUsed, locallyFree, remainder)
         case EListBody(EList(basePs, locallyFree, connectiveUsed, remainder)) =>
-          makeMap(basePs, connectiveUsed, locallyFree.get.pure[Coeval], remainder)
+          makeMap(basePs, connectiveUsed, locallyFree.get.pure[Eval], remainder)
         case other =>
           MethodNotDefined("toMap", other.typ).raiseError[M, Par]
       }

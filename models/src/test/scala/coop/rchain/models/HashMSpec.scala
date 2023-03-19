@@ -5,7 +5,7 @@ import java.util.Objects
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.testImplicits._
-import monix.eval.Coeval
+import cats.Eval
 import org.scalacheck.Arbitrary
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
@@ -95,7 +95,7 @@ class HashMSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers 
     // This makes this test valid both before and after we override the generated hashCode
     // (which is long done when you're reading this).
     reference should be(a.hashCode())
-    val result = HashM[A].hash[Coeval](a).value
+    val result = HashM[A].hash[Eval](a).value
     result should be(reference)
   }
 }

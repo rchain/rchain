@@ -23,7 +23,7 @@ import coop.rchain.rholang.interpreter.compiler.normalizer.{
   NameNormalizeMatcher
 }
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
-import monix.eval.Coeval
+import cats.Eval
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -48,25 +48,25 @@ class GroundPrinterSpec extends AnyFlatSpec with Matchers {
   "GroundInt" should "Print as \"" + 7 + "\"" in {
     val gi             = new GroundInt("7")
     val target: String = "7"
-    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gi).value) shouldBe target
+    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Eval](gi).value) shouldBe target
   }
 
   "GroundBigInt" should "Print as \" 9999999999999999999999999999999999999999 \"" in {
     val gbi            = new GroundBigInt("9999999999999999999999999999999999999999")
     val target: String = "BigInt(9999999999999999999999999999999999999999)"
-    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gbi).value) shouldBe target
+    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Eval](gbi).value) shouldBe target
   }
 
   "GroundString" should "Print as \"" + "String" + "\"" in {
     val gs             = new GroundString("\"String\"")
     val target: String = "\"" + "String" + "\""
-    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gs).value) shouldBe target
+    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Eval](gs).value) shouldBe target
   }
 
   "GroundUri" should "Print with back-ticks" in {
     val gu             = new GroundUri("`Uri`")
     val target: String = "`" + "Uri" + "`"
-    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Coeval](gu).value) shouldBe target
+    PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch[Eval](gu).value) shouldBe target
   }
 }
 
@@ -91,7 +91,7 @@ class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 
     val result =
       PrettyPrinter(0, 2).buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](list, inputs).value.par
       )
     result shouldBe "[x0, x1, 7...free0]"
   }
@@ -106,7 +106,7 @@ class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 
     val result =
       PrettyPrinter(0, 2).buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](list, inputs).value.par
       )
     result shouldBe "Set(7, x1, x0...free0)"
   }
@@ -124,7 +124,7 @@ class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 
     val result =
       PrettyPrinter(0, 2).buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](map, inputs).value.par
       )
     result shouldBe "{7 : \"" + "Seven" + "\", x0 : x1...free0}"
   }
@@ -153,7 +153,7 @@ class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](map, inputs).value.par
       )
     val target = """{"a" : 1, "b" : 2, "c" : 3}"""
     result shouldBe target
@@ -267,7 +267,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val source = new PNew(nameDec, receive)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](source, inputs).value.par
       )
     val target =
       """new x0 in {
@@ -299,7 +299,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val source = new PNew(nameDec, receive)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](source, inputs).value.par
       )
     val target =
       """new x0 in {
@@ -345,7 +345,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val source = new PNew(nameDec, receive)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](source, inputs).value.par
       )
     val target =
       """new x0, x1 in {
@@ -392,7 +392,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val source = new PNew(nameDec, receive)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](source, inputs).value.par
       )
     val target =
       """new x0, x1 in {
@@ -444,7 +444,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val source = new PNew(nameDec, receive)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](source, inputs).value.par
       )
     val target =
       """new x0, x1 in {
@@ -484,7 +484,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val source = new PNew(nameDec, body)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](source, inputs).value.par
       )
     val target =
       """new x0 in {
@@ -499,7 +499,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
   "PNil" should "Print" in {
     val nil = new PNil()
     val result = PrettyPrinter().buildString(
-      ProcNormalizeMatcher.normalizeMatch[Coeval](nil, inputs).value.par
+      ProcNormalizeMatcher.normalizeMatch[Eval](nil, inputs).value.par
     )
     result shouldBe "Nil"
   }
@@ -510,7 +510,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](pvar, boundInputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](pvar, boundInputs).value.par
       )
     result shouldBe "x0"
   }
@@ -536,7 +536,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](pEval, boundInputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](pEval, boundInputs).value.par
       )
     result shouldBe "x0"
   }
@@ -549,7 +549,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](pEval, boundInputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](pEval, boundInputs).value.par
       )
     result shouldBe
       """x0 |
@@ -598,7 +598,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     sentData.add(new PGround(new GroundInt("8")))
     val pSend = new PSend(new NameQuote(new PNil()), new SendSingle(), sentData)
     val result = PrettyPrinter().buildString(
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value.par
+      ProcNormalizeMatcher.normalizeMatch[Eval](pSend, inputs).value.par
     )
     result shouldBe "@{Nil}!(7, 8)"
   }
@@ -612,7 +612,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, boundInputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](pSend, boundInputs).value.par
       )
     result shouldBe "@{x0}!(7, 8)"
   }
@@ -621,7 +621,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val parGround = new PPar(new PGround(new GroundInt("7")), new PGround(new GroundInt("8")))
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](parGround, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](parGround, inputs).value.par
       )
     result shouldBe
       """8 |
@@ -633,7 +633,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val boundInputs =
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     val result = PrettyPrinter(0, 1).buildString(
-      ProcNormalizeMatcher.normalizeMatch[Coeval](parDoubleBound, boundInputs).value.par
+      ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleBound, boundInputs).value.par
     )
     result shouldBe
       """x0 |
@@ -644,7 +644,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val parDoubleFree = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](parDoubleFree, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleFree, inputs).value.par
       )
     result shouldBe
       """free1 |
@@ -695,7 +695,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val basicInput1 = new PInput(listReceipt1, body1)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput1, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](basicInput1, inputs).value.par
       )
     val target =
       """for( @{x0}, @{for( @{y0}, @{y1} <- @{Nil} ) { y1 | y0 | x1 }} <- @{Nil} ) {
@@ -769,7 +769,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val pInput = new PNew(listNameDecl, new PInput(listReceipt, body3))
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](pInput, inputs).value.par
       )
     result shouldBe
       """new x0, x1 in {
@@ -817,7 +817,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val result = PrettyPrinter()
       .buildString(
         ProcNormalizeMatcher
-          .normalizeMatch[Coeval](pNew, inputs)
+          .normalizeMatch[Eval](pNew, inputs)
           .value
           .par
       )
@@ -858,7 +858,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       send47OnNil
     )
     val result = PrettyPrinter().buildString(
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pPar, inputs).value.par
+      ProcNormalizeMatcher.normalizeMatch[Eval](pPar, inputs).value.par
     )
     result shouldBe
       """@{Nil}!(47) |
@@ -894,7 +894,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val basicInput = new PIf(condition, body)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs).value.par
       )
     result shouldBe
       """match true {
@@ -929,7 +929,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val basicInput = new PIfElse(condition, pNewIf, pNewElse)
     val result =
       PrettyPrinter().buildString(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value.par
+        ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs).value.par
       )
     result shouldBe
       """match (47 == 47) {
@@ -968,7 +968,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     listReceipt.add(receipt)
     val input = new PInput(listReceipt, new PNil())
     val result = PrettyPrinter().buildString(
-      ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par
+      ProcNormalizeMatcher.normalizeMatch[Eval](input, inputs).value.par
     )
     result shouldBe """for( @{match x0 | x1 { 47 => { Nil } }} <- @{Nil} ) {
                       |  Nil
@@ -979,7 +979,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val pMatches = new PMatches(new PGround(new GroundInt("1")), new PVar(new ProcVarWildcard()))
 
     val result = PrettyPrinter(0, 1).buildString(
-      ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value.par
+      ProcNormalizeMatcher.normalizeMatch[Eval](pMatches, inputs).value.par
     )
 
     result shouldBe "(1 matches _)"
@@ -989,7 +989,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     assert(parseAndPrint(prettySource) == prettySource)
 
   private def parseAndPrint(source: String): String = PrettyPrinter().buildString(
-    Compiler[Coeval].sourceToADT(new StringReader(source)).runAttempt().right.get
+    Compiler[Eval].sourceToADT(new StringReader(source)).runAttempt().right.get
   )
 }
 
@@ -1030,7 +1030,7 @@ class NamePrinterSpec extends AnyFlatSpec with Matchers {
   "NameWildcard" should "Print" in {
     val nw = new NameWildcard()
     val result = PrettyPrinter().buildString(
-      NameNormalizeMatcher.normalizeMatch[Coeval](nw, inputs).value.par
+      NameNormalizeMatcher.normalizeMatch[Eval](nw, inputs).value.par
     )
     result shouldBe "_"
   }
@@ -1042,7 +1042,7 @@ class NamePrinterSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
-        NameNormalizeMatcher.normalizeMatch[Coeval](nvar, boundInputs).value.par
+        NameNormalizeMatcher.normalizeMatch[Eval](nvar, boundInputs).value.par
       )
     result shouldBe "x0"
   }
@@ -1055,7 +1055,7 @@ class NamePrinterSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
-        NameNormalizeMatcher.normalizeMatch[Coeval](nqeval, boundInputs).value.par
+        NameNormalizeMatcher.normalizeMatch[Eval](nqeval, boundInputs).value.par
       )
     result shouldBe "x0 |\nx0"
   }

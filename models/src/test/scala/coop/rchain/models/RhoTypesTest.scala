@@ -7,7 +7,7 @@ import coop.rchain.models.Connective.ConnectiveInstance.{Empty => _}
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.shared.Serialize
-import monix.eval.Coeval
+import cats.Eval
 import org.scalacheck.{Arbitrary, Shrink}
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
@@ -72,7 +72,7 @@ class RhoTypesTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
     // We also check `stacksafeDeserialize(referenceSerialize(a)).equals(a)` just in case :)
     val referenceBytes = a.toByteArray
     val in             = CodedInputStream.newInstance(referenceBytes)
-    val decoded        = companion.defaultInstance.mergeFromM[Coeval](in).value
+    val decoded        = companion.defaultInstance.mergeFromM[Eval](in).value
     val encoded        = decoded.toByteArray
     assert(encoded sameElements referenceBytes)
     assert(decoded == a)

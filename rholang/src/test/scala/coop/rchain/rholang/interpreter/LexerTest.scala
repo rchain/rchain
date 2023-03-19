@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.errors.LexerError
-import monix.eval.Coeval
+import cats.Eval
 import org.scalatest.EitherValues._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,7 +11,7 @@ import org.scalatest.matchers.should.Matchers
 class LexerTest extends AnyFlatSpec with Matchers {
 
   def attemptMkTerm(input: String): Either[Throwable, Par] =
-    Compiler[Coeval].sourceToADT(input).runAttempt()
+    Compiler[Eval].sourceToADT(input).runAttempt()
 
   "Lexer" should "return LexerError for unterminated string at EOF" in {
     val attempt = attemptMkTerm("""{{ @"ack!(0) }}""")

@@ -16,7 +16,7 @@ import coop.rchain.models.{
 }
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{KeyValuePair => AbsynKeyValuePair, _}
 import coop.rchain.rholang.interpreter.compiler._
-import monix.eval.Coeval
+import cats.Eval
 
 import scala.collection.convert.ImplicitConversionsToScala._
 import scala.collection.immutable.{BitSet, Vector}
@@ -132,7 +132,7 @@ object CollectionNormalizeMatcher {
                 optionalRemainder =>
                   (pars, locallyFree, connectiveUsed) => {
                     val tmpParSet =
-                      ParSet(pars, connectiveUsed, Coeval.delay(locallyFree.get), optionalRemainder)
+                      ParSet(pars, connectiveUsed, Eval.later(locallyFree.get()), optionalRemainder)
                     tmpParSet.copy(
                       connectiveUsed = tmpParSet.connectiveUsed || optionalRemainder.isDefined
                     )
