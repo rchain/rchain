@@ -119,9 +119,13 @@ class StacksafeMessagePrinter(
       fp: FunctionalPrinter
   ): FunctionalPrinter = {
     val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
-    fp.add(
-        s"override def equals(x: Any): Boolean = coop.rchain.models.EqualM[$myFullScalaName].equals[monix.eval.Coeval](this, x).value"
-      )
+    fp.add(s"override def equals(x: Any): Boolean = {")
+      .newline
+      .add("  import coop.rchain.catscontrib.effect.implicits.sEval")
+      .newline
+      .add(s" coop.rchain.models.EqualM[$myFullScalaName].equals[cats.Eval](this, x).value")
+      .newline
+      .add("}")
       .newline
   }
 
@@ -131,10 +135,15 @@ class StacksafeMessagePrinter(
   ): FunctionalPrinter = {
     val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
 
-    val printer = fp
-      .add(
-        s"override def hashCode(): Int = coop.rchain.models.HashM[$myFullScalaName].hash[monix.eval.Coeval](this).value"
-      )
+    val printer =
+      fp.add(s"override def hashCode(): Int = {")
+        .newline
+        .add("  import coop.rchain.catscontrib.effect.implicits.sEval")
+        .newline
+        .add(s" coop.rchain.models.HashM[$myFullScalaName].hash[cats.Eval](this).value")
+        .newline
+        .add("}")
+        .newline
 
     // In new version of scalapb (0.10.8) `merge` method is moved to companion object
     //  so it's added here to be a member method.

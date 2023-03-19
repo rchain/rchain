@@ -9,6 +9,7 @@ import com.google.protobuf.{ByteString, CodedOutputStream, Descriptors, MessageL
 import cats.Eval
 import scalapb.WireType
 import scalapb.compiler.Types
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.JavaConverters._
 

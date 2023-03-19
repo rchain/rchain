@@ -5,13 +5,13 @@ import coop.rchain.models.Par
 import coop.rchain.models.rholang.sorter.ScoredTerm._
 import cats.Eval
 import cats.implicits._
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 //FIXME the `.sort` methods in this file should return via F[_] : Sync, and the corresponding ParSet and ParMap should
 //be constructed via factory methods also returning via F. Otherwise we risk StackOverflowErrors.
 object ordering {
 
   implicit class ListSortOps(ps: List[Par]) {
-    implicit val sync = implicitly[Sync[Coeval]]
 
     def sort: List[Par] = {
       val psSorted: List[Eval[ScoredTerm[Par]]] =

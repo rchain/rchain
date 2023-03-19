@@ -1,8 +1,8 @@
 package coop.rchain.catscontrib.effect
 
 import cats._
-import cats.effect.ExitCase.{Completed, Error}
 import cats.effect._
+import cats.syntax.all._
 
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
@@ -66,4 +66,35 @@ package object implicits {
       def suspend[A](thunk: => A): A = thunk
     }
 
+  // Sync typeclass implementation for cats.Eval datatype is required to use cats Eval for stack safe serialization of
+  // Rholang types. This replaces (as part of attempt to abstract from concrete effect type)
+  // monix.Сoeval that was used for this purpose before.
+  implicit val sEval = new Sync[Eval] {
+    override def suspend[A](thunk: => Eval[A]): Eval[A] = Eval.defer(thunk)
+
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    override def bracketCase[A, B](
+        acquire: Eval[A]
+    )(use: A => Eval[B])(release: (A, ExitCase[Throwable]) => Eval[Unit]): Eval[B] =
+      Try(use(acquire.value)) match {
+        case Success(result) =>
+          release(acquire.value, ExitCase.Completed).flatMap(_ => result)
+        case Failure(e) =>
+          release(acquire.value, ExitCase.error(e)).map(_ => throw e)
+      }
+
+    override def flatMap[A, B](fa: Eval[A])(f: A => Eval[B]): Eval[B] = fa.flatMap(f)
+
+    override def tailRecM[A, B](a: A)(f: A => Eval[Either[A, B]]): Eval[B] = a.tailRecM(f)
+
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    override def raiseError[A](e: Throwable): Eval[A] = Eval.later(throw e)
+
+    override def handleErrorWith[A](fa: Eval[A])(f: Throwable => Eval[A]): Eval[A] =
+      try {
+        Eval.now(fa.value)
+      } catch { case NonFatal(e) => f(e) }
+
+    override def pure[A](x: A): Eval[A] = Eval.now(x)
+  }
 }
