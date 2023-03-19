@@ -3,6 +3,7 @@ package coop.rchain.models
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.models.rholang.sorter.ordering._
 import cats.Eval
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.GenTraversableOnce
 import scala.collection.immutable.HashMap

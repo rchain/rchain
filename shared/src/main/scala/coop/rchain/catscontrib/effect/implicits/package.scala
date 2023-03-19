@@ -1,8 +1,8 @@
 package coop.rchain.catscontrib.effect
 
 import cats._
-import cats.effect.ExitCase.{Completed, Error}
 import cats.effect._
+import cats.syntax.all._
 
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
@@ -66,4 +66,21 @@ package object implicits {
       def suspend[A](thunk: => A): A = thunk
     }
 
+  implicit val sEval = new Sync[Eval] {
+    override def suspend[A](thunk: => Eval[A]): Eval[A] = thunk
+
+    override def bracketCase[A, B](acquire: Eval[A])(use: A => Eval[B])(
+        release: (A, ExitCase[Throwable]) => Eval[Unit]
+    ): Eval[B] = flatMap[A, B](acquire)(use)
+
+    override def flatMap[A, B](fa: Eval[A])(f: A => Eval[B]): Eval[B] = fa.flatMap(f)
+
+    override def tailRecM[A, B](a: A)(f: A => Eval[Either[A, B]]): Eval[B] = a.tailRecM(f)
+
+    override def raiseError[A](e: Throwable): Eval[A] = e.raiseError
+
+    override def handleErrorWith[A](fa: Eval[A])(f: Throwable => Eval[A]): Eval[A] = fa
+
+    override def pure[A](x: A): Eval[A] = Eval.now(x)
+  }
 }

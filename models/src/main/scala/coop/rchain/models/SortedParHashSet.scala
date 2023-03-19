@@ -6,6 +6,7 @@ import cats.Eval
 
 import scala.collection.GenSet
 import scala.collection.immutable.HashSet
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 //Enforce ordering and uniqueness.
 // - uniqueness is handled by using HashSet.

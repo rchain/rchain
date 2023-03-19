@@ -6,6 +6,7 @@ import coop.rchain.shared.Serialize
 import cats.Eval
 import scalapb.GeneratedMessageCompanion
 import scodec.bits.ByteVector
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 object implicits {
 
