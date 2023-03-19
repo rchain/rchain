@@ -8,6 +8,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{FreeMap, ReceiveBindsSortMatcher, VarSort}
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class ReceiveSortMatcherSpec extends AnyFlatSpec with Matchers {
   val emptyMap = FreeMap.empty[VarSort]

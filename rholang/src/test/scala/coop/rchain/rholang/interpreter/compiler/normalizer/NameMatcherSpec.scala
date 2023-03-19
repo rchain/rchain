@@ -18,6 +18,7 @@ import coop.rchain.rholang.interpreter.compiler.{
   VarSort
 }
 import cats.Eval
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class NameMatcherSpec extends AnyFlatSpec with Matchers {
   val inputs                                   = NameVisitInputs(BoundMapChain.empty[VarSort], FreeMap.empty[VarSort])

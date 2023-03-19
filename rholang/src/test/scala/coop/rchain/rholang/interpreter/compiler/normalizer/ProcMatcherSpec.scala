@@ -19,6 +19,7 @@ import cats.Eval
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
 
@@ -247,45 +248,45 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
   "PSend" should "Not compile if data contains negation" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Compiler[Eval].sourceToADT("""new x in { x!(~1) }""").value()
+      Compiler[Eval].sourceToADT("""new x in { x!(~1) }""").value
     }
   }
 
   "PSend" should "Not compile if data contains conjunction" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Compiler[Eval].sourceToADT("""new x in { x!(1 /\ 2) }""").value()
+      Compiler[Eval].sourceToADT("""new x in { x!(1 /\ 2) }""").value
     }
   }
 
   "PSend" should "Not compile if data contains disjunction" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Compiler[Eval].sourceToADT("""new x in { x!(1 \/ 2) }""").value()
+      Compiler[Eval].sourceToADT("""new x in { x!(1 \/ 2) }""").value
     }
   }
 
   "PSend" should "Not compile if data contains wildcard" in {
     an[TopLevelWildcardsNotAllowedError] should be thrownBy {
-      Compiler[Eval].sourceToADT("""@"x"!(_)""").value()
+      Compiler[Eval].sourceToADT("""@"x"!(_)""").value
     }
   }
 
   "PSend" should "Not compile if data contains free variable" in {
     an[TopLevelFreeVariablesNotAllowedError] should be thrownBy {
-      Compiler[Eval].sourceToADT("""@"x"!(y)""").value()
+      Compiler[Eval].sourceToADT("""@"x"!(y)""").value
     }
   }
 
   "PSend" should "not compile if name contains connectives" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Compiler[Eval].sourceToADT("""@{Nil /\ Nil}!(1)""").value()
+      Compiler[Eval].sourceToADT("""@{Nil /\ Nil}!(1)""").value
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Compiler[Eval].sourceToADT("""@{Nil \/ Nil}!(1)""").value()
+      Compiler[Eval].sourceToADT("""@{Nil \/ Nil}!(1)""").value
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      Compiler[Eval].sourceToADT("""@{~Nil}!(1)""").value()
+      Compiler[Eval].sourceToADT("""@{~Nil}!(1)""").value
     }
   }
 
@@ -485,7 +486,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     (for {
       basicInput <- Compiler[Eval].sourceToAST("""for ( x, y <<- @Nil ) { x!(*y) }""")
       result     <- ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs)
-    } yield result.par.receives.head.peek shouldBe true).value()
+    } yield result.par.receives.head.peek shouldBe true).value
   }
 
   "PInput" should "Handle a more complicated receive" in {
@@ -650,19 +651,19 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""for(x <- @{Nil \/ Nil}){ Nil }""")
-        .value()
+        .value
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""for(x <- @{Nil /\ Nil}){ Nil }""")
-        .value()
+        .value
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""for(x <- @{~Nil}){ Nil }""")
-        .value()
+        .value
     }
   }
 
@@ -670,19 +671,19 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""for(x <- @Nil){ 1 /\ 2 }""")
-        .value()
+        .value
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""for(x <- @Nil){ 1 \/ 2 }""")
-        .value()
+        .value
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""for(x <- @Nil){ ~1 }""")
-        .value()
+        .value
     }
   }
 
@@ -690,13 +691,13 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     an[PatternReceiveError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }""")
-        .value()
+        .value
     }
 
     an[PatternReceiveError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""new x in { for(@{~Nil} <- x) { Nil } }""")
-        .value()
+        .value
     }
   }
 
@@ -704,7 +705,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     noException should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }""")
-        .value()
+        .value
     }
   }
 
@@ -712,13 +713,13 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     an[PatternReceiveError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""new x in { contract x(@{ y /\ {Nil \/ Nil}}) = { Nil } }""")
-        .value()
+        .value
     }
 
     an[PatternReceiveError] should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""new x in { contract x(@{ y /\ ~Nil}) = { Nil } }""")
-        .value()
+        .value
     }
   }
 
@@ -726,7 +727,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     noException should be thrownBy {
       Compiler[Eval]
         .sourceToADT("""new x in { contract x(@{ y /\ {Nil /\ Nil}}) = { Nil } }""")
-        .value()
+        .value
     }
   }
 
@@ -1422,7 +1423,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
            }
          }
        """
-        Compiler[Eval].sourceToADT(rho).value()
+        Compiler[Eval].sourceToADT(rho).value
         assert(true)
       } catch {
         case e: Throwable =>

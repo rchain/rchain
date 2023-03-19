@@ -1,8 +1,9 @@
 package coop.rchain.rholang.interpreter.matcher
 
+import cats.effect.Async.catsStateTAsync
 import cats.effect._
 import cats.mtl.implicits._
-import cats.{Eval => _}
+import cats.Eval
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.MonadError_._
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -12,13 +13,13 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter._
-import monix.eval.{Eval, Task}
-import monix.execution.Scheduler.Implicits.global
+import monix.eval.Task
 import org.scalactic.TripleEqualsSupport
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.concurrent.TimeLimits
+import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
@@ -77,6 +78,7 @@ class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with Trip
     expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
 
   private def assertSorted(term: Par, termName: String): Assertion = {
+    import coop.rchain.catscontrib.effect.implicits.sEval
     val sortedTerm = Sortable[Par].sortMatch[Eval](term).value.term
     val clue       = s"Invalid test case - ${termName} is not sorted"
     assert(printer.buildString(term) == printer.buildString(sortedTerm), clue)

@@ -14,13 +14,14 @@ import coop.rchain.rholang.ast.rholang_mercury.PrettyPrinter
 import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.{GenTools, ProcGen}
 import coop.rchain.shared.Log
-import monix.eval.{Eval, Task}
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Test.Parameters
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.concurrent.duration._
 
@@ -35,7 +36,7 @@ class CostAccountingPropertyTest extends AnyFlatSpec with ScalaCheckPropertyChec
 
   implicit val taskExecutionDuration: FiniteDuration = 5.seconds
 
-  def cost(proc: Proc): Cost = Cost(Compiler[Eval].astToADT(proc).apply)
+  def cost(proc: Proc): Cost = Cost(Compiler[Eval].astToADT(proc).value)
 
   behavior of "Cost accounting in Reducer"
 

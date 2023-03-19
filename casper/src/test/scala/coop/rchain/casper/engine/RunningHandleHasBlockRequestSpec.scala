@@ -16,6 +16,7 @@ import cats.Eval
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class RunningHandleHasBlockRequestSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
@@ -49,9 +50,9 @@ class RunningHandleHasBlockRequestSpec extends AnyFunSpec with BeforeAndAfterEac
         it("should send back HasBlock message to the sender") {
           // given
           val sender                                  = peerNode("peer", 40400)
-          val blockLookup: BlockHash => Eval[Boolean] = kp(Eval(true))
+          val blockLookup: BlockHash => Eval[Boolean] = kp(Eval.now(true))
           // then
-          NodeRunning.handleHasBlockRequest[Eval](sender, hbr)(blockLookup).apply()
+          NodeRunning.handleHasBlockRequest[Eval](sender, hbr)(blockLookup).value
           // then
           val (peer, msg) = transport.getRequest(0)
           peer should be(sender)
@@ -63,9 +64,9 @@ class RunningHandleHasBlockRequestSpec extends AnyFunSpec with BeforeAndAfterEac
         it("should do nothing") {
           // given
           val sender                                  = peerNode("peer", 40400)
-          val blockLookup: BlockHash => Eval[Boolean] = kp(Eval(false))
+          val blockLookup: BlockHash => Eval[Boolean] = kp(Eval.now(false))
           // then
-          NodeRunning.handleHasBlockRequest[Eval](sender, hbr)(blockLookup).apply()
+          NodeRunning.handleHasBlockRequest[Eval](sender, hbr)(blockLookup).value
           // then
           transport.requests.size should be(0)
         }

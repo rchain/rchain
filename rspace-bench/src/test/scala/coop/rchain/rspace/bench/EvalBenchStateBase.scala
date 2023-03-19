@@ -1,5 +1,7 @@
 package coop.rchain.rspace.bench
 
+import cats.Eval
+import cats.implicits.catsSyntaxOptionId
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -9,9 +11,10 @@ import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
-import monix.eval.{Eval, Task}
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{Setup, TearDown}
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
@@ -36,10 +39,9 @@ trait EvalBenchStateBase {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
 
-    term = Compiler[Eval].sourceToADT(resourceFileReader(rhoScriptSource)).runAttempt match {
-      case Right(par) => Some(par)
-      case Left(err)  => throw err
-    }
+    term = try {
+      Compiler[Eval].sourceToADT(resourceFileReader(rhoScriptSource)).value.some
+    } catch { case x: Throwable => throw x }
   }
 
   @TearDown

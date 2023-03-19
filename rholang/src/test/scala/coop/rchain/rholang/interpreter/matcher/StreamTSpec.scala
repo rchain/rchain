@@ -11,12 +11,14 @@ import coop.rchain.catscontrib.laws.discipline.MonadTransTests
 import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
 import cats.Eval
+import cats.effect.Sync
 import org.scalacheck.{Arbitrary, Gen, Prop}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import cats.instances.AllInstances
 import cats.syntax.AllSyntax
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class StreamTSpec extends AnyFlatSpec with Matchers {
 
@@ -25,11 +27,11 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   behavior of "StreamT"
 
   it must "allow for lazy computation of the stream's head and shape" in {
-    val stack  = StreamT.liftF[Eval, Int](Eval.delay(???))
+    val stack  = StreamT.liftF[Eval, Int](Sync[Eval].delay(???))
     val result = StreamT.run(stack)
 
     assertThrows[NotImplementedError] {
-      result.value()
+      result.value
     }
   }
 
@@ -41,14 +43,14 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
     noException shouldBe thrownBy {
       stream.head
       val wrappedStep1 = StreamT.fromStream(Eval.now(stream))
-      val step1        = wrappedStep1.next.value().asInstanceOf[SCons[Eval, Int]]
+      val step1        = wrappedStep1.next.value.asInstanceOf[SCons[Eval, Int]]
       assert(step1.head == 1)
       val wrappedStep2 = step1.tail
       step2 = wrappedStep2.next
     }
 
     assertThrows[NotImplementedError] {
-      step2.value()
+      step2.value
     }
   }
 
@@ -60,7 +62,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   it must "be stacksafe for a stacksafe F when calling StreamT.run[F]" in {
     val huge = hugeStream[Eval](maxDepth - 1, StreamT.pure(maxDepth))
 
-    assert(StreamT.run(huge).value() == Stream.range(1, maxDepth + 1))
+    assert(StreamT.run(huge).value == Stream.range(1, maxDepth + 1))
   }
 
   it must "be stacksafe for a stacksafe F when calling StreamT.fromStream[F]" in {
@@ -68,7 +70,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
 
     val huge = StreamT.fromStream(Eval.now(reference))
 
-    assert(StreamT.run(huge).value() == reference)
+    assert(StreamT.run(huge).value == reference)
   }
 
   it must "be stacksafe for a stacksafe F when calling Monad[StreamT[F, *]].flatMap" in {
@@ -80,7 +82,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
 
     val huge = hugeFlatMap[StreamT[Eval, *]](maxDepth)
 
-    assert(StreamT.run(huge).value() == Stream(0))
+    assert(StreamT.run(huge).value == Stream(0))
   }
 
   it must "be stacksafe for a stacksafe F when calling MonoidK[StreamT[F, *]].combineK" in {
@@ -91,7 +93,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
 
     val combined = huge.combineK(huge)
 
-    assert(StreamT.run(combined).value() == (reference ++ reference))
+    assert(StreamT.run(combined).value == (reference ++ reference))
   }
 
   it must "be stacksafe and lazy for a stacksafe F when calling dropTail" in {
@@ -99,12 +101,12 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
 
     val reference                  = Stream(1)
     val head: StreamTEval[Int]     = StreamT.fromStream(Eval.now(reference))
-    val throwing: StreamTEval[Int] = StreamT.liftF[Eval, Int](Eval.delay(???))
+    val throwing: StreamTEval[Int] = StreamT.liftF[Eval, Int](Sync[Eval].delay(???))
     val combined                   = head.combineK(throwing)
 
     val noTail = StreamT.dropTail(combined)
 
-    assert(StreamT.run(noTail).value() == reference)
+    assert(StreamT.run(noTail).value == reference)
   }
 }
 
@@ -149,7 +151,7 @@ class StreamTLawsSpec
       )
     )
 
-  implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.value.attempt())
+  implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.attempt)
   implicit def eqFA[A: Eq]: Eq[StreamTEffect[A]] = Eq.by(StreamT.run[Effect, A])
 
   implicit def eqT: Eq[Throwable] = Eq.allEqual
