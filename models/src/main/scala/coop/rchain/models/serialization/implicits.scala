@@ -18,7 +18,8 @@ object implicits {
       override def decode(bytes: ByteVector): Either[Throwable, T] = {
         val companion = implicitly[GeneratedMessageCompanion[T]]
         val buffer    = CodedInputStream.newInstance(bytes.toArray)
-        companion.defaultInstance.mergeFromM[Coeval](buffer).runAttempt()
+        try Right(companion.defaultInstance.mergeFromM[Eval](buffer).value)
+        catch { case e: Throwable => Left(e) }
       }
     }
 
