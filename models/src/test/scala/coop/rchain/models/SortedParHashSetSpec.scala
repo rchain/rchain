@@ -16,6 +16,7 @@ import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
 
@@ -140,7 +141,7 @@ class SortedParHashSetSpec extends AnyFlatSpec with ScalaCheckPropertyChecks wit
   }
 
   def isSorted[A: Sortable](a: A): Boolean =
-    a == Sortable[A].sortMatch[Eval](a).value().term
+    a == Sortable[A].sortMatch[Eval](a).value.term
 
   private def checkSortedInput[A, B](f: A => B, unsorted: A, sorted: A): Assertion =
     assert(f(sorted) == f(unsorted))

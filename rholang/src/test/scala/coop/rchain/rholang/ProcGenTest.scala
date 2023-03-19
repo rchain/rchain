@@ -10,6 +10,7 @@ import org.scalacheck.Test.Parameters
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class ProcGenTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
@@ -21,7 +22,7 @@ class ProcGenTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
   it should "generate correct procs that are normalized successfully" in {
 
     forAll { p: PrettyPrinted[Proc] =>
-      Compiler[Eval].astToADT(p.value).apply
+      Compiler[Eval].astToADT(p.value)
     }
   }
 
@@ -32,7 +33,7 @@ class ProcGenTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
       ProcGen.procShrinker
         .shrink(original.value)
         .headOption
-        .map(shrinked => Compiler[Eval].astToADT(shrinked).apply)
+        .map(shrinked => Compiler[Eval].astToADT(shrinked))
         .getOrElse(true)
 
     }

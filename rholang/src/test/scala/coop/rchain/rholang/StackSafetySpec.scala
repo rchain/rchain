@@ -1,5 +1,6 @@
 package coop.rchain.rholang
 
+import cats.Eval
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
@@ -13,12 +14,13 @@ import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil, ParBuilderUtil, PrettyPrinter}
 import coop.rchain.shared.{Log, Serialize}
-import monix.eval.{Eval, Task}
+import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.Assertions
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
@@ -198,7 +200,7 @@ class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Ma
          |""".stripMargin
 
     isolateStackOverflow {
-      val ast = Compiler[Eval].sourceToADT(rho).value()
+      val ast = Compiler[Eval].sourceToADT(rho).value
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime[Task](tmpPrefix).use { runtime =>

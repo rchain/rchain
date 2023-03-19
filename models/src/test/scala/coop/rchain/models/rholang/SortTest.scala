@@ -11,10 +11,12 @@ import coop.rchain.models.rholang.sorter._
 import coop.rchain.models.testUtils.TestUtils.forAllSimilarA
 import coop.rchain.models.{New, _}
 import cats.Eval
+import cats.effect.Sync
 import org.scalacheck.Arbitrary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
 
@@ -168,14 +170,16 @@ class ScoredTermSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matc
   }
   it should "sort so that unequal ParSet have unequal scores" in {
     val set1 =
-      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Eval.delay(BitSet()), None)))
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Sync[Eval].delay(BitSet()), None)))
     val set2 =
-      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = false, Eval.delay(BitSet()), None)))
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = false, Sync[Eval].delay(BitSet()), None)))
     assert(sort(set1).score != sort(set2).score)
     val set3 =
-      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Eval.delay(BitSet()), None)))
+      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Sync[Eval].delay(BitSet()), None)))
     val set4 =
-      Expr(ESetBody(ParSet(Seq.empty, connectiveUsed = true, Eval.delay(BitSet()), Some(Var()))))
+      Expr(
+        ESetBody(ParSet(Seq.empty, connectiveUsed = true, Sync[Eval].delay(BitSet()), Some(Var())))
+      )
     assert(sort(set3).score != sort(set4).score)
   }
   it should "sort so that unequal List have unequal scores" in {

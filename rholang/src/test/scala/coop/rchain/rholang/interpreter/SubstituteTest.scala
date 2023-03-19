@@ -13,6 +13,7 @@ import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
 

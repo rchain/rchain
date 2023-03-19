@@ -6,9 +6,10 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.Assertion
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks._
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 object TestUtils {
-  def sort(par: Par): Par                                            = Sortable[Par].sortMatch[Eval](par).map(_.term).value()
+  def sort(par: Par): Par                                            = Sortable[Par].sortMatch[Eval](par).map(_.term).value
   def forAllSimilarA[A: Arbitrary](block: (A, A) => Assertion): Unit =
     // ScalaCheck generates similar A-s in subsequent calls which
     // we need to hit the case where `x == y` more often

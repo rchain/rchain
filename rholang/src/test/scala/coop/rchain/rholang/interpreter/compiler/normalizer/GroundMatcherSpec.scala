@@ -9,6 +9,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import cats.Eval
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class GroundMatcherSpec extends AnyFlatSpec with Matchers {
   "GroundInt" should "Compile as GInt" in {

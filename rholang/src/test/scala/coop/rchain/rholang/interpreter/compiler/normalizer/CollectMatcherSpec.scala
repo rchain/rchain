@@ -24,6 +24,7 @@ import coop.rchain.rholang.interpreter.compiler.{
   VarSort
 }
 import cats.Eval
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class CollectMatcherSpec extends AnyFlatSpec with Matchers {
   val inputs = ProcVisitInputs(

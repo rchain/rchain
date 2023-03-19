@@ -27,6 +27,7 @@ import cats.Eval
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
 
@@ -989,7 +990,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     assert(parseAndPrint(prettySource) == prettySource)
 
   private def parseAndPrint(source: String): String = PrettyPrinter().buildString(
-    Compiler[Eval].sourceToADT(new StringReader(source)).runAttempt().right.get
+    Compiler[Eval].sourceToADT(new StringReader(source)).value
   )
 }
 

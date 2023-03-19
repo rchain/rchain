@@ -7,11 +7,14 @@ import cats.Eval
 import org.scalatest.EitherValues._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class LexerTest extends AnyFlatSpec with Matchers {
 
   def attemptMkTerm(input: String): Either[Throwable, Par] =
-    Compiler[Eval].sourceToADT(input).runAttempt()
+    try {
+      Right(Compiler[Eval].sourceToADT(input).value)
+    } catch { case x: Throwable => Left(x) }
 
   "Lexer" should "return LexerError for unterminated string at EOF" in {
     val attempt = attemptMkTerm("""{{ @"ack!(0) }}""")
