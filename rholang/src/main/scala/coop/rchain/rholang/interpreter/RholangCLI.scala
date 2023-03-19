@@ -14,7 +14,7 @@ import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.{mb, Db, LmdbEnvConfig}
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
-import monix.eval.{Coeval, Task}
+import monix.eval.Task
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
 
@@ -208,11 +208,15 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    Compiler[Coeval]
-      .sourceToADT(source, Map.empty[String, Par])
-      .runAttempt
-      .fold(Failure(_), processTerm)
-
+    import coop.rchain.catscontrib.effect.implicits.sEval
+    val x = try {
+      Success(
+        Compiler[Eval]
+          .sourceToADT(source, Map.empty[String, Par])
+          .value
+      )
+    } catch { case x: Throwable => Failure(x) }
+    x.flatMap(processTerm)
   }
 
   def evaluate(runtime: RhoRuntime[Task], source: String): Task[Unit] =

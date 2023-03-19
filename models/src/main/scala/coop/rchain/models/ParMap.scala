@@ -38,7 +38,7 @@ object ParMap {
       locallyFree: BitSet,
       remainder: Option[Var]
   ): ParMap =
-    apply(seq, connectiveUsed, Coeval.pure(locallyFree), remainder)
+    apply(seq, connectiveUsed, Eval.now(locallyFree), remainder)
 
   def apply(seq: Seq[(Par, Par)]): ParMap =
     apply(seq, connectiveUsed(seq), updateLocallyFree(seq), None)
