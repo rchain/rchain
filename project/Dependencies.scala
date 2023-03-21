@@ -44,7 +44,7 @@ object Dependencies {
   val endpointsOpenApi    = "org.endpoints4s"            %% "openapi"                   % "3.0.0"
   val fs2Core             = "co.fs2"                     %% "fs2-core"                  % fs2Version
   val fs2Io               = "co.fs2"                     %% "fs2-io"                    % fs2Version
-  val guava               = "com.google.guava"            % "guava"                     % "30.1-jre"
+  val guava               = "com.google.guava"            % "guava"                     % "31.1-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
   val http4sBlazeServer   = "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion
@@ -83,10 +83,10 @@ object Dependencies {
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
   val grpcServices        = "io.grpc"                     % "grpc-services"             % scalapb.compiler.Version.grpcJavaVersion
-  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.36.Final"
-  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier osClassifier
-  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier "linux-x86_64"
-  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier "linux-x86_64-fedora"
+  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.59.Final"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.59.Final" classifier osClassifier
+  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.59.Final" classifier "linux-x86_64"
+  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.59.Final" classifier "linux-x86_64-fedora"
   val scalaCompat         = "org.scala-lang.modules"     %% "scala-collection-compat"   % "2.6.0"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.2.9"   % "test"
   val scalatestPlus       = "org.scalatestplus"          %% "scalacheck-1-15"           % "3.2.9.0" % "test"
@@ -114,21 +114,23 @@ object Dependencies {
     scalaCompat,
     slf4j,
     kamonCore,
-    "org.typelevel" % "jawn-parser_2.12" % "1.0.1",
-    // Added to resolve conflicts in scalapb plugin v0.10.8
-    "com.google.protobuf" % "protobuf-java" % "3.12.0",
-    // Strange version conflict, it requires the same version but in square brackets (range?).
-    // e.g. io.grpc:grpc-core:1.30.2 ([1.30.2] wanted)
-    // https://stackoverflow.com/questions/59423185/strange-versions-conflict-in-sbt-strict-mode
-    "io.grpc"  % "grpc-api"          % "1.30.2",
-    "io.grpc"  % "grpc-core"         % "1.30.2",
-    "io.netty" % "netty-codec-http2" % "4.1.48.Final",
     // Overrides for transitive dependencies (we don't use them directly, hence no val-s)
-    "com.github.jnr"         % "jnr-ffi"     % "2.2.12",
-    "com.lihaoyi"            %% "geny"       % "0.6.10",
-    "com.lihaoyi"            %% "sourcecode" % "0.2.1",
-    "org.scala-lang.modules" %% "scala-xml"  % "1.3.0",
-    "com.typesafe"           % "config"      % "1.4.0"
+    "org.typelevel"          % "jawn-parser_2.12" % "1.4.0",
+    "com.github.jnr"         % "jnr-ffi"          % "2.2.13",
+    "com.lihaoyi"            %% "geny"            % "1.0.0",
+    "org.scala-lang.modules" %% "scala-xml"       % "2.1.0",
+    "com.typesafe"           % "config"           % "1.4.2",
+    // Added to resolve conflicts in scalapb plugin v0.11.3
+    "com.google.code.gson"  % "gson"                       % "2.10.1",
+    "com.google.protobuf"   % "protobuf-java"              % "3.12.2",
+    "com.google.errorprone" % "error_prone_annotations"    % "2.18.0",
+    "io.perfmark"           % "perfmark-api"               % "0.23.0",
+    "org.codehaus.mojo"     % "animal-sniffer-annotations" % "1.19",
+    // Strange version conflict, it requires the same version but in square brackets (range?).
+    // e.g. io.grpc:grpc-core:1.37.0 ([1.37.0] wanted)
+    // https://stackoverflow.com/questions/59423185/strange-versions-conflict-in-sbt-strict-mode
+    "io.grpc" % "grpc-api"  % scalapb.compiler.Version.grpcJavaVersion,
+    "io.grpc" % "grpc-core" % scalapb.compiler.Version.grpcJavaVersion
   )
 
   private val kindProjector = compilerPlugin(
