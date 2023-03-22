@@ -99,6 +99,8 @@ object Dependencies {
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.8"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
+  val sourcecode          = "com.lihaoyi"                %% "sourcecode"                % "0.2.1"
+
   // format: on
 
   val overrides = Seq(
@@ -114,6 +116,7 @@ object Dependencies {
     scalaCompat,
     slf4j,
     kamonCore,
+    sourcecode,
     // Overrides for transitive dependencies (we don't use them directly, hence no val-s)
     "org.typelevel"          % "jawn-parser_2.12" % "1.4.0",
     "com.github.jnr"         % "jnr-ffi"          % "2.2.13",
@@ -177,5 +180,5 @@ object Dependencies {
     http4sDependencies ++ circeDependencies
 
   val commonDependencies: Seq[ModuleID] =
-    logging ++ testing :+ kindProjector :+ macroParadise :+ scalaCompat
+    logging ++ testing :+ kindProjector :+ macroParadise :+ scalaCompat :+ sourcecode
 }
