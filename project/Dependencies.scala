@@ -100,6 +100,7 @@ object Dependencies {
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
   val sourcecode          = "com.lihaoyi"                %% "sourcecode"                % "0.2.1"
+  val grpcNettyShaded     = "io.grpc"                     % "grpc-netty-shaded"         % scalapb.compiler.Version.grpcJavaVersion
 
   // format: on
 

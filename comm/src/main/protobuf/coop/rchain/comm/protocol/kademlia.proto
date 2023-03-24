@@ -6,6 +6,7 @@ import "scalapb/scalapb.proto";
 option (scalapb.options) = {
   package_name: "coop.rchain.comm.discovery"
   flat_package: true
+  preserve_unknown_fields: false
 };
 
 message Node {

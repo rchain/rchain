@@ -18,3 +18,6 @@ addSbtPlugin("org.xerial.sbt"         % "sbt-sonatype"         % "2.6")
 addSbtPlugin("net.virtual-void"       % "sbt-dependency-graph" % "0.9.2")
 addSbtPlugin("io.spray"               % "sbt-revolver"         % "0.9.1")
 addSbtPlugin("com.sksamuel.scapegoat" %% "sbt-scapegoat"       % "1.1.1")
+// TODO replace with addSbtPlugin("org.typelevel" % "sbt-fs2-grpc" % "<latest-version>")
+//   when migrated top CE3 since latest fs2-grpc is not available for CE2
+addSbtPlugin("org.lyranthe.fs2-grpc" % "sbt-java-gen" % "0.11.2")

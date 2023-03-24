@@ -10,6 +10,7 @@ import "scalapb/scalapb.proto";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.node.model"
+  preserve_unknown_fields: false
 };
 
 service Repl {
