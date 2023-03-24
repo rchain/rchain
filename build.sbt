@@ -18,8 +18,8 @@ lazy val projectSettings = Seq(
   version := "0.1.0-SNAPSHOT",
   resolvers ++=
     Resolver.sonatypeOssRepos("releases") ++
-    Resolver.sonatypeOssRepos("snapshots") ++
-    Seq("jitpack" at "https://jitpack.io"),
+      Resolver.sonatypeOssRepos("snapshots") ++
+      Seq("jitpack" at "https://jitpack.io"),
   wartremoverExcluded += sourceManaged.value,
   Compile / compile / wartremoverErrors ++= Warts.allBut(
     // those we want
@@ -77,7 +77,7 @@ lazy val projectSettings = Seq(
     Seq(
       Compile / packageDoc / publishArtifact := false,
       packageDoc / publishArtifact := false,
-      Compile / doc / sources := Seq.empty,
+      Compile / doc / sources := Seq.empty
     )
   }
 
@@ -276,6 +276,9 @@ lazy val node = (project in file("node"))
         (Compile / sourceManaged).value,
         coop.rchain.scalapb.gen(flatPackage = true)._2
       ),
+    // if this is not specified similar error happens https://github.com/sbt/sbt-buildinfo/issues/149
+    // looks like fs2 grpc plugin pipeline removes BuildInfo.scala
+    PB.deleteTargetDirectory := false,
     version := git.gitDescribedVersion.value.getOrElse({
       val v = "0.0.0-unknown"
       System.err.println("Could not get version from `git describe`.")
@@ -401,7 +404,7 @@ lazy val node = (project in file("node"))
     rpmUrl := Some("https://rchain.coop"),
     rpmLicense := Some("Apache 2.0"),
     Rpm / packageArchitecture := "noarch",
-    Rpm / maintainerScripts := maintainerScriptsAppendFromFile((Rpm/maintainerScripts).value)(
+    Rpm / maintainerScripts := maintainerScriptsAppendFromFile((Rpm / maintainerScripts).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
     rpmPrerequisites := Seq(
@@ -432,7 +435,7 @@ lazy val rholang = (project in file("rholang"))
       "-Xfatal-warnings",
       "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
     ),
-    Compile / packageDoc/ publishArtifact := false,
+    Compile / packageDoc / publishArtifact := false,
     packageDoc / publishArtifact := false,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= commonDependencies ++ Seq(

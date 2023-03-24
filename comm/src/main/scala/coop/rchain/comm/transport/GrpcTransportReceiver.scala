@@ -1,7 +1,7 @@
 package coop.rchain.comm.transport
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync, ConcurrentEffect, Timer}
+import cats.effect.{Concurrent, ConcurrentEffect, Sync, Timer}
 import cats.syntax.all._
 import cats.effect.syntax.all._
 import coop.rchain.comm.protocol.routing._
