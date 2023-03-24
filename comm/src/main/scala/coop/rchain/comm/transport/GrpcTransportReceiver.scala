@@ -1,7 +1,7 @@
 package coop.rchain.comm.transport
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, Sync, ConcurrentEffect, Timer}
 import cats.syntax.all._
 import cats.effect.syntax.all._
 import coop.rchain.comm.protocol.routing._
@@ -13,12 +13,11 @@ import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
+import io.grpc.Metadata
 import fs2.concurrent.Queue
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
-import monix.eval.Task
 import monix.execution.{Cancelable, Scheduler}
-import monix.reactive.Observable
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.DurationInt
@@ -31,7 +30,7 @@ object GrpcTransportReceiver {
   type MessageBuffers[F[_]]  = (Send => F[Boolean], StreamMessage => F[Boolean], Stream[F, Unit])
   type MessageHandlers[F[_]] = (Send => F[Unit], StreamMessage => F[Unit])
 
-  def create[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics: Timer](
+  def create[F[_]: Monixable: Concurrent: ConcurrentEffect: RPConfAsk: Log: Metrics: Timer](
       networkId: String,
       port: Int,
       serverSslContext: SslContext,
@@ -43,7 +42,7 @@ object GrpcTransportReceiver {
       cache: TrieMap[String, Array[Byte]]
   )(implicit mainScheduler: Scheduler): F[Cancelable] = {
 
-    val service = new RoutingGrpcMonix.TransportLayer {
+    val service = new TransportLayerFs2Grpc[F, Metadata] {
 
       private val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
         if (streamed.header.exists(_.networkId != networkId))
@@ -99,8 +98,8 @@ object GrpcTransportReceiver {
         } yield c
       }
 
-      def send(request: TLRequest): Task[TLResponse] =
-        (for {
+      def send(request: TLRequest, c: Metadata): F[TLResponse] =
+        for {
           _                <- Metrics[F].incrementCounter("packets.received")
           self             <- RPConfAsk[F].reader(_.local)
           peer             = PeerNode.from(request.protocol.header.sender)
@@ -112,20 +111,20 @@ object GrpcTransportReceiver {
                 Metrics[F].incrementCounter("packets.dropped") >>
                   internalServerError(packetDroppedMsg).pure[F]
               )
-        } yield r).toTask
+        } yield r
 
-      def stream(observable: Observable[Chunk]): Task[TLResponse] = {
+      def stream(observable: Stream[F, Chunk], c: Metadata): F[TLResponse] = {
         import StreamHandler._
         import StreamError.StreamErrorToMessage
 
-        val result = handleStream(observable, circuitBreaker, cache) >>= {
+        handleStream(observable, circuitBreaker, cache) >>= {
           case Left(error @ StreamError.Unexpected(t)) =>
             Log[F].error(error.message, t).as(internalServerError(error.message))
 
           case Left(error) =>
             Log[F].warn(error.message).as(internalServerError(error.message))
 
-          case Right(msg) => {
+          case Right(msg) =>
             val msgEnqueued =
               s"Stream chunk pushed to message buffer. Sender ${msg.sender.endpoint.host}, message ${msg.typeId}, " +
                 s"size ${msg.contentLength}, file ${msg.key}."
@@ -146,9 +145,7 @@ object GrpcTransportReceiver {
                       internalServerError(msgDropped).pure[F]
                   )
             } yield r
-          }
         }
-        result.toTask
       }
 
       // TODO InternalServerError should take msg in constructor
@@ -169,7 +166,7 @@ object GrpcTransportReceiver {
       .executor(mainScheduler)
       .maxInboundMessageSize(maxMessageSize)
       .sslContext(serverSslContext)
-      .addService(RoutingGrpcMonix.bindService(service, mainScheduler))
+      .addService(TransportLayerFs2Grpc.bindService(service))
       .intercept(new SslSessionServerInterceptor(networkId))
       .build
       .start

@@ -1,15 +1,15 @@
 package coop.rchain.casper.protocol.client
 
-import cats.effect.Sync
+import cats.effect.{ConcurrentEffect, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.deploy.v1.{DeployExecStatus, DeployServiceV1GrpcMonix}
+import coop.rchain.casper.protocol.deploy.v1.{DeployExecStatus, DeployServiceFs2Grpc}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Par
-import coop.rchain.models.either.implicits._
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.syntax._
-import io.grpc.{ManagedChannel, ManagedChannelBuilder}
+import coop.rchain.models.either.implicits._
+import io.grpc.netty.NettyChannelBuilder
+import io.grpc.{ManagedChannel, Metadata}
 
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
@@ -39,23 +39,22 @@ object DeployService {
   def apply[F[_]](implicit ev: DeployService[F]): DeployService[F] = ev
 }
 
-class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessageSize: Int)
+class GrpcDeployService[F[_]: Sync: ConcurrentEffect](host: String, port: Int, maxMessageSize: Int)
     extends DeployService[F]
     with Closeable {
 
   private val channel: ManagedChannel =
-    ManagedChannelBuilder
+    NettyChannelBuilder
       .forAddress(host, port)
       .maxInboundMessageSize(maxMessageSize)
       .usePlaintext()
       .build
 
-  private val stub = DeployServiceV1GrpcMonix.stub(channel)
+  private val stub = DeployServiceFs2Grpc.stub(channel)
 
   def deploy(d: Signed[DeployData]): F[Either[Seq[String], String]] =
     stub
-      .doDeploy(DeployData.toProto(d))
-      .fromTask
+      .doDeploy(DeployData.toProto(d), new Metadata)
       .toEitherF(
         _.message.error,
         _.message.result
@@ -63,8 +62,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
 
   def deployStatus(deployId: FindDeployQuery): F[Either[Seq[String], DeployExecStatus]] =
     stub
-      .deployStatus(deployId)
-      .fromTask
+      .deployStatus(deployId, new Metadata)
       .toEitherF(
         _.message.error,
         _.message.deployExecStatus
@@ -72,8 +70,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
 
   def getBlock(q: BlockQuery): F[Either[Seq[String], String]] =
     stub
-      .getBlock(q)
-      .fromTask
+      .getBlock(q, new Metadata)
       .toEitherF(
         _.message.error,
         _.message.blockInfo.map(_.toProtoString)
@@ -81,8 +78,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
 
   def findDeploy(q: FindDeployQuery): F[Either[Seq[String], String]] =
     stub
-      .findDeploy(q)
-      .fromTask
+      .findDeploy(q, new Metadata)
       .toEitherF(
         _.message.error,
         _.message.blockInfo.map(_.toProtoString)
@@ -90,10 +86,10 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
 
   def visualizeDag(q: VisualizeDagQuery): F[Either[Seq[String], String]] =
     stub
-      .visualizeDag(q)
-      .mapEval(_.pure[F].toTask.toEitherF(_.message.error, _.message.content))
-      .toListL
-      .fromTask
+      .visualizeDag(q, new Metadata)
+      .evalMap(_.pure[F].toEitherF(_.message.error, _.message.content))
+      .compile
+      .toList
       .map { bs =>
         val (l, r) = bs.partition(_.isLeft)
         if (l.isEmpty) Right(r.map(_.right.get).mkString)
@@ -102,8 +98,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
 
   def machineVerifiableDag(q: MachineVerifyQuery): F[Either[Seq[String], String]] =
     stub
-      .machineVerifiableDag(q)
-      .fromTask
+      .machineVerifiableDag(q, new Metadata)
       .toEitherF(
         _.message.error,
         _.message.content
@@ -111,8 +106,8 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
 
   def getBlocks(q: BlocksQuery): F[Either[Seq[String], String]] =
     stub
-      .getBlocks(q)
-      .mapEval(_.pure[F].toTask.toEitherF(_.message.error, _.message.blockInfo))
+      .getBlocks(q, new Metadata)
+      .evalMap(_.pure[F].toEitherF(_.message.error, _.message.blockInfo))
       .map(_.map { bi =>
         s"""
          |------------- block ${bi.blockNumber} ---------------
@@ -120,8 +115,8 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
          |-----------------------------------------------------
          |""".stripMargin
       })
-      .toListL
-      .fromTask
+      .compile
+      .toList
       .map { bs =>
         val (l, r) = bs.partition(_.isLeft)
         if (l.isEmpty) {
@@ -138,8 +133,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
       request: DataAtNameQuery
   ): F[Either[Seq[String], Seq[DataWithBlockInfo]]] =
     stub
-      .listenForDataAtName(request)
-      .fromTask
+      .listenForDataAtName(request, new Metadata)
       .toEitherF(
         _.message.error,
         _.message.payload.map(_.blockInfo)
@@ -149,8 +143,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
       request: ContinuationAtNameQuery
   ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]] =
     stub
-      .listenForContinuationAtName(request)
-      .fromTask
+      .listenForContinuationAtName(request, new Metadata)
       .toEitherF(
         _.message.error,
         _.message.payload.map(_.blockResults)
@@ -160,8 +153,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
       request: DataAtNameByBlockQuery
   ): F[Either[Seq[String], (Seq[Par], LightBlockInfo)]] =
     stub
-      .getDataAtName(request)
-      .fromTask
+      .getDataAtName(request, new Metadata)
       .toEitherF(
         _.message.error,
         _.message.payload.map(r => (r.par, r.block))
@@ -169,18 +161,15 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
 
   def lastFinalizedBlock: F[Either[Seq[String], String]] =
     stub
-      .lastFinalizedBlock(LastFinalizedBlockQuery())
-      .fromTask
+      .lastFinalizedBlock(LastFinalizedBlockQuery(), new Metadata)
       .toEitherF(
         _.message.error,
         _.message.blockInfo.map(_.toProtoString)
       )
 
-  def isFinalized(request: IsFinalizedQuery): F[Either[Seq[String], String]] = {
-    import cats.instances.either._
+  def isFinalized(request: IsFinalizedQuery): F[Either[Seq[String], String]] =
     stub
-      .isFinalized(request)
-      .fromTask
+      .isFinalized(request, new Metadata)
       .toEitherF(_.message.error, _.message.isFinalized)
       .map(
         _.ifM(
@@ -188,13 +177,10 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
           Seq("Block is not finalized").asLeft
         )
       )
-  }
 
-  def bondStatus(request: BondStatusQuery): F[Either[Seq[String], String]] = {
-    import cats.instances.either._
+  def bondStatus(request: BondStatusQuery): F[Either[Seq[String], String]] =
     stub
-      .bondStatus(request)
-      .fromTask
+      .bondStatus(request, new Metadata)
       .toEitherF(_.message.error, _.message.isBonded)
       .map(
         _.ifM(
@@ -202,12 +188,10 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
           Seq("Validator is not bonded").asLeft
         )
       )
-  }
 
   def status: F[Either[Seq[String], String]] =
     stub
-      .status(com.google.protobuf.empty.Empty())
-      .fromTask
+      .status(com.google.protobuf.empty.Empty(), new Metadata)
       .toEitherF(
         _.message.error,
         _.message.status.map(_.toProtoString)

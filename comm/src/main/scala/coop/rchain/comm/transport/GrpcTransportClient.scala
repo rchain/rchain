@@ -3,7 +3,7 @@ package coop.rchain.comm.transport
 import cats.Applicative
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.syntax.all._
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, Sync}
 import cats.syntax.all._
 import coop.rchain.comm.CommError.{protocolException, CommErr}
 import coop.rchain.comm._
@@ -16,7 +16,7 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
 import fs2.concurrent.{Signal, SignallingRef}
-import io.grpc.ManagedChannel
+import io.grpc.{CallOptions, ManagedChannel, Metadata}
 import io.grpc.netty._
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
@@ -39,7 +39,7 @@ final case class BufferedGrpcStreamChannel[F[_]](
     buferSubscriber: Stream[F, Unit]
 )
 
-class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
+class GrpcTransportClient[F[_]: Monixable: Concurrent: ConcurrentEffect: Log: Metrics](
     networkId: String,
     cert: String,
     key: String,
@@ -133,15 +133,13 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
     } yield r
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration)(
-      request: RoutingGrpcMonix.TransportLayer => F[CommErr[A]]
+      request: TransportLayerFs2Grpc[F, Metadata] => F[CommErr[A]]
   ): F[CommErr[A]] =
     (for {
       channel <- getChannel(peer)
-      stub <- Sync[F].delay(
-               RoutingGrpcMonix.stub(channel.grpcTransport).withDeadlineAfter(timeout)
-             )
-      result <- request(stub)
-      _      <- Task.unit.asyncBoundary.fromTask // return control to caller thread
+      co      = CallOptions.DEFAULT.withDeadlineAfter(timeout.toMillis, MILLISECONDS)
+      stub    = TransportLayerFs2Grpc.stub(channel.grpcTransport, co)
+      result  <- request(stub)
     } yield result).attempt.map(_.fold(e => Left(protocolException(e)), identity))
 
   def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =

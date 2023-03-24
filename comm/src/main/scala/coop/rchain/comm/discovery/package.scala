@@ -1,6 +1,6 @@
 package coop.rchain.comm
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{ConcurrentEffect, Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
@@ -13,7 +13,7 @@ package object discovery {
   val DiscoveryMetricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
-  def acquireKademliaRPCServer[F[_]: Monixable: Sync](
+  def acquireKademliaRPCServer[F[_]: Monixable: Sync: ConcurrentEffect](
       networkId: String,
       port: Int,
       pingHandler: PeerNode => F[Unit],
@@ -24,11 +24,8 @@ package object discovery {
       .forPort(port)
       .executor(grpcScheduler)
       .addService(
-        KademliaGrpcMonix
-          .bindService(
-            new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler),
-            grpcScheduler
-          )
+        KademliaRPCServiceFs2Grpc
+          .bindService(new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler))
       )
       .build
 

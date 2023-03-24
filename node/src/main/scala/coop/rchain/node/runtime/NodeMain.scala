@@ -85,7 +85,7 @@ object NodeMain {
     * @param options command line options
     * @param console console
     */
-  def runCLI[F[_]: Sync: Monixable: ConsoleIO: Timer](
+  def runCLI[F[_]: Sync: Monixable: ConcurrentEffect: ConsoleIO: Timer](
       options: commandline.Options
   ): F[Unit] = {
     val grpcPort =

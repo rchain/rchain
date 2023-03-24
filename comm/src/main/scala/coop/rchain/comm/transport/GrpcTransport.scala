@@ -4,13 +4,12 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
-import coop.rchain.comm.protocol.routing.{RoutingGrpcMonix, _}
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
 import coop.rchain.monix.Monixable
-import coop.rchain.shared.syntax._
-import io.grpc.{Status, StatusRuntimeException}
-import monix.reactive.Observable
+import io.grpc.{Metadata, Status, StatusRuntimeException}
+import fs2.Stream
 
 import scala.util.{Either, Left, Right}
 
@@ -85,7 +84,7 @@ object GrpcTransport {
       }
 
   def send[F[_]: Monixable: Sync](
-      transport: RoutingGrpcMonix.TransportLayer,
+      transport: TransportLayerFs2Grpc[F, Metadata],
       peer: PeerNode,
       msg: Protocol
   )(
@@ -94,25 +93,22 @@ object GrpcTransport {
     for {
       _ <- metrics.incrementCounter("send")
       result <- transport
-                 .send(TLRequest(msg))
-                 .fromTask
+                 .send(TLRequest(msg), new Metadata)
                  .attempt
                  .timer("send-time")
                  .map(processResponse(peer, _))
     } yield result
 
   def stream[F[_]: Monixable: Sync](
-      transport: RoutingGrpcMonix.TransportLayer,
+      transport: TransportLayerFs2Grpc[F, Metadata],
       peer: PeerNode,
       networkId: String,
       blob: Blob,
       packetChunkSize: Int
   ): F[CommErr[Unit]] = {
-    val chunkIt = Chunker.chunkIt[F](networkId, blob, packetChunkSize)
-    transport
-      .stream(Observable.fromIterator(chunkIt.toTask))
-      .fromTask
-      .attempt
-      .map(processResponse(peer, _))
+    val chunkIt = Stream.eval(Chunker.chunkIt[F](networkId, blob, packetChunkSize)).flatMap { i =>
+      Stream.fromIterator(i)
+    }
+    transport.stream(chunkIt, new Metadata).attempt.map(processResponse(peer, _))
   }
 }

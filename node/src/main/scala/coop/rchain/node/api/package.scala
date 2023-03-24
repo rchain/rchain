@@ -1,11 +1,12 @@
 package coop.rchain.node
 
-import cats.effect.{Concurrent, Resource, Sync}
-import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
-import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.node.model.repl._
+import cats.effect.{Concurrent, ConcurrentEffect, Resource, Sync}
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceFs2Grpc
+import coop.rchain.casper.protocol.propose.v1.ProposeServiceFs2Grpc
+import coop.rchain.node.model.ReplFs2Grpc
 import coop.rchain.shared._
 import io.grpc
+import io.grpc.Metadata
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.services.ProtoReflectionService
 import monix.execution.Scheduler
@@ -15,13 +16,13 @@ import scala.concurrent.duration.FiniteDuration
 
 package object api {
 
-  def acquireInternalServer[F[_]: Sync](
+  def acquireInternalServer[F[_]: Sync: ConcurrentEffect](
       host: String,
       port: Int,
       grpcExecutor: Scheduler,
-      replGrpcService: ReplGrpcMonix.Repl,
-      deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
-      proposeGrpcService: ProposeServiceV1GrpcMonix.ProposeService,
+      replService: ReplFs2Grpc[F, Metadata],
+      deployService: DeployServiceFs2Grpc[F, Metadata],
+      proposeService: ProposeServiceFs2Grpc[F, Metadata],
       maxMessageSize: Int,
       keepAliveTime: FiniteDuration,
       keepAliveTimeout: FiniteDuration,
@@ -34,17 +35,9 @@ package object api {
       .forAddress(new InetSocketAddress(host, port))
       .executor(grpcExecutor)
       .maxInboundMessageSize(maxMessageSize)
-      .addService(
-        ReplGrpcMonix.bindService(replGrpcService, grpcExecutor)
-      )
-      .addService(
-        ProposeServiceV1GrpcMonix
-          .bindService(proposeGrpcService, grpcExecutor)
-      )
-      .addService(
-        DeployServiceV1GrpcMonix
-          .bindService(deployGrpcService, grpcExecutor)
-      )
+      .addService(ReplFs2Grpc.bindService(replService))
+      .addService(ProposeServiceFs2Grpc.bindService(proposeService))
+      .addService(DeployServiceFs2Grpc.bindService(deployService))
       .keepAliveTime(keepAliveTime.length, keepAliveTime.unit)
       .keepAliveTimeout(keepAliveTimeout.length, keepAliveTimeout.unit)
       .permitKeepAliveTime(permitKeepAliveTime.length, permitKeepAliveTime.unit)
@@ -58,11 +51,11 @@ package object api {
     Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.awaitTermination()))
   }
 
-  def acquireExternalServer[F[_]: Concurrent: Log](
+  def acquireExternalServer[F[_]: Concurrent: ConcurrentEffect: Log](
       host: String,
       port: Int,
       grpcExecutor: Scheduler,
-      deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
+      deployGrpcService: DeployServiceFs2Grpc[F, Metadata],
       maxMessageSize: Int,
       keepAliveTime: FiniteDuration,
       keepAliveTimeout: FiniteDuration,
@@ -75,10 +68,7 @@ package object api {
       .forAddress(new InetSocketAddress(host, port))
       .executor(grpcExecutor)
       .maxInboundMessageSize(maxMessageSize)
-      .addService(
-        DeployServiceV1GrpcMonix
-          .bindService(deployGrpcService, grpcExecutor)
-      )
+      .addService(DeployServiceFs2Grpc.bindService(deployGrpcService))
       .compressorRegistry(null)
       .keepAliveTime(keepAliveTime.length, keepAliveTime.unit)
       .keepAliveTimeout(keepAliveTimeout.length, keepAliveTimeout.unit)

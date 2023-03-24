@@ -60,7 +60,7 @@ object Setup {
     (
         Stream[F, Unit], // Node startup process (protocol messages handling)
         Queue[F, RoutingMessage],
-        GrpcServices,
+        GrpcServices[F],
         WebApi[F],
         AdminWebApi[F],
         ReportingHttpRoutes[F]

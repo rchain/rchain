@@ -1,7 +1,7 @@
 package coop.rchain.node
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, Sync}
 import cats.mtl._
 import cats.syntax.all._
 import cats.{Applicative, Monad, Parallel}
@@ -32,12 +32,12 @@ package object effects {
   def nodeDiscovery[F[_]: Monad: KademliaStore: KademliaRPC](id: NodeIdentifier): NodeDiscovery[F] =
     NodeDiscovery.kademlia(id)
 
-  def kademliaRPC[F[_]: Monixable: Sync: RPConfAsk: Metrics](
+  def kademliaRPC[F[_]: Sync: ConcurrentEffect: RPConfAsk: Metrics](
       networkId: String,
       timeout: FiniteDuration
   )(implicit scheduler: Scheduler): KademliaRPC[F] = new GrpcKademliaRPC(networkId, timeout)
 
-  def transportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
+  def transportClient[F[_]: Monixable: Concurrent: ConcurrentEffect: Parallel: Log: Metrics](
       networkId: String,
       certPath: Path,
       keyPath: Path,

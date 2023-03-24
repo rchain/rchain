@@ -3,8 +3,9 @@ package coop.rchain.node.runtime
 import cats.effect.{Concurrent, ConcurrentEffect, Resource, Sync, Timer}
 import cats.syntax.all._
 import com.typesafe.config.Config
-import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
-import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
+import coop.rchain.casper.protocol.deploy.v1
+import coop.rchain.casper.protocol.deploy.v1.DeployServiceFs2Grpc
+import coop.rchain.casper.protocol.propose.v1.ProposeServiceFs2Grpc
 import coop.rchain.comm.discovery.{KademliaHandleRPC, KademliaStore, NodeDiscovery}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.HandleMessages
@@ -19,14 +20,14 @@ import coop.rchain.node.diagnostics.{
   NewPrometheusReporter,
   UdpInfluxDBReporter
 }
-import coop.rchain.node.model.repl.ReplGrpcMonix
+import coop.rchain.node.model.ReplFs2Grpc
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.{api, web}
 import coop.rchain.sdk.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.concurrent.Queue
-import io.grpc.Server
+import io.grpc.{Metadata, Server}
 import kamon.Kamon
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -46,7 +47,7 @@ object NetworkServers {
     /* Diagnostics */ : Log: Metrics] // format: on
   (
       routingMessageQueue: Queue[F, RoutingMessage],
-      grpcServices: GrpcServices,
+      grpcServices: GrpcServices[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       reportingRoutes: ReportingHttpRoutes[F],
@@ -86,11 +87,11 @@ object NetworkServers {
     } yield ()
   }
 
-  def internalServer[F[_]: Concurrent: Log](
+  def internalServer[F[_]: Concurrent: ConcurrentEffect: Log](
       nodeConf: NodeConf,
-      replService: ReplGrpcMonix.Repl,
-      deployService: DeployServiceV1GrpcMonix.DeployService,
-      proposeService: ProposeServiceV1GrpcMonix.ProposeService,
+      replService: ReplFs2Grpc[F, Metadata],
+      deployService: DeployServiceFs2Grpc[F, Metadata],
+      proposeService: ProposeServiceFs2Grpc[F, Metadata],
       grpcScheduler: Scheduler
   ): Resource[F, Server] =
     api.acquireInternalServer[F](
@@ -109,9 +110,9 @@ object NetworkServers {
       nodeConf.apiServer.maxConnectionAgeGrace
     )
 
-  def externalServer[F[_]: Concurrent: Log](
+  def externalServer[F[_]: Concurrent: ConcurrentEffect: Log](
       nodeConf: NodeConf,
-      deployService: DeployServiceV1GrpcMonix.DeployService,
+      deployService: v1.DeployServiceFs2Grpc[F, Metadata],
       grpcScheduler: Scheduler
   ): Resource[F, Server] =
     api.acquireExternalServer[F](
@@ -128,7 +129,7 @@ object NetworkServers {
       nodeConf.apiServer.maxConnectionAgeGrace
     )
 
-  def protocolServer[F[_]: Monixable: Concurrent: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics: Timer](
+  def protocolServer[F[_]: Monixable: Concurrent: ConcurrentEffect: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics: Timer](
       nodeConf: NodeConf,
       routingMessageQueue: Queue[F, RoutingMessage]
   )(implicit scheduler: Scheduler): Resource[F, Unit] = {
@@ -148,7 +149,7 @@ object NetworkServers {
     )
   }
 
-  def discoveryServer[F[_]: Monixable: Concurrent: KademliaStore: Log: Metrics](
+  def discoveryServer[F[_]: Monixable: Concurrent: ConcurrentEffect: KademliaStore: Log: Metrics](
       nodeConf: NodeConf,
       grpcScheduler: Scheduler
   ): Resource[F, Server] =

@@ -6,35 +6,29 @@ import coop.rchain.casper.api.BlockApi
 import coop.rchain.casper.protocol.propose.v1.{
   ProposeResponse,
   ProposeResultResponse,
-  ProposeServiceV1GrpcMonix
+  ProposeServiceFs2Grpc
 }
 import coop.rchain.casper.protocol.{ProposeQuery, ProposeResultQuery, ServiceError}
-import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.TaskContrib.AbstractTaskOps
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
-import coop.rchain.shared.syntax._
-import monix.eval.Task
-import monix.execution.Scheduler
+import io.grpc.Metadata
 
 object ProposeGrpcServiceV1 {
 
   def apply[F[_]: Monixable: Sync: Log](
       blockApi: BlockApi[F]
-  )(
-      implicit worker: Scheduler
-  ): ProposeServiceV1GrpcMonix.ProposeService =
-    new ProposeServiceV1GrpcMonix.ProposeService {
+  ): ProposeServiceFs2Grpc[F, Metadata] =
+    new ProposeServiceFs2Grpc[F, Metadata] {
 
       private def defer[A, R <: StacksafeMessage[R]](
           task: F[Either[String, A]]
       )(
           response: Either[ServiceError, A] => R
-      ): Task[R] =
-        task.toTask
-          .executeOn(worker)
-          .fromTask
+      ): F[R] =
+        task
           .logOnError("Propose service method error.")
           .attempt
           .map(
@@ -43,12 +37,9 @@ object ProposeGrpcServiceV1 {
               r => response(r.leftMap(e => ServiceError(Seq(e))))
             )
           )
-          .toTask
 
       // This method should return immediately, only trggerred propose if allowed
-      def propose(
-          request: ProposeQuery
-      ): Task[ProposeResponse] =
+      def propose(request: ProposeQuery, ctx: Metadata): F[ProposeResponse] =
         defer(blockApi.createBlock(request.isAsync)) { r =>
           import ProposeResponse.Message
           import ProposeResponse.Message._
@@ -56,7 +47,7 @@ object ProposeGrpcServiceV1 {
         }
 
       // This method waits for propose to finish, returning result data
-      def proposeResult(request: ProposeResultQuery): Task[ProposeResultResponse] =
+      def proposeResult(request: ProposeResultQuery, ctx: Metadata): F[ProposeResultResponse] =
         defer(blockApi.getProposeResult) { r =>
           import ProposeResultResponse.Message
           import ProposeResultResponse.Message._
