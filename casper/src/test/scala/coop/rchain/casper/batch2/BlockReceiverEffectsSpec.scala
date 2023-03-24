@@ -159,6 +159,9 @@ class BlockReceiverEffectsSpec
     bsMock.put(*) answers { kvPairs: Seq[(BlockHash, BlockMessage)] =>
       state.update(s => kvPairs.foldLeft(s) { case (acc, item) => acc + item })
     }
+    bsMock.get(*) answers { keys: Seq[BlockHash] =>
+      state.get.map(s => keys.toList.map(s.get))
+    }
     bsMock
   }
 

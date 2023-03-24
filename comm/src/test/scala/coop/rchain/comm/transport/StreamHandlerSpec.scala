@@ -1,7 +1,6 @@
 package coop.rchain.comm.transport
 
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
@@ -13,6 +12,7 @@ import monix.reactive.Observable
 import org.scalatest.Inside
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+import fs2.Stream
 
 import scala.collection.concurrent.TrieMap
 import scala.util.Random
@@ -66,11 +66,13 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
     it("should stop processing a stream if stream is missing header") {
       // given
       val cache = TrieMap[String, Array[Byte]]()
-      val streamWithoutHeader: Observable[Chunk] =
-        Observable.fromIterator(createStreamIterator().map(_.toList).map {
+      val streamWithoutHeader: Stream[Task, Chunk] = {
+        val it: Task[Iterator[Chunk]] = createStreamIterator().map(_.toList).map {
           case _ :: data => data.toIterator
           case _         => throw new RuntimeException("")
-        })
+        }
+        Stream.eval(it).flatMap(Stream.fromIterator[Task](_, 1))
+      }
       // when
       val err: StreamHandler.StreamError = handleStreamErr(streamWithoutHeader)
       // then
@@ -83,11 +85,13 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
     it("should stop processing a stream if stream brought incomplete data") {
       // given
       val cache = TrieMap[String, Array[Byte]]()
-      val incompleteStream: Observable[Chunk] =
-        Observable.fromIterator(createStreamIterator().map(_.toList).map {
+      val incompleteStream: Stream[Task, Chunk] = {
+        val it: Task[Iterator[Chunk]] = createStreamIterator().map(_.toList).map {
           case header :: _ :: data2 => (header :: data2).toIterator
           case _                    => throw new RuntimeException("")
-        })
+        }
+        Stream.eval(it).flatMap(Stream.fromIterator[Task](_, 1))
+      }
       // when
       val err: StreamHandler.StreamError = handleStreamErr(incompleteStream, cache = cache)
       // then
@@ -99,7 +103,7 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
   }
 
   private def handleStream(
-      stream: Observable[Chunk],
+      stream: fs2.Stream[Task, Chunk],
       cache: TrieMap[String, Array[Byte]] = TrieMap[String, Array[Byte]]()
   ): StreamMessage =
     StreamHandler
@@ -109,7 +113,7 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
       .get
 
   private def handleStreamErr(
-      stream: Observable[Chunk],
+      stream: fs2.Stream[Task, Chunk],
       circuitBreaker: StreamHandler.CircuitBreaker = neverBreak,
       cache: TrieMap[String, Array[Byte]] = TrieMap[String, Array[Byte]]()
   ): StreamHandler.StreamError =
@@ -124,8 +128,10 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
       contentLength: Int = 30 * 1024,
       sender: String = "sender",
       typeId: String = "BlockMessageTest"
-  ): Observable[Chunk] =
-    Observable.fromIterator(createStreamIterator(messageSize, contentLength, sender, typeId))
+  ): Stream[Task, Chunk] =
+    Stream
+      .eval(createStreamIterator(messageSize, contentLength, sender, typeId))
+      .flatMap(Stream.fromIterator[Task](_, 1))
 
   private def createStreamIterator(
       messageSize: Int = 10 * 1024,

@@ -3,10 +3,11 @@ package coop.rchain.comm.transport
 import com.google.protobuf.ByteString
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
-import io.grpc.{Status, StatusRuntimeException}
+import io.grpc.{Metadata, Status, StatusRuntimeException}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -52,13 +53,13 @@ class GrpcTransportSpec extends AnyWordSpecLike with Matchers with Inside {
     new RuntimeException("Test exception")
 
   private class TestTransportLayer(response: Task[TLResponse])
-      extends RoutingGrpcMonix.TransportLayer {
-    def send(request: TLRequest): Task[TLResponse] = {
+      extends routing.TransportLayerFs2Grpc[Task, Metadata] {
+    override def send(request: TLRequest, ctx: Metadata): Task[TLResponse] = {
       sendMessages += request
       response
     }
-    def stream(input: Observable[Chunk]): Task[TLResponse] =
-      input.toListL.map { l =>
+    override def stream(input: fs2.Stream[Task, Chunk], ctx: Metadata): Task[TLResponse] =
+      input.compile.toList.map { l =>
         streamMessages += l
         ack
       }
