@@ -1,9 +1,8 @@
 package coop.rchain.comm.transport
 
+import cats.effect.{ContextShift, IO}
 import com.google.protobuf.ByteString
 import coop.rchain.comm.protocol.routing._
-import monix.eval.Task
-import monix.execution.Scheduler
 import org.scalacheck.Gen
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
@@ -16,7 +15,8 @@ class PacketStoreRestoreSpec extends AnyFunSpec with Matchers with ScalaCheckDri
 
   import PacketOps._
 
-  implicit val scheduler: Scheduler = Scheduler.Implicits.global
+  import scala.concurrent.ExecutionContext.Implicits.global
+  implicit val cs: ContextShift[IO] = IO.contextShift(global)
 
   describe("Packet store & restore") {
     it("should store and restore to the original Packet") {
@@ -25,8 +25,8 @@ class PacketStoreRestoreSpec extends AnyFunSpec with Matchers with ScalaCheckDri
         val cache  = TrieMap[String, Array[Byte]]()
         val packet = Packet("Test", ByteString.copyFrom(content))
         // when
-        val storedIn = packet.store[Task](cache).runSyncUnsafe().right.get
-        val restored = PacketOps.restore[Task](storedIn, cache).runSyncUnsafe().right.get
+        val storedIn = packet.store[IO](cache).unsafeRunSync.right.get
+        val restored = PacketOps.restore[IO](storedIn, cache).unsafeRunSync.right.get
         // then
         packet shouldBe restored
       }

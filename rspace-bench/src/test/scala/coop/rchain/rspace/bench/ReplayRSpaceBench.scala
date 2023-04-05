@@ -75,11 +75,12 @@ object ReplayRSpaceBench {
 
     @Setup
     def setup() = {
+      import coop.rchain.shared.RChainScheduler._
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
       val kvm   = RholangCLI.mkRSpaceStoreManager[Id](dbDir)
       val store = kvm.rSpaceStores
       val (space, replaySpace) =
-        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](store)
+        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](store, rholangEC)
       this.space = space
       this.replaySpace = replaySpace
     }

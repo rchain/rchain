@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats._
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
@@ -12,9 +12,9 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
+import coop.rchain.shared.RChainScheduler.rholangEC
 import coop.rchain.store.LmdbDirStoreManager.{mb, Db, LmdbEnvConfig}
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
-import monix.eval.Task
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
 
@@ -22,7 +22,7 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, IOException}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
-import scala.concurrent.Await
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.util.{Failure, Success, Try, Using}
@@ -57,21 +57,22 @@ object RholangCLI {
   }
 
   def main(args: Array[String]): Unit = {
-    import monix.execution.Scheduler.Implicits.global
+    import scala.concurrent.ExecutionContext.Implicits.global
+    implicit val cs: ContextShift[IO] = IO.contextShift(global)
 
-    val conf = new Conf(args)
+    val conf = new Conf(args.toList)
 
-    implicit val log: Log[Task]          = Log.log[Task]
-    implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
-    implicit val spanF: Span[Task]       = NoopSpan[Task]()
-    implicit val parF: Parallel[Task]    = Task.catsParallel
+    implicit val log: Log[IO]          = Log.log[IO]
+    implicit val metricsF: Metrics[IO] = new Metrics.MetricsNOP[IO]()
+    implicit val spanF: Span[IO]       = NoopSpan[IO]()
+    implicit val parF: Parallel[IO]    = IO.ioParallel
 
-    val kvm = mkRSpaceStoreManager[Task](conf.dataDir(), conf.mapSize()).runSyncUnsafe()
+    val kvm = mkRSpaceStoreManager[IO](conf.dataDir(), conf.mapSize()).unsafeRunSync
 
     val runtime = (for {
       store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime[Task](store, Par())
-    } yield runtime).runSyncUnsafe()
+      runtime <- RhoRuntime.createRuntime[IO](store, Par(), rholangEC)
+    } yield runtime).unsafeRunSync
 
     val problems = try {
       if (conf.files.supplied) {
@@ -102,7 +103,7 @@ object RholangCLI {
       }
     } finally {
       // TODO: Refactor with Resource.
-      kvm.shutdown.runSyncUnsafe()
+      kvm.shutdown.unsafeRunSync
     }
     if (!problems.isEmpty) {
       System.exit(1)
@@ -174,11 +175,11 @@ object RholangCLI {
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Return"))
-  def repl(runtime: RhoRuntime[Task])(implicit scheduler: Scheduler): Unit = {
+  def repl(runtime: RhoRuntime[IO]): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
-        evaluate(runtime, line).runSyncUnsafe()
+        evaluate(runtime, line).unsafeRunSync
       case None =>
         Console.println("\nExiting...")
         return
@@ -188,12 +189,10 @@ object RholangCLI {
 
   def processFile(
       conf: Conf,
-      runtime: RhoRuntime[Task],
+      runtime: RhoRuntime[IO],
       fileName: String,
       quiet: Boolean,
       unmatchedSendsOnly: Boolean
-  )(
-      implicit scheduler: Scheduler
   ): Try[Unit] = {
     val processTerm: Par => Try[Unit] =
       if (conf.binary()) writeBinary(fileName)
@@ -219,7 +218,7 @@ object RholangCLI {
     x.flatMap(processTerm)
   }
 
-  def evaluate(runtime: RhoRuntime[Task], source: String): Task[Unit] =
+  def evaluate(runtime: RhoRuntime[IO], source: String): IO[Unit] =
     runtime.evaluate(source).map {
       case EvaluateResult(_, Vector(), _) =>
       case EvaluateResult(_, errors, _) =>
@@ -234,7 +233,7 @@ object RholangCLI {
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
+  def waitForSuccess(evaluatorFuture: Future[EvaluateResult]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
         case Some(Success(EvaluateResult(cost, errors, _))) =>
@@ -273,24 +272,24 @@ object RholangCLI {
   }
 
   def evaluatePar(
-      runtime: RhoRuntime[Task],
+      runtime: RhoRuntime[IO],
       source: String,
       quiet: Boolean,
       unmatchedSendsOnly: Boolean
   )(
       par: Par
-  )(implicit scheduler: Scheduler): Try[Unit] = {
-    val evaluatorTask =
+  ): Try[Unit] = {
+    val evaluatorIO =
       for {
-        _ <- Task.delay(if (!quiet) {
+        _ <- IO.delay(if (!quiet) {
               printNormalizedTerm(par)
             })
         result <- runtime.evaluate(source)
       } yield result
 
-    Try(waitForSuccess(evaluatorTask.runToFuture)).map { _ok =>
+    Try(waitForSuccess(evaluatorIO.unsafeToFuture())).map { _ok =>
       if (!quiet) {
-        printStorageContents(runtime, unmatchedSendsOnly).runSyncUnsafe()
+        printStorageContents(runtime, unmatchedSendsOnly).unsafeRunSync
       }
     }
   }

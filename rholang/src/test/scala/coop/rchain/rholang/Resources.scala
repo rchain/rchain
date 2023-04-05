@@ -14,7 +14,7 @@ import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, RChainScheduler}
 import coop.rchain.store.KeyValueStoreManager
 import monix.execution.Scheduler
 
@@ -39,32 +39,32 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Concurrent: Parallel: ContextShift: KeyValueStoreManager: Metrics: Span: Log](
-      implicit scheduler: Scheduler
-  ): F[RhoISpace[F]] = {
+  def mkRhoISpace[F[_]: Concurrent: Parallel: ContextShift: KeyValueStoreManager: Metrics: Span: Log]
+      : F[RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage._
 
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
     for {
       store <- KeyValueStoreManager[F].rSpaceStores
-      space <- RSpace.create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
+      space <- RSpace.create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                store,
+                RChainScheduler.rholangEC
+              )
     } yield space
   }
 
   def mkRuntime[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
       prefix: String
-  )(implicit scheduler: Scheduler): Resource[F, RhoRuntime[F]] =
+  ): Resource[F, RhoRuntime[F]] =
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
       .evalMap(_.rSpaceStores)
-      .evalMap(RhoRuntime.createRuntime(_, Par()))
+      .evalMap(RhoRuntime.createRuntime(_, Par(), RChainScheduler.rholangEC))
 
   def mkRuntimes[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
       prefix: String,
       initRegistry: Boolean = false
-  )(
-      implicit scheduler: Scheduler
   ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
@@ -75,15 +75,14 @@ object Resources {
       stores: RSpaceStore[F],
       initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
-  )(
-      implicit scheduler: Scheduler
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
       hrstores <- RSpace
                    .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                     stores
+                     stores,
+                     RChainScheduler.rholangEC
                    )
       (space, replay) = hrstores
       runtimes <- RhoRuntime

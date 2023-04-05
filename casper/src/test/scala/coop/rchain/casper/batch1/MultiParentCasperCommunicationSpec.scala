@@ -8,7 +8,6 @@ import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
 import org.scalatest.matchers.should.Matchers

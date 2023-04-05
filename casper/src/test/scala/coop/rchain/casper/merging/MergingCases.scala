@@ -1,6 +1,6 @@
 package coop.rchain.casper.merging
 
-import cats.effect.Resource
+import cats.effect.{IO, Resource}
 import cats.syntax.all._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
@@ -14,25 +14,24 @@ import coop.rchain.rspace.merger.{EventLogIndex, EventLogMergingLogic}
 import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class MergingCases extends AnyFlatSpec with Matchers {
 
-  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 5)
-  val genesis                    = genesisContext.genesisBlock
-  implicit val logEff            = Log.log[Task]
-  implicit val timeF: Time[Task] = new LogicalTime[Task]
+  val genesisContext           = GenesisBuilder.buildGenesis(validatorsNum = 5)
+  val genesis                  = genesisContext.genesisBlock
+  implicit val logEff          = Log.log[IO]
+  implicit val timeF: Time[IO] = new LogicalTime[IO]
+  import coop.rchain.shared.RChainScheduler._
 
-  val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
-    dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
+  val runtimeManagerResource: Resource[IO, RuntimeManager[IO]] = for {
+    dir <- Resources.copyStorage[IO](genesisContext.storageDirectory)
+    kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[IO](dir))
     mergeableTag = BlockRandomSeed.nonNegativeMergeableTagName(
       genesis.shardId
     )
-    rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
+    rm <- Resource.eval(Resources.mkRuntimeManagerAt[IO](kvm, mergeableTag))
   } yield rm
 
   /**

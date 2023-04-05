@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import cats.effect.IO
 import com.google.protobuf.ByteString
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -13,8 +14,6 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -24,6 +23,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks._
 import java.nio.file.{Files, Path}
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
+import coop.rchain.shared.RChainScheduler._
 
 class RholangMethodsCostsSpec
     extends AnyWordSpec
@@ -52,7 +52,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+          implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
           implicit val env  = Env[Par]()
           val method        = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -86,7 +86,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+          implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
           implicit val env  = Env[Par]()
           val method        = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -109,7 +109,7 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+    implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
     implicit val env  = Env[Par]()
     withReducer { reducer =>
       for {
@@ -967,11 +967,11 @@ class RholangMethodsCostsSpec
   def methodCall(method: String, target: Par, arguments: List[Par]): Expr =
     EMethod(method, target, arguments)
 
-  def methodCallCost(reducer: Reduce[Task])(implicit cost: _cost[Task]): Task[Cost] =
+  def methodCallCost(reducer: Reduce[IO])(implicit cost: _cost[IO]): IO[Cost] =
     cost.get
       .map(balance => Cost.UNSAFE_MAX - balance - METHOD_CALL_COST)
 
-  def exprCallCost(reducer: Reduce[Task])(implicit cost: _cost[Task]): Task[Cost] =
+  def exprCallCost(reducer: Reduce[IO])(implicit cost: _cost[IO]): IO[Cost] =
     cost.get
       .map(balance => Cost.UNSAFE_MAX - balance)
 
@@ -1008,7 +1008,7 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(expr: Expr, expectedCost: Cost): Assertion = {
-    implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+    implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
     implicit val env  = Env[Par]()
     withReducer[Assertion] { reducer =>
       for {
@@ -1023,32 +1023,34 @@ class RholangMethodsCostsSpec
   }
 
   def withReducer[R](
-      f: DebruijnInterpreter[Task] => Task[R]
-  )(implicit cost: _cost[Task]): R = {
+      f: DebruijnInterpreter[IO] => IO[R]
+  )(implicit cost: _cost[IO]): R = {
 
     val test = for {
       _   <- cost.set(Cost.UNSAFE_MAX)
       res <- f(RholangOnlyDispatcher(space)._2)
     } yield res
-    test.runSyncUnsafe(5.seconds)
+    test.unsafeRunSync
   }
 
-  private var dbDir: Path                = null
-  private var space: RhoTuplespace[Task] = null
+  private var dbDir: Path              = null
+  private var space: RhoTuplespace[IO] = null
 
-  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
-  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
-  implicit val ms: Metrics.Source         = Metrics.BaseSource
-  implicit val kvm                        = InMemoryStoreManager[Task]
-  val rSpaceStore                         = kvm.rSpaceStores.runSyncUnsafe()
+  implicit val logF: Log[IO]            = new Log.NOPLog[IO]
+  implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+  implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
+  implicit val ms: Metrics.Source       = Metrics.BaseSource
+  implicit val kvm                      = InMemoryStoreManager[IO]
+  val rSpaceStore                       = kvm.rSpaceStores.unsafeRunSync
+  import coop.rchain.shared.RChainScheduler._
+
   protected override def beforeAll(): Unit = {
     import coop.rchain.rholang.interpreter.storage._
-    implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
+    implicit val m: Match[IO, BindPattern, ListParWithRandom] = matchListPar[IO]
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     space = RSpace
-      .create[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](rSpaceStore)
-      .runSyncUnsafe()
+      .create[IO, Par, BindPattern, ListParWithRandom, TaggedContinuation](rSpaceStore, rholangEC)
+      .unsafeRunSync
   }
 
   protected override def afterAll(): Unit = {

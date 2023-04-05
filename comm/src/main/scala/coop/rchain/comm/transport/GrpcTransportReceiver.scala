@@ -1,7 +1,7 @@
 package coop.rchain.comm.transport
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ConcurrentEffect, Sync, Timer}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
 import cats.effect.syntax.all._
 import coop.rchain.comm.protocol.routing._
@@ -9,17 +9,17 @@ import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.{CommMetricsSource, PeerNode}
 import coop.rchain.metrics.Metrics
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import io.grpc.Metadata
+import io.grpc.{Metadata, Server}
 import fs2.concurrent.Queue
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
-import monix.execution.{Cancelable, Scheduler}
+import io.netty.internal.tcnative.AsyncTask
 
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
 
 object GrpcTransportReceiver {
@@ -30,7 +30,7 @@ object GrpcTransportReceiver {
   type MessageBuffers[F[_]]  = (Send => F[Boolean], StreamMessage => F[Boolean], Stream[F, Unit])
   type MessageHandlers[F[_]] = (Send => F[Unit], StreamMessage => F[Unit])
 
-  def create[F[_]: Monixable: Concurrent: ConcurrentEffect: RPConfAsk: Log: Metrics: Timer](
+  def create[F[_]: Concurrent: ConcurrentEffect: RPConfAsk: Log: Metrics: Timer](
       networkId: String,
       port: Int,
       serverSslContext: SslContext,
@@ -40,7 +40,7 @@ object GrpcTransportReceiver {
       messageHandlers: MessageHandlers[F],
       parallelism: Int,
       cache: TrieMap[String, Array[Byte]]
-  )(implicit mainScheduler: Scheduler): F[Cancelable] = {
+  ): Resource[F, Unit] = {
 
     val service = new TransportLayerFs2Grpc[F, Metadata] {
 
@@ -161,16 +161,18 @@ object GrpcTransportReceiver {
         )
     }
 
+    import coop.rchain.shared.RChainScheduler.mainEC
     val server = NettyServerBuilder
       .forPort(port)
-      .executor(mainScheduler)
+      .executor(mainEC.execute)
       .maxInboundMessageSize(maxMessageSize)
       .sslContext(serverSslContext)
       .addService(TransportLayerFs2Grpc.bindService(service))
       .intercept(new SslSessionServerInterceptor(networkId))
       .build
-      .start
 
-    Cancelable(() => server.shutdown().awaitTermination()).pure[F]
+    val startF = Sync[F].delay(server.start())
+    val stopF  = Sync[F].delay(server.shutdown().awaitTermination())
+    Resource.make(startF)(_ => stopF).map(_ => ())
   }
 }

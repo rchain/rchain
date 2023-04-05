@@ -10,6 +10,7 @@ import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper.protocol
 import coop.rchain.comm.transport._
 import coop.rchain.comm.{CommError, PeerNode}
+import io.grpc.Server
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.FiniteDuration

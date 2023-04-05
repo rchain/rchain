@@ -32,6 +32,7 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.models.syntax._
+import coop.rchain.shared.RChainScheduler.rholangEC
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.syntax._
 
@@ -225,7 +226,7 @@ object TransactionBalances {
       walletPath: Path,
       bondPath: Path,
       targetBlockHash: String
-  )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
+  ): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
     implicit val metrics: Metrics.MetricsNOP[F] = new Metrics.MetricsNOP[F]()
     import coop.rchain.rholang.interpreter.storage._
     implicit val span: NoopSpan[F]                           = NoopSpan[F]()
@@ -237,7 +238,8 @@ object TransactionBalances {
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                   store
+                   store,
+                   rholangEC
                  )
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes <- RhoRuntime

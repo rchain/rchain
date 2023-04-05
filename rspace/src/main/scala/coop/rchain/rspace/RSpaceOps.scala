@@ -23,14 +23,14 @@ import scala.util.Random
 
 abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    val storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+    val storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
+    rholangEC: ExecutionContext
 )(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
-    serializeK: Serialize[K],
-    scheduler: ExecutionContext
+    serializeK: Serialize[K]
 ) extends SpaceMatcher[F, C, P, A, K] {
 
   override def syncF: Sync[F] = Sync[F]
@@ -182,7 +182,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
   ): F[MaybeActionResult] =
-    ContextShift[F].evalOn(scheduler) {
+    ContextShift[F].evalOn(rholangEC) {
       if (channels.isEmpty) {
         val msg = "channels can't be empty"
         Log[F].error(msg) >> Sync[F]
@@ -221,7 +221,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       data: A,
       persist: Boolean
   ): F[MaybeActionResult] =
-    ContextShift[F].evalOn(scheduler) {
+    ContextShift[F].evalOn(rholangEC) {
       (for {
         produceRef <- Sync[F].delay(Produce(channel, data, persist))
         result <- produceLockF(channel)(

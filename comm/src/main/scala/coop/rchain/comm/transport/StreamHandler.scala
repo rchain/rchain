@@ -8,11 +8,9 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.transport.PacketOps._
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.Compression._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import monix.reactive.Observable
 import fs2.Stream
 
 import scala.collection.concurrent.TrieMap

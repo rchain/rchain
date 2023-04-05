@@ -39,7 +39,7 @@ object Resources {
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
       prefix: String,
       mergeableTagName: Par
-  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
+  ): Resource[F, RuntimeManager[F]] =
     mkTempDir[F](prefix)
       .evalMap(mkTestRNodeStoreManager[F])
       .evalMap(mkRuntimeManagerAt[F](_, mergeableTagName))
@@ -49,12 +49,11 @@ object Resources {
   def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
       kvm: KeyValueStoreManager[F],
       mergeableTagName: Par
-  )(
-      implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
     implicit val log               = Log.log[F]
     implicit val metricsEff        = new metrics.Metrics.MetricsNOP[F]
     implicit val noopSpan: Span[F] = NoopSpan[F]()
+    import coop.rchain.shared.RChainScheduler._
 
     for {
       rStore <- kvm.rSpaceStores
@@ -63,7 +62,8 @@ object Resources {
                          rStore,
                          mStore,
                          mergeableTagName,
-                         RuntimeManager.noOpExecutionTracker[F]
+                         RuntimeManager.noOpExecutionTracker[F],
+                         rholangEC
                        )
     } yield runtimeManager
   }

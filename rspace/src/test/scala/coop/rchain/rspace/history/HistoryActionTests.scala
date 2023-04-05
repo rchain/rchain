@@ -1,12 +1,11 @@
 package coop.rchain.rspace.history
 
+import cats.effect.IO
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.shared.Base16
 import coop.rchain.store.InMemoryKeyValueStore
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -230,9 +229,9 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
       for {
         emptyHistory <- emptyHistoryF
         _ <- (1 to 10).toList.foldLeftM[
-              Task,
+              IO,
               (
-                  History[Task],
+                  History[IO],
                   List[InsertAction],
                   TrieMap[KeySegment, Blake2b256Hash]
               )
@@ -276,17 +275,19 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
       } yield ()
   }
 
-  protected def withEmptyHistory(f: Task[History[Task]] => Task[Unit]): Unit = {
-    val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
-    f(emptyHistory).runSyncUnsafe(1.minute)
+  import coop.rchain.shared.RChainScheduler._
+
+  protected def withEmptyHistory(f: IO[History[IO]] => IO[Unit]): Unit = {
+    val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[IO])
+    f(emptyHistory).unsafeRunTimed(1.minute)
   }
 
   protected def withEmptyHistoryAndStore(
-      f: (Task[History[Task]], InMemoryKeyValueStore[Task]) => Task[Unit]
+      f: (IO[History[IO]], InMemoryKeyValueStore[IO]) => IO[Unit]
   ): Unit = {
-    val store        = InMemoryKeyValueStore[Task]
+    val store        = InMemoryKeyValueStore[IO]
     val emptyHistory = History.create(History.emptyRootHash, store)
-    f(emptyHistory, store).runSyncUnsafe(20.seconds)
+    f(emptyHistory, store).unsafeRunTimed(20.seconds)
   }
 
   def randomKey(size: Int): KeySegment =

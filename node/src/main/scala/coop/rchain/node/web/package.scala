@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -24,7 +24,7 @@ package object web {
   def corsPolicy[F[_]: Sync](routes: HttpRoutes[F]) =
     CORS(routes, CORS.DefaultCORSConfig.copy(allowCredentials = false))
 
-  def acquireHttpServer[F[_]: ConcurrentEffect: Timer: RPConfAsk: NodeDiscovery: ConnectionsCell: Log](
+  def acquireHttpServer[F[_]: ContextShift: ConcurrentEffect: Timer: RPConfAsk: NodeDiscovery: ConnectionsCell: Log](
       reporting: Boolean,
       host: String = "0.0.0.0",
       httpPort: Int,
@@ -32,7 +32,7 @@ package object web {
       connectionIdleTimeout: FiniteDuration,
       webApi: WebApi[F],
       reportingRoutes: ReportingHttpRoutes[F]
-  )(implicit scheduler: Scheduler): Resource[F, Server[F]] = {
+  ): Resource[F, Server[F]] = {
     val reportingRoutesOpt = if (reporting) reportingRoutes else HttpRoutes.empty
     val baseRoutes = Map(
       "/metrics" -> corsPolicy(NewPrometheusReporter.service[F](prometheusReporter)),
@@ -50,7 +50,8 @@ package object web {
         Map.empty
     val allRoutes = baseRoutes ++ extraRoutes
 
-    BlazeServerBuilder[F](scheduler)
+    import coop.rchain.shared.RChainScheduler._
+    BlazeServerBuilder[F](mainEC)
       .bindHttp(httpPort, host)
       .withHttpApp(RouterFix(allRoutes.toList: _*).orNotFound)
       .withIdleTimeout(connectionIdleTimeout)
@@ -58,20 +59,21 @@ package object web {
       .resource
   }
 
-  def acquireAdminHttpServer[F[_]: ConcurrentEffect: Timer: Log](
+  def acquireAdminHttpServer[F[_]: ContextShift: ConcurrentEffect: Timer: Log](
       host: String = "0.0.0.0",
       httpPort: Int,
       connectionIdleTimeout: FiniteDuration,
       webApi: WebApi[F],
       adminWebApiRoutes: AdminWebApi[F],
       reportingRoutes: ReportingHttpRoutes[F]
-  )(implicit scheduler: Scheduler): Resource[F, Server[F]] = {
+  ): Resource[F, Server[F]] = {
     val baseRoutes = Map(
       "/api" -> corsPolicy(AdminWebApiRoutes.service[F](adminWebApiRoutes) <+> reportingRoutes),
       // Web API v1 (admin) with OpenAPI schema
       "/api/v1" -> corsPolicy(WebApiRoutesV1.createAdmin[F](webApi, adminWebApiRoutes))
     )
-    BlazeServerBuilder[F](scheduler)
+    import coop.rchain.shared.RChainScheduler._
+    BlazeServerBuilder[F](mainEC)
       .bindHttp(httpPort, host)
       .withHttpApp(RouterFix(baseRoutes.toList: _*).orNotFound)
       .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)

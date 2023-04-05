@@ -1,10 +1,9 @@
 package coop.rchain.rholang.interpreter.merging
 
 import cats.Applicative
+import cats.effect.IO
 import cats.syntax.all._
 import coop.rchain.shared.scalatestcontrib._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -40,7 +39,8 @@ class RholangMergingLogicSpec extends AnyFlatSpec with Matchers {
     def getDataOnHash[F[_]: Applicative](hash: String): F[Option[Long]] =
       initValues.get(hash).pure[F]
 
-    RholangMergingLogic.calculateNumChannelDiff(input, getDataOnHash[Task]).map { res =>
+    import coop.rchain.shared.RChainScheduler._
+    RholangMergingLogic.calculateNumChannelDiff(input, getDataOnHash[IO]).map { res =>
       res shouldBe Seq(Map(("A", 10)), Map(("B", 3)), Map(("A", -5), ("C", -10)))
     }
   }

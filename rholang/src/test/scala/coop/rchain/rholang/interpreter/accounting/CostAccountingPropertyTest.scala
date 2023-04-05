@@ -14,8 +14,6 @@ import coop.rchain.rholang.ast.rholang_mercury.PrettyPrinter
 import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.{GenTools, ProcGen}
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Test.Parameters
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -78,11 +76,12 @@ class CostAccountingPropertyTest extends AnyFlatSpec with ScalaCheckPropertyChec
 
 object CostAccountingPropertyTest {
 
-  def haveEqualResults[A](tasks: Task[A]*)(implicit duration: Duration): Boolean =
+  def haveEqualResults[A](tasks: IO[A]*)(implicit duration: Duration): Boolean =
     tasks.toList
-      .sequence[Task, A]
+      .sequence[IO, A]
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
-      .runSyncUnsafe(duration)
+      .unsafeRunTimed(duration)
+      .get
 
   def execute[F[_]: Sync](runtime: RhoRuntime[F], p: Proc): F[Long] =
     for {
@@ -99,17 +98,18 @@ object CostAccountingPropertyTest {
     runtime.evaluate(term)
   }
 
-  def costOfExecution(procs: Proc*): Task[Long] = {
-    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
-    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
-    implicit val ms: Metrics.Source         = Metrics.BaseSource
+  def costOfExecution(procs: Proc*): IO[Long] = {
+    import coop.rchain.shared.RChainScheduler._
+    implicit val logF: Log[IO]            = new Log.NOPLog[IO]
+    implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
+    implicit val ms: Metrics.Source       = Metrics.BaseSource
 
     val prefix = "cost-accounting-property-test"
-    mkRuntime[Task](prefix).use { runtime =>
+    mkRuntime[IO](prefix).use { runtime =>
       for {
         _    <- runtime.cost.set(Cost.UNSAFE_MAX)
-        cost <- CostAccounting.emptyCost[Task]
+        cost <- CostAccounting.emptyCost[IO]
         res <- {
           procs.toStream
             .traverse(execute(runtime, _))

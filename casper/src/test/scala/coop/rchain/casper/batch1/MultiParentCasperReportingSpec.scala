@@ -12,7 +12,6 @@ import coop.rchain.rspace.ReportingRspace.ReportingComm
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.store.InMemoryStoreManager
 import coop.rchain.rspace.syntax._
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
 import org.scalatest.matchers.should.Matchers
@@ -20,6 +19,7 @@ import org.scalatest.matchers.should.Matchers
 class MultiParentCasperReportingSpec extends AnyFlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
+  import coop.rchain.shared.RChainScheduler._
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 

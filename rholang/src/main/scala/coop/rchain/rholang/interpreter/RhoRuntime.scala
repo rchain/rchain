@@ -29,6 +29,8 @@ import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
 
+import scala.concurrent.ExecutionContext
+
 trait RhoRuntime[F[_]] extends HasCost[F] {
 
   /**
@@ -581,17 +583,17 @@ object RhoRuntime {
   def createRuntime[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       mergeableTagName: Par,
+      rholangEC: ExecutionContext,
       initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
-  )(
-      implicit scheduler: Scheduler
   ): F[RhoRuntime[F]] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
       space <- RSpace
                 .create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                  stores
+                  stores,
+                  rholangEC
                 )
       runtime <- createRhoRuntime[F](
                   space,

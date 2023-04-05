@@ -12,7 +12,7 @@ import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rspace.{Match => StorageMatch}
 import coop.rchain.shared.Serialize
 
-//noinspection ConvertExpressionToSAM
+//noinspectTaskn ConvertExpressionToSAM
 package object storage {
 
   /* Match instance */

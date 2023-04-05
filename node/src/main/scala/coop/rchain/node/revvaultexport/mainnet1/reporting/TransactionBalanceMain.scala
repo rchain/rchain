@@ -2,8 +2,7 @@ package coop.rchain.node.revvaultexport.mainnet1.reporting
 
 import cats.effect._
 import coop.rchain.node.revvaultexport.reporting.TransactionBalances
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+
 import org.rogach.scallop.ScallopConf
 
 import java.io.PrintWriter
@@ -74,9 +73,10 @@ object TransactionBalanceMain {
     val transactionBalancesFile = outputDir.resolve("transactionBalances.csv")
     val historyFile             = outputDir.resolve("history.csv")
 
-    implicit val tc = Concurrent[Task]
+    import coop.rchain.shared.RChainScheduler._
+    implicit val tc = Concurrent[IO]
 
-    val task: Task[Unit] = for {
+    val task: IO[Unit] = for {
       result <- TransactionBalances.main(
                  dataDir,
                  walletPath,
@@ -110,6 +110,6 @@ object TransactionBalanceMain {
       }
     } yield ()
 
-    task.runSyncUnsafe()
+    task.unsafeRunSync
   }
 }

@@ -11,7 +11,7 @@ import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.shared.{Log, RChainScheduler, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval._
 import monix.execution.atomic.AtomicAny
@@ -88,28 +88,14 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
   }
 }
 
-trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
-  import scala.concurrent.ExecutionContext
-
-  implicit override val concurrentF: Concurrent[Task] =
-    new monix.eval.instances.CatsConcurrentEffectForTask()(
-      monix.execution.Scheduler.Implicits.global,
-      Task.defaultOptions
-    )
-  implicit val logF: Log[Task]         = Log.log[Task]
-  implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
-  implicit val spanF: Span[Task]       = NoopSpan[Task]()
-
-  implicit override val monadF: Monad[Task] = concurrentF
-  implicit override val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
-    override def shift: Task[Unit] =
-      Task.shift
-    override def evalOn[B](ec: ExecutionContext)(fa: Task[B]): Task[B] =
-      Task.shift(ec).bracket(_ => fa)(_ => Task.shift)
-  }
-
-  import monix.execution.Scheduler.Implicits.global
-  override def run[RES](f: Task[RES]): RES = f.runSyncUnsafe()
+trait TaskTests[C, P, A, R, K] extends StorageTestsBase[IO, C, P, R, K] {
+  implicit val logF: Log[IO]                   = Log.log[IO]
+  implicit val metricsF: Metrics[IO]           = new Metrics.MetricsNOP[IO]()
+  implicit val spanF: Span[IO]                 = NoopSpan[IO]()
+  implicit val contextShiftF: ContextShift[IO] = coop.rchain.shared.RChainScheduler.csIO
+  implicit val concurrentF: Concurrent[IO]     = Concurrent[IO]
+  implicit val monadF: Monad[IO]               = Monad[IO]
+  override def run[RES](f: IO[RES]): RES       = f.unsafeRunSync
 }
 
 abstract class InMemoryHotStoreTestsBase[F[_]]
@@ -121,7 +107,11 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
       (hr, ts) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, String, Pattern, String, StringsCaptor](hr, atomicStore)
+          new RSpace[F, String, Pattern, String, StringsCaptor](
+            hr,
+            atomicStore,
+            RChainScheduler.rholangEC
+          )
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

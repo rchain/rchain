@@ -14,7 +14,7 @@ class Blake2b256HashTests extends AnyFlatSpec with Checkers {
 
   "The bytes of a Blake2b256 hash" should "be the same as if it was created directly" in {
 
-    //noinspection ReferenceMustBePrefixed
+    //noinspectTaskn ReferenceMustBePrefixed
     val propCreate: Prop = Prop.forAll { (bytes: Array[Byte]) =>
       Arrays.equals(Blake2b256.hash(bytes), Blake2b256Hash.create(bytes).bytes.toArray)
     }

@@ -1,7 +1,7 @@
 package coop.rchain.casper.merging
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.{Concurrent, ContextShift, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.rholang.Resources
@@ -26,8 +26,6 @@ import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
 import coop.rchain.sdk.dag.merging.ConflictResolutionLogic._
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import scodec.bits.ByteVector
 
@@ -303,12 +301,14 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
       } yield ()
     }
   }
-  implicit val timeEff = new LogicalTime[Task]
-  implicit val logEff  = Log.log[Task]
-  implicit val spanEff = Span.noop[Task]
+  implicit val timeEff = new LogicalTime[IO]
+  implicit val logEff  = Log.log[IO]
+  implicit val spanEff = Span.noop[IO]
+
+  import coop.rchain.shared.RChainScheduler._
 
   "multiple branches" should "reject deploy when mergeable number channels got negative number" in effectTest {
-    testCase[Task](
+    testCase[IO](
       baseTerms = Seq(rhoST, rhoChange(10)),
       leftTerms = Seq(
         DeployTestInfo(rhoChange(-5), 10L, "0x11") //  -5
@@ -322,7 +322,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   "multiple branches" should "reject deploy when mergeable number channels got overflow" in effectTest {
-    testCase[Task](
+    testCase[IO](
       baseTerms = Seq(rhoST, rhoChange(10)),
       leftTerms = Seq(
         DeployTestInfo(rhoChange(-5), 10L, "0x11") //  -5
@@ -336,7 +336,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   "multiple branches with normal rejection" should "choose from normal reject options" in effectTest {
-    testCase[Task](
+    testCase[IO](
       baseTerms = Seq(rhoST, rhoChange(100)),
       leftTerms = Seq(
         DeployTestInfo(parRho(rhoChange(-20), "@\"X\"!(1)"), 10L, "0x11"),
@@ -352,7 +352,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   }
 
   "multiple branches" should "merge number channels" in effectTest {
-    testCase[Task](
+    testCase[IO](
       baseTerms = Seq(rhoST),
       leftTerms = Seq(
         DeployTestInfo(rhoChange(10), 10L, "0x10"),

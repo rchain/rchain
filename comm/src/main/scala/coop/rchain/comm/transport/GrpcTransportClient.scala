@@ -9,22 +9,18 @@ import coop.rchain.comm.CommError.{protocolException, CommErr}
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.transport.StreamObservable.StreamObservable
-import coop.rchain.grpc.implicits._
 import coop.rchain.metrics.Metrics
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import fs2.concurrent.{Signal, SignallingRef}
-import io.grpc.{CallOptions, ManagedChannel, Metadata}
+import fs2.concurrent.SignallingRef
 import io.grpc.netty._
+import io.grpc.{CallOptions, ManagedChannel, Metadata}
 import io.netty.handler.ssl.SslContext
-import monix.eval.Task
-import monix.execution.Ack.Continue
-import monix.execution.{Cancelable, CancelableFuture, Scheduler}
 
 import java.io.ByteArrayInputStream
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util._
 
@@ -39,18 +35,20 @@ final case class BufferedGrpcStreamChannel[F[_]](
     buferSubscriber: Stream[F, Unit]
 )
 
-class GrpcTransportClient[F[_]: Monixable: Concurrent: ConcurrentEffect: Log: Metrics](
+class GrpcTransportClient[F[_]: Concurrent: ConcurrentEffect: Log: Metrics](
     networkId: String,
     cert: String,
     key: String,
     maxMessageSize: Int,
     packetChunkSize: Int,
     clientQueueSize: Int,
-    channelsMap: Ref[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]],
-    ioScheduler: Scheduler
+    channelsMap: Ref[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]]
 ) extends TransportLayer[F] {
 
   val DefaultSendTimeout: FiniteDuration = 5.seconds
+
+  import coop.rchain.shared.RChainScheduler.ioScheduler
+  val ioEC = ExecutionContext.fromExecutorService(ioScheduler)
 
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
@@ -81,7 +79,7 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: ConcurrentEffect: Log: Me
       clientSslContext <- clientSslContextTask
       grpcChannel = NettyChannelBuilder
         .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
-        .executor(ioScheduler)
+        .executor(ioEC)
         .maxInboundMessageSize(maxMessageSize)
         .negotiationType(NegotiationType.TLS)
         .sslContext(clientSslContext)

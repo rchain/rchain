@@ -4,7 +4,6 @@ import cats.effect.{ConcurrentEffect, Sync}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.propose.v1._
 import coop.rchain.models.either.implicits._
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.syntax._
 import io.grpc.netty.NettyChannelBuilder
 import io.grpc.{ManagedChannel, ManagedChannelBuilder, Metadata}

@@ -1,33 +1,34 @@
 package coop.rchain.rspace.concurrent
 
+import cats.effect.{IO, Sync}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import monix.eval.Task
+
 import scala.collection._
 import scala.collection.immutable.Seq
-
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
+import coop.rchain.shared.RChainScheduler._
 
 class MultiLockTest extends AnyFlatSpec with Matchers {
 
   import monix.execution.Scheduler
   implicit val s       = Scheduler.fixedPool("test-scheduler", 8)
-  implicit val metrics = new Metrics.MetricsNOP[Task]
+  implicit val metrics = new Metrics.MetricsNOP[IO]
 
-  implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
+  implicit class TaskOps[A](task: IO[A]) {
     import scala.concurrent.Await
     import scala.concurrent.duration._
 
     def unsafeRunSync: A =
-      Await.result(task.runToFuture, Duration.Inf)
+      Await.result(task.unsafeToFuture(), Duration.Inf)
   }
 
-  val tested = new MultiLock[Task, String](Metrics.BaseSource)
+  val tested = new MultiLock[IO, String](Metrics.BaseSource)
 
   def acquire(m: mutable.Map[String, Int])(seq: Seq[String]) =
     tested.acquire(seq) {
-      Task.delay {
+      IO.delay {
         for {
           k <- seq
           v = m.getOrElse(k, 0) + 1
@@ -65,11 +66,9 @@ class MultiLockTest extends AnyFlatSpec with Matchers {
 
     (for {
       _ <- acquire(m)(Seq("a", "b"))
-      _ <- Task
-            .delay {
-              tested.acquire(Seq("a", "c")) { throw new Exception() }
-            }
-            .onErrorRecoverWith { case _: Exception => Task.now(()) }
+      _ <- IO.delay {
+            tested.acquire(Seq("a", "c")) { throw new Exception() }
+          }.attempt
       _ <- acquire(m)(Seq("a", "c"))
     } yield ()).unsafeRunSync
 
@@ -90,9 +89,6 @@ class MultiLockTest extends AnyFlatSpec with Matchers {
   "FunctionalMultiLock" should "not allow concurrent modifications of same keys" in {
     import cats.effect.{Concurrent, ContextShift, IO}
     import cats.implicits._
-
-    implicit val ioContextShift: ContextShift[IO] =
-      IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
 
     implicit val metrics: Metrics.MetricsNOP[IO] = new Metrics.MetricsNOP[IO]
 

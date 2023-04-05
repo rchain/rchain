@@ -1,7 +1,7 @@
 package coop.rchain.node.perf
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -402,14 +402,13 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
   }
 
   it should "execute with monix" in {
-    import monix.eval.Task
-    import monix.execution.Scheduler.Implicits.global
+    import coop.rchain.shared.RChainScheduler._
 
-    implicit val log: Log.NOPLog[Task]         = new Log.NOPLog[Task]()
-    implicit val met: Metrics.MetricsNOP[Task] = new Metrics.MetricsNOP[Task]()
-    implicit val spn: NoopSpan[Task]           = new NoopSpan[Task]()
+    implicit val log: Log.NOPLog[IO]         = new Log.NOPLog[IO]()
+    implicit val met: Metrics.MetricsNOP[IO] = new Metrics.MetricsNOP[IO]()
+    implicit val spn: NoopSpan[IO]           = new NoopSpan[IO]()
 
-    val t = new Experiment[Task]
-    t.test.runSyncUnsafe()
+    val t = new Experiment[IO]
+    t.test.unsafeRunSync
   }
 }

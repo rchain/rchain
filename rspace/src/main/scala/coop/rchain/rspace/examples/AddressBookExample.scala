@@ -1,6 +1,6 @@
 package coop.rchain.rspace.examples
 
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.{Concurrent, ContextShift, IO}
 import cats.{Applicative, Id}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -14,10 +14,10 @@ import scodec.bits.ByteVector
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContext.Implicits.global
 
 @SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
 object AddressBookExample {
+  import coop.rchain.shared.RChainScheduler._
 
   /* Here we define a type for channels */
 
@@ -195,7 +195,6 @@ object AddressBookExample {
   )
 
   def exampleOne(): Unit = {
-
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
@@ -203,7 +202,7 @@ object AddressBookExample {
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store, rholangEC)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -238,7 +237,7 @@ object AddressBookExample {
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store, rholangEC)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -325,7 +324,7 @@ object AddressBookExample {
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store, rholangEC)
     try {
       f(space)
     } finally {

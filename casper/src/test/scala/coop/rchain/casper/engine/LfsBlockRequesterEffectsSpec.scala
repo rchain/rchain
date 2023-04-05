@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, IO, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsBlockRequester.ST
@@ -12,13 +12,14 @@ import coop.rchain.models.blockImplicits
 import coop.rchain.shared.Log
 import fs2.Stream
 import fs2.concurrent.Queue
-import monix.eval.Task
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
 class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
+
+  import coop.rchain.shared.RChainScheduler._
 
   def mkHash(s: String) = ByteString.copyFromUtf8(s)
 
@@ -135,9 +136,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     } yield ()
   }
 
-  implicit val logEff: Log[Task] = Log.log[Task]
-
-  import monix.execution.Scheduler.Implicits.global
+  implicit val logEff: Log[IO] = Log.log[IO]
 
   /**
     * Test runner
@@ -152,11 +151,11 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       startBlock: BlockMessage,
       runProcessingStream: Boolean = true,
       requestTimeout: FiniteDuration = 10.days
-  )(test: Mock[Task] => Task[Unit]): Unit =
-    createMock[Task](startBlock, requestTimeout) { mock =>
+  )(test: Mock[IO] => IO[Unit]): Unit =
+    createMock[IO](startBlock, requestTimeout) { mock =>
       if (!runProcessingStream) test(mock)
       else (Stream.eval(test(mock)) concurrently mock.stream).compile.drain
-    }.runSyncUnsafe(timeout = 10.seconds)
+    }.unsafeRunTimed(10.seconds)
 
   def asMap(bs: BlockMessage*): Map[BlockHash, BlockMessage] = bs.map(b => (b.blockHash, b)).toMap
 
@@ -373,8 +372,8 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * NOTE: We don't have any abstraction to test time in execution (with monix Task or cats IO).
     *  We have LogicalTime and DiscreteTime which are just wrappers to get different "milliseconds" but are totally
-    *  disconnected from Task/IO execution notion of time (e.g. Task.sleep).
-    *  Other testing instances of Time are the same as in normal node execution (using Task.timer).
+    *  disconnected from Task/IO execution notion of time (e.g. IO.sleep).
+    *  Other testing instances of Time are the same as in normal node execution (using IO.timer).
     *  https://github.com/rchain/rchain/issues/3001
     */
   it should "re-send request after timeout" in dagFromBlock(
@@ -385,7 +384,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     import mock._
     for {
       // Wait for timeout to expire
-      _ <- stream.compile.drain.timeout(300.millis).onErrorHandle(_ => ())
+      _ <- stream.compile.drain.timeout(300.millis).attempt
 
       // Wait for two requests
       reqs <- sentRequests.take(2).compile.toList

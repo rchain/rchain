@@ -1,7 +1,7 @@
 package coop.rchain.node
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ConcurrentEffect, Sync}
+import cats.effect.{Blocker, Concurrent, ConcurrentEffect, ContextShift, IO, Sync}
 import cats.mtl._
 import cats.syntax.all._
 import cats.{Applicative, Monad, Parallel}
@@ -11,12 +11,12 @@ import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
-import coop.rchain.monix.Monixable
 import coop.rchain.shared._
 import monix.eval._
 import monix.execution._
 
 import java.nio.file.Path
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.tools.jline.console._
@@ -24,7 +24,7 @@ import scala.util.Using
 
 package object effects {
 
-  def log: Log[Task] = Log.log
+  def log: Log[IO] = Log.log
 
   def kademliaStore[F[_]: Sync: KademliaRPC: Metrics](id: NodeIdentifier): KademliaStore[F] =
     KademliaStore.table[F](id)
@@ -34,16 +34,17 @@ package object effects {
 
   def kademliaRPC[F[_]: Sync: ConcurrentEffect: RPConfAsk: Metrics](
       networkId: String,
-      timeout: FiniteDuration
-  )(implicit scheduler: Scheduler): KademliaRPC[F] = new GrpcKademliaRPC(networkId, timeout)
+      timeout: FiniteDuration,
+      grpcEC: ExecutionContext
+  ): KademliaRPC[F] =
+    new GrpcKademliaRPC(networkId, timeout, grpcEC)
 
-  def transportClient[F[_]: Monixable: Concurrent: ConcurrentEffect: Parallel: Log: Metrics](
+  def transportClient[F[_]: Concurrent: ContextShift: ConcurrentEffect: Parallel: Log: Metrics](
       networkId: String,
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
-      packetChunkSize: Int,
-      ioScheduler: Scheduler
+      packetChunkSize: Int
   ): F[TransportLayer[F]] =
     Ref.of[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]](Map()) map { channels =>
       val cert = Using.resource(Source.fromFile(certPath.toFile))(_.mkString)
@@ -55,8 +56,7 @@ package object effects {
         maxMessageSize,
         packetChunkSize,
         clientQueueSize = 100,
-        channels,
-        ioScheduler
+        channels
       ): TransportLayer[F]
     }
 

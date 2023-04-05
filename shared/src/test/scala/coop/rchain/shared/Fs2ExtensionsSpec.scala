@@ -1,17 +1,17 @@
 package coop.rchain.shared
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, IO, Timer}
 import cats.syntax.all._
 import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import fs2.Stream
-import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.util.Success
+import RChainScheduler._
 
 class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
 
@@ -20,7 +20,7 @@ class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
     */
   def test[F[_]: Concurrent: Timer](timeout: FiniteDuration): F[String] = Ref.of("") flatMap { st =>
     val addOne  = Stream.eval(st.updateAndGet(_ + "1"))
-    val pause   = Stream.sleep(1.second).drain
+    val pause   = Stream.sleep(1.second)(Timer[F]).drain
     val addZero = st.update(_ + "0")
 
     (addOne ++ pause ++ addOne).evalOnIdle(addZero, timeout).compile.lastOrError
@@ -29,11 +29,11 @@ class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
   // Helper to construct success result
   def success[A](a: A): Option[Success[A]] = Success(a).some
 
-  // Instance of testing ExecutionContext (Scheduler)
+  // Instance of testing ContextShift (Scheduler)
   implicit val ec = TestScheduler()
 
   "evalOnIdle" should "NOT trigger timeout if element IS produced within timeout period" in {
-    val t = test[Task](1001.millis).runToFuture
+    val t = test[IO](1001.millis).unsafeToFuture()
 
     // Sanity check, value should be empty before start
     t.value shouldBe none
@@ -47,7 +47,7 @@ class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "trigger timeout if element is NOT produced within timeout" in {
-    val t = test[Task](750.millis).runToFuture
+    val t = test[IO](750.millis).unsafeToFuture
 
     // Sanity check, value should be empty before start
     t.value shouldBe none
@@ -61,7 +61,7 @@ class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "trigger two timeouts if element is NOT produced and timeout is double time shorter" in {
-    val t = test[Task](499.millis).runToFuture
+    val t = test[IO](499.millis).unsafeToFuture
 
     // Sanity check, value should be empty before start
     t.value shouldBe none

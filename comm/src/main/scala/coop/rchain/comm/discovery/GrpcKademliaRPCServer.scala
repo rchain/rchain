@@ -3,10 +3,9 @@ package coop.rchain.comm.discovery
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.comm.PeerNode
-import coop.rchain.monix.Monixable
 import io.grpc.Metadata
 
-class GrpcKademliaRPCServer[F[_]: Monixable: Sync](
+class GrpcKademliaRPCServer[F[_]: Sync](
     networkId: String,
     pingHandler: PeerNode => F[Unit],
     lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]

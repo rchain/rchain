@@ -21,8 +21,6 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Checkpoint, Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
 import org.scalatest.{AppendedClues, Assertion}
@@ -33,6 +31,7 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
+import coop.rchain.shared.RChainScheduler._
 
 class CostAccountingSpec
     extends AnyFlatSpec
@@ -45,26 +44,24 @@ class CostAccountingSpec
       initialPhlo: Long,
       contract: String
   ): (EvaluateResult, Chain[Cost]) = {
-    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val kvm                       = InMemoryStoreManager[Task]
+    implicit val logF: Log[IO]           = new Log.NOPLog[IO]
+    implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+    implicit val kvm                     = InMemoryStoreManager[IO]
 
     val resources = for {
-      costLog         <- costLog[Task]()
+      costLog         <- costLog[IO]()
       store           <- kvm.rSpaceStores
-      spaces          <- createRuntimesWithCostLog[Task](store, costLog)
+      spaces          <- createRuntimesWithCostLog[IO](store, costLog)
       (runtime, _, _) = spaces
     } yield (runtime, costLog)
 
-    resources
-      .flatMap {
-        case (runtime, costL) =>
-          costL.listen {
-            runtime.evaluate(contract, Cost(initialPhlo))
-          }
-      }
-      .runSyncUnsafe(75.seconds)
+    resources.flatMap {
+      case (runtime, costL) =>
+        costL.listen {
+          runtime.evaluate(contract, Cost(initialPhlo))
+        }
+    }.unsafeRunSync
   }
 
   private def createRuntimesWithCostLog[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
@@ -80,7 +77,8 @@ class CostAccountingSpec
     for {
       hrstores <- RSpace
                    .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                     stores
+                     stores,
+                     rholangEC
                    )
       (space, replay) = hrstores
       rhoRuntime <- RhoRuntime
@@ -99,17 +97,17 @@ class CostAccountingSpec
       term: String
   ): (EvaluateResult, EvaluateResult) = {
 
-    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val ms: Metrics.Source        = Metrics.BaseSource
-    implicit val kvm                       = InMemoryStoreManager[Task]
+    implicit val logF: Log[IO]           = new Log.NOPLog[IO]
+    implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+    implicit val ms: Metrics.Source      = Metrics.BaseSource
+    implicit val kvm                     = InMemoryStoreManager[IO]
 
     val evaluaResult = for {
-      costLog                     <- costLog[Task]()
-      cost                        <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      costLog                     <- costLog[IO]()
+      cost                        <- CostAccounting.emptyCost[IO](implicitly, metricsEff, costLog, ms)
       store                       <- kvm.rSpaceStores
-      spaces                      <- Resources.createRuntimes[Task](store)
+      spaces                      <- Resources.createRuntimes[IO](store)
       (runtime, replayRuntime, _) = spaces
       result <- {
         implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
@@ -125,7 +123,7 @@ class CostAccountingSpec
       }
     } yield result
 
-    evaluaResult.runSyncUnsafe(75.seconds)
+    evaluaResult.unsafeRunSync
   }
 
   // Uses Godel numbering and a https://en.wikipedia.org/wiki/Mixed_radix

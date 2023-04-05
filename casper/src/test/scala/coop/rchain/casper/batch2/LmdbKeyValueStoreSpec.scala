@@ -1,12 +1,10 @@
 package coop.rchain.casper.batch2
 
 import java.nio.file.Files
-
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, IO}
 import cats.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.store.{KeyValueStoreSut, LmdbStoreManager}
-import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -46,35 +44,36 @@ class LmdbKeyValueStoreSpec
     Gen.listOfN(2000, arbKV).map(_.toMap)
   }
 
-  implicit val log: Log[Task] = new Log.NOPLog[Task]()
+  implicit val log: Log[IO] = new Log.NOPLog[IO]()
+  import coop.rchain.shared.RChainScheduler._
 
   it should "put and get data from the store" in {
     forAll(genData) { expected =>
-      val test = withSut[Task] { sut =>
+      val test = withSut[IO] { sut =>
         for {
           result <- sut.testPutGet(expected)
         } yield result shouldBe expected
       }
 
-      test.runSyncUnsafe()
+      test.unsafeRunSync
     }
   }
 
   it should "put and get all data from the store" in {
     forAll(genData) { expected =>
-      val test = withSut[Task] { sut =>
+      val test = withSut[IO] { sut =>
         for {
           result <- sut.testPutIterate(expected)
         } yield result shouldBe expected
       }
 
-      test.runSyncUnsafe()
+      test.unsafeRunSync
     }
   }
 
   it should "not have deleted keys in the store" in {
     forAll(genData) { input =>
-      val test = withSut[Task] { sut =>
+      val test = withSut[IO] { sut =>
         val allKeys = input.keysIterator.toVector
         // Take some keys for deletion
         val (getKeys, deleteKeys) = allKeys.splitAt(allKeys.size / 2)
@@ -87,7 +86,7 @@ class LmdbKeyValueStoreSpec
         } yield result shouldBe expected
       }
 
-      test.runSyncUnsafe()
+      test.unsafeRunSync
     }
   }
 

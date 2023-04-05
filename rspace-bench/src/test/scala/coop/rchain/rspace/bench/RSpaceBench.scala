@@ -98,9 +98,10 @@ class RSpaceBench extends RSpaceBenchBase {
   val kvm          = RholangCLI.mkRSpaceStoreManager(dbDir)
   val rspaceStores = kvm.rSpaceStores
 
+  import coop.rchain.shared.RChainScheduler._
   @Setup
   def setup() =
-    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](rspaceStores)
+    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](rspaceStores, rholangEC)
 
   @TearDown
   def tearDown() = {

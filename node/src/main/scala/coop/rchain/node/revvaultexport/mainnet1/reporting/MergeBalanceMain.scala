@@ -1,6 +1,6 @@
 package coop.rchain.node.revvaultexport.mainnet1.reporting
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -14,8 +14,6 @@ import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.syntax._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
 
 import java.io.PrintWriter
@@ -155,23 +153,25 @@ object MergeBalanceMain {
     val outputDir              = options.outputDir()
     val mergeFile              = outputDir.resolve("mergeBalances.csv")
 
-    implicit val log: Log[Task]                    = Log.log
-    implicit val span: NoopSpan[Task]              = NoopSpan[Task]()
-    implicit val metrics: Metrics.MetricsNOP[Task] = new Metrics.MetricsNOP[Task]()
+    implicit val log: Log[IO]                    = Log.log
+    implicit val span: NoopSpan[IO]              = NoopSpan[IO]()
+    implicit val metrics: Metrics.MetricsNOP[IO] = new Metrics.MetricsNOP[IO]()
     import coop.rchain.rholang.interpreter.storage._
-    implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
+    implicit val m: Match[IO, BindPattern, ListParWithRandom] = matchListPar[IO]
+    import coop.rchain.shared.RChainScheduler._
 
-    val task: Task[Vector[Account]] = for {
-      accountMap        <- getVaultMap(stateBalanceFile, transactionBalanceFile).pure[Task]
-      rnodeStoreManager <- RNodeKeyValueStoreManager[Task](dataDir)
-      blockStore        <- BlockStore[Task](rnodeStoreManager)
+    val task: IO[Vector[Account]] = for {
+      accountMap        <- getVaultMap(stateBalanceFile, transactionBalanceFile).pure[IO]
+      rnodeStoreManager <- RNodeKeyValueStoreManager[IO](dataDir)
+      blockStore        <- BlockStore[IO](rnodeStoreManager)
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
-                 .createWithReplay[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                   store
+                 .createWithReplay[IO, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                   store,
+                   rholangEC
                  )
       (rSpacePlay, rSpaceReplay) = spaces
-      runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
+      runtimes                   <- RhoRuntime.createRuntimes[IO](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
       blockOpt                   <- blockStore.get1(blockHash.unsafeHexToByteString)
       block                      = blockOpt.get
@@ -179,18 +179,18 @@ object MergeBalanceMain {
       adjustedAccounts <- accountMap.toList.foldLeftM(Vector.empty[Account]) {
                            case (acc, (_, account)) =>
                              if (account.transactionBalance != account.stateBalance) for {
-                               _ <- Log[Task].info(s"account is not correct ${account}")
+                               _ <- Log[IO].info(s"account is not correct ${account}")
                                balance <- if (account.address != "unknown")
-                                           getBalanceFromRholang[Task](
+                                           getBalanceFromRholang[IO](
                                              account.address,
                                              rhoRuntime,
                                              postStateHash
                                            )
-                                         else 0L.pure[Task]
+                                         else 0L.pure[IO]
                                adjustAccount = account.copy(
                                  adjustedStateBalance = balance
                                )
-                               _ <- Log[Task]
+                               _ <- Log[IO]
                                      .info(
                                        s"Should Before adjusted after ${adjustAccount}"
                                      )
@@ -199,11 +199,11 @@ object MergeBalanceMain {
                                val adjustAccount =
                                  account.copy(adjustedStateBalance = account.stateBalance)
                                acc :+ adjustAccount
-                             }.pure[Task]
+                             }.pure[IO]
                          }
     } yield adjustedAccounts
 
-    val accountMap = task.runSyncUnsafe()
+    val accountMap = task.unsafeRunSync
 
     val file = mergeFile.toFile
     val bw   = new PrintWriter(file)

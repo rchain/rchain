@@ -20,16 +20,16 @@ import scala.concurrent.ExecutionContext
 
 class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+    storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
+    rholangEC: ExecutionContext
 )(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    val m: Match[F, P, A],
-    scheduler: ExecutionContext
-) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
+    val m: Match[F, P, A]
+) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom, rholangEC)
     with IReplaySpace[F, C, P, A, K] {
 
   protected override def logF: Log[F] = Log[F]
@@ -306,7 +306,7 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       nextHistory   <- historyRepo.reset(historyRepo.history.root)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       hotStore      <- HotStore(historyReader.base)
-      rSpaceReplay  <- ReplayRSpace(nextHistory, hotStore)
+      rSpaceReplay  <- ReplayRSpace(nextHistory, hotStore, rholangEC)
       _             <- rSpaceReplay.restoreInstalls()
     } yield rSpaceReplay
   }
@@ -319,17 +319,17 @@ object ReplayRSpace {
     */
   def apply[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
-      store: HotStore[F, C, P, A, K]
+      store: HotStore[F, C, P, A, K],
+      rholangEC: ExecutionContext
   )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
+      m: Match[F, P, A]
   ): F[ReplayRSpace[F, C, P, A, K]] = Sync[F].delay {
-    new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
+    new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store), rholangEC)
   }
 
 }

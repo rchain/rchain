@@ -1,6 +1,6 @@
 package coop.rchain.casper.rholang
 
-import cats.effect.Resource
+import cats.effect.{IO, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.Genesis
@@ -17,18 +17,17 @@ import coop.rchain.models.{GDeployerId, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Base16, Log}
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class DeployerIdTest extends AnyFlatSpec with Matchers {
-  implicit val time              = new LogicalTime[Task]
-  implicit val log: Log[Task]    = new Log.NOPLog[Task]()
+  implicit val time              = new LogicalTime[IO]
+  implicit val log: Log[IO]      = new Log.NOPLog[IO]()
   private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
+  import coop.rchain.shared.RChainScheduler._
 
-  val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deployer-id-runtime-manager-test", dummyMergeableName)
+  val runtimeManager: Resource[IO, RuntimeManager[IO]] =
+    mkRuntimeManager[IO]("deployer-id-runtime-manager-test", dummyMergeableName)
 
   "Deployer id" should "be equal to the deployer's public key" in effectTest {
     val sk = PrivateKey(
@@ -63,7 +62,7 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
       deployer: PrivateKey,
       contractUser: PrivateKey,
       isAccessGranted: Boolean
-  ): Task[Unit] = {
+  ): IO[Unit] = {
     val checkDeployerDefinition =
       s"""
          |contract @"checkAuth"(input, ret) = {

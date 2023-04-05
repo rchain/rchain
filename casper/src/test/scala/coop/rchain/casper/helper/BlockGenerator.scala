@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats.Applicative
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, IO, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -26,13 +26,12 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource, Time}
-import monix.eval.Task
 
 object BlockGenerator {
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
-  implicit val timeEff              = new LogicalTime[Task]
+  implicit val timeEff              = new LogicalTime[IO]
   implicit val logSource: LogSource = LogSource(this.getClass)
 
   // Dummy empty Casper snapshot

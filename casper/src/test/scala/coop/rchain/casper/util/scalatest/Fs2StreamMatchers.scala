@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.scalatest
 
+import cats.effect.{ContextShift, IO}
 import fs2.Stream
-import monix.eval.Task
 import org.scalatest.matchers.{MatchResult, Matcher}
 
 import java.util.concurrent.TimeoutException
@@ -14,11 +14,11 @@ trait Fs2StreamMatchers {
     *
     * @param timeout duration to wait for new elements
     */
-  class EmptyMatcher[A](timeout: FiniteDuration) extends Matcher[Stream[Task, A]] {
-    import monix.execution.Scheduler.Implicits.global
+  class EmptyMatcher[A](timeout: FiniteDuration) extends Matcher[Stream[IO, A]] {
+    import coop.rchain.shared.RChainScheduler._
 
-    def apply(left: Stream[Task, A]) = {
-      val res = left.take(1).timeout(timeout).compile.toList.attempt.runSyncUnsafe()
+    def apply(left: Stream[IO, A]) = {
+      val res = left.take(1).timeout(timeout).compile.toList.attempt.unsafeRunSync
 
       val isEmpty = res.isLeft && res.left.get.isInstanceOf[TimeoutException]
 

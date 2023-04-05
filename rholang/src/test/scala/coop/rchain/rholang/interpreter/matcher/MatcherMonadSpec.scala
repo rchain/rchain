@@ -10,34 +10,32 @@ import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher}
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 
 class MatcherMonadSpec extends AnyFlatSpec with Matchers {
-  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
-  implicit val ms: Metrics.Source     = Metrics.BaseSource
+  implicit val metrics: Metrics[IO] = new Metrics.MetricsNOP[IO]
+  implicit val ms: Metrics.Source   = Metrics.BaseSource
+  import coop.rchain.shared.RChainScheduler._
 
-  type F[A] = MatcherMonadT[Task, A]
+  type F[A] = MatcherMonadT[IO, A]
 
   val A: Alternative[F] = Alternative[F]
 
-  implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe()
+  implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
 
-  implicit val costF: _cost[F]   = matcherMonadCostLog[Task]
+  implicit val costF: _cost[F]   = matcherMonadCostLog[IO]
   implicit val matcherMonadError = implicitly[Sync[F]]
 
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
 
-  private def runWithCost[A](f: Task[A], phlo: Int) =
+  private def runWithCost[A](f: IO[A], phlo: Int) =
     (for {
       _        <- cost.set(Cost(phlo, "initial cost"))
       result   <- f
       phloLeft <- cost.get
-    } yield (phloLeft, result)).runSyncUnsafe()
+    } yield (phloLeft, result)).unsafeRunSync
 
   behavior of "MatcherMonad"
 

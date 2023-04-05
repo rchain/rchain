@@ -3,26 +3,25 @@ package coop.rchain.comm
 import cats.effect.{ConcurrentEffect, Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.metrics.Metrics
-import coop.rchain.monix.Monixable
 import coop.rchain.sdk.syntax.all._
 import io.grpc
 import io.grpc.netty.NettyServerBuilder
-import monix.execution.Scheduler
+import scala.concurrent.ExecutionContext
 
 package object discovery {
   val DiscoveryMetricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
-  def acquireKademliaRPCServer[F[_]: Monixable: Sync: ConcurrentEffect](
+  def acquireKademliaRPCServer[F[_]: Sync: ConcurrentEffect](
       networkId: String,
       port: Int,
       pingHandler: PeerNode => F[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]],
-      grpcScheduler: Scheduler
+      grpcEC: ExecutionContext
   ): Resource[F, grpc.Server] = {
     val server = NettyServerBuilder
       .forPort(port)
-      .executor(grpcScheduler)
+      .executor(grpcEC.execute)
       .addService(
         KademliaRPCServiceFs2Grpc
           .bindService(new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler))

@@ -14,7 +14,6 @@ import TaskContrib._
 import cats.effect.Sync
 import coop.rchain.shared.StringOps.ColoredString
 import coop.rchain.shared.TerminalMode
-import monix.eval.Task
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class JLineConsoleIO[F[_]: Sync](console: ConsoleReader) extends ConsoleIO[F] {

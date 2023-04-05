@@ -1,7 +1,7 @@
 package coop.rchain.node.mergeablity
 
 import cats.Monoid
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.BlockIndex
@@ -17,8 +17,6 @@ import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.exceptions.TestFailedException
 
 object RhoState {
@@ -90,16 +88,17 @@ object OperationOn0Ch {
   case class Rho(
       value: String
   ) {
-    val rstate: State = state.runSyncUnsafe()
+    val rstate: State = state.unsafeRunSync
 
     def |(other: Rho): Rho = Rho(s"$value | ${other.value}")
 
-    def state: Task[State] = {
+    def state: IO[State] = {
       import coop.rchain.models.rholang.{implicits => toPar}
-      implicit val logger: Log[Task]         = Log.log[Task]
-      implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
-      implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-      rhoRuntimeEff[Task](initRegistry = false).use {
+      implicit val logger: Log[IO]         = Log.log[IO]
+      implicit val metricsEff: Metrics[IO] = new Metrics.MetricsNOP[IO]
+      implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+      import coop.rchain.shared.RChainScheduler._
+      rhoRuntimeEff[IO](initRegistry = false).use {
         case (runtime, _, _) =>
           for {
             _            <- runtime.evaluate(value, Cost(500L))
@@ -170,7 +169,7 @@ trait BasicMergeabilityRules extends ComputeMerge {
       isConflict = false,
       mergedState,
       rejectRight = false // this parameter is not actually important in merge case
-    ).runSyncUnsafe()
+    ).unsafeRunSync
 
   def ConflictingCase(left: Rho*)(
       right: Rho*
@@ -191,7 +190,7 @@ trait BasicMergeabilityRules extends ComputeMerge {
       isConflict = true,
       mergedLeftState,
       rejectRight = true
-    )).runSyncUnsafe()
+    )).unsafeRunSync
 
   /**
     * This is a mark for cases which happen left consume and right produce doesn't match.But because we don't run
@@ -242,7 +241,7 @@ trait BasicMergeabilityRules extends ComputeMerge {
       isConflict: Boolean,
       mergedStateResult: State,
       rejectRight: Boolean
-  ): Task[Unit] = {
+  ): IO[Unit] = {
 
     case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
 
@@ -255,11 +254,12 @@ trait BasicMergeabilityRules extends ComputeMerge {
         phloLimit = 500,
         sec = ConstructDeploy.defaultSec2
       )
-    implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val logger: Log[Task]         = Log.log[Task]
-    val baseDeployRand                     = Blake2b512Random.defaultRandom
-    computeMergeCase[Task](
+    implicit val metricsEff: Metrics[IO] = new Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+    implicit val logger: Log[IO]         = Log.log[IO]
+    val baseDeployRand                   = Blake2b512Random.defaultRandom
+    import coop.rchain.shared.RChainScheduler._
+    computeMergeCase[IO](
       baseDeployRand,
       Seq(baseDeploy),
       Seq(leftDeploy),
@@ -285,10 +285,10 @@ trait BasicMergeabilityRules extends ComputeMerge {
              |
              | conflicts found: ${mergedState._2.size}
              | """.stripMargin
-          _ <- Sync[Task]
+          _ <- Sync[IO]
                 .raiseError(new Exception(errMsg))
                 .whenA(rejectedDeploys.isEmpty == isConflict)
-          _ <- Sync[Task]
+          _ <- Sync[IO]
                 .raiseError(new Exception(errMsg))
                 .whenA(dataContinuationAtMergedState != mergedStateResult)
         } yield ()

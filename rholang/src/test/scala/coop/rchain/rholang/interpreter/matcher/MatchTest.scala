@@ -13,13 +13,11 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter._
-import monix.eval.Task
 import org.scalactic.TripleEqualsSupport
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.concurrent.TimeLimits
-import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
@@ -30,7 +28,7 @@ class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with Trip
 
   private val printer = PrettyPrinter()
 
-  type F[A] = MatcherMonadT[Task, A]
+  type F[A] = MatcherMonadT[IO, A]
 
   def assertSpatialMatch(
       target: Par,
@@ -50,7 +48,7 @@ class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with Trip
       maybeResultWithCost <- runFirst(spatialMatch[F, Par, Par](target, pattern))
       result              = maybeResultWithCost.map(_._1)
       _                   = assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
-    } yield (assert(result === expectedCaptures))).runSyncUnsafe(5.seconds)
+    } yield (assert(result === expectedCaptures))).unsafeRunSync
   }
 
   private def explainMatch(

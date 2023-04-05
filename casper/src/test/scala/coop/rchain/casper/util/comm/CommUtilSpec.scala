@@ -14,8 +14,6 @@ import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime, TransportLayerStub}
 import coop.rchain.shared._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
@@ -44,9 +42,9 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           )
           implicit val requestedBlocks = initRequestedBlocks()
           implicit val connectionsCell = initConnectionsCell(connections = peers)
-          implicit val commUtil        = CommUtil.of[Task]
+          implicit val commUtil        = CommUtil.of[IO]
           // when
-          CommUtil[Task].sendBlockRequest(hash).runSyncUnsafe()
+          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync
           // then
           val requested = transport.requests
             .map(_.msg)
@@ -66,9 +64,9 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           )
           implicit val requestedBlocks = initRequestedBlocks()
           implicit val connectionsCell = initConnectionsCell(connections = peers)
-          implicit val commUtil        = CommUtil.of[Task]
+          implicit val commUtil        = CommUtil.of[IO]
           // when
-          CommUtil[Task].sendBlockRequest(hash).runSyncUnsafe()
+          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync
           // then
           log.infos contains (s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
         }
@@ -76,11 +74,11 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           // given
           implicit val requestedBlocks = initRequestedBlocks()
           implicit val connectionsCell = initConnectionsCell()
-          implicit val commUtil        = CommUtil.of[Task]
+          implicit val commUtil        = CommUtil.of[IO]
           // when
-          CommUtil[Task].sendBlockRequest(hash).runSyncUnsafe()
+          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync
           // then
-          requestedBlocks.read.runSyncUnsafe().contains(hash) should be(true)
+          requestedBlocks.read.unsafeRunSync.contains(hash) should be(true)
         }
       }
       describe("if given block was already requested") {
@@ -97,9 +95,9 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           )
           implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
           implicit val connectionsCell = initConnectionsCell(connections = peers)
-          implicit val commUtil        = CommUtil.of[Task]
+          implicit val commUtil        = CommUtil.of[IO]
           // when
-          CommUtil[Task].sendBlockRequest(hash).runSyncUnsafe()
+          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync
           // then
           transport.requests.size shouldBe 0
           log.infos.size shouldBe 0
@@ -113,18 +111,18 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
   val maxNoConnections = 10
   val conf             = RPConf(local, networkId, null, null, maxNoConnections, null)
 
-  implicit val transport = new TransportLayerStub[Task]
-  implicit val askConf   = new ConstApplicativeAsk[Task, RPConf](conf)
-  implicit val log       = new LogStub[Task]
-  implicit val time      = new LogicalTime[Task]
-  implicit val metrics   = new MetricsNOP[Task]
+  implicit val transport = new TransportLayerStub[IO]
+  implicit val askConf   = new ConstApplicativeAsk[IO, RPConf](conf)
+  implicit val log       = new LogStub[IO]
+  implicit val time      = new LogicalTime[IO]
+  implicit val metrics   = new MetricsNOP[IO]
 
   private def initRequestedBlocks(
       init: Map[BlockHash, Requested] = Map.empty
-  ): RequestedBlocks[Task] =
-    Cell.unsafe[Task, Map[BlockHash, Running.Requested]](init)
+  ): RequestedBlocks[IO] =
+    Cell.unsafe[IO, Map[BlockHash, Running.Requested]](init)
   private def initConnectionsCell(connections: Connections = List.empty) =
-    Cell.unsafe[Task, Connections](connections)
+    Cell.unsafe[IO, Connections](connections)
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))

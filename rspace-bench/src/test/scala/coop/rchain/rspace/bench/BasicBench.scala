@@ -10,7 +10,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.rspace.{Match, _}
+import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
@@ -114,7 +114,7 @@ object BasicBench {
     private val dbDir: Path                                     = Files.createTempDirectory("rchain-storage-test-")
     implicit val kvm                                            = RholangCLI.mkRSpaceStoreManager[Task](dbDir).runSyncUnsafe()
     val rSpaceStore                                             = kvm.rSpaceStores.runSyncUnsafe()
-
+    import coop.rchain.shared.RChainScheduler._
     val testSpace: ISpace[
       Task,
       Par,
@@ -129,9 +129,8 @@ object BasicBench {
           BindPattern,
           ListParWithRandom,
           TaggedContinuation
-        ](rSpaceStore)
+        ](rSpaceStore, rholangEC)
         .runSyncUnsafe()
-
     implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).runSyncUnsafe()
 
     val initSeed = 123456789L

@@ -11,14 +11,13 @@ import coop.rchain.casper.protocol.propose.v1.{
 import coop.rchain.casper.protocol.{ProposeQuery, ProposeResultQuery, ServiceError}
 import coop.rchain.catscontrib.TaskContrib.AbstractTaskOps
 import coop.rchain.models.StacksafeMessage
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
 import io.grpc.Metadata
 
 object ProposeGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Sync: Log](
+  def apply[F[_]: Sync: Log](
       blockApi: BlockApi[F]
   ): ProposeServiceFs2Grpc[F, Metadata] =
     new ProposeServiceFs2Grpc[F, Metadata] {

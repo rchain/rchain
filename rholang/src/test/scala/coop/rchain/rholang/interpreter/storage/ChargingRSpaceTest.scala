@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.storage
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -19,8 +19,6 @@ import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpac
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.Outcome
 import org.scalatest.flatspec.FixtureAnyFlatSpec
@@ -53,7 +51,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF Cost(0)
     } yield ()
 
-    test.runSyncUnsafe(1.second)
+    test.unsafeRunSync
   }
 
   it should "refund if data doesn't stay in tuplespace" in { fixture =>
@@ -69,7 +67,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (consumeStorageCost + produceStorageCost)
     } yield ()
 
-    test.runSyncUnsafe(1.second)
+    test.unsafeRunSync
   }
 
   it should "fail with OutOfPhloError when deploy runs out of it" in { fixture =>
@@ -80,10 +78,10 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- chargingRSpace.produce(channel, data, false)
     } yield ()
 
-    val outOfPhloTest = test.attempt.runSyncUnsafe(1.second)
+    val outOfPhloTest = test.attempt.unsafeRunSync
     assert(outOfPhloTest === Left(OutOfPhlogistonsError))
 
-    val costTest = cost.get.runSyncUnsafe(1.second)
+    val costTest = cost.get.unsafeRunSync
     assert(costTest.value === -1)
   }
 
@@ -123,7 +121,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
         _                   = phlosLeft.value shouldBe (firstProdCost + secondProdCost + joinCost).value
       } yield ()
 
-      test.runSyncUnsafe(1.second)
+      test.unsafeRunSync
   }
 
   it should "not charge for storage if linear terms create a COMM" in { fixture =>
@@ -144,7 +142,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (consumeStorageCost + produceStorageCost)
     } yield ()
 
-    test.runSyncUnsafe(1.second)
+    test.unsafeRunSync
   }
 
   it should "charge for storing persistent produce that create a COMM" in { fixture =>
@@ -167,7 +165,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
           )
     } yield ()
 
-    test.runSyncUnsafe(1.second)
+    test.unsafeRunSync
   }
 
   it should "charge for storing persistent consume that create a COMM" in { fixture =>
@@ -188,7 +186,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
           )
     } yield ()
 
-    test.runSyncUnsafe(1.second)
+    test.unsafeRunSync
   }
 
   it should "refund for linear data in join" in { fixture =>
@@ -221,7 +219,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (initPhlos + produceYCost - consumeEventStorageCost - commEventStorageCost)
     } yield ()
 
-    test.runSyncUnsafe(1.second)
+    test.unsafeRunSync
   }
 
   it should "refund for removing consume" in { fixture =>
@@ -242,7 +240,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (initPhlos + consumeStorageCost - produceEventStorageCost - commEventStorageCost)
     } yield ()
 
-    test.runSyncUnsafe(1.second)
+    test.unsafeRunSync
   }
 
   it should "refund for removing produce" in { fixture =>
@@ -266,7 +264,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (initPhlos + produceCost - consumeEventStorageCost - commEventStorageCost)
     } yield ()
 
-    test.runSyncUnsafe(1.second)
+    test.unsafeRunSync
   }
 
   it should "refund for clearing tuplespace" in { fixture =>
@@ -302,32 +300,33 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
           )
     } yield ()
 
-    test.runSyncUnsafe(5.seconds)
+    test.unsafeRunSync
   }
 
   override type FixtureParam = TestFixture
 
   protected override def withFixture(test: OneArgTest): Outcome = {
-    val cost: _cost[Task] = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
-    implicit val span     = NoopSpan[Task]
-    implicit val kvm      = InMemoryStoreManager[Task]
+    import coop.rchain.shared.RChainScheduler._
+    val cost: _cost[IO] = CostAccounting.emptyCost[IO].unsafeRunSync
+    implicit val span   = NoopSpan[IO]
+    implicit val kvm    = InMemoryStoreManager[IO]
 
-    def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
-      val s = implicitly[Sync[Task]]
-      Task.delay(ChargingRSpace.chargingRSpace(rhoISpace)(s, span, cost))
+    def mkChargingRspace(rhoISpace: RhoISpace[IO]): IO[ChargingRSpace] = {
+      val s = implicitly[Sync[IO]]
+      IO.delay(ChargingRSpace.chargingRSpace(rhoISpace)(s, span, cost))
     }
 
-    mkRhoISpace[Task]
+    mkRhoISpace[IO]
       .flatMap(mkChargingRspace)
-      .flatMap(chargingRSpace => Task.delay { test(TestFixture(chargingRSpace, cost)) })
-      .runSyncUnsafe(10.seconds)
+      .flatMap(chargingRSpace => IO.delay { test(TestFixture(chargingRSpace, cost)) })
+      .unsafeRunSync
   }
 
 }
 
 object ChargingRSpaceTest {
-  type ChargingRSpace = RhoTuplespace[Task]
-  final case class TestFixture(chargingRSpace: ChargingRSpace, cost: _cost[Task])
+  type ChargingRSpace = RhoTuplespace[IO]
+  final case class TestFixture(chargingRSpace: ChargingRSpace, cost: _cost[IO])
 
   val NilPar = ListParWithRandom().withPars(Seq(Par()))
 
@@ -349,7 +348,7 @@ object ChargingRSpaceTest {
   ): TaggedContinuation =
     TaggedContinuation(ParBody(ParWithRandom(par, r)))
 
-  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
-  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val ms: Metrics.Source         = Metrics.BaseSource
+  implicit val logF: Log[IO]            = new Log.NOPLog[IO]
+  implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+  implicit val ms: Metrics.Source       = Metrics.BaseSource
 }

@@ -1,6 +1,6 @@
 package coop.rchain.casper.helper
 
-import cats.effect.{Concurrent, Resource}
+import cats.effect.{Concurrent, IO, Resource, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -11,9 +11,7 @@ import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.rholang
-import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.shared.{Log, Time}
 import org.scalatest.{BeforeAndAfter, Suite}
 
 import java.nio.file.Path
@@ -23,34 +21,36 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
 
   def withGenesis[R](
       context: GenesisContext
-  )(f: BlockStore[Task] => BlockDagStorage[Task] => RuntimeManager[Task] => Task[R]): R = {
-    implicit val metrics = new MetricsNOP[Task]()
-    implicit val log     = Log.log[Task]
+  )(f: BlockStore[IO] => BlockDagStorage[IO] => RuntimeManager[IO] => IO[R]): R = {
+    implicit val metrics = new MetricsNOP[IO]()
+    implicit val log     = Log.log[IO]
+    import coop.rchain.shared.RChainScheduler._
 
     def create(dir: Path) =
       for {
-        kvm        <- Resources.mkTestRNodeStoreManager[Task](dir)
-        blocks     <- BlockStore[Task](kvm)
-        dag        <- BlockDagKeyValueStorage.create[Task](kvm)
-        indexedDag = BlockDagStorage[Task](dag)
-        runtime <- Resources.mkRuntimeManagerAt[Task](
+        kvm        <- Resources.mkTestRNodeStoreManager[IO](dir)
+        blocks     <- BlockStore[IO](kvm)
+        dag        <- BlockDagKeyValueStorage.create[IO](kvm)
+        indexedDag = BlockDagStorage[IO](dag)
+        runtime <- Resources.mkRuntimeManagerAt[IO](
                     kvm,
                     BlockRandomSeed.nonNegativeMergeableTagName(context.genesisBlock.shardId)
                   )
       } yield (blocks, indexedDag, runtime)
 
     Resources
-      .copyStorage[Task](context.storageDirectory)
+      .copyStorage[IO](context.storageDirectory)
       .evalMap(create)
       .use(Function.uncurried(f).tupled)
-      .runSyncUnsafe()
+      .unsafeRunSync
   }
 
-  def withStorage[R](f: BlockStore[Task] => BlockDagStorage[Task] => Task[R]): R = {
-    implicit val metrics = new MetricsNOP[Task]()
-    implicit val log     = Log.log[Task]
+  def withStorage[R](f: BlockStore[IO] => BlockDagStorage[IO] => IO[R]): R = {
+    implicit val metrics = new MetricsNOP[IO]()
+    implicit val log     = Log.log[IO]
+    import coop.rchain.shared.RChainScheduler._
 
-    BlockDagStorageTestFixture.withStorageF[Task].use(Function.uncurried(f).tupled).runSyncUnsafe()
+    BlockDagStorageTestFixture.withStorageF[IO].use(Function.uncurried(f).tupled).unsafeRunSync
   }
 }
 

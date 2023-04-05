@@ -2,7 +2,7 @@ package coop.rchain.casper.helper
 
 import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
+import cats.effect.{Concurrent, ContextShift, IO, Resource, Sync, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -36,7 +36,6 @@ import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
 import fs2.concurrent.Queue
-import monix.eval.Task
 import monix.execution.Scheduler
 
 import java.nio.file.Path
@@ -282,11 +281,13 @@ case class TestNode[F[_]: Concurrent: Timer](
 }
 
 object TestNode {
-  type Effect[A] = Task[A]
+  type Effect[A] = IO[A]
 
-  def standaloneEff(genesis: GenesisContext)(
-      implicit scheduler: Scheduler
-  ): Resource[Effect, TestNode[Effect]] =
+  import scala.concurrent.ExecutionContext.Implicits.global
+  implicit val cs: ContextShift[IO] = IO.contextShift(global)
+  implicit val t: Timer[IO]         = IO.timer(global)
+
+  def standaloneEff(genesis: GenesisContext): Resource[Effect, TestNode[Effect]] =
     networkEff(
       genesis,
       networkSize = 1
@@ -299,7 +300,7 @@ object TestNode {
       maxNumberOfParents: Int = Int.MaxValue,
       maxParentDepth: Option[Int] = None,
       withReadOnlySize: Int = 0
-  )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[TestNode[Effect]]] = {
+  ): Resource[Effect, IndexedSeq[TestNode[Effect]]] = {
     implicit val c = Concurrent[Effect]
     implicit val n = TestNetwork.empty[Effect]
 
@@ -322,7 +323,7 @@ object TestNode {
       maxNumberOfParents: Int,
       maxParentDepth: Option[Int],
       withReadOnlySize: Int
-  )(implicit s: Scheduler): Resource[F, IndexedSeq[TestNode[F]]] = {
+  ): Resource[F, IndexedSeq[TestNode[F]]] = {
     val n           = sks.length
     val names       = (1 to n).map(i => if (i <= (n - withReadOnlySize)) s"node-$i" else s"readOnly-$i")
     val isReadOnly  = (1 to n).map(i => if (i <= (n - withReadOnlySize)) false else true)
@@ -383,12 +384,13 @@ object TestNode {
       maxNumberOfParents: Int,
       maxParentDepth: Option[Int],
       isReadOnly: Boolean
-  )(implicit s: Scheduler): Resource[F, TestNode[F]] = {
+  ): Resource[F, TestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
     implicit val log       = Log.log[F]
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val spanEff   = new NoopSpan[F]
+    import RChainScheduler._
     for {
       newStorageDir   <- Resources.copyStorage[F](storageDir)
       kvm             <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
@@ -402,7 +404,8 @@ object TestNode {
                            rSpaceStore,
                            mStore,
                            BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId),
-                           RuntimeManager.noOpExecutionTracker[F]
+                           RuntimeManager.noOpExecutionTracker[F],
+                           rholangEC
                          )
                        )
 

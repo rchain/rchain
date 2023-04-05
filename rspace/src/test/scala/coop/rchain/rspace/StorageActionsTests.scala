@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Parallel
 import cats.effect._
 import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples._
@@ -10,7 +11,6 @@ import coop.rchain.rspace.test._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util.{getK, runK, unpackOption}
 import coop.rchain.shared.Serialize
-import monix.eval.Task
 import org.scalatestplus.scalacheck._
 
 import scala.collection.SortedSet
@@ -1184,9 +1184,9 @@ trait StorageActionsTests[F[_]]
 }
 
 class InMemoryHotStoreStorageActionsTests
-    extends InMemoryHotStoreTestsBase[Task]
+    extends InMemoryHotStoreTestsBase[IO]
     with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
-    with StorageActionsTests[Task]
-    with StorageTestsBase[Task, String, Pattern, String, StringsCaptor] {
-  implicit val parF = Task.catsParallel
+    with StorageActionsTests[IO]
+    with StorageTestsBase[IO, String, Pattern, String, StringsCaptor] {
+  implicit val parF: Parallel[IO] = IO.ioParallel
 }

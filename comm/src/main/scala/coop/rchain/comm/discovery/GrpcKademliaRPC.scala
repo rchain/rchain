@@ -8,20 +8,17 @@ import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits.MetricsSyntaxConversion
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.syntax._
 import io.grpc._
 import io.grpc.netty._
-import monix.eval.Task
-import monix.execution.Scheduler
-
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class GrpcKademliaRPC[F[_]: Sync: ConcurrentEffect: RPConfAsk: Metrics](
     networkId: String,
-    timeout: FiniteDuration
-)(implicit scheduler: Scheduler)
-    extends KademliaRPC[F] {
+    timeout: FiniteDuration,
+    grpcEC: ExecutionContext
+) extends KademliaRPC[F] {
 
   implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia.grpc")
@@ -73,7 +70,7 @@ class GrpcKademliaRPC[F[_]: Sync: ConcurrentEffect: RPConfAsk: Metrics](
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.udpPort)
               .idleTimeout(timeout.toMillis, MILLISECONDS)
-              .executor(scheduler)
+              .executor(grpcEC.execute)
               .usePlaintext()
               .build()
           }

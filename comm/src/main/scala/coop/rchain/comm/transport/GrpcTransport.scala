@@ -7,7 +7,6 @@ import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits._
-import coop.rchain.monix.Monixable
 import io.grpc.{Metadata, Status, StatusRuntimeException}
 import fs2.Stream
 
@@ -83,7 +82,7 @@ object GrpcTransport {
         case e                     => protocolException(e)
       }
 
-  def send[F[_]: Monixable: Sync](
+  def send[F[_]: Sync](
       transport: TransportLayerFs2Grpc[F, Metadata],
       peer: PeerNode,
       msg: Protocol
@@ -99,7 +98,7 @@ object GrpcTransport {
                  .map(processResponse(peer, _))
     } yield result
 
-  def stream[F[_]: Monixable: Sync](
+  def stream[F[_]: Sync](
       transport: TransportLayerFs2Grpc[F, Metadata],
       peer: PeerNode,
       networkId: String,

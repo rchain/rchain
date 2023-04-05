@@ -16,6 +16,7 @@ import coop.rchain.rspace.ReportingRspace.{
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
+import coop.rchain.shared.RChainScheduler.rholangEC
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
 import monix.execution.atomic.AtomicAny
@@ -62,10 +63,11 @@ object ReportingRspace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
+      m: Match[F, P, A]
   ): F[ReportingRspace[F, C, P, A, K]] =
-    Sync[F].delay(new ReportingRspace[F, C, P, A, K](historyRepository, AtomicAny(store)))
+    Sync[F].delay(
+      new ReportingRspace[F, C, P, A, K](historyRepository, AtomicAny(store))
+    )
 
   /**
     * Creates [[RSpace]] from [[KeyValueStore]]'s,
@@ -77,8 +79,7 @@ object ReportingRspace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
+      m: Match[F, P, A]
   ): F[ReportingRspace[F, C, P, A, K]] =
     for {
       history                          <- RSpace.createHistoryRepo[F, C, P, A, K](store)
@@ -96,9 +97,8 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    m: Match[F, P, A],
-    scheduler: ExecutionContext
-) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeAtom) {
+    m: Match[F, P, A]
+) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeAtom, rholangEC) {
 
   protected[this] override val logger: Logger = Logger[this.type]
 

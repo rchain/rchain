@@ -1,20 +1,18 @@
 package coop.rchain.rspace.bench
 
-import cats.Eval
-import cats.implicits.catsSyntaxOptionId
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.Resources
-import coop.rchain.rholang.interpreter.RholangCLI
-import coop.rchain.rholang.interpreter.compiler.Compiler
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, RhoRuntime, RholangCLI}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.shared.Log
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{Setup, TearDown}
-import coop.rchain.catscontrib.effect.implicits.sEval
 
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
@@ -39,9 +37,10 @@ trait EvalBenchStateBase {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
 
-    term = try {
-      Compiler[Eval].sourceToADT(resourceFileReader(rhoScriptSource)).value.some
-    } catch { case x: Throwable => throw x }
+    term = Compiler[Coeval].sourceToADT(resourceFileReader(rhoScriptSource)).runAttempt match {
+      case Right(par) => Some(par)
+      case Left(err)  => throw err
+    }
   }
 
   @TearDown

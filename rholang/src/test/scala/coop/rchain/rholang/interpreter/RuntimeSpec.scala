@@ -1,23 +1,21 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.IO
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.syntax._
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 
 class RuntimeSpec extends AnyFlatSpec with Matchers {
-  private val tmpPrefix                   = "rspace-store-"
-  private val maxDuration                 = 5.seconds
-  implicit val logF: Log[Task]            = Log.log[Task]
-  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  private val tmpPrefix                 = "rspace-store-"
+  implicit val logF: Log[IO]            = Log.log[IO]
+  implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+  implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
 
   private val channelReadOnlyError = "ReduceError: Trying to read from non-readable channel."
 
@@ -51,10 +49,10 @@ class RuntimeSpec extends AnyFlatSpec with Matchers {
   private def checkError(rho: String, error: String): Unit =
     assert(execute(rho).errors.nonEmpty, s"Expected $rho to fail - it didn't.")
 
-  private def execute(source: String): EvaluateResult =
-    mkRuntime[Task](tmpPrefix)
-      .use { runtime =>
-        runtime.evaluate(source)
-      }
-      .runSyncUnsafe(maxDuration)
+  private def execute(source: String): EvaluateResult = {
+    import coop.rchain.shared.RChainScheduler._
+    mkRuntime[IO](tmpPrefix).use { runtime =>
+      runtime.evaluate(source)
+    }.unsafeRunSync
+  }
 }

@@ -1,6 +1,6 @@
 package coop.rchain.comm.rp
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, IO}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.comm._
@@ -10,15 +10,14 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import coop.rchain.shared.scalatestcontrib.convertToAnyShouldWrapper
 import fs2.concurrent.Queue
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import RChainScheduler._
 
 class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChecks {
 
-  implicit private val logEffTest   = new Log.NOPLog[Task]
-  implicit private val metricEffEff = new Metrics.MetricsNOP[Task]
+  implicit private val logEffTest   = new Log.NOPLog[IO]
+  implicit private val metricEffEff = new Metrics.MetricsNOP[IO]
 
   val validConnections = Table(
     ("src", "remote"),
@@ -67,12 +66,12 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
         val src    = peerNode(srcHost)
         val remote = peerNode(remoteHost)
         val run = for {
-          conn <- tryToHandshake[Task](src, remote)
+          conn <- tryToHandshake[IO](src, remote)
 
           _ = conn.size shouldBe 1
         } yield ()
 
-        run.runSyncUnsafe()
+        run.unsafeRunSync
     }
   }
 
@@ -98,12 +97,12 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
         val src    = peerNode(srcHost)
         val remote = peerNode(remoteHost)
         val run = for {
-          conn <- tryToHandshake[Task](src, remote)
+          conn <- tryToHandshake[IO](src, remote)
 
           _ = conn.size shouldBe 0
         } yield ()
 
-        run.runSyncUnsafe()
+        run.unsafeRunSync
     }
   }
 

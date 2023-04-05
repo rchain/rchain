@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Parallel
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, IO, Sync}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples.{StringsCaptor, _}
@@ -10,8 +10,6 @@ import coop.rchain.rspace.history.HistoryReaderBase
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.shared.GeneratorUtils._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -1115,11 +1113,12 @@ class History[F[_]: Sync, C, P, A, K](R: Ref[F, HotStoreState[C, P, A, K]])
   override def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]] = ???
 }
 
-trait InMemHotStoreSpec extends HotStoreSpec[Task] {
+trait InMemHotStoreSpec extends HotStoreSpec[IO] {
 
-  protected type F[A] = Task[A]
-  implicit override val S: Sync[F]        = implicitly[Concurrent[Task]]
-  implicit override val P: Parallel[Task] = Task.catsParallel
+  import coop.rchain.shared.RChainScheduler._
+  protected type F[A] = IO[A]
+  implicit override val S: Sync[F]      = implicitly[Concurrent[IO]]
+  implicit override val P: Parallel[IO] = IO.ioParallel
   def C(
       c: HotStoreState[String, Pattern, String, StringsCaptor] = HotStoreState()
   ): F[Ref[F, HotStoreState[String, Pattern, String, StringsCaptor]]]
@@ -1137,7 +1136,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
       cache        <- C()
       hotStore     <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
       res          <- f(cache, history, hotStore)
-    } yield res).runSyncUnsafe(1.second)
+    } yield res).unsafeRunTimed(1.second)
 
   override def fixture(cache: HotStoreState[String, Pattern, String, StringsCaptor])(
       f: HotStore[F, String, Pattern, String, StringsCaptor] => F[Unit]
@@ -1148,7 +1147,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
       cache        <- C(cache)
       hotStore     <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
       res          <- f(hotStore)
-    } yield res).runSyncUnsafe(1.second)
+    } yield res).unsafeRunTimed(1.second)
 
 }
 

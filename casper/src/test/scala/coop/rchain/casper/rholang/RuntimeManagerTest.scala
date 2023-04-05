@@ -1,7 +1,7 @@
 package coop.rchain.casper.rholang
 
 import cats.data.EitherT
-import cats.effect.{Resource, Sync}
+import cats.effect.{IO, Resource, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Functor, Id}
 import com.google.protobuf.ByteString
@@ -30,8 +30,6 @@ import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, ReplayRhoRun
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Base16, Log, Time}
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -55,23 +53,24 @@ object SystemDeployReplayResult {
 
 class RuntimeManagerTest extends AnyFlatSpec with Matchers {
 
-  implicit val timeF: Time[Task]         = new LogicalTime[Task]
-  implicit val log: Log[Task]            = Log.log[Task]
-  implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+  implicit val timeF: Time[IO]         = new LogicalTime[IO]
+  implicit val log: Log[IO]            = Log.log[IO]
+  implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+  implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+  import coop.rchain.shared.RChainScheduler._
 
   val genesisContext  = GenesisBuilder.buildGenesis()
   val genesis         = genesisContext.genesisBlock
   val genesisBlockNum = genesis.blockNumber
   val genesisSeqNum   = genesis.seqNum
 
-  val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
+  val runtimeManagerResource: Resource[IO, RuntimeManager[IO]] =
     Resources
-      .copyStorage[Task](genesisContext.storageDirectory)
-      .evalMap(Resources.mkTestRNodeStoreManager[Task])
+      .copyStorage[IO](genesisContext.storageDirectory)
+      .evalMap(Resources.mkTestRNodeStoreManager[IO])
       .evalMap(
         Resources
-          .mkRuntimeManagerAt[Task](_, BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId))
+          .mkRuntimeManagerAt[IO](_, BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId))
       )
 
   private def computeState[F[_]: Functor](
@@ -148,11 +147,11 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   }
 
   private def compareSuccessfulSystemDeploys[S <: SystemDeploy](
-      runtimeManager: RuntimeManager[Task]
+      runtimeManager: RuntimeManager[IO]
   )(startState: StateHash)(
       playSystemDeploy: S,
       replaySystemDeploy: S
-  )(resultAssertion: S#Result => Boolean): Task[StateHash] =
+  )(resultAssertion: S#Result => Boolean): IO[StateHash] =
     for {
       runtime   <- runtimeManager.spawnRuntime
       blockData = BlockData.fromBlock(genesis)
@@ -421,7 +420,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
 
             runtime       <- runtimeManager.spawnRuntime
             _             <- runtime.cost.set(initialPhlo)
-            term          <- Compiler[Task].sourceToADT(deploy.data.term)
+            term          <- Compiler[IO].sourceToADT(deploy.data.term)
             _             <- runtime.inj(term)
             phlosLeft     <- runtime.cost.get
             reductionCost = initialPhlo - phlosLeft
@@ -475,21 +474,21 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         .use(
           mgr =>
             for {
-              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
+              hash <- RuntimeManager.emptyStateHashFixed.pure[IO]
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy) }
             } yield res
         )
-        .runSyncUnsafe(10.seconds)
+        .unsafeRunSync
     val noResults =
       runtimeManagerResource
         .use(
           mgr =>
             for {
-              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
+              hash <- RuntimeManager.emptyStateHashFixed.pure[IO]
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deployNoRes) }
             } yield res
         )
-        .runSyncUnsafe(10.seconds)
+        .unsafeRunSync
 
     noResults.isEmpty should be(true)
 
@@ -500,19 +499,22 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
   }
 
   "captureResult" should "throw error if execution fails" in {
-    val term   = s""" new return in { return.undefined() } """
-    val deploy = ConstructDeploy.sourceDeploy(term, timestamp = 0)
+    val buggyTerm = s""" new @return in { return.undefined() } """
+    val deploy    = ConstructDeploy.sourceDeploy(buggyTerm, timestamp = 0)
     val task =
       runtimeManagerResource
         .use(
           mgr =>
             for {
-              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
+              hash <- RuntimeManager.emptyStateHashFixed.pure[IO]
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy) }
             } yield res
         )
 
-    Await.result(task.failed.runToFuture, 1.seconds) shouldBe a[BugFoundError]
+    task.handleErrorWith {
+      case _: BugFoundError => true.pure[IO]
+      case _                => false.pure[IO]
+    }.unsafeRunSync shouldBe true
   }
 
   "emptyStateHash" should "not remember previous hot store state" in effectTest {
@@ -520,11 +522,11 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
 
     val term = ConstructDeploy.basicDeployData[Id](0)
 
-    def run: Task[StateHash] =
+    def run: IO[StateHash] =
       runtimeManagerResource
         .use { m =>
           for {
-            hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
+            hash <- RuntimeManager.emptyStateHashFixed.pure[IO]
             afterHash <- computeState(m, term, genesis.postStateHash)
                           .map(_ => hash)
           } yield afterHash
@@ -754,7 +756,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
+  private def invalidReplay(source: String): IO[Either[ReplayFailure, StateHash]] =
     runtimeManagerResource.use { runtimeManager =>
       for {
         deploy       <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)

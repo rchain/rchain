@@ -1,5 +1,6 @@
 package coop.rchain.rspace.bench
 
+import coop.rchain.catscontrib.TaskContrib._
 import org.openjdk.jmh.annotations.{Level, Setup}
 import org.openjdk.jmh.infra.Blackhole
 

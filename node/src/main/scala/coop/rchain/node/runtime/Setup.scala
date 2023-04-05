@@ -27,7 +27,6 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
 import coop.rchain.models.syntax.modelsSyntaxByteString
-import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.{AdminWebApi, WebApi}
@@ -49,14 +48,14 @@ import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
 object Setup {
-  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Timer: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](
+  def setupNodeProgram[F[_]: Concurrent: Parallel: ContextShift: Timer: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](
       storeManager: KeyValueStoreManager[F],
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       commUtil: CommUtil[F],
       blockRetriever: BlockRetriever[F],
       conf: NodeConf
-  )(implicit mainScheduler: Scheduler): F[
+  ): F[
     (
         Stream[F, Unit], // Node startup process (protocol messages handling)
         Queue[F, RoutingMessage],
@@ -90,12 +89,14 @@ object Setup {
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        storeManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
+        import RChainScheduler._
+        storeManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par(), rholangEC))
       }
 
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
+        import RChainScheduler._
         for {
           rStores    <- storeManager.rSpaceStores
           mergeStore <- RuntimeManager.mergeableStore(storeManager)
@@ -104,7 +105,8 @@ object Setup {
                    rStores,
                    mergeStore,
                    BlockRandomSeed.nonNegativeMergeableTagName(conf.casper.shardName),
-                   executionTracker
+                   executionTracker,
+                   rholangEC
                  )
         } yield rm
       }

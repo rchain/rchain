@@ -10,7 +10,6 @@ import coop.rchain.casper.protocol.deploy.v1._
 import coop.rchain.catscontrib.TaskContrib.AbstractTaskOps
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.models.syntax._
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.ThrowableOps.RichThrowable
 import io.grpc.Metadata
@@ -18,7 +17,7 @@ import fs2.Stream
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: Log](
+  def apply[F[_]: Concurrent: Log](
       blockApi: BlockApi[F],
       blockReportAPI: BlockReportApi[F]
   ): DeployServiceFs2Grpc[F, Metadata] =

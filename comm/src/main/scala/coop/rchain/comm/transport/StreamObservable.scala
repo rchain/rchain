@@ -7,7 +7,6 @@ import coop.rchain.comm.transport.PacketOps._
 import coop.rchain.shared.Log
 import fs2.Stream
 import fs2.concurrent.Queue
-import monix.execution.Scheduler
 
 import scala.collection.concurrent.TrieMap
 

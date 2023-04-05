@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.IO
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -16,8 +17,6 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.shared.{Base16, Serialize}
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks._
@@ -32,7 +31,7 @@ import scala.util.Failure
 
 class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
+  implicit val metrics: Metrics[IO]   = new Metrics.MetricsNOP[IO]
 
   case class DataMapEntry(data: Seq[Par], rand: Blake2b512Random)
 
@@ -97,7 +96,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val addExpr      = EPlus(GInt(7L), GInt(8L))
         implicit val env = Env[Par]()
         val resultTask   = reducer.evalExpr(addExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        Await.result(resultTask.unsafeToFuture(), 3.seconds)
     }
 
     val expected = Seq(Expr(GInt(15L)))
@@ -110,7 +109,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val addExpr      = EPlus(GInt(Int.MaxValue), GInt(Int.MaxValue))
         implicit val env = Env[Par]()
         val resultTask   = reducer.evalExpr(addExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        Await.result(resultTask.unsafeToFuture(), 3.seconds)
     }
 
     val expected = Seq(Expr(GInt(2 * Int.MaxValue.toLong)))
@@ -123,7 +122,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val groundExpr   = GInt(7L)
         implicit val env = Env[Par]()
         val resultTask   = reducer.evalExpr(groundExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        Await.result(resultTask.unsafeToFuture(), 3.seconds)
     }
 
     val expected = Seq(Expr(GInt(7L)))
@@ -136,7 +135,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val eqExpr       = EEq(GPrivateBuilder("private_name"), GPrivateBuilder("private_name"))
         implicit val env = Env[Par]()
         val resultTask   = reducer.evalExpr(eqExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        Await.result(resultTask.unsafeToFuture(), 3.seconds)
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
@@ -148,7 +147,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         implicit val emptyEnv = Env.makeEnv(Par(), Par())
         val eqExpr            = EEq(EVar(BoundVar(0)), EVar(BoundVar(1)))
         val resultTask        = reducer.evalExpr(eqExpr)
-        Await.result(resultTask.runToFuture, 3.seconds)
+        Await.result(resultTask.unsafeToFuture(), 3.seconds)
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
@@ -167,7 +166,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- resultTask
           res <- space.toMap
         } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val expectedResult = mapData(
@@ -191,7 +190,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val task         = reducer.eval(receive) >> space.toMap
-        Await.ready(task.runToFuture, 3.seconds)
+        Await.ready(task.unsafeToFuture(), 3.seconds)
     }
     receiveResult.value shouldBe Failure(ReduceError("Trying to read from non-readable channel.")).some
 
@@ -206,7 +205,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         implicit val env = Env[Par]()
 
         val task = reducer.eval(send) >> space.toMap
-        Await.ready(task.runToFuture, 3.seconds)
+        Await.ready(task.unsafeToFuture(), 3.seconds)
     }
     sendResult.value shouldBe Failure(ReduceError("Trying to send on non-writeable channel.")).some
   }
@@ -224,7 +223,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- resultTask
           res <- space.toMap
         } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val expectedResult = mapData(
@@ -247,7 +246,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val task         = reducer.eval(send)(env, splitRand).flatMap(_ => space.toMap)
-        Await.result(task.runToFuture, 3.seconds)
+        Await.result(task.unsafeToFuture(), 3.seconds)
     }
 
     val expectedResult = mapData(
@@ -283,7 +282,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- resultTask
           res <- space.toMap
         } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val bindPattern = BindPattern(
       List(
@@ -316,7 +315,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
         val task         = reducer.eval(receive)(env, splitRand).flatMap(_ => space.toMap)
-        Await.result(task.runToFuture, 3.seconds)
+        Await.result(task.unsafeToFuture(), 3.seconds)
     }
 
     val channels = List[Par](y)
@@ -355,7 +354,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(receive)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskSendFirst.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -376,7 +375,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
@@ -466,7 +465,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(receive)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskSendFirst.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -485,7 +484,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
@@ -525,7 +524,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(receive)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskSendFirst.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -544,7 +543,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
   }
@@ -581,7 +580,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(receive)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskSendFirst.unsafeToFuture(), 3.seconds)
     }
 
     val channels = List[Par](GInt(2L))
@@ -601,7 +600,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
 
     checkContinuation(receiveFirstResult)(
@@ -617,7 +616,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(Par(receives = Seq(receive), sends = Seq(send)))(env, baseRand)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
 
     checkContinuation(bothResult)(
@@ -664,7 +663,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- matchTask
           res <- space.toMap
         } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -712,7 +711,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.inj(receive)(splitRand2)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskSendFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskSendFirst.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -732,7 +731,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(send2)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskReceiveFirst.runToFuture, 3.seconds)
+        Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
 
     receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
@@ -746,7 +745,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(send2)(env, splitRand1)
           res <- space.toMap
         } yield res
-        Await.result(inspectTaskInterleaved.runToFuture, 3.seconds)
+        Await.result(inspectTaskInterleaved.unsafeToFuture(), 3.seconds)
     }
 
     interleavedResult.toIterable should contain theSameElementsAs expectedResult
@@ -772,7 +771,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- reducer.eval(send)(env, splitRand0)
           res <- space.toMap
         } yield res
-        Await.result(task.runToFuture, 3.seconds)
+        Await.result(task.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -791,7 +790,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     val directResult: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
-        Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
+        Await.result(reducer.evalExprToPar(nthCall).unsafeToFuture(), 3.seconds)
     }
     val expectedResult: Par = GInt(9L)
     directResult should be(expectedResult)
@@ -817,7 +816,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- nthTask
           res <- space.toMap
         } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -835,7 +834,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     val directResult: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
-        Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
+        Await.result(reducer.evalExprToPar(nthCall).unsafeToFuture(), 3.seconds)
     }
     val expectedResult: Par = GInt(255.toLong)
     directResult should be(expectedResult)
@@ -847,7 +846,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     val directResult: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
-        Await.result(reducer.evalExprToPar(nthCall).runToFuture, 3.seconds)
+        Await.result(reducer.evalExprToPar(nthCall).unsafeToFuture(), 3.seconds)
     }
     val expectedResult: Par = GInt(3.toLong)
     directResult should be(expectedResult)
@@ -874,17 +873,18 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
 
     val result = withTestSpace {
       case TestFixture(space, _) =>
-        implicit val cost          = CostAccounting.emptyCost[Task].runSyncUnsafe()
+        import coop.rchain.shared.RChainScheduler._
+        implicit val cost          = CostAccounting.emptyCost[IO].unsafeRunSync
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer                = RholangOnlyDispatcher(space, Map("rho:test:foo" -> byteName(42)))._2
-        cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
+        cost.set(Cost.UNSAFE_MAX).unsafeRunSync
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(newProc)(env, splitRand)
         val inspectTask = for {
           _   <- nthTask
           res <- space.toMap
         } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel0: Par = GString("result0")
@@ -937,7 +937,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           _   <- nthTask
           res <- space.toMap
         } yield res
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -961,7 +961,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
     val directResult: Par = withTestSpace {
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
-        Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
+        Await.result(reducer.evalExprToPar(hexToBytesCall).unsafeToFuture(), 3.seconds)
     }
     val expectedResult: Par = Expr(GByteArray("deadbeef".unsafeHexToByteString))
     directResult should be(expectedResult)
@@ -987,7 +987,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
         val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -1015,7 +1015,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val env         = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
         val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val expectedResult = mapData(
@@ -1042,7 +1042,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(toByteArrayWithArgumentsCall)
         val inspectTask  = nthTask >> space.toMap
-        Await.ready(inspectTask.runToFuture, 3.seconds)
+        Await.ready(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.value shouldBe Failure(MethodArgumentNumberMismatch("toByteArray", 0, 1)).some
   }
@@ -1060,7 +1060,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
         val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -1085,7 +1085,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toStringCall))(env, splitRand)
         val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -1109,7 +1109,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val env         = Env[Par]()
         val task        = reducer.eval(wrapWithSend(toUtf8BytesCall))(env, splitRand)
         val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -1137,7 +1137,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(toUtfBytesWithArgumentsCall)
         val inspectTask  = nthTask >> space.toMap
-        Await.ready(inspectTask.runToFuture, 3.seconds)
+        Await.ready(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.value shouldBe Failure(MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1)).some
   }
@@ -1150,7 +1150,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(toUtfBytesCall)
         val inspectTask  = nthTask >> space.toMap
-        Await.ready(inspectTask.runToFuture, 3.seconds)
+        Await.ready(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.value shouldBe Failure(MethodNotDefined("toUtf8Bytes", "Int")).some
   }
@@ -1192,7 +1192,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, splitRandSrc)
         val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -1226,7 +1226,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, splitRandSrc)
         val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val channel: Par = GString("result")
     val expectedResult = mapData(
@@ -1271,7 +1271,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val env         = Env[Par]()
         val task        = reducer.eval(proc)(env, baseRand)
         val inspectTask = task >> space.toMap
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     val channel: Par = GString("result")
@@ -1288,7 +1288,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), GInt(1L)))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
@@ -1299,7 +1299,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), GInt(0L)))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     result.exprs should be(Seq(Expr(GBool(false))))
@@ -1310,7 +1310,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask  = reducer.evalExpr(EMatches(GInt(1L), EVar(Wildcard(Var.WildcardMsg()))))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
@@ -1321,7 +1321,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par](GInt(1L))
         val inspectTask  = reducer.evalExpr(EMatches(EVar(BoundVar(0)), GInt(1L)))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
@@ -1334,7 +1334,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
 
         val inspectTask = reducer.evalExpr(EMatches(GInt(1L), Connective(VarRefBody(VarRef(0, 1)))))
 
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
@@ -1345,7 +1345,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env = Env.makeEnv[Par]()
         val inspectTask  = reducer.evalExpr(EMethodBody(EMethod("length", GString("abc"))))
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
   }
@@ -1357,7 +1357,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(3L), GInt(6L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("aba"))))
   }
@@ -1369,7 +1369,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(2L), GInt(1L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString(""))))
   }
@@ -1381,7 +1381,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(8L), GInt(9L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString(""))))
   }
@@ -1393,7 +1393,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(-2L), GInt(2L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("ab"))))
   }
@@ -1410,7 +1410,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("Hello, Alice!"))))
   }
@@ -1427,7 +1427,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("abcdef"))))
   }
@@ -1444,7 +1444,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(
       Seq(Expr(GByteArray("deadbeef".unsafeHexToByteString)))
@@ -1472,7 +1472,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("1 ${b} 2 ${a}"))))
   }
@@ -1490,7 +1490,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
             )
           )
         )
-        Await.result(task.runToFuture, 3.seconds)
+        Await.result(task.unsafeToFuture(), 3.seconds)
     }
 
     result.exprs should be(Seq(Expr(GString("false true"))))
@@ -1509,7 +1509,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
             )
           )
         )
-        Await.result(task.runToFuture, 3.seconds)
+        Await.result(task.unsafeToFuture(), 3.seconds)
     }
 
     result.exprs should be(Seq(Expr(GString("testUriA testUriB"))))
@@ -1522,7 +1522,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val list         = EList(List(GInt(0L), GInt(1L), GInt(2L), GInt(3L)))
         val inspectTask  = reducer.evalExpr(EMethodBody(EMethod("length", list)))
 
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(4L))))
   }
@@ -1535,7 +1535,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("slice", list, List(GInt(3L), GInt(5L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(9L), GInt(4L)))))))
   }
@@ -1548,7 +1548,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("slice", list, List(GInt(5L), GInt(4L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List())))))
   }
@@ -1561,7 +1561,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("slice", list, List(GInt(7L), GInt(8L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List())))))
   }
@@ -1574,7 +1574,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("slice", list, List(GInt(-2L), GInt(2L))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(3L), GInt(7L)))))))
   }
@@ -1593,7 +1593,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
             )
           )
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultList = EList(List(GInt(3L), GInt(2L), GInt(9L), GInt(6L), GInt(1L), GInt(7L)))
     result.exprs should be(Seq(Expr(EListBody(resultList))))
@@ -1608,7 +1608,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("getOrElse", map, List(GInt(1L), GString("c"))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("a"))))
   }
@@ -1622,7 +1622,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("getOrElse", map, List(GInt(3L), GString("c"))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("c"))))
   }
@@ -1636,7 +1636,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("set", map, List(GInt(3L), GString("c"))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultMap = EMapBody(
       ParMap(
@@ -1659,7 +1659,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("set", map, List(GInt(2L), GString("c"))))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultMap =
       EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("c")))))
@@ -1682,7 +1682,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("keys", map))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultSet = ESetBody(
       ParSet(
@@ -1708,7 +1708,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMethodBody(EMethod("size", map))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
   }
@@ -1723,7 +1723,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           EMethodBody(EMethod("size", set))
         )
 
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.exprs should be(Seq(Expr(GInt(3L))))
   }
@@ -1736,7 +1736,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EPlusBody(EPlus(set, GInt(3L)))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
     result.exprs should be(Seq(Expr(resultSet)))
@@ -1758,7 +1758,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMinusBody(EMinus(map, GInt(3L)))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultMap =
       EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
@@ -1773,7 +1773,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMinusBody(EMinus(set, GInt(3L)))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L))))
     result.exprs should be(Seq(Expr(resultSet)))
@@ -1788,7 +1788,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EPlusPlusBody(EPlusPlus(lhsSet, rhsSet))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L), GInt(4L))))
     result.exprs should be(Seq(Expr(resultSet)))
@@ -1805,7 +1805,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EPlusPlusBody(EPlusPlus(lhsMap, rhsMap))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultMap = EMapBody(
       ParMap(
@@ -1829,7 +1829,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val inspectTask = reducer.evalExpr(
           EMinusMinusBody(EMinusMinus(lhsSet, rhsSet))
         )
-        Await.result(inspectTask.runToFuture, 3.seconds)
+        Await.result(inspectTask.unsafeToFuture(), 3.seconds)
     }
     val resultSet = ESetBody(ParSet(List[Par](GInt(3L), GInt(4L))))
     result.exprs should be(Seq(Expr(resultSet)))
@@ -1841,7 +1841,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         implicit val env = Env.makeEnv[Par]()
         val set          = ESetBody(ParSet(List[Par](GInt(1L), GInt(2L), GInt(3L))))
         val inspectTask  = reducer.eval(EMethodBody(EMethod("get", set, List(GInt(1L)))))
-        Await.ready(inspectTask.runToFuture, 3.seconds)
+        Await.ready(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.value shouldBe Failure(MethodNotDefined("get", "Set")).some
   }
@@ -1853,7 +1853,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         val map =
           EMapBody(ParMap(List[(Par, Par)]((GInt(1L), GString("a")), (GInt(2L), GString("b")))))
         val inspectTask = reducer.eval(EMethodBody(EMethod("add", map, List(GInt(1L)))))
-        Await.ready(inspectTask.runToFuture, 3.seconds)
+        Await.ready(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.value shouldBe Failure(MethodNotDefined("add", "Map")).some
   }
@@ -1871,7 +1871,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(toListCall)
         val inspectTask  = nthTask >> space.toMap
-        Await.ready(inspectTask.runToFuture, 3.seconds)
+        Await.ready(inspectTask.unsafeToFuture(), 3.seconds)
     }
     result.value shouldBe Failure(MethodArgumentNumberMismatch("toList", 0, 1)).some
   }
@@ -1896,7 +1896,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
         val toListTask             = reducer.evalExpr(toListCall)
-        Await.result(toListTask.runToFuture, 3.seconds)
+        Await.result(toListTask.unsafeToFuture(), 3.seconds)
     }
     val resultList =
       EListBody(
@@ -1930,7 +1930,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
         val toListTask             = reducer.evalExpr(toListCall)
-        Await.result(toListTask.runToFuture, 3.seconds)
+        Await.result(toListTask.unsafeToFuture(), 3.seconds)
     }
     val resultList =
       EListBody(
@@ -1964,7 +1964,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env: Env[Par] = Env[Par]()
         val toListTask             = reducer.evalExpr(toListCall)
-        Await.result(toListTask.runToFuture, 3.seconds)
+        Await.result(toListTask.unsafeToFuture(), 3.seconds)
     }
     val resultList =
       EListBody(
@@ -2298,7 +2298,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           reducer.evalExpr(input).attempt
       }
 
-    task.runSyncUnsafe(timeout)
+    task.unsafeRunSync
   }
 
   /**
@@ -2320,7 +2320,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
         val task         = reducer.eval(proc)
-        Await.result(task.runToFuture, 30.seconds)
+        Await.result(task.unsafeToFuture(), 30.seconds)
     }
 
     result should be(())
@@ -2335,11 +2335,13 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       case TestFixture(_, reducer) =>
         implicit val env = Env[Par]()
         val task         = reducer.eval(proc)
-        Await.result(task.failed.runToFuture, 1.seconds)
+        Await.result(task.attempt.unsafeToFuture(), 1.seconds)
     }
 
     result should be(
-      ReduceError("The number of terms in the Par is 32768, which exceeds the limit of 32767.")
+      Left(
+        ReduceError("The number of terms in the Par is 32768, which exceeds the limit of 32767.")
+      )
     )
   }
 

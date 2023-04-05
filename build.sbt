@@ -132,7 +132,6 @@ lazy val shared = (project in file("shared"))
       catsTagless,
       fs2Core,
       lz4,
-      monix,
       scodecCore,
       scodecCats,
       scodecBits,
@@ -142,7 +141,8 @@ lazy val shared = (project in file("shared"))
       catsLawsTest,
       catsLawsTestkitTest,
       enumeratum,
-      jaxb
+      jaxb,
+      monix // remove when monix TestSheduler is replaced
     )
   )
   .dependsOn(sdk)
@@ -171,7 +171,6 @@ lazy val casper = (project in file("casper"))
       catsCore,
       catsRetry,
       catsMtl,
-      monix,
       fs2Core,
       fs2Io,
       scalacheck % "slowcooker"
@@ -213,7 +212,6 @@ lazy val comm = (project in file("comm"))
       catsCore,
       catsMtl,
       catsTagless,
-      monix,
       guava
     )
   )
@@ -302,7 +300,8 @@ lazy val node = (project in file("node"))
         scalapbRuntimegGrpc,
         circeParser,
         circeGenericExtras,
-        pureconfig
+        pureconfig,
+        monix // remove when BatchInfluxDBReporter is adjusted to work w/o monix
       ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
@@ -441,7 +440,6 @@ lazy val rholang = (project in file("rholang"))
     libraryDependencies ++= commonDependencies ++ Seq(
       catsMtl,
       catsEffect,
-      monix,
       scallop,
       lightningj,
       catsLawsTest,
@@ -506,7 +504,8 @@ lazy val rspace = (project in file("rspace"))
       catsCore,
       fs2Core,
       scodecCore,
-      scodecBits
+      scodecBits,
+      monix // remove when AtomicAny migrated to Ref
     ),
     /* Tutorial */
     /* Publishing Settings */

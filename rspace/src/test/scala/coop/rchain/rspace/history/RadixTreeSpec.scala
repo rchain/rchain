@@ -1,6 +1,6 @@
 package coop.rchain.rspace.history
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RadixTree._
@@ -8,8 +8,6 @@ import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.shared.Base16
 import coop.rchain.shared.syntax.{sharedSyntaxKeyValueStore, sharedSyntaxKeyValueTypedStore}
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueTypedStore}
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.OptionValues
@@ -208,7 +206,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
                          noPrintFlag = true
                        )
 
-        itemIdx <- Sync[Task].delay(byteToInt(dataSet.head.rKey.head))
+        itemIdx <- IO.delay(byteToInt(dataSet.head.rKey.head))
 
         itemToDelete = rootNode1(itemIdx)
         item3Opt     <- impl.delete(itemToDelete, dataSet.head.rKey.tail)
@@ -301,7 +299,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
   "Call of functions saveNode() and then commit()" should "put node into store" in withImplAndStore {
     (impl, inMemoStore) =>
       for {
-        nodesCount1 <- Sync[Task].delay(inMemoStore.numRecords())
+        nodesCount1 <- IO.delay(inMemoStore.numRecords())
         _           = impl.saveNode(emptyNode)
         _           <- impl.commit
 
@@ -314,7 +312,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
 
   "function loadNode" should "load node from store" in withImplAndStore { (impl, _) =>
     for {
-      hash <- Sync[Task].delay(impl.saveNode(emptyNode))
+      hash <- IO.delay(impl.saveNode(emptyNode))
       _    <- impl.commit
 
       _        = impl.clearReadCache()
@@ -327,7 +325,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
   "Trying to load a non-existent node" should "throw error" in withImplAndStore { (impl, store) =>
     {
       for {
-        hash <- Sync[Task].delay(impl.saveNode(emptyNode))
+        hash <- IO.delay(impl.saveNode(emptyNode))
         _    <- impl.commit
         _    = store.clear() // Clearing database
         _    = impl.clearReadCache()
@@ -487,7 +485,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
           None,
           skipSize = 0,
           takeSize = 100,
-          x => Sync[Task].delay(localStorage.get(x)),
+          x => IO.delay(localStorage.get(x)),
           exportSettings
         )
       }
@@ -706,7 +704,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
   )
   case class ExportParameters(
       rootHash: Blake2b256Hash, // hash
-      typedStore: KeyValueTypedStore[Task, Blake2b256Hash, ByteVector],
+      typedStore: KeyValueTypedStore[IO, Blake2b256Hash, ByteVector],
       takeSize: Int,     // take size
       skipSize: Int,     // skip size
       withSkip: Boolean, // start with skip is true
@@ -721,11 +719,11 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
 
   def validateMultipageExport(
       rootHash: Blake2b256Hash,
-      store: KeyValueTypedStore[Task, Blake2b256Hash, ByteVector],
+      store: KeyValueTypedStore[IO, Blake2b256Hash, ByteVector],
       withSkip: Boolean
-  ): Task[MultipageExportResults] = {
+  ): IO[MultipageExportResults] = {
 
-    def multipageExport(p: ExportParameters): Task[Either[ExportParameters, ExportParameters]] = {
+    def multipageExport(p: ExportParameters): IO[Either[ExportParameters, ExportParameters]] = {
       def collectExportData(prevData: ExportData, pageData: ExportData): ExportData =
         ExportData(
           prevData.nodePrefixes ++ pageData.nodePrefixes,
@@ -788,7 +786,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
                                 skipSize = 0,
                                 takeSize = 100,
                                 x =>
-                                  Sync[Task]
+                                  Sync[IO]
                                     .delay(localStorage.get(x)),
                                 exportSettings
                               )
@@ -799,13 +797,14 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
 
   private def withImplAndStore(
       f: (
-          RadixTreeImpl[Task],
-          InMemoryKeyValueStore[Task]
-      ) => Task[Unit]
+          RadixTreeImpl[IO],
+          InMemoryKeyValueStore[IO]
+      ) => IO[Unit]
   ): Unit = {
-    val store         = InMemoryKeyValueStore[Task]
+    import coop.rchain.shared.RChainScheduler._
+    val store         = InMemoryKeyValueStore[IO]
     val typedStore    = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
-    val radixTreeImpl = new RadixTreeImpl[Task](typedStore)
-    f(radixTreeImpl, store).runSyncUnsafe(20.seconds)
+    val radixTreeImpl = new RadixTreeImpl[IO](typedStore)
+    f(radixTreeImpl, store).unsafeRunTimed(20.seconds)
   }
 };

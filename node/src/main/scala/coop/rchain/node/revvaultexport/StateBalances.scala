@@ -19,6 +19,7 @@ import coop.rchain.shared.syntax._
 
 import java.nio.file.Path
 import scala.concurrent.ExecutionContext
+import scala.concurrent.ExecutionContext.global
 
 object StateBalances {
 
@@ -45,7 +46,7 @@ object StateBalances {
       blockHash: String,
       vaultTreeHashMapDepth: Int,
       dataDir: Path
-  )(implicit scheduler: ExecutionContext): F[List[(ByteString, Long)]] = {
+  ): F[List[(ByteString, Long)]] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val span                                        = NoopSpan[F]()
     implicit val log: Log[F]                                 = Log.log
@@ -59,7 +60,8 @@ object StateBalances {
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                   store
+                   store,
+                   global
                  )
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())

@@ -1,21 +1,19 @@
 package coop.rchain.rspace.bench
 
-import cats.Eval
-import cats.implicits.catsSyntaxOptionId
+import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime, RholangCLI}
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.Resources
-import coop.rchain.rholang.interpreter.compiler.Compiler
-import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime, RholangCLI}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.shared.Log
-import monix.eval.Task
+import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
-import coop.rchain.catscontrib.effect.implicits.sEval
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.Await
@@ -64,14 +62,16 @@ abstract class RhoBenchBaseState {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
     setupTerm = setupRho.flatMap { p =>
-      try {
-        Compiler[Eval].sourceToADT(p).value.some
-      } catch { case err: Throwable => throw err }
+      Compiler[Coeval].sourceToADT(p).runAttempt match {
+        case Right(par) => Some(par)
+        case Left(err)  => throw err
+      }
     }
 
-    term = try {
-      Compiler[Eval].sourceToADT(testedRho).value
-    } catch { case err: Throwable => throw err }
+    term = Compiler[Coeval].sourceToADT(testedRho).runAttempt match {
+      case Right(par) => par
+      case Left(err)  => throw err
+    }
 
     val runtimes = createRuntime.runSyncUnsafe()
     runtime = runtimes._1

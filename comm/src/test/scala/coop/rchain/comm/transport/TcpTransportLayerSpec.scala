@@ -1,25 +1,22 @@
 package coop.rchain.comm.transport
 
+import cats.effect.{IO, Sync, Timer}
 import cats.effect.concurrent.{Deferred, MVar, Ref}
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.shared.RChainScheduler._
 import coop.rchain.shared.{Base16, Log}
-import monix.eval.Task
-import monix.execution.Scheduler
 
-import scala.concurrent.duration.Duration
+class TcpTransportLayerSpec extends TransportLayerSpec[IO, TcpTlsEnvironment] {
 
-class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+  implicit val log: Log[IO]         = new Log.NOPLog[IO]
+  implicit val metrics: Metrics[IO] = new Metrics.MetricsNOP
 
-  implicit val log: Log[Task]         = new Log.NOPLog[Task]
-  implicit val scheduler: Scheduler   = Scheduler.Implicits.global
-  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
-
-  def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
-    Task.delay {
+  def createEnvironment(port: Int): IO[TcpTlsEnvironment] =
+    IO.delay {
       val host    = "127.0.0.1"
       val keyPair = CertificateHelper.generateKeyPair(true)
       val cert    = CertificatePrinter.print(CertificateHelper.generate(keyPair))
@@ -35,8 +32,8 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
 
   def createTransportLayer(
       env: TcpTlsEnvironment
-  ): Task[TransportLayer[Task]] =
-    Task.delay(
+  ): IO[TransportLayer[IO]] =
+    IO.delay(
       new GrpcTransportClient(
         networkId,
         env.cert,
@@ -44,20 +41,19 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
         maxMessageSize,
         maxMessageSize,
         100,
-        Ref.unsafe[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel[Task]]]](Map.empty),
-        scheduler
+        Ref.unsafe[IO, Map[PeerNode, Deferred[IO, BufferedGrpcStreamChannel[IO]]]](Map.empty)
       )
     )
 
-  def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
+  def extract[A](fa: IO[A]): A = fa.unsafeRunSync
 
-  def createDispatcherCallback: Task[DispatcherCallback[Task]] =
-    MVar.empty[Task, Unit].map(new DispatcherCallback(_))
+  def createDispatcherCallback: IO[DispatcherCallback[IO]] =
+    MVar.empty[IO, Unit].map(new DispatcherCallback(_))
 
-  def createTransportLayerServer(env: TcpTlsEnvironment): Task[TransportLayerServer[Task]] =
-    Task.delay {
-      implicit val rPConfAsk: RPConfAsk[Task] = createRPConfAsk[Task](env.peer)
-      val server = new GrpcTransportServer(
+  def createTransportLayerServer(env: TcpTlsEnvironment): IO[TransportLayerServer[IO]] =
+    IO.delay {
+      implicit val rPConfAsk: RPConfAsk[IO] = createRPConfAsk[IO](env.peer)
+      val server = new GrpcTransportServer[IO](
         networkId,
         env.port,
         env.cert,

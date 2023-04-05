@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import cats.effect.IO
 import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.{BlockRandomSeed, Resources}
@@ -12,8 +13,6 @@ import coop.rchain.node.web.{PreCharge, Refund, Transaction, UserDeploy}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
 import org.scalatest.matchers.should.Matchers
@@ -25,14 +24,15 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
     TestNode.networkEff(genesis, networkSize = 1, withReadOnlySize = 1).use { nodes =>
       val validator = nodes(0)
       val readonly  = nodes(1)
+      import coop.rchain.shared.RChainScheduler._
       import readonly._
       for {
-        kvm         <- Resources.mkTestRNodeStoreManager[Task](readonly.dataDir)
+        kvm         <- Resources.mkTestRNodeStoreManager[IO](readonly.dataDir)
         rspaceStore <- kvm.rSpaceStores
         reportingCasper = ReportingCasper
-          .rhoReporter[Task](rspaceStore, this.genesis.genesisBlock.shardId)
-        reportingStore <- ReportStore.store[Task](kvm)
-        blockReportAPI = BlockReportApi[Task](
+          .rhoReporter[IO](rspaceStore, this.genesis.genesisBlock.shardId)
+        reportingStore <- ReportStore.store[IO](kvm)
+        blockReportAPI = BlockReportApi[IO](
           reportingCasper,
           reportingStore,
           readonly.validatorIdOpt
@@ -44,7 +44,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
                    phloPrice = phloPrice,
                    shardId = this.genesis.genesisBlock.shardId
                  )
-        transactionAPI = Transaction[Task](
+        transactionAPI = Transaction[IO](
           blockReportAPI,
           BlockRandomSeed.transferUnforgeable(
             this.genesis.genesisBlock.shardId
@@ -105,7 +105,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
           case _ => ()
         }
       }
-    } yield ()).runSyncUnsafe()
+    } yield ()).unsafeRunSync
   }
 
   "no user deploy log" should "return only precharge and refund transaction" in {
@@ -135,7 +135,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
         }
       }
 
-    } yield ()).runSyncUnsafe()
+    } yield ()).unsafeRunSync
   }
 
   "preCharge failed case" should "return 1 preCharge transaction" in {
@@ -152,7 +152,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
 
       _ = t.transaction.failReason should be(Some("Insufficient funds"))
 
-    } yield (t, block)).runSyncUnsafe()
+    } yield (t, block)).unsafeRunSync
     transaction.transactionType shouldBe a[PreCharge]
     transaction.transaction.fromAddr shouldBe fromAddr
     transaction.transaction.amount shouldBe phloLimit * phloPrice - block.state.deploys.head.cost.cost

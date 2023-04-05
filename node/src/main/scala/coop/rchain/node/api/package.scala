@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.{Concurrent, ConcurrentEffect, Resource, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceFs2Grpc
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceFs2Grpc
 import coop.rchain.node.model.ReplFs2Grpc
@@ -12,6 +12,7 @@ import io.grpc.protobuf.services.ProtoReflectionService
 import monix.execution.Scheduler
 
 import java.net.InetSocketAddress
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 package object api {
@@ -19,7 +20,7 @@ package object api {
   def acquireInternalServer[F[_]: Sync: ConcurrentEffect](
       host: String,
       port: Int,
-      grpcExecutor: Scheduler,
+      grpcEC: ExecutionContext,
       replService: ReplFs2Grpc[F, Metadata],
       deployService: DeployServiceFs2Grpc[F, Metadata],
       proposeService: ProposeServiceFs2Grpc[F, Metadata],
@@ -33,7 +34,7 @@ package object api {
   ): Resource[F, grpc.Server] = {
     val server = NettyServerBuilder
       .forAddress(new InetSocketAddress(host, port))
-      .executor(grpcExecutor)
+      .executor(grpcEC.execute)
       .maxInboundMessageSize(maxMessageSize)
       .addService(ReplFs2Grpc.bindService(replService))
       .addService(ProposeServiceFs2Grpc.bindService(proposeService))
@@ -54,7 +55,7 @@ package object api {
   def acquireExternalServer[F[_]: Concurrent: ConcurrentEffect: Log](
       host: String,
       port: Int,
-      grpcExecutor: Scheduler,
+      grpcEC: ExecutionContext,
       deployGrpcService: DeployServiceFs2Grpc[F, Metadata],
       maxMessageSize: Int,
       keepAliveTime: FiniteDuration,
@@ -66,7 +67,7 @@ package object api {
   ): Resource[F, grpc.Server] = {
     val server = NettyServerBuilder
       .forAddress(new InetSocketAddress(host, port))
-      .executor(grpcExecutor)
+      .executor(grpcEC.execute)
       .maxInboundMessageSize(maxMessageSize)
       .addService(DeployServiceFs2Grpc.bindService(deployGrpcService))
       .compressorRegistry(null)

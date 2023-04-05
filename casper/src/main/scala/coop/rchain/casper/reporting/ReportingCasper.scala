@@ -86,7 +86,7 @@ object ReportingCasper {
   def rhoReporter[F[_]: Concurrent: ContextShift: Parallel: BlockDagStorage: Log: Metrics: Span](
       rspaceStore: RSpaceStore[F],
       shardId: String
-  )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
+  ): ReportingCasper[F] =
     new ReportingCasper[F] {
       override def trace(block: BlockMessage): F[ReplayResult] =
         for {
@@ -171,8 +171,6 @@ object ReportingRuntime {
 
   def createReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       store: RSpaceStore[F]
-  )(
-      implicit scheduler: ExecutionContext
   ): F[RhoReportingRspace[F]] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]

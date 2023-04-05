@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Functor
+import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
@@ -14,7 +15,6 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
 import org.scalacheck._
@@ -32,12 +32,13 @@ object SchedulerPools {
   val rspacePool      = Scheduler.fixedPool("RSpacePool", 5)
 }
 
-//noinspection ZeroIndexToHead,NameBooleanParameters
+//noinspectTaskn ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
-  import SchedulerPools.global
-  import cats.syntax.parallel._
 
-  implicit val log: Log[Task]      = new Log.NOPLog[Task]
+  import coop.rchain.shared.RChainScheduler._
+  implicit val pIO = IO.ioParallel
+
+  implicit val log: Log[IO]        = new Log.NOPLog[IO]
   val arbitraryRangeSize: Gen[Int] = Gen.chooseNum[Int](1, 10)
   val arbitraryRangesSize: Gen[(Int, Int)] = for {
     m <- Gen.chooseNum[Int](1, 10)
@@ -45,14 +46,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
   } yield (n, m)
 
   def consumeMany[C, P, A, K](
-      space: ISpace[Task, C, P, A, K],
+      space: ISpace[IO, C, P, A, K],
       range: Seq[Int],
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
-  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]] =
+  ): IO[List[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started consume {}", i)
       space
@@ -64,12 +65,12 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     }
 
   def produceMany[C, P, A, K](
-      space: ISpace[Task, C, P, A, K],
+      space: ISpace[IO, C, P, A, K],
       range: Seq[Int],
       channelCreator: Int => C,
       datumCreator: Int => A,
       persist: Boolean
-  ): Task[List[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]] =
+  ): IO[List[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]] =
     shuffle(range).toList.parTraverse { i: Int =>
       logger.debug("Started produce {}", i)
       space.produce(channelCreator(i), datumCreator(i), persist).map { r =>
@@ -496,7 +497,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         val peeks: SortedSet[Int] =
           SortedSet.apply(Random.shuffle(channelsRange).take(amountOfPeekedChannels): _*)
         val produces = Random.shuffle(channels)
-        def consumeAndProduce(s: ISpace[Task, String, Pattern, String, String]) =
+        def consumeAndProduce(s: ISpace[IO, String, Pattern, String, String]) =
           for {
             r  <- s.consume(channels, patterns, continuation, false, peeks = peeks)
             rs <- produces.traverse(ch => s.produce(ch, s"datum-$ch", false))
@@ -1025,11 +1026,11 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     n: Int =>
       def process(indices: Seq[Int]): Checkpoint = fixture {
         (store, replayStore, space, replaySpace) =>
-          Task.delay {
+          IO.delay {
             for (i <- indices) {
-              replaySpace.produce("ch1", s"datum$i", false).runSyncUnsafe()
+              replaySpace.produce("ch1", s"datum$i", false).unsafeRunSync
             }
-            space.createCheckpoint().runSyncUnsafe()
+            space.createCheckpoint().unsafeRunSync
           }
       }
 
@@ -1083,7 +1084,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
 
-        _ <- replayStore.get().isEmpty.map(_ shouldBe false)
+        _ <- replayStore.get().isEmpty().map(_ shouldBe false)
         _ <- replayStore
               .get()
               .changes
@@ -1091,7 +1092,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
               .map(_.length shouldBe 1)
 
         _ <- replaySpace.reset(emptyPoint.root)
-        _ <- replayStore.get().isEmpty.map(_ shouldBe true)
+        _ <- replayStore.get().isEmpty().map(_ shouldBe true)
         _ = replaySpace.replayData shouldBe empty
 
         checkpoint1 <- replaySpace.createCheckpoint()
@@ -1239,18 +1240,18 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
 
   def fixture[S](
       f: (
-          AtomicAny[HotStore[Task, C, P, A, K]],
-          AtomicAny[HotStore[Task, C, P, A, K]],
-          ISpace[Task, C, P, A, K],
-          IReplaySpace[Task, C, P, A, K]
-      ) => Task[S]
+          AtomicAny[HotStore[IO, C, P, A, K]],
+          AtomicAny[HotStore[IO, C, P, A, K]],
+          ISpace[IO, C, P, A, K],
+          IReplaySpace[IO, C, P, A, K]
+      ) => IO[S]
   )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[Task, P, A]
+      m: Match[IO, P, A]
   ): S
 }
 
@@ -1258,55 +1259,58 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
   import SchedulerPools.global
   override def fixture[S](
       f: (
-          AtomicAny[HotStore[Task, C, P, A, K]],
-          AtomicAny[HotStore[Task, C, P, A, K]],
-          ISpace[Task, C, P, A, K],
-          IReplaySpace[Task, C, P, A, K]
-      ) => Task[S]
+          AtomicAny[HotStore[IO, C, P, A, K]],
+          AtomicAny[HotStore[IO, C, P, A, K]],
+          ISpace[IO, C, P, A, K],
+          IReplaySpace[IO, C, P, A, K]
+      ) => IO[S]
   )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[Task, P, A]
+      m: Match[IO, P, A]
   ): S = {
-    implicit val log: Log[Task]          = Log.log[Task]
-    implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
-    implicit val spanF: Span[Task]       = NoopSpan[Task]()
-    implicit val kvm                     = InMemoryStoreManager[Task]
+    import coop.rchain.shared.RChainScheduler._
+    implicit val log: Log[IO]          = Log.log[IO]
+    implicit val metricsF: Metrics[IO] = new Metrics.MetricsNOP[IO]()
+    implicit val spanF: Span[IO]       = NoopSpan[IO]()
+    implicit val kvm                   = InMemoryStoreManager[IO]
 
     (for {
       roots   <- kvm.store("roots")
       cold    <- kvm.store("cold")
       history <- kvm.store("history")
-      historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](
+      historyRepository <- HistoryRepositoryInstances.lmdbRepository[IO, C, P, A, K](
                             roots,
                             cold,
                             history
                           )
-      cache         <- Ref[Task].of(HotStoreState[C, P, A, K]())
+      cache         <- Ref[IO].of(HotStoreState[C, P, A, K]())
       historyReader <- historyRepository.getHistoryReader(historyRepository.root)
       store <- {
         val hr = historyReader.base
-        HotStore[Task, C, P, A, K](cache, hr).map(AtomicAny(_))
+        HotStore[IO, C, P, A, K](cache, hr).map(AtomicAny(_))
       }
 
-      space = new RSpace[Task, C, P, A, K](
+      space = new RSpace[IO, C, P, A, K](
         historyRepository,
-        store
+        store,
+        rholangEC
       )
-      historyCache <- Ref[Task].of(HotStoreState[C, P, A, K]())
+      historyCache <- Ref[IO].of(HotStoreState[C, P, A, K]())
       replayStore <- {
         val hr = historyReader.base
-        HotStore[Task, C, P, A, K](historyCache, hr).map(AtomicAny(_))
+        HotStore[IO, C, P, A, K](historyCache, hr).map(AtomicAny(_))
       }
-      replaySpace = new ReplayRSpace[Task, C, P, A, K](
+      replaySpace = new ReplayRSpace[IO, C, P, A, K](
         historyRepository,
-        replayStore
+        replayStore,
+        rholangEC
       )
       res <- f(store, replayStore, space, replaySpace)
-    } yield { res }).runSyncUnsafe()
+    } yield { res }).unsafeRunSync
   }
 }
 

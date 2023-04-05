@@ -2,12 +2,9 @@ package coop.rchain.node.diagnostics
 
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
-
 import scala.concurrent.duration._
 import scala.util.Try
-
 import coop.rchain.node.diagnostics.BatchInfluxDBReporter.Settings
-
 import com.typesafe.config.Config
 import kamon.{Kamon, MetricReporter}
 import kamon.metric._
@@ -19,6 +16,7 @@ import monix.reactive.subjects._
 import okhttp3._
 import org.slf4j.LoggerFactory
 
+// TODO get rid of monix
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporter {
   private val logger = LoggerFactory.getLogger(classOf[BatchInfluxDBReporter])

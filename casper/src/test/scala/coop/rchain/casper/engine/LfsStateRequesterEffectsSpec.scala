@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Concurrent, IO, Timer}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsTupleSpaceRequester.{ST, StatePartPath}
@@ -12,7 +12,6 @@ import coop.rchain.rspace.state.{RSpaceImporter, StateValidationError}
 import coop.rchain.shared.Log
 import fs2.Stream
 import fs2.concurrent.Queue
-import monix.eval.Task
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
@@ -159,9 +158,9 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     } yield ()
   }
 
-  implicit val logEff: Log[Task] = Log.log[Task]
+  implicit val logEff: Log[IO] = Log.log[IO]
 
-  import monix.execution.Scheduler.Implicits.global
+  import coop.rchain.shared.RChainScheduler._
 
   /**
     * Test runner
@@ -173,12 +172,12 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     * @param test test specification
     */
   def createBootstrapTest(runProcessingStream: Boolean, requestTimeout: FiniteDuration = 10.days)(
-      test: Mock[Task] => Task[Unit]
+      test: Mock[IO] => IO[Unit]
   ): Unit =
-    createMock[Task](requestTimeout) { mock =>
+    createMock[IO](requestTimeout) { mock =>
       if (!runProcessingStream) test(mock)
       else (Stream.eval(test(mock)) concurrently mock.stream).compile.drain
-    }.runSyncUnsafe(timeout = 10.seconds)
+    }.unsafeRunSync
 
   val bootstrapTest = createBootstrapTest(runProcessingStream = true) _
 
@@ -306,8 +305,8 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * NOTE: We don't have any abstraction to test time in execution (with monix Task or cats IO).
     *  We have LogicalTime and DiscreteTime which are just wrappers to get different "milliseconds" but are totally
-    *  disconnected from Task/IO execution notion of time (e.g. Task.sleep).
-    *  Other testing instances of Time are the same as in normal node execution (using Task.timer).
+    *  disconnected from Task/IO execution notion of time (e.g. IO.sleep).
+    *  Other testing instances of Time are the same as in normal node execution (using IO.timer).
     *  https://github.com/rchain/rchain/issues/3001
     */
   it should "re-send request after timeout" in createBootstrapTest(
@@ -317,7 +316,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     import mock._
     for {
       // Wait for timeout to expire
-      _ <- stream.compile.drain.timeout(300.millis).onErrorHandle(_ => ())
+      _ <- stream.compile.drain.timeout(300.millis).attempt
 
       // Wait for two requests
       reqs <- sentRequests.take(2).compile.toList

@@ -8,7 +8,6 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.models.syntax._
-import coop.rchain.monix.Monixable
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects
@@ -27,14 +26,16 @@ import scala.tools.jline.console.completer.StringsCompleter
 
 object NodeMain {
 
+  import coop.rchain.shared.RChainScheduler.mainEC // main execution context
+
   /**
     * Starts RNode instance
     *
     * @param options command line options
     */
-  def startNode[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log](
+  def startNode[F[_]: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log](
       options: commandline.Options
-  )(implicit s: Scheduler): F[Unit] = Sync[F].defer {
+  ): F[Unit] = Sync[F].defer {
     // Create merged configuration from CLI options and config file
     val (nodeConf, profile, configFile, kamonConf) = Configuration.build(options)
     // This system variable is used in Logger config file `node/src/main/resources/logback.xml`
@@ -85,7 +86,7 @@ object NodeMain {
     * @param options command line options
     * @param console console
     */
-  def runCLI[F[_]: Sync: Monixable: ConcurrentEffect: ConsoleIO: Timer](
+  def runCLI[F[_]: Sync: ConcurrentEffect: ConsoleIO: Timer](
       options: commandline.Options
   ): F[Unit] = {
     val grpcPort =
