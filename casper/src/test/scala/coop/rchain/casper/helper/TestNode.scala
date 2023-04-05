@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats.Parallel
-import cats.effect.{Concurrent, IO, Resource, Sync}
+import cats.effect.{Async, IO, Resource, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -41,7 +41,7 @@ import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import cats.effect.{Deferred, Ref, Temporal}
 
-case class TestNode[F[_]: Concurrent: Temporal](
+case class TestNode[F[_]: Async: Temporal](
     name: String,
     local: PeerNode,
     tle: TransportLayerTestImpl[F],
@@ -301,7 +301,7 @@ object TestNode {
       maxParentDepth: Option[Int] = None,
       withReadOnlySize: Int = 0
   ): Resource[Effect, IndexedSeq[TestNode[Effect]]] = {
-    implicit val c = Concurrent[Effect]
+    implicit val c = Async[Effect]
     implicit val n = TestNetwork.empty[Effect]
 
     networkF[Effect](
@@ -315,7 +315,7 @@ object TestNode {
     )
   }
 
-  private def networkF[F[_]: Concurrent: Parallel: ContextShift: Temporal: TestNetwork](
+  private def networkF[F[_]: Async: Parallel: ContextShift: Temporal: TestNetwork](
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageMatrixPath: Path,
@@ -373,7 +373,7 @@ object TestNode {
     }
   }
 
-  private def createNode[F[_]: Concurrent: Temporal: Parallel: ContextShift: TestNetwork](
+  private def createNode[F[_]: Async: Temporal: Parallel: ContextShift: TestNetwork](
       name: String,
       currentPeerNode: PeerNode,
       genesis: BlockMessage,

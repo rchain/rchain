@@ -1,6 +1,6 @@
 package coop.rchain.node.instances
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.effect.concurrent.MVar
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
@@ -14,7 +14,7 @@ import cats.effect.{Deferred, Ref}
 import cats.effect.std.Semaphore
 
 object ProposerInstance {
-  def create[F[_]: Concurrent: Log](
+  def create[F[_]: Async: Log](
       proposeRequestsQueue: Queue[F, (Boolean, Deferred[F, ProposerResult])],
       proposer: Proposer[F],
       state: Ref[F, ProposerState[F]]

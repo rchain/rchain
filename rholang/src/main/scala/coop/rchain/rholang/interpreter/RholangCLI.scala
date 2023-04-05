@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats._
-import cats.effect.{Concurrent, IO, Sync}
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
@@ -110,7 +110,7 @@ object RholangCLI {
     }
   }
 
-  def mkRSpaceStoreManager[F[_]: Concurrent: Log](
+  def mkRSpaceStoreManager[F[_]: Async: Log](
       dirPath: Path,
       mapSize: Long = 100 * mb
   ): F[KeyValueStoreManager[F]] = {

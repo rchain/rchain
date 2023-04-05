@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.effect.testing.scalatest.AsyncIOSpec
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -177,7 +177,7 @@ import scala.collection.immutable.SortedMap
 //    }
 //  }
 //
-//  private def exploratoryDeploy[F[_]: Concurrent: BlockStore: BlockDagStorage: RuntimeManager: Log: Span](
+//  private def exploratoryDeploy[F[_]: Async: BlockStore: BlockDagStorage: RuntimeManager: Log: Span](
 //      term: String,
 //      block: BlockHash,
 //      validatorIdOpt: Option[ValidatorIdentity] = none

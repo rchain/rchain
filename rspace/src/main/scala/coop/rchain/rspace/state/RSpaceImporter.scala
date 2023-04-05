@@ -22,7 +22,7 @@ final case class StateValidationError(message: String) extends Exception(message
 }
 
 object RSpaceImporter {
-  def validateStateItems[F[_]: Concurrent](
+  def validateStateItems[F[_]: Async](
       historyItems: Seq[(Blake2b256Hash, ByteVector)],
       dataItems: Seq[(Blake2b256Hash, ByteVector)],
       startPath: Seq[(Blake2b256Hash, Option[Byte])],

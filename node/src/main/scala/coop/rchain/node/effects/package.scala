@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.{Concurrent, ConcurrentEffect, IO, Sync}
+import cats.effect.{Async, ConcurrentEffect, IO, Sync}
 import cats.mtl._
 import cats.syntax.all._
 import cats.{Applicative, Monad, Parallel}
@@ -32,14 +32,14 @@ package object effects {
   def nodeDiscovery[F[_]: Monad: KademliaStore: KademliaRPC](id: NodeIdentifier): NodeDiscovery[F] =
     NodeDiscovery.kademlia(id)
 
-  def kademliaRPC[F[_]: Sync: ConcurrentEffect: RPConfAsk: Metrics](
+  def kademliaRPC[F[_]: Sync: AsyncEffect: RPConfAsk: Metrics](
       networkId: String,
       timeout: FiniteDuration,
       grpcEC: ExecutionContext
   ): KademliaRPC[F] =
     new GrpcKademliaRPC(networkId, timeout, grpcEC)
 
-  def transportClient[F[_]: Concurrent: ContextShift: ConcurrentEffect: Parallel: Log: Metrics](
+  def transportClient[F[_]: Async: ContextShift: AsyncEffect: Parallel: Log: Metrics](
       networkId: String,
       certPath: Path,
       keyPath: Path,
@@ -63,7 +63,7 @@ package object effects {
   def consoleIO[F[_]: Sync](consoleReader: ConsoleReader): ConsoleIO[F] =
     new JLineConsoleIO(consoleReader)
 
-  def rpConnections[F[_]: Concurrent]: F[ConnectionsCell[F]] =
+  def rpConnections[F[_]: Async]: F[ConnectionsCell[F]] =
     Ref[F].of(Connections.empty)
 
   def rpConfState[F[_]: Sync](conf: RPConf): F[Ref[F, RPConf]] = Ref.of(conf)

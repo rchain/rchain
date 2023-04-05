@@ -50,7 +50,7 @@ object CommUtil {
 
   def apply[F[_]](implicit ev: CommUtil[F]): CommUtil[F] = ev
 
-  def of[F[_]: Concurrent: Temporal: TransportLayer: RPConfAsk: ConnectionsCell: Log]: CommUtil[F] =
+  def of[F[_]: Async: Temporal: TransportLayer: RPConfAsk: ConnectionsCell: Log]: CommUtil[F] =
     new CommUtil[F] {
 
       def sendToPeers(message: Packet, scopeSize: Option[Int]): F[Unit] =

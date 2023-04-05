@@ -1,7 +1,7 @@
 package coop.rchain.casper.rholang
 
 import cats.Parallel
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.metrics
@@ -19,7 +19,7 @@ import java.nio.file.{Files, Path}
 
 object Resources {
 
-  def mkTestRNodeStoreManager[F[_]: Concurrent: Log](
+  def mkTestRNodeStoreManager[F[_]: Async: Log](
       dirPath: Path
   ): F[KeyValueStoreManager[F]] = {
     // Limit maximum environment (file) size for LMDB in tests
@@ -36,7 +36,7 @@ object Resources {
     dbMappings >>= (xs => LmdbDirStoreManager[F](dirPath, xs.toMap))
   }
 
-  def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
+  def mkRuntimeManager[F[_]: Async: Parallel: ContextShift: Log](
       prefix: String,
       mergeableTagName: Par
   ): Resource[F, RuntimeManager[F]] =
@@ -46,7 +46,7 @@ object Resources {
 
   // TODO: This is confusing to create another instances for Log, Metrics and Span.
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
-  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
+  def mkRuntimeManagerAt[F[_]: Async: Parallel: ContextShift](
       kvm: KeyValueStoreManager[F],
       mergeableTagName: Par
   ): F[RuntimeManager[F]] = {

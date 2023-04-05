@@ -1,6 +1,6 @@
 package coop.rchain.rspace.concurrent
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.metrics.Metrics
@@ -9,7 +9,7 @@ import coop.rchain.metrics.Metrics.Source
 import scala.collection.concurrent.TrieMap
 import cats.effect.std.Semaphore
 
-class MultiLock[F[_]: Concurrent: Metrics, K](metricSource: Metrics.Source) {
+class MultiLock[F[_]: Async: Metrics, K](metricSource: Metrics.Source) {
 
   implicit private val ms: Source = metricSource
 
@@ -34,7 +34,7 @@ class MultiLock[F[_]: Concurrent: Metrics, K](metricSource: Metrics.Source) {
 
     import coop.rchain.metrics.implicits._
 
-    Concurrent[F].bracket(
+    Sync[F].bracket(
       for {
         _     <- Metrics[F].incrementGauge("lock.queue")
         locks <- acquireLocks.timer("lock.acquire")

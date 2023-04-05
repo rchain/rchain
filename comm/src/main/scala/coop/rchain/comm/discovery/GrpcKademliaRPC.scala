@@ -1,6 +1,6 @@
 package coop.rchain.comm.discovery
 
-import cats.effect.{ConcurrentEffect, Sync}
+import cats.effect.{AsyncEffect, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.ski._
@@ -14,7 +14,7 @@ import io.grpc.netty._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-class GrpcKademliaRPC[F[_]: Sync: ConcurrentEffect: RPConfAsk: Metrics](
+class GrpcKademliaRPC[F[_]: Sync: AsyncEffect: RPConfAsk: Metrics](
     networkId: String,
     timeout: FiniteDuration,
     grpcEC: ExecutionContext

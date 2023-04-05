@@ -1,6 +1,6 @@
 package coop.rchain.casper.blocks
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
@@ -22,7 +22,7 @@ object BlockProcessor {
     * - input block must have all dependencies in the DAG
     * - blocks created by node itself are not processed here, but in Proposer
     */
-  def apply[F[_]: Concurrent: Temporal: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
+  def apply[F[_]: Async: Temporal: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
       inputBlocks: Stream[F, BlockMessage],
       validatedQueue: Queue[F, BlockMessage],
       shardId: String,
@@ -41,7 +41,7 @@ object BlockProcessor {
       } yield (block, result)
     }
 
-  def validateAndAddToDag[F[_]: Concurrent: Temporal: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
+  def validateAndAddToDag[F[_]: Async: Temporal: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
       block: BlockMessage,
       shardId: String,
       minPhloPrice: Long

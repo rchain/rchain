@@ -1,6 +1,6 @@
 package coop.rchain.rspace.state
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.exporters.RSpaceExporterItems.StoreItems
@@ -52,7 +52,7 @@ final class RSpaceExporterOps[F[_]](
   // Export to disk
 
   def writeToDisk[C, P, A, K](root: Blake2b256Hash, dirPath: Path, chunkSize: Int)(
-      implicit m: Concurrent[F],
+      implicit m: Async[F],
       l: Log[F]
   ): F[Unit] =
     RSpaceExporterDisk.writeToDisk[F](exporter, root, dirPath, chunkSize)

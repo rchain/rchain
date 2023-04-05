@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper.PrettyPrinter
@@ -37,7 +37,7 @@ final class BlockStoreOps[F[_]](
 
   def getUnsafe(
       hashes: Seq[BlockHash]
-  )(implicit concurrent: Concurrent[F]): fs2.Stream[F, BlockMessage] = {
+  )(implicit concurrent: Async[F]): fs2.Stream[F, BlockMessage] = {
     val streams = hashes.map(h => fs2.Stream.eval(getUnsafe(h)))
     fs2.Stream
       .emits(streams)

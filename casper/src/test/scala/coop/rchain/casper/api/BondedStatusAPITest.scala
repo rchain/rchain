@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.effect.testing.scalatest.AsyncIOSpec
-import cats.effect.{Concurrent, IO, Sync}
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -118,7 +118,7 @@ import scala.collection.immutable.SortedMap
 //    }
 //  }
 //
-//  private def createMocks[F[_]: Concurrent: Sync]
+//  private def createMocks[F[_]: Async: Sync]
 //      : (Concurrent[F], Log[F], BlockDagStorage[F], BlockStore[F], RuntimeManager[F], Span[F]) = {
 //    val c  = Concurrent[F]
 //    val sp = mock[Span[F]]
@@ -169,7 +169,7 @@ import scala.collection.immutable.SortedMap
 //      Set(m.blockHash)
 //    )
 //
-//  private def bondedStatus[F[_]: Concurrent: BlockDagStorage: BlockStore: Log: RuntimeManager: Span](
+//  private def bondedStatus[F[_]: Async: BlockDagStorage: BlockStore: Log: RuntimeManager: Span](
 //      validatorIdOpt: ValidatorIdentity,
 //      publicKey: PublicKey,
 //      block: BlockMessage

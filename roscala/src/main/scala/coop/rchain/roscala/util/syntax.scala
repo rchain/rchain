@@ -16,7 +16,7 @@ object syntax {
     }
   }
 
-  implicit class ConcurrentHashMapOps[K, V](val hm: ConcurrentHashMap[K, V]) extends AnyVal {
+  implicit class ConcurrentHashMapOps[K, V](val hm: AsyncHashMap[K, V]) extends AnyVal {
     @inline def apply(k: K): V = hm.get(k)
 
     @inline def update(k: K, v: V) = hm.put(k, v)

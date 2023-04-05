@@ -25,7 +25,7 @@ class LockedMap[K, V] {
       map.put(i, v)
     }
 
-  def useWithReadLock[R](f: ConcurrentHashMap[K, V] => R): R =
+  def useWithReadLock[R](f: AsyncHashMap[K, V] => R): R =
     lock.readLock().withLock {
       f(map)
     }

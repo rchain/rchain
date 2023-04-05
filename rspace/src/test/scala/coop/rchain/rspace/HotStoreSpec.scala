@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Parallel
-import cats.effect.{Concurrent, IO, Sync}
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples.{StringsCaptor, _}
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -1117,7 +1117,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[IO] {
 
   import coop.rchain.shared.RChainScheduler._
   protected type F[A] = IO[A]
-  implicit override val S: Sync[F]      = implicitly[Concurrent[IO]]
+  implicit override val S: Sync[F]      = implicitly[Async[IO]]
   implicit override val P: Parallel[IO] = IO.ioParallel
   def C(
       c: HotStoreState[String, Pattern, String, StringsCaptor] = HotStoreState()

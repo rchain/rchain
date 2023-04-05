@@ -1,6 +1,6 @@
 package coop.rchain.node.runtime
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import coop.rchain.casper.api.{BlockApi, BlockReportApi}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceFs2Grpc
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceFs2Grpc
@@ -17,7 +17,7 @@ final case class GrpcServices[F[_]](
 )
 
 object GrpcServices {
-  def build[F[_]: Concurrent: Log](
+  def build[F[_]: Async: Log](
       blockApi: BlockApi[F],
       blockReportAPI: BlockReportApi[F],
       runtime: RhoRuntime[F]

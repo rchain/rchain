@@ -1,7 +1,7 @@
 package coop.rchain.rspace.merger
 
 import cats.Monoid
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.{ColdStoreInstances, DataLeaf, HistoryReaderBinary}
@@ -30,7 +30,7 @@ final case class StateChange(
 
 object StateChange {
 
-  private def computeValueChange[F[_]: Concurrent](
+  private def computeValueChange[F[_]: Async](
       historyPointer: Blake2b256Hash,
       startValue: Blake2b256Hash => F[Seq[ByteVector]],
       endValue: Blake2b256Hash => F[Seq[ByteVector]]
@@ -42,7 +42,7 @@ object StateChange {
       deleted    = startValue diff endValue
     } yield ChannelChange(added, deleted)
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       preStateReader: HistoryReaderBinary[F, C, P, A, K],
       postStateReader: HistoryReaderBinary[F, C, P, A, K],
       eventLogIndex: EventLogIndex,

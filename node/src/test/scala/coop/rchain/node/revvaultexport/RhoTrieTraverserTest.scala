@@ -1,6 +1,6 @@
 package coop.rchain.node.revvaultexport
 
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
@@ -58,7 +58,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
                                |  }
                                |}""".stripMargin
 
-    implicit val concurrent                  = Concurrent[IO]
+    implicit val concurrent                  = Async[IO]
     implicit val metricsEff: Metrics[Effect] = new Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[Effect]      = NoopSpan[IO]()
     implicit val logger: Log[Effect]         = Log.log[IO]

@@ -75,7 +75,7 @@ object StateBalanceMain {
 
     val stateBalancesFile = outputDir.resolve("stateBalances.csv")
     import coop.rchain.shared.RChainScheduler._
-    implicit val tc = Concurrent[IO]
+    implicit val tc = Async[IO]
 
     val task: IO[Unit] = for {
       stateBalances <- StateBalances.read(

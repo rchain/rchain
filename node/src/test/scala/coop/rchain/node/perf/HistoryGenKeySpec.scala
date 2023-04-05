@@ -1,7 +1,7 @@
 package coop.rchain.node.perf
 
 import cats.Parallel
-import cats.effect.{Concurrent, IO, Sync}
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -76,7 +76,7 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
 
   override def afterAll: Unit = tempDir.deleteRecursively
 
-  def storeLMDB[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  def storeLMDB[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span]()
       : F[KeyValueStore[F]] =
     for {
       lmdbHistoryManager <- LmdbStoreManager(
@@ -106,7 +106,7 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
     def create(root: Blake2b256Hash): F[HistoryType[F]]
   }
 
-  case class CreateRadixHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  case class CreateRadixHistory[F[_]: Sync: Async: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
@@ -131,7 +131,7 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
       }
   }
 
-  case class CreateDefaultHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  case class CreateDefaultHistory[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
@@ -154,7 +154,7 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
       }
   }
 
-  class Experiment[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span: Sync] {
+  class Experiment[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span: Sync] {
 
     def getHistory(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeHistory match {

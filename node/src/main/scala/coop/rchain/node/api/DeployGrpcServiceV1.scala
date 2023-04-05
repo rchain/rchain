@@ -1,6 +1,6 @@
 package coop.rchain.node.api
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Foldable}
 import com.google.protobuf.ByteString
@@ -17,7 +17,7 @@ import fs2.Stream
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Concurrent: Log](
+  def apply[F[_]: Async: Log](
       blockApi: BlockApi[F],
       blockReportAPI: BlockReportApi[F]
   ): DeployServiceFs2Grpc[F, Metadata] =

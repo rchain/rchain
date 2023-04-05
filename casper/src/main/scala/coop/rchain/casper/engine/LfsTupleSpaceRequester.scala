@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.models.syntax._
@@ -94,7 +94,7 @@ object LfsTupleSpaceRequester {
     * @param validateTupleSpaceItems Check if received statet chunk is valid
     * @return fs2.Stream processing all tuple space state
     */
-  def stream[F[_]: Concurrent: Temporal: Log](
+  def stream[F[_]: Async: Temporal: Log](
       fringe: FinalizedFringe,
       tupleSpaceMessageQueue: Queue[F, StoreItemsMessage],
       requestForStoreItem: (StatePartPath, Int) => F[Unit],

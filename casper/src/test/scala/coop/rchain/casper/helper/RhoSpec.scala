@@ -1,6 +1,6 @@
 package coop.rchain.casper.helper
 
-import cats.effect.{Concurrent, IO, Sync}
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.TestUtil
@@ -74,7 +74,7 @@ class RhoSpec(
 
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
-  private def testFrameworkContracts[F[_]: Log: Concurrent: Span](
+  private def testFrameworkContracts[F[_]: Log: Async: Span](
       testResultCollector: TestResultCollector[F]
   ): Seq[SystemProcesses.Definition[F]] = {
     val testResultCollectorService =

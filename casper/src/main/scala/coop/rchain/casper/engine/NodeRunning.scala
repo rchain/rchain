@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.Monad
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -26,7 +26,7 @@ object NodeRunning {
 
   // format: off
   def apply[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Async: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
   /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager
@@ -212,7 +212,7 @@ object NodeRunning {
 
 // format: off
 class NodeRunning[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Async: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
   /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager

@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.data.EitherT
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -22,7 +22,7 @@ import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap
 
-class BlockReportApi[F[_]: Concurrent: BlockStore: Metrics: Log](
+class BlockReportApi[F[_]: Async: BlockStore: Metrics: Log](
     reportingCasper: ReportingCasper[F],
     reportStore: ReportStore[F],
     validatorIdentityOpt: Option[ValidatorIdentity]
@@ -106,7 +106,7 @@ class BlockReportApi[F[_]: Concurrent: BlockStore: Metrics: Log](
 }
 
 object BlockReportApi {
-  def apply[F[_]: Concurrent: BlockStore: Metrics: Log](
+  def apply[F[_]: Async: BlockStore: Metrics: Log](
       reportingCasper: ReportingCasper[F],
       reportStore: ReportStore[F],
       validatorIdentityOpt: Option[ValidatorIdentity]

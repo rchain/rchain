@@ -1,6 +1,6 @@
 package coop.rchain.node.dag
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.node.dag.implementation.{BlockStatus, NetworkBlockRequester, RNodeDagManager}
 import cats.effect.Ref
@@ -10,7 +10,7 @@ object RNodeStateSetup {
   /**
     * TODO: Should create the whole node state to be used for API, CLI, etc.
     */
-  def setupRNodeState[F[_]: Concurrent, M, MId, S, SId] =
+  def setupRNodeState[F[_]: Async, M, MId, S, SId] =
     for {
       /* State */
 

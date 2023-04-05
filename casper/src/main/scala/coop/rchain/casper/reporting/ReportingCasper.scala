@@ -1,7 +1,7 @@
 package coop.rchain.casper.reporting
 
 import cats.Parallel
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.models.syntax._
@@ -83,7 +83,7 @@ object ReportingCasper {
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def rhoReporter[F[_]: Concurrent: ContextShift: Parallel: BlockDagStorage: Log: Metrics: Span](
+  def rhoReporter[F[_]: Async: ContextShift: Parallel: BlockDagStorage: Log: Metrics: Span](
       rspaceStore: RSpaceStore[F],
       shardId: String
   ): ReportingCasper[F] =
@@ -169,7 +169,7 @@ object ReportingRuntime {
   implicit val RuntimeMetricsSource: Source =
     Metrics.Source(RholangMetricsSource, "reportingRuntime")
 
-  def createReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  def createReportingRSpace[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
       store: RSpaceStore[F]
   ): F[RhoReportingRspace[F]] = {
     import coop.rchain.rholang.interpreter.storage._
@@ -178,7 +178,7 @@ object ReportingRuntime {
     ReportingRspace.create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
   }
 
-  def createReportingRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
+  def createReportingRuntime[F[_]: Async: Log: Metrics: Span: Parallel](
       reporting: RhoReportingRspace[F],
       shardId: String,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty

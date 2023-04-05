@@ -1,13 +1,12 @@
 package coop.rchain.fs2
 
-import cats.effect.Concurrent
+import cats.effect.{Async, Ref, Temporal}
 import cats.syntax.all._
 import fs2.Stream
 import fs2.Stream._
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{FiniteDuration, NANOSECONDS}
-import cats.effect.{Ref, Temporal}
 
 trait Fs2StreamSyntax {
   implicit final def sharedSyntaxFs2Stream[F[_], A](stream: Stream[F, A]): Fs2StreamOps[F, A] =
@@ -27,25 +26,25 @@ class Fs2StreamOps[F[_], A](
   /**
     * Variant of [[Stream.parEvalMap]] with parallelism bound to number of processors.
     */
-  def parEvalMapProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
+  def parEvalMapProcBounded[F2[x] >: F[x]: Async, B](f: A => F2[B]): Stream[F2, B] =
     stream.parEvalMap[F2, B](availableProcessors)(f)
 
   /**
     * Variant of [[Stream.parEvalMapUnordered]] with parallelism bound to number of processors.
     */
-  def parEvalMapUnorderedProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
+  def parEvalMapUnorderedProcBounded[F2[x] >: F[x]: Async, B](f: A => F2[B]): Stream[F2, B] =
     stream.parEvalMapUnordered[F2, B](availableProcessors)(f)
 
   /**
     * Variant of [[Stream.evalFilterAsync]] with parallelism bound to number of processors.
     */
-  def evalFilterAsyncProcBounded[F2[x] >: F[x]: Concurrent](f: A => F2[Boolean]): Stream[F2, A] =
+  def evalFilterAsyncProcBounded[F2[x] >: F[x]: Async](f: A => F2[Boolean]): Stream[F2, A] =
     stream.evalFilterAsync[F2](availableProcessors)(f)
 
   /**
     * Variant of [[Stream.evalFilterAsync]] without keeping order of results.
     */
-  def evalFilterAsyncUnordered[F2[x] >: F[x]: Concurrent](
+  def evalFilterAsyncUnordered[F2[x] >: F[x]: Async](
       maxConcurrent: Int
   )(f: A => F2[Boolean]): Stream[F2, A] =
     stream
@@ -57,7 +56,7 @@ class Fs2StreamOps[F[_], A](
   /**
     * Variant of [[evalFilterAsyncUnordered]] with parallelism bound to number of processors.
     */
-  def evalFilterAsyncUnorderedProcBounded[F2[x] >: F[x]: Concurrent](
+  def evalFilterAsyncUnorderedProcBounded[F2[x] >: F[x]: Async](
       f: A => F2[Boolean]
   ): Stream[F2, A] =
     evalFilterAsyncUnordered[F2](availableProcessors)(f)
@@ -79,9 +78,9 @@ class Fs2StreamOps[F[_], A](
   def evalOnIdle[B](
       action: F[B],
       timeout: FiniteDuration
-  )(implicit c: Concurrent[F], t: Temporal[F]): Stream[F, A] = {
+  )(implicit t: Temporal[F]): Stream[F, A] = {
     // Current time in nano seconds
-    val nanoTime = Temporal[F].clock.monotonic(NANOSECONDS)
+    val nanoTime = Temporal[F].realTime.map(_.toNanos)
     // Timeout in nano seconds
     val timeoutNano = timeout.toNanos
 
@@ -132,6 +131,6 @@ class Fs2StreamOfStreamsOps[F[_], A](
   /**
     * Variant of [[Stream.parJoin]] with parallelism bound to number of processors.
     */
-  def parJoinProcBounded(implicit F: Concurrent[F]): Stream[F, A] =
+  def parJoinProcBounded(implicit F: Async[F]): Stream[F, A] =
     streams.parJoin(availableProcessors)
 }

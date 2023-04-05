@@ -38,11 +38,11 @@ object MetricsSemaphore {
   )(implicit ms: Metrics.Source): MetricsSemaphore[F] =
     new MetricsSemaphore(underlying)
 
-  def apply[F[_]: Concurrent: Metrics](
+  def apply[F[_]: Async: Metrics](
       n: Long
   )(implicit ms: Metrics.Source): F[MetricsSemaphore[F]] =
     Semaphore[F](n).map(apply(_))
 
-  def single[F[_]: Concurrent: Metrics](implicit ms: Metrics.Source): F[MetricsSemaphore[F]] =
+  def single[F[_]: Async: Metrics](implicit ms: Metrics.Source): F[MetricsSemaphore[F]] =
     apply(1L)
 }

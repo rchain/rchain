@@ -1,16 +1,9 @@
 package coop.rchain.shared
 
-import cats.effect.IO
-
-import java.util.concurrent.{Executors, ThreadFactory}
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.{Executors, ThreadFactory}
 
 object RChainScheduler {
-  implicit val mainEC                 = scala.concurrent.ExecutionContext.Implicits.global
-  implicit val csIO: ContextShift[IO] = IO.contextShift(mainEC)
-  val rholangEC                       = mainEC
-  implicit val timer                  = IO.timer(mainEC)
-
   val ioScheduler = Executors.newCachedThreadPool(new ThreadFactory {
     private val counter = new AtomicLong(0L)
 

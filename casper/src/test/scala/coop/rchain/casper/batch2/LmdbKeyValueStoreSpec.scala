@@ -1,7 +1,7 @@
 package coop.rchain.casper.batch2
 
 import java.nio.file.Files
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.store.{KeyValueStoreSut, LmdbStoreManager}
@@ -28,7 +28,7 @@ class LmdbKeyValueStoreSpec
 
   override def afterAll: Unit = tempDir.deleteRecursively
 
-  def withSut[F[_]: Concurrent: Log](f: KeyValueStoreSut[F] => F[Unit]) =
+  def withSut[F[_]: Async: Log](f: KeyValueStoreSut[F] => F[Unit]) =
     for {
       kvm <- LmdbStoreManager[F](tempPath.resolve(Random.nextString(32)), 1024 * 1024 * 1024)
       sut = {

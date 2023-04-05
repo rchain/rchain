@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.{Concurrent, ConcurrentEffect, Resource, Sync}
+import cats.effect.{Async, ConcurrentEffect, Resource, Sync}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceFs2Grpc
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceFs2Grpc
 import coop.rchain.node.model.ReplFs2Grpc
@@ -17,7 +17,7 @@ import scala.concurrent.duration.FiniteDuration
 
 package object api {
 
-  def acquireInternalServer[F[_]: Sync: ConcurrentEffect](
+  def acquireInternalServer[F[_]: Sync: AsyncEffect](
       host: String,
       port: Int,
       grpcEC: ExecutionContext,
@@ -52,7 +52,7 @@ package object api {
     Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.awaitTermination()))
   }
 
-  def acquireExternalServer[F[_]: Concurrent: ConcurrentEffect: Log](
+  def acquireExternalServer[F[_]: Async: AsyncEffect: Log](
       host: String,
       port: Int,
       grpcEC: ExecutionContext,

@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import cats.effect.{Concurrent, ConcurrentEffect, Resource, Sync}
+import cats.effect.{Async, ConcurrentEffect, Resource, Sync}
 import cats.syntax.all._
 import cats.effect.syntax.all._
 import coop.rchain.comm.protocol.routing._
@@ -30,7 +30,7 @@ object GrpcTransportReceiver {
   type MessageBuffers[F[_]]  = (Send => F[Boolean], StreamMessage => F[Boolean], Stream[F, Unit])
   type MessageHandlers[F[_]] = (Send => F[Unit], StreamMessage => F[Unit])
 
-  def create[F[_]: Concurrent: ConcurrentEffect: RPConfAsk: Log: Metrics: Temporal](
+  def create[F[_]: Async: AsyncEffect: RPConfAsk: Log: Metrics: Temporal](
       networkId: String,
       port: Int,
       serverSslContext: SslContext,
@@ -62,7 +62,7 @@ object GrpcTransportReceiver {
               blobBuffer.dequeueChunk(1).parEvalMapUnordered(parallelism)(messageHandlers._2(_))
             // inbound queue lives for 10 minutes TODO synchronize with Kademlia table cleanup
             s = (Stream.fixedDelay(10.minutes) ++ Stream.eval(clear)) concurrently stream
-            _ <- Concurrent[F]
+            _ <- Sync[F]
                   .start(s.compile.drain)
                   .onError {
                     case err =>

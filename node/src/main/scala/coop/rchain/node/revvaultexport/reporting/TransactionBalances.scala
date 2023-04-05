@@ -1,7 +1,7 @@
 package coop.rchain.node.revvaultexport.reporting
 
 import cats.Parallel
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.DagRepresentation
@@ -221,7 +221,7 @@ object TransactionBalances {
     } yield blockMes
   }
 
-  def main[F[_]: Concurrent: Parallel: ContextShift](
+  def main[F[_]: Async: Parallel: ContextShift](
       dataDir: Path,
       walletPath: Path,
       bondPath: Path,

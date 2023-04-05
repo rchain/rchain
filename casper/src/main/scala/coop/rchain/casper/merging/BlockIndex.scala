@@ -1,6 +1,6 @@
 package coop.rchain.casper.merging
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -28,7 +28,7 @@ object BlockIndex {
   // TODO make proper storage for block indices
   val cache = TrieMap.empty[BlockHash, BlockIndex]
 
-  def getBlockIndex[F[_]: Concurrent: RuntimeManager: BlockStore](
+  def getBlockIndex[F[_]: Async: RuntimeManager: BlockStore](
       blockHash: BlockHash
   ): F[BlockIndex] = {
     val cached = BlockIndex.cache.get(blockHash).map(_.pure)
@@ -55,7 +55,7 @@ object BlockIndex {
     }
   }
 
-  def createEventLogIndex[F[_]: Concurrent, C, P, A, K](
+  def createEventLogIndex[F[_]: Async, C, P, A, K](
       events: List[Event],
       historyRepository: HistoryRepository[F, C, P, A, K],
       preStateHash: Blake2b256Hash,
@@ -75,7 +75,7 @@ object BlockIndex {
                       )
     } yield eventLogIndex
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       blockHash: BlockHash,
       usrProcessedDeploys: List[ProcessedDeploy],
       sysProcessedDeploys: List[ProcessedSystemDeploy],

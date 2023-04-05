@@ -1,7 +1,7 @@
 package coop.rchain.casper.merging
 
 import cats.Parallel
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.rholang.Resources
@@ -92,7 +92,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
     RhoName(baseRhoSeed.next())
   }
 
-  def testCase[F[_]: Concurrent: ContextShift: Parallel: Span: Log](
+  def testCase[F[_]: Async: ContextShift: Parallel: Span: Log](
       baseTerms: Seq[String],
       leftTerms: Seq[DeployTestInfo],
       rightTerms: Seq[DeployTestInfo],

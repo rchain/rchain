@@ -1,6 +1,6 @@
 package coop.rchain.rspace.state.instances
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RootsStoreInstances
@@ -15,7 +15,7 @@ import java.nio.ByteBuffer
 
 object RSpaceExporterStore {
   // RSpace exporter constructor / smart constructor "guards" private class
-  def apply[F[_]: Concurrent](
+  def apply[F[_]: Async](
       historyStore: KeyValueStore[F],
       valueStore: KeyValueStore[F],
       rootsStore: KeyValueStore[F]
@@ -23,7 +23,7 @@ object RSpaceExporterStore {
 
   final case object NoRootError extends Exception
 
-  private final case class RSpaceExporterImpl[F[_]: Concurrent](
+  private final case class RSpaceExporterImpl[F[_]: Async](
       sourceHistoryStore: KeyValueStore[F],
       sourceValueStore: KeyValueStore[F],
       sourceRootsStore: KeyValueStore[F]

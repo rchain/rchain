@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.Parallel
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -35,7 +35,7 @@ object NodeLaunch {
 
   // format: off
   def apply[F[_]
-    /* Execution */   : Concurrent: Parallel: ContextShift: Time: Temporal
+    /* Execution */   : Async: Parallel: ContextShift: Time: Temporal
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever
     /* State */       : RPConfAsk: ConnectionsCell
     /* Rholang */     : RuntimeManager
@@ -140,7 +140,7 @@ object NodeLaunch {
     } yield ()
   }
 
-  def createGenesisBlockFromConfig[F[_]: Concurrent: ContextShift: RuntimeManager: Log](
+  def createGenesisBlockFromConfig[F[_]: Async: ContextShift: RuntimeManager: Log](
       validator: ValidatorIdentity,
       conf: CasperConf
   ): F[BlockMessage] =
@@ -162,7 +162,7 @@ object NodeLaunch {
       conf.genesisBlockData.systemContractPubKey
     )
 
-  def createGenesisBlock[F[_]: Concurrent: ContextShift: RuntimeManager: Log](
+  def createGenesisBlock[F[_]: Async: ContextShift: RuntimeManager: Log](
       validator: ValidatorIdentity,
       shardId: String,
       blockNumber: Long,

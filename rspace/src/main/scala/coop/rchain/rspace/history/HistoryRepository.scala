@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.Parallel
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.metrics.Span
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -54,7 +54,7 @@ object HistoryRepositoryInstances {
   val PREFIX_KONT: Byte  = 0x01
   val PREFIX_JOINS: Byte = 0x02
 
-  def lmdbRepository[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](
+  def lmdbRepository[F[_]: Async: Parallel: Log: Span, C, P, A, K](
       historyKeyValueStore: KeyValueStore[F],
       rootsKeyValueStore: KeyValueStore[F],
       coldKeyValueStore: KeyValueStore[F]

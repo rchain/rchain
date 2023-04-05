@@ -1,7 +1,7 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect.{ConcurrentEffect, Resource, Sync}
+import cats.effect.{AsyncEffect, Resource, Sync}
 import cats.mtl._
 import cats.syntax.all._
 import com.typesafe.config.Config
@@ -31,7 +31,7 @@ import cats.effect.{Ref, Temporal}
 object NodeRuntime {
   type LocalEnvironment[F[_]] = ApplicativeLocal[F, NodeCallCtx]
 
-  def start[F[_]: ConcurrentEffect: Parallel: ContextShift: Temporal: Log](
+  def start[F[_]: AsyncEffect: Parallel: ContextShift: Temporal: Log](
       nodeConf: NodeConf,
       kamonConf: Config
   )(implicit mainEC: ExecutionContext): F[Unit] = {
@@ -75,7 +75,7 @@ object NodeRuntime {
     } yield ()
 }
 
-class NodeRuntime[F[_]: ConcurrentEffect: Parallel: Temporal: ContextShift: LocalEnvironment: Log] private[node] (
+class NodeRuntime[F[_]: AsyncEffect: Parallel: Temporal: ContextShift: LocalEnvironment: Log] private[node] (
     nodeConf: NodeConf,
     kamonConf: Config,
     id: NodeIdentifier

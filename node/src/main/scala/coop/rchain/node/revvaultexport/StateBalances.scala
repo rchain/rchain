@@ -1,7 +1,7 @@
 package coop.rchain.node.revvaultexport
 
 import cats.Parallel
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -41,7 +41,7 @@ object StateBalances {
     } yield unf
   }
 
-  def read[F[_]: Concurrent: Parallel: ContextShift](
+  def read[F[_]: Async: Parallel: ContextShift](
       shardId: String,
       blockHash: String,
       vaultTreeHashMapDepth: Int,

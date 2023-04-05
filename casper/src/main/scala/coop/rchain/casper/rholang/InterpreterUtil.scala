@@ -1,6 +1,6 @@
 package coop.rchain.casper.rholang
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -48,7 +48,7 @@ object InterpreterUtil {
 
   // TODO: most of this function is legacy code, it should be refactored with separation of errors that are
   //  handled (with included data e.g. hash not equal) and fatal errors which should NOT be handled
-  def validateBlockCheckpoint[F[_]: Concurrent: Temporal: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def validateBlockCheckpoint[F[_]: Async: Temporal: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[(BlockMetadata, BlockProcessing[Boolean])] =
     for {
@@ -130,7 +130,7 @@ object InterpreterUtil {
       (bmd, result)
     }
 
-  def validateBlockCheckpointLegacy[F[_]: Concurrent: Temporal: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def validateBlockCheckpointLegacy[F[_]: Async: Temporal: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[BlockProcessing[Boolean]] = validateBlockCheckpoint(block).map(_._2)
 
@@ -244,7 +244,7 @@ object InterpreterUtil {
     Log[F].info(s"Deploy ($deployInfo) errors: ${errors.mkString(", ")}")
   }
 
-  def computeDeploysCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def computeDeploysCheckpoint[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
       rand: Blake2b512Random,

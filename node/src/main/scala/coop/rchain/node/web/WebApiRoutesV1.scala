@@ -1,6 +1,6 @@
 package coop.rchain.node.web
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.node.api.json.JsonEntitiesCirceFromSchema
 import coop.rchain.node.api.v1.{WebApiAdminEndpoints, WebApiEndpoints}
@@ -22,7 +22,7 @@ object WebApiRoutesV1 {
     * @param webApi Web API implementation
     * @return http4s routes (including OpenAPI schema _openapi.json_)
     */
-  def create[F[_]: Concurrent: Log](webApi: WebApi[F]): HttpRoutes[F] = {
+  def create[F[_]: Async: Log](webApi: WebApi[F]): HttpRoutes[F] = {
     // RNode WebApi v1 routes
     val apiRoutes = HttpRoutes.of[F](WebApiRoutesV1(webApi).publicRoutes)
     // OpenAPI schema route
@@ -37,7 +37,7 @@ object WebApiRoutesV1 {
     * @param adminWebApi Admin Web API implementation
     * @return http4s routes (including OpenAPI schema _openapi.json_)
     */
-  def createAdmin[F[_]: Concurrent: Log](
+  def createAdmin[F[_]: Async: Log](
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F]
   ): HttpRoutes[F] = {
@@ -55,7 +55,7 @@ object WebApiRoutesV1 {
 /**
   * Defines implementation (interpreter) for Web API endpoints.
   */
-final case class WebApiRoutesV1[F[_]: Concurrent: Log](
+final case class WebApiRoutesV1[F[_]: Async: Log](
     webApi: WebApi[F]
 ) extends Endpoints[F]
     with JsonEntitiesCirceFromSchema

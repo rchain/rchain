@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import cats.effect.{Concurrent, ConcurrentEffect, Resource, Sync}
+import cats.effect.{Async, ConcurrentEffect, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -38,7 +38,7 @@ object TransportLayerServer {
     }
 }
 
-class GrpcTransportServer[F[_]: Concurrent: ConcurrentEffect: RPConfAsk: Log: Metrics: Temporal](
+class GrpcTransportServer[F[_]: Async: AsyncEffect: RPConfAsk: Log: Metrics: Temporal](
     networkId: String,
     port: Int,
     cert: String,
@@ -108,7 +108,7 @@ class GrpcTransportServer[F[_]: Concurrent: ConcurrentEffect: RPConfAsk: Log: Me
 
 object GrpcTransportServer {
 
-  def acquireServer[F[_]: Concurrent: ConcurrentEffect: RPConfAsk: Log: Metrics: Temporal](
+  def acquireServer[F[_]: Async: AsyncEffect: RPConfAsk: Log: Metrics: Temporal](
       networkId: String,
       port: Int,
       certPath: Path,

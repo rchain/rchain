@@ -1,6 +1,6 @@
 package coop.rchain.shared
 
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import fs2.Stream
@@ -18,13 +18,12 @@ class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
   /**
     * Creates a Stream of 2 elements creating String "11", if timeout occurs it will insert zeroes e.g. "101"
     */
-  def test[F[_]: Concurrent: Temporal](timeout: FiniteDuration): F[String] = Ref.of("") flatMap {
-    st =>
-      val addOne  = Stream.eval(st.updateAndGet(_ + "1"))
-      val pause   = Stream.sleep(1.second)(Temporal[F]).drain
-      val addZero = st.update(_ + "0")
+  def test[F[_]: Async: Temporal](timeout: FiniteDuration): F[String] = Ref.of("") flatMap { st =>
+    val addOne  = Stream.eval(st.updateAndGet(_ + "1"))
+    val pause   = Stream.sleep(1.second)(Temporal[F]).drain
+    val addZero = st.update(_ + "0")
 
-      (addOne ++ pause ++ addOne).evalOnIdle(addZero, timeout).compile.lastOrError
+    (addOne ++ pause ++ addOne).evalOnIdle(addZero, timeout).compile.lastOrError
   }
 
   // Helper to construct success result

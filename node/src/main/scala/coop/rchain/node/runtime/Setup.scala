@@ -1,6 +1,6 @@
 package coop.rchain.node.runtime
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import cats.{Parallel, Show}
@@ -48,7 +48,7 @@ import monix.execution.Scheduler
 import cats.effect.{Deferred, Ref, Temporal}
 
 object Setup {
-  def setupNodeProgram[F[_]: Concurrent: Parallel: ContextShift: Temporal: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](
+  def setupNodeProgram[F[_]: Async: Parallel: ContextShift: Temporal: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](
       storeManager: KeyValueStoreManager[F],
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],

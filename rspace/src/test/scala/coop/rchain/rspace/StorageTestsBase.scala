@@ -27,7 +27,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
   type HR   = HistoryRepository[F, C, P, A, K]
   type AtST = AtomicAny[ST]
 
-  implicit def concurrentF: Concurrent[F]
+  implicit def concurrentF: Async[F]
   implicit def parF: Parallel[F]
   implicit def logF: Log[F]
   implicit def metricsF: Metrics[F]
@@ -93,7 +93,7 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[IO, C, P, R, K] {
   implicit val metricsF: Metrics[IO]           = new Metrics.MetricsNOP[IO]()
   implicit val spanF: Span[IO]                 = NoopSpan[IO]()
   implicit val contextShiftF: ContextShift[IO] = coop.rchain.shared.RChainScheduler.csIO
-  implicit val concurrentF: Concurrent[IO]     = Concurrent[IO]
+  implicit val concurrentF: Async[IO]     = Async[IO]
   implicit val monadF: Monad[IO]               = Monad[IO]
   override def run[RES](f: IO[RES]): RES       = f.unsafeRunSync
 }

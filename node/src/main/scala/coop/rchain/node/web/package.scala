@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.{ConcurrentEffect, Resource, Sync}
+import cats.effect.{AsyncEffect, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -25,7 +25,7 @@ package object web {
   def corsPolicy[F[_]: Sync](routes: HttpRoutes[F]) =
     CORS(routes, CORS.DefaultCORSConfig.copy(allowCredentials = false))
 
-  def acquireHttpServer[F[_]: ContextShift: ConcurrentEffect: Temporal: RPConfAsk: NodeDiscovery: ConnectionsCell: Log](
+  def acquireHttpServer[F[_]: ContextShift: AsyncEffect: Temporal: RPConfAsk: NodeDiscovery: ConnectionsCell: Log](
       reporting: Boolean,
       host: String = "0.0.0.0",
       httpPort: Int,
@@ -60,7 +60,7 @@ package object web {
       .resource
   }
 
-  def acquireAdminHttpServer[F[_]: ContextShift: ConcurrentEffect: Temporal: Log](
+  def acquireAdminHttpServer[F[_]: ContextShift: AsyncEffect: Temporal: Log](
       host: String = "0.0.0.0",
       httpPort: Int,
       connectionIdleTimeout: FiniteDuration,

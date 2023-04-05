@@ -1,6 +1,6 @@
 package coop.rchain.rspace.examples
 
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.{Applicative, Id}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -81,7 +81,7 @@ object AddressBookExample {
 
   object implicits {
 
-    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
+    implicit val concurrentF: Async[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
 
     implicit val contextShiftId: ContextShift[Id] =
       new ContextShift[Id] {

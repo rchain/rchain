@@ -1,6 +1,6 @@
 package coop.rchain.casper.rholang.syntax
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.rholang.RuntimeManager.StateHash
@@ -64,7 +64,7 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
       channelsData: Seq[NumberChannelsEndVal],
       // Used to calculate value difference from final values
       preStateHash: Blake2b256Hash
-  )(implicit s: Concurrent[F]): F[Unit] =
+  )(implicit s: Async[F]): F[Unit] =
     for {
       // Calculate difference values from final values on number channels
       diffs <- convertNumberChannelsToDiff(channelsData, preStateHash)
@@ -94,7 +94,7 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
       channelsData: Seq[NumberChannelsEndVal],
       // Used to calculate value difference from final values
       preStateHash: Blake2b256Hash
-  )(implicit s: Concurrent[F]): F[List[NumberChannelsDiff]] = Sync[F].defer {
+  )(implicit s: Async[F]): F[List[NumberChannelsDiff]] = Sync[F].defer {
     // Get number channel value for pre-state
     val getDataFunc =
       (ch: Blake2b256Hash) =>

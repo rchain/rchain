@@ -2,7 +2,7 @@ package coop.rchain.rspace
 
 import cats.Parallel.Aux
 import cats._
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._

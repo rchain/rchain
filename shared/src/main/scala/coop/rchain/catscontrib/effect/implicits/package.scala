@@ -10,7 +10,7 @@ import scala.util.control.NonFatal
 package object implicits {
 
   // this is for testing purposes, do not use in production code!
-  implicit val concurrentId: Concurrent[Id] =
+  implicit val concurrentId: Async[Id] =
     new Concurrent[Id] {
       override def start[A](fa: Id[A]): Id[Fiber[Id, A]] = ???
       override def racePair[A, B](

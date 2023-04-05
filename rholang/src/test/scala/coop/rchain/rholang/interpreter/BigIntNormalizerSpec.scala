@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.testing.scalatest.AsyncIOSpec
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -24,7 +24,7 @@ import org.scalatest.matchers.should.Matchers
 //  import coop.rchain.shared.RChainScheduler._
 //  val outcomeCh = "ret"
 //
-//  private def execute[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
+//  private def execute[F[_]: Async: Parallel: ContextShift: Metrics: Span: Log](
 //      source: String
 //  ): F[Either[InterpreterError, BigInt]] =
 //    mkRuntime[F]("rholang-bigint")

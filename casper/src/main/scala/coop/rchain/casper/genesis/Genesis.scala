@@ -1,6 +1,6 @@
 package coop.rchain.casper.genesis
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts._
@@ -57,7 +57,7 @@ object Genesis {
       StandardDeploys.poSGenerator(posParams, shardId)
   }
 
-  def createGenesisBlock[F[_]: Concurrent: RuntimeManager](
+  def createGenesisBlock[F[_]: Async: RuntimeManager](
       validator: ValidatorIdentity,
       genesis: Genesis
   ): F[BlockMessage] = {

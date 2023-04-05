@@ -1,6 +1,6 @@
 package coop.rchain.node.effects
 
-import cats.effect.{ConcurrentEffect, Sync}
+import cats.effect.{AsyncEffect, Sync}
 import cats.syntax.all._
 import coop.rchain.node.model._
 import io.grpc.netty.NettyChannelBuilder
@@ -24,7 +24,7 @@ object ReplClient {
   def apply[F[_]](implicit ev: ReplClient[F]): ReplClient[F] = ev
 }
 
-class GrpcReplClient[F[_]: Sync: ConcurrentEffect](host: String, port: Int, maxMessageSize: Int)
+class GrpcReplClient[F[_]: Sync: AsyncEffect](host: String, port: Int, maxMessageSize: Int)
     extends ReplClient[F]
     with Closeable {
 

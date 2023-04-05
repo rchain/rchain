@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage.dag
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
@@ -26,7 +26,7 @@ final class BlockDagStorageOps[F[_]](
 
   def lookupUnsafe(
       hashes: Seq[BlockHash]
-  )(implicit concurrent: Concurrent[F]): F[List[BlockMetadata]] = {
+  )(implicit concurrent: Async[F]): F[List[BlockMetadata]] = {
     val streams = hashes.map(h => fs2.Stream.eval(lookupUnsafe(h)))
     fs2.Stream.emits(streams).parJoinUnbounded.compile.toList
   }

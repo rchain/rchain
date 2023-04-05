@@ -1,6 +1,6 @@
 package coop.rchain.casper.rholang
 
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -47,7 +47,7 @@ class InterpreterUtilTest
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  def computeDeploysCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def computeDeploysCheckpoint[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       parents: Seq[BlockHash],
       deploys: Seq[Signed[DeployData]],
       blockNumber: Long = 0L,

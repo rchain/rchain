@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.transport.PacketOps._
@@ -12,7 +12,7 @@ import scala.collection.concurrent.TrieMap
 
 final case class StreamMsgId(key: String, sender: PeerNode)
 
-class StreamObservableClass[F[_]: Concurrent: Log](
+class StreamObservableClass[F[_]: Async: Log](
     peer: PeerNode,
     bufferSize: Int,
     cache: TrieMap[String, Array[Byte]],
@@ -46,7 +46,7 @@ class StreamObservableClass[F[_]: Concurrent: Log](
 
 object StreamObservable {
   type StreamObservable[F[_]] = (Blob => F[Unit], Stream[F, StreamMsgId])
-  def apply[F[_]: Concurrent: Log](
+  def apply[F[_]: Async: Log](
       peer: PeerNode,
       bufferSize: Int,
       cache: TrieMap[String, Array[Byte]]

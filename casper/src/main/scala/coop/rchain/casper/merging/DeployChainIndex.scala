@@ -1,6 +1,6 @@
 package coop.rchain.casper.merging
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -36,7 +36,7 @@ object DeployChainIndex {
 
   implicit val ord = Ordering.by((x: DeployChainIndex) => (x.hostBlock, x.postStateHash))
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       hostBlock: Blake2b256Hash,
       deploys: Set[DeployIndex],
       preStateHash: Blake2b256Hash,

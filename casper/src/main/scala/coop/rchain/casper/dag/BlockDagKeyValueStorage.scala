@@ -1,6 +1,6 @@
 package coop.rchain.casper.dag
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import cats.{Monad, Show}
 import coop.rchain.blockstorage._
@@ -31,7 +31,7 @@ import scala.collection.concurrent.TrieMap
 import cats.effect.Ref
 import cats.effect.std.Semaphore
 
-final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
+final class BlockDagKeyValueStorage[F[_]: Async: Log] private (
     representationState: Ref[F, DagRepresentation],
     lock: Semaphore[F],
     blockMetadataIndex: BlockMetadataStore[F],
@@ -190,7 +190,7 @@ object BlockDagKeyValueStorage {
       deployPool: KeyValueTypedStore[F, DeployId, Signed[DeployData]]
   )
 
-  private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
+  private def createStores[F[_]: Async: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
     implicit val kvm_ = kvm
     for {
       // Block metadata map
@@ -230,7 +230,7 @@ object BlockDagKeyValueStorage {
     )
   }
 
-  def create[F[_]: Concurrent: Log: Metrics](
+  def create[F[_]: Async: Log: Metrics](
       kvm: KeyValueStoreManager[F]
   ): F[BlockDagKeyValueStorage[F]] =
     for {

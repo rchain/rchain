@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -32,7 +32,7 @@ object NodeSyncing {
     */
   // format: off
   def apply[F[_]
-  /* Execution */   : Concurrent: Time: Temporal
+  /* Execution */   : Async: Time: Temporal
   /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
@@ -62,7 +62,7 @@ object NodeSyncing {
   */
 // format: off
 class NodeSyncing[F[_]
-  /* Execution */   : Concurrent: Time: Temporal
+  /* Execution */   : Async: Time: Temporal
   /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager

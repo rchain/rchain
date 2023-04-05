@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{BlockMessage, FinalizedFringe}
@@ -148,7 +148,7 @@ object LfsBlockRequester {
     * @param validateBlock Check if received block is valid
     * @return fs2.Stream processing all blocks
     */
-  def stream[F[_]: Concurrent: Temporal: Log](
+  def stream[F[_]: Async: Temporal: Log](
       fringe: FinalizedFringe,
       incomingBlocks: Stream[F, BlockMessage],
       blockHeightsBeforeFringe: Int,

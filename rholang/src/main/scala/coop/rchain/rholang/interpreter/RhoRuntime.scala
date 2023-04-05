@@ -379,7 +379,7 @@ object RhoRuntime {
     )
   )
 
-  def dispatchTableCreator[F[_]: Concurrent: Span](
+  def dispatchTableCreator[F[_]: Async: Span](
       space: RhoTuplespace[F],
       dispatcher: RhoDispatch[F],
       blockData: Ref[F, BlockData],
@@ -398,7 +398,7 @@ object RhoRuntime {
     )
   )
 
-  def setupReducer[F[_]: Concurrent: Parallel: _cost: Log: Metrics: Span](
+  def setupReducer[F[_]: Async: Parallel: _cost: Log: Metrics: Span](
       chargingRSpace: RhoTuplespace[F],
       blockDataRef: Ref[F, BlockData],
       extraSystemProcesses: Seq[Definition[F]],
@@ -433,7 +433,7 @@ object RhoRuntime {
         .map(_.toProcDefs)
     } yield (blockDataRef, urnMap, procDefs)
 
-  def createRhoEnv[F[_]: Concurrent: Parallel: _cost: Log: Metrics: Span](
+  def createRhoEnv[F[_]: Async: Parallel: _cost: Log: Metrics: Span](
       rspace: RhoISpace[F],
       mergeChs: Ref[F, Set[Par]],
       mergeableTagName: Par,
@@ -471,7 +471,7 @@ object RhoRuntime {
     } yield ()
   }
 
-  private def createRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
+  private def createRuntime[F[_]: Async: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
       extraSystemProcesses: Seq[Definition[F]],
       initRegistry: Boolean,
@@ -510,7 +510,7 @@ object RhoRuntime {
     *                use [[coop.rchain.rholang.interpreter.accounting.noOpCostLog]]
     * @return
     */
-  def createRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
+  def createRhoRuntime[F[_]: Async: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
       mergeableTagName: Par,
       initRegistry: Boolean = true,
@@ -526,7 +526,7 @@ object RhoRuntime {
     * @param costLog same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
     * @return
     */
-  def createReplayRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
+  def createReplayRhoRuntime[F[_]: Async: Log: Metrics: Span: Parallel](
       rspace: RhoReplayISpace[F],
       mergeableTagName: Par,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
@@ -554,7 +554,7 @@ object RhoRuntime {
       } yield runtime
     }
 
-  def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  def createRuntimes[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
       space: RhoISpace[F],
       replaySpace: RhoReplayISpace[F],
       initRegistry: Boolean,
@@ -580,7 +580,7 @@ object RhoRuntime {
    * Create from KeyValueStore's
    */
 
-  def createRuntime[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  def createRuntime[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       mergeableTagName: Par,
       rholangEC: ExecutionContext,

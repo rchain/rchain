@@ -2,7 +2,7 @@ package coop.rchain.rholang
 
 import cats.Parallel
 import cats.effect.ExitCase.Error
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -39,7 +39,7 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Concurrent: Parallel: ContextShift: KeyValueStoreManager: Metrics: Span: Log]
+  def mkRhoISpace[F[_]: Async: Parallel: ContextShift: KeyValueStoreManager: Metrics: Span: Log]
       : F[RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage._
 
@@ -54,7 +54,7 @@ object Resources {
     } yield space
   }
 
-  def mkRuntime[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
+  def mkRuntime[F[_]: Async: Parallel: ContextShift: Metrics: Span: Log](
       prefix: String
   ): Resource[F, RhoRuntime[F]] =
     mkTempDir(prefix)
@@ -62,7 +62,7 @@ object Resources {
       .evalMap(_.rSpaceStores)
       .evalMap(RhoRuntime.createRuntime(_, Par(), RChainScheduler.rholangEC))
 
-  def mkRuntimes[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
+  def mkRuntimes[F[_]: Async: Parallel: ContextShift: Metrics: Span: Log](
       prefix: String,
       initRegistry: Boolean = false
   ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
@@ -71,7 +71,7 @@ object Resources {
       .evalMap(_.rSpaceStores)
       .evalMap(createRuntimes(_, initRegistry = initRegistry))
 
-  def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  def createRuntimes[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty

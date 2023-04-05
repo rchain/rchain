@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsBlockRequester.ST
@@ -81,7 +81,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * @param test test definition
     */
-  def createMock[F[_]: Concurrent: Temporal: Log](
+  def createMock[F[_]: Async: Temporal: Log](
       startBlock: BlockMessage,
       requestTimeout: FiniteDuration
   )(test: Mock[F] => F[Unit]): F[Unit] = {

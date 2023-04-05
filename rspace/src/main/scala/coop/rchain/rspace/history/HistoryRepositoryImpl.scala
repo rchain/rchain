@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.Parallel
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -16,7 +16,7 @@ import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Serialize}
 import fs2.Stream
 
-final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](
+final case class HistoryRepositoryImpl[F[_]: Async: Parallel: Log: Span, C, P, A, K](
     currentHistory: History[F],
     rootsRepository: RootRepository[F],
     leafStore: ColdKeyValueStore[F],
@@ -226,7 +226,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
       .reset(root = stateHash)
       .map(
         new RSpaceHistoryReaderImpl(_, leafStore)(
-          Concurrent[F],
+          Async[F],
           serializeC,
           serializeP,
           serializeA,

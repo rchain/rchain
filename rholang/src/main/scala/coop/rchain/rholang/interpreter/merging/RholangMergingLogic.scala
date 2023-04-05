@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.merging
 
 import cats.Monad
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -39,7 +39,7 @@ object RholangMergingLogic {
     * @param channelValues Final values
     * @param getInitialValue Accessor to initial value
     */
-  def calculateNumChannelDiff[F[_]: Concurrent, Key](
+  def calculateNumChannelDiff[F[_]: Async, Key](
       channelValues: Seq[Map[Key, Long]],
       getInitialValue: Key => F[Option[Long]]
   ): F[List[Map[Key, Long]]] = {

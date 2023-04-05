@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats.Applicative
-import cats.effect.{Concurrent, IO, Sync}
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -48,7 +48,7 @@ object BlockGenerator {
     rejectedDeploys = Set()
   )
 
-  def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def step[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[Unit] =
     for {
@@ -57,7 +57,7 @@ object BlockGenerator {
       result                                    <- injectPostStateHash[F](block, postB1StateHash, postB1ProcessedDeploys)
     } yield result
 
-  private def computeBlockCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  private def computeBlockCheckpoint[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
       preState: ParentsMergedState
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {

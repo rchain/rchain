@@ -1,6 +1,6 @@
 package coop.rchain.node.runtime
 
-import cats.effect.{Async, Concurrent, ConcurrentEffect, IO, Resource, Sync}
+import cats.effect.{Async, ConcurrentEffect, IO, Resource, Sync}
 import cats.syntax.all._
 import com.typesafe.config.Config
 import coop.rchain.casper.protocol.deploy.v1
@@ -45,7 +45,7 @@ object NetworkServers {
     */
   // format: off
   def create[F[_]
-    /* Execution */   : ConcurrentEffect: Temporal: ContextShift
+    /* Execution */   : AsyncEffect: Temporal: ContextShift
     /* Comm */        : TransportLayer: NodeDiscovery: KademliaStore: RPConfAsk: ConnectionsCell
     /* Diagnostics */ : Log: Metrics] // format: on
   (
@@ -90,7 +90,7 @@ object NetworkServers {
     } yield ()
   }
 
-  def internalServer[F[_]: Concurrent: ConcurrentEffect: Log](
+  def internalServer[F[_]: Async: AsyncEffect: Log](
       nodeConf: NodeConf,
       replService: ReplFs2Grpc[F, Metadata],
       deployService: DeployServiceFs2Grpc[F, Metadata],
@@ -113,7 +113,7 @@ object NetworkServers {
       nodeConf.apiServer.maxConnectionAgeGrace
     )
 
-  def externalServer[F[_]: Concurrent: ConcurrentEffect: Log](
+  def externalServer[F[_]: Async: AsyncEffect: Log](
       nodeConf: NodeConf,
       deployService: v1.DeployServiceFs2Grpc[F, Metadata],
       grpcEC: ExecutionContext
@@ -132,7 +132,7 @@ object NetworkServers {
       nodeConf.apiServer.maxConnectionAgeGrace
     )
 
-  def protocolServer[F[_]: Concurrent: ConcurrentEffect: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics: Temporal](
+  def protocolServer[F[_]: Async: AsyncEffect: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics: Temporal](
       nodeConf: NodeConf,
       routingMessageQueue: Queue[F, RoutingMessage]
   ): Resource[F, Unit] = {
@@ -152,7 +152,7 @@ object NetworkServers {
     )
   }
 
-  def discoveryServer[F[_]: Concurrent: ConcurrentEffect: KademliaStore: Log: Metrics](
+  def discoveryServer[F[_]: Async: AsyncEffect: KademliaStore: Log: Metrics](
       nodeConf: NodeConf,
       grpcEC: ExecutionContext
   ): Resource[F, Server] =
@@ -164,7 +164,7 @@ object NetworkServers {
       grpcEC
     )
 
-  def webApiServer[F[_]: ContextShift: ConcurrentEffect: Temporal: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
+  def webApiServer[F[_]: ContextShift: AsyncEffect: Temporal: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
       nodeConf: NodeConf,
       webApi: WebApi[F],
       reportingRoutes: ReportingHttpRoutes[F],
@@ -180,7 +180,7 @@ object NetworkServers {
       reportingRoutes
     )
 
-  def adminWebApiServer[F[_]: ContextShift: ConcurrentEffect: Temporal: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
+  def adminWebApiServer[F[_]: ContextShift: AsyncEffect: Temporal: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
       nodeConf: NodeConf,
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],

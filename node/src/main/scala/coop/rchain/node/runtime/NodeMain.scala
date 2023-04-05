@@ -1,7 +1,7 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect.{ConcurrentEffect, Resource, Sync}
+import cats.effect.{AsyncEffect, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.protocol.client.{DeployRuntime, GrpcDeployService, GrpcProposeService}
 import coop.rchain.crypto.PrivateKey
@@ -34,7 +34,7 @@ object NodeMain {
     *
     * @param options command line options
     */
-  def startNode[F[_]: ConcurrentEffect: Parallel: ContextShift: Temporal: ConsoleIO: Log](
+  def startNode[F[_]: AsyncEffect: Parallel: ContextShift: Temporal: ConsoleIO: Log](
       options: commandline.Options
   ): F[Unit] = Sync[F].defer {
     // Create merged configuration from CLI options and config file
@@ -87,7 +87,7 @@ object NodeMain {
     * @param options command line options
     * @param console console
     */
-  def runCLI[F[_]: Sync: ConcurrentEffect: ConsoleIO: Temporal](
+  def runCLI[F[_]: Sync: AsyncEffect: ConsoleIO: Temporal](
       options: commandline.Options
   ): F[Unit] = {
     val grpcPort =

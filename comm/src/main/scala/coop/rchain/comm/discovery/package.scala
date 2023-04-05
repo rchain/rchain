@@ -1,6 +1,6 @@
 package coop.rchain.comm
 
-import cats.effect.{ConcurrentEffect, Resource, Sync}
+import cats.effect.{AsyncEffect, Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.metrics.Metrics
 import coop.rchain.sdk.syntax.all._
@@ -12,7 +12,7 @@ package object discovery {
   val DiscoveryMetricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
-  def acquireKademliaRPCServer[F[_]: Sync: ConcurrentEffect](
+  def acquireKademliaRPCServer[F[_]: Sync: AsyncEffect](
       networkId: String,
       port: Int,
       pingHandler: PeerNode => F[Unit],

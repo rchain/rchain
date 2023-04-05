@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.data.OptionT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -47,7 +47,7 @@ import scala.collection.immutable.SortedMap
 import cats.effect.Ref
 
 object BlockApiImpl {
-  def apply[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
+  def apply[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
       validatorOpt: Option[ValidatorIdentity],
       networkId: String,
       shardId: String,
@@ -89,7 +89,7 @@ object BlockApiImpl {
   final case class BlockRetrievalError(message: String) extends Exception
 }
 
-class BlockApiImpl[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
+class BlockApiImpl[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
     validatorOpt: Option[ValidatorIdentity],
     networkId: String,
     shardId: String,

@@ -64,7 +64,7 @@ class CostAccountingSpec
     }.unsafeRunSync
   }
 
-  private def createRuntimesWithCostLog[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  private def createRuntimesWithCostLog[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       costLog: FunctorTell[F, Chain[Cost]],
       initRegistry: Boolean = false,

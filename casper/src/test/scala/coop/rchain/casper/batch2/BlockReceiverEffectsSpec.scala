@@ -1,7 +1,7 @@
 package coop.rchain.casper.batch2
 
 import cats.Applicative
-import cats.effect.{Concurrent, IO, Sync}
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation}
@@ -167,7 +167,7 @@ import scala.collection.immutable.SortedMap
 //
 //  import fs2._
 //
-//  private def withEnv[F[_]: Concurrent: Log](shardId: String)(
+//  private def withEnv[F[_]: Async: Log](shardId: String)(
 //      f: (
 //          Queue[F, BlockMessage],
 //          Queue[F, BlockMessage],

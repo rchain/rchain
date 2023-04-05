@@ -18,7 +18,7 @@ import scala.collection.JavaConverters._
 import scala.collection.{immutable, SortedSet}
 import scala.concurrent.ExecutionContext
 
-class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
+class ReplayRSpace[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     rholangEC: ExecutionContext
@@ -317,7 +317,7 @@ object ReplayRSpace {
   /**
     * Creates [[ReplayRSpace]] from [[HistoryRepository]] and [[HotStore]].
     */
-  def apply[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
+  def apply[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K],
       rholangEC: ExecutionContext

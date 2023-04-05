@@ -1,6 +1,6 @@
 package coop.rchain.comm.rp
 
-import cats.effect.{Concurrent, IO}
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect._
@@ -106,7 +106,7 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
     }
   }
 
-  private def tryToHandshake[F[_]: Concurrent: Log: Metrics](
+  private def tryToHandshake[F[_]: Async: Log: Metrics](
       srcPeer: PeerNode,
       remotePeer: PeerNode
   ): F[Connections] = {

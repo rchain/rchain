@@ -61,7 +61,7 @@ private final case class HistoryStoreCache[F[_], C, P, A, K](
     joins: Map[C, Deferred[F, Seq[Seq[C]]]]
 )
 
-private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
+private class InMemHotStore[F[_]: Async, C, P, A, K](
     hotStoreState: Ref[F, HotStoreState[C, P, A, K]],
     // this is what is inside history store, lazily populated. Starting data for HotStoreState
     historyStoreCache: Ref[F, HistoryStoreCache[F, C, P, A, K]],
@@ -362,7 +362,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
 
 object HotStore {
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       hotStoreStateRef: Ref[F, HotStoreState[C, P, A, K]],
       historyReaderBase: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
@@ -372,7 +372,7 @@ object HotStore {
       )
       .map(new InMemHotStore[F, C, P, A, K](hotStoreStateRef, _, historyReaderBase))
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       cache: HotStoreState[C, P, A, K],
       historyReader: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
@@ -381,7 +381,7 @@ object HotStore {
       store <- HotStore(cache, historyReader)
     } yield store
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       historyReader: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
     apply(HotStoreState[C, P, A, K](), historyReader)

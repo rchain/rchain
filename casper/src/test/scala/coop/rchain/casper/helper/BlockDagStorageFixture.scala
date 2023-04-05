@@ -1,6 +1,6 @@
 package coop.rchain.casper.helper
 
-import cats.effect.{Concurrent, IO, Resource}
+import cats.effect.{Async, IO, Resource}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -56,7 +56,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
 
 object BlockDagStorageTestFixture {
 
-  def withStorageF[F[_]: Concurrent: Metrics: Log]
+  def withStorageF[F[_]: Async: Metrics: Log]
       : Resource[F, (BlockStore[F], BlockDagStorage[F])] = {
     def create(dir: Path) =
       for {

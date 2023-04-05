@@ -1,6 +1,6 @@
 package coop.rchain.rspace.merger
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.kernel.Monoid
 import cats.syntax.all._
 import coop.rchain.rspace.merger.EventLogMergingLogic.{
@@ -31,7 +31,7 @@ final case class EventLogIndex(
 
 object EventLogIndex {
 
-  def apply[F[_]: Concurrent](
+  def apply[F[_]: Async](
       eventLog: List[Event],
       produceExistsInPreState: Produce => F[Boolean],
       produceTouchPreStateJoin: Produce => F[Boolean],

@@ -1,7 +1,7 @@
 package coop.rchain.casper.blocks
 
 import cats.Show
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -176,7 +176,7 @@ final case class BlockReceiverState[MId: Show] private (
 }
 
 object BlockReceiver {
-  def apply[F[_]: Concurrent: BlockStore: BlockDagStorage: BlockRetriever: Log](
+  def apply[F[_]: Async: BlockStore: BlockDagStorage: BlockRetriever: Log](
       state: Ref[F, BlockReceiverState[BlockHash]],
       incomingBlocksStream: Stream[F, BlockMessage],
       finishedProcessingStream: Stream[F, BlockMessage],
@@ -300,6 +300,6 @@ object BlockReceiver {
     }
   }
 
-  def notValidated[F[_]: Concurrent: BlockStore: BlockDagStorage](hash: BlockHash): F[Boolean] =
+  def notValidated[F[_]: Async: BlockStore: BlockDagStorage](hash: BlockHash): F[Boolean] =
     BlockStore[F].contains(hash) &&^ BlockDagStorage[F].getRepresentation.map(!_.contains(hash))
 }

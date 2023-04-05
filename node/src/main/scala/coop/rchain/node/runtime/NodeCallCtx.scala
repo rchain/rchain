@@ -1,7 +1,8 @@
 package coop.rchain.node.runtime
 
 import cats.data.ReaderT
-import cats.effect.{CancelToken, Concurrent, ConcurrentEffect, ExitCase, Fiber, IO, SyncIO}
+import cats.effect.kernel.Async
+import cats.effect.{CancelToken, ConcurrentEffect, ExitCase, Fiber, IO, SyncIO}
 import cats.~>
 import coop.rchain.node.diagnostics.Trace
 import coop.rchain.node.diagnostics.Trace.TraceId
@@ -13,7 +14,7 @@ final case class NodeCallCtx(trace: TraceId) {
 object NodeCallCtx {
   def init: NodeCallCtx = NodeCallCtx(Trace.next)
 
-  final case class NodeCallCtxReader[F[_]: ConcurrentEffect]() {
+  final case class NodeCallCtxReader[F[_]: AsyncEffect]() {
 
     /**
       * Current implementation of Span uses ReaderT layer to hold the local state for tracing.
@@ -37,7 +38,7 @@ object NodeCallCtx {
       * `runCancelable` and `runAsync` are newly provided.
       */
     implicit val concurrentReaderNodeCallCtx = new ConcurrentEffect[ReaderNodeCallCtx] {
-      val c = Concurrent[ReaderNodeCallCtx]
+      val c = Async[ReaderNodeCallCtx]
       val t = ConcurrentEffect[F]
 
       // ConcurrentEffect

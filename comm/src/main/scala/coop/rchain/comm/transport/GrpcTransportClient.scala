@@ -2,7 +2,7 @@ package coop.rchain.comm.transport
 
 import cats.Applicative
 import cats.effect.syntax.all._
-import cats.effect.{Concurrent, ConcurrentEffect, Sync}
+import cats.effect.{Async, ConcurrentEffect, Sync}
 import cats.syntax.all._
 import coop.rchain.comm.CommError.{protocolException, CommErr}
 import coop.rchain.comm._
@@ -35,7 +35,7 @@ final case class BufferedGrpcStreamChannel[F[_]](
     buferSubscriber: Stream[F, Unit]
 )
 
-class GrpcTransportClient[F[_]: Concurrent: ConcurrentEffect: Log: Metrics](
+class GrpcTransportClient[F[_]: Async: AsyncEffect: Log: Metrics](
     networkId: String,
     cert: String,
     key: String,
@@ -120,7 +120,7 @@ class GrpcTransportClient[F[_]: Concurrent: ConcurrentEffect: Log: Metrics](
             ) >>
               channelsMap.update(_ - peer) >> getChannel(peer)
           else c.pure[F]
-      _ <- Concurrent[F]
+      _ <- Sync[F]
             .start(r.buferSubscriber.compile.drain)
             .onError {
               case err =>

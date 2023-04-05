@@ -1,6 +1,6 @@
 package coop.rchain.rspace.merger
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.rspace._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
@@ -24,7 +24,7 @@ object StateChangeMerger {
       joinAction: Option[JoinAction]
   )
 
-  def computeTrieActions[F[_]: Concurrent, C, P, A, K](
+  def computeTrieActions[F[_]: Async, C, P, A, K](
       changes: StateChange,
       baseReader: HistoryReaderBinary[F, C, P, A, K],
       mergeableChs: NumberChannelsDiff,
