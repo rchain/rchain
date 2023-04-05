@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import cats.data.Chain
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.mtl.FunctorTell
 import cats.syntax.all._
 import cats.{Monad, Parallel}
@@ -30,6 +29,7 @@ import coop.rchain.shared.Log
 import monix.execution.Scheduler
 
 import scala.concurrent.ExecutionContext
+import cats.effect.Ref
 
 trait RhoRuntime[F[_]] extends HasCost[F] {
 

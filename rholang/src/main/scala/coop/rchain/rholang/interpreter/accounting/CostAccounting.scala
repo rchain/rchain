@@ -8,6 +8,7 @@ import cats.mtl._
 import cats.Monad
 
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import cats.effect.Ref
 
 object CostAccounting {
 

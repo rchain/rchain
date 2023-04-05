@@ -1,6 +1,6 @@
 package coop.rchain.shared
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
 
 import java.util.concurrent.{Executors, ThreadFactory}
 import java.util.concurrent.atomic.AtomicLong

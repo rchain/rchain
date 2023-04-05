@@ -1,7 +1,6 @@
 package coop.rchain.casper.sync
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.casper.blocks.BlockRetriever
 import coop.rchain.casper.blocks.BlockRetriever.{RequestState, RequestedBlocks}
@@ -23,6 +22,7 @@ import org.scalatest.matchers.should.Matchers
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration._
+import cats.effect.Ref
 
 class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 

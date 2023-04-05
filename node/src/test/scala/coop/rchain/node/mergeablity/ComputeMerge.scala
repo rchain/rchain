@@ -1,8 +1,7 @@
 package coop.rchain.node.mergeablity
 
 import cats.Parallel
-import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.dag.BlockDagKeyValueStorage

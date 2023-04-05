@@ -1,9 +1,9 @@
 package coop.rchain.node.dag.implementation
 
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import coop.rchain.sdk.dag.data.{DagManager, DagView}
 import fs2.Stream
+import cats.effect.Ref
 
 object RNodeDagManager {
   def apply[F[_]: Concurrent, M, MId, S, SId](

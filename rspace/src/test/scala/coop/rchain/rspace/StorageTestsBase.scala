@@ -1,7 +1,6 @@
 package coop.rchain.rspace
 
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Parallel, _}
 import com.typesafe.scalalogging.Logger
@@ -20,6 +19,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import cats.effect.Ref
 
 trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with OptionValues {
   type T    = ISpace[F, C, P, A, K]

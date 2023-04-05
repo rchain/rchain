@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats._
-import cats.effect.{Blocker, Concurrent, ContextShift, IO, Sync}
+import cats.effect.{Concurrent, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._

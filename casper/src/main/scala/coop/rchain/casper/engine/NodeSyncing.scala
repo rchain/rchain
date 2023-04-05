@@ -1,7 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Timer}
+import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -24,6 +23,7 @@ import fs2.concurrent.Queue
 
 import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
+import cats.effect.{Deferred, Ref, Temporal}
 
 object NodeSyncing {
 
@@ -32,7 +32,7 @@ object NodeSyncing {
     */
   // format: off
   def apply[F[_]
-  /* Execution */   : Concurrent: Time: Timer
+  /* Execution */   : Concurrent: Time: Temporal
   /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
@@ -62,7 +62,7 @@ object NodeSyncing {
   */
 // format: off
 class NodeSyncing[F[_]
-  /* Execution */   : Concurrent: Time: Timer
+  /* Execution */   : Concurrent: Time: Temporal
   /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager

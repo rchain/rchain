@@ -1,7 +1,7 @@
 package coop.rchain.node.revvaultexport.reporting
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.DagRepresentation

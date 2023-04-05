@@ -1,7 +1,7 @@
 package coop.rchain.node.perf
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, IO, Sync}
+import cats.effect.{Concurrent, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash

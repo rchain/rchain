@@ -2,7 +2,6 @@ package coop.rchain.rspace.merger
 
 import cats.Monoid
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.{ColdStoreInstances, DataLeaf, HistoryReaderBinary}
@@ -15,6 +14,7 @@ import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import fs2.Stream
 import scodec.bits.ByteVector
+import cats.effect.Ref
 
 /**
   * Datum changes are referenced by channel, continuation changes are references by consume.

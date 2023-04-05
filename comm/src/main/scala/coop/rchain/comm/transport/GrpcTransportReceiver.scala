@@ -1,7 +1,6 @@
 package coop.rchain.comm.transport
 
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync, Timer}
+import cats.effect.{Concurrent, ConcurrentEffect, Resource, Sync}
 import cats.syntax.all._
 import cats.effect.syntax.all._
 import coop.rchain.comm.protocol.routing._
@@ -21,6 +20,7 @@ import io.netty.internal.tcnative.AsyncTask
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
+import cats.effect.{Deferred, Ref, Temporal}
 
 object GrpcTransportReceiver {
 
@@ -30,7 +30,7 @@ object GrpcTransportReceiver {
   type MessageBuffers[F[_]]  = (Send => F[Boolean], StreamMessage => F[Boolean], Stream[F, Unit])
   type MessageHandlers[F[_]] = (Send => F[Unit], StreamMessage => F[Unit])
 
-  def create[F[_]: Concurrent: ConcurrentEffect: RPConfAsk: Log: Metrics: Timer](
+  def create[F[_]: Concurrent: ConcurrentEffect: RPConfAsk: Log: Metrics: Temporal](
       networkId: String,
       port: Int,
       serverSslContext: SslContext,

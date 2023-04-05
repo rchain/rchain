@@ -1,7 +1,6 @@
 package coop.rchain.comm.rp
 
 import cats.effect.{Concurrent, IO}
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect._
@@ -13,6 +12,7 @@ import fs2.concurrent.Queue
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import RChainScheduler._
+import cats.effect.Ref
 
 class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChecks {
 

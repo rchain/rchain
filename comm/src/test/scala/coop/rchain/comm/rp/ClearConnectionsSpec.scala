@@ -1,6 +1,5 @@
 package coop.rchain.comm.rp
 
-import cats.effect.concurrent.Ref
 import cats.{catsInstancesForId => _, _}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
@@ -16,6 +15,7 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
+import cats.effect.Ref
 
 class ClearConnectionsSpec
     extends AnyFunSpec

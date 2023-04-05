@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.{IO, Sync}
-import cats.effect.concurrent.Ref
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
@@ -24,6 +23,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
+import cats.effect.Ref
 
 class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqualsSupport {
 

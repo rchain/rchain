@@ -1,7 +1,6 @@
 package coop.rchain.casper.api
 
 import cats.data.OptionT
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -45,6 +44,7 @@ import coop.rchain.shared.syntax._
 import fs2.Stream
 
 import scala.collection.immutable.SortedMap
+import cats.effect.Ref
 
 object BlockApiImpl {
   def apply[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](

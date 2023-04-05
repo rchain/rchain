@@ -1,8 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Applicative
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -20,6 +19,7 @@ import monix.execution.atomic.AtomicAny
 import scala.collection.SortedSet
 import scala.concurrent.{ExecutionContext, SyncVar}
 import scala.util.Random
+import cats.effect.Ref
 
 abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],

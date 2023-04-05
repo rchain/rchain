@@ -1,7 +1,7 @@
 package coop.rchain.comm.transport
 
-import cats.effect.{IO, Sync, Timer}
-import cats.effect.concurrent.{Deferred, MVar, Ref}
+import cats.effect.{IO, Sync}
+import cats.effect.concurrent.MVar
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
@@ -9,6 +9,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.RChainScheduler._
 import coop.rchain.shared.{Base16, Log}
+import cats.effect.{Deferred, Ref}
 
 class TcpTransportLayerSpec extends TransportLayerSpec[IO, TcpTlsEnvironment] {
 

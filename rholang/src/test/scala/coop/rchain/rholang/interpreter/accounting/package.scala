@@ -3,10 +3,10 @@ package coop.rchain.rholang.interpreter.accounting
 import cats._
 import cats.data._
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.mtl._
 import cats.mtl.implicits._
+import cats.effect.Ref
 
 package object utils {
 

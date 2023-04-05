@@ -1,7 +1,7 @@
 package coop.rchain.casper.merging
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, IO}
+import cats.effect.{Concurrent, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.rholang.Resources

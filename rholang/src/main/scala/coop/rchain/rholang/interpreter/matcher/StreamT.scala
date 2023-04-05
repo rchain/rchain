@@ -3,13 +3,13 @@ import cats.mtl.lifting.MonadLayerControl
 import cats.{~>, Alternative, Applicative, Functor, FunctorFilter, Monad, MonadError, MonoidK}
 import cats.data.OptionT
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
 import scala.collection.immutable.Stream
 import scala.collection.immutable.Stream.Cons
 import scala.util.{Left, Right}
+import cats.effect.Ref
 
 /**
   * Shamelessly transcribed minimal version of Gabriel Gonzalez's beginner-friendly ListT

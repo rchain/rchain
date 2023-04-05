@@ -1,7 +1,6 @@
 package coop.rchain.casper.api
 
 import cats.effect.{IO, Sync}
-import cats.effect.concurrent.Ref
 import cats.effect.testing.scalatest.AsyncIOSpec
 import cats.syntax.all._
 import com.google.protobuf.ByteString

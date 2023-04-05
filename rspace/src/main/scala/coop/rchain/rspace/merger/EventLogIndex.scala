@@ -1,7 +1,6 @@
 package coop.rchain.rspace.merger
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
 import cats.kernel.Monoid
 import cats.syntax.all._
 import coop.rchain.rspace.merger.EventLogMergingLogic.{
@@ -12,6 +11,7 @@ import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
 import coop.rchain.shared.syntax._
 
 import scala.collection.immutable.Set
+import cats.effect.Ref
 
 final case class EventLogIndex(
     producesLinear: Set[Produce],

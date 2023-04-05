@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Parallel, Eval => _}
 import com.google.protobuf.ByteString
@@ -29,6 +28,7 @@ import scalapb.GeneratedMessage
 import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
 import scala.util.Try
+import cats.effect.Ref
 
 /** Reduce is the interface for evaluating Rholang expressions.
   *

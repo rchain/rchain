@@ -2,11 +2,11 @@ package coop.rchain.rspace
 
 import cats.syntax.all._
 import cats.effect._
-import cats.effect.concurrent.{Deferred, Ref}
 import coop.rchain.rspace.history.HistoryReaderBase
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Map
+import cats.effect.{Deferred, Ref}
 
 trait HotStore[F[_], C, P, A, K] {
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]

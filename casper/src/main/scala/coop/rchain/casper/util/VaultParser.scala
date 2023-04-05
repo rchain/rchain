@@ -1,6 +1,6 @@
 package coop.rchain.casper.util
 
-import cats.effect.{Blocker, ContextShift, Sync}
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.rholang.interpreter.util.RevAddress
@@ -8,6 +8,7 @@ import coop.rchain.shared.Log
 import fs2.{io, text}
 
 import java.nio.file.Path
+import cats.effect.Resource
 
 object VaultParser {
 
@@ -19,7 +20,7 @@ object VaultParser {
     *    - https://typelevel.org/cats-effect/docs/migration-guide#blocker
     */
   def parse[F[_]: Sync: ContextShift: Log](vaultsPath: Path): F[Seq[Vault]] = {
-    def readLines(blocker: Blocker) =
+    def readLines =
       io.file
         .readAll[F](vaultsPath, blocker, chunkSize = 4096)
         .through(text.utf8Decode)
@@ -61,13 +62,13 @@ object VaultParser {
           case ex: Throwable =>
             new Exception(s"FAILED PARSING WALLETS FILE: $vaultsPath\n$ex")
         }
-    Blocker[F].use(readLines)
+    Resource.unit[F].use(readLines)
   }
 
   def parse[F[_]: Sync: ContextShift: Log](vaultsPathStr: String): F[Seq[Vault]] = {
     val vaultsPath = Path.of(vaultsPathStr)
 
-    def readLines(blocker: Blocker) =
+    def readLines =
       io.file
         .exists(blocker, vaultsPath)
         .ifM(
@@ -76,7 +77,7 @@ object VaultParser {
             .warn(s"WALLETS FILE NOT FOUND: $vaultsPath. No vaults will be put in genesis block.")
             .as(Seq.empty[Vault])
         )
-    Blocker[F].use(readLines)
+    Resource.unit[F].use(readLines)
   }
 
   private def tryWithMsg[F[_]: Sync, A](f: => A)(failMsg: => String) =

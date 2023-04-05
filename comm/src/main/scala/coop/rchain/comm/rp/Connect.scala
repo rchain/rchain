@@ -2,7 +2,6 @@ package coop.rchain.comm.rp
 
 import cats._
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.mtl._
 import cats.syntax.all._
 import coop.rchain.comm.CommError._
@@ -15,6 +14,7 @@ import coop.rchain.metrics.implicits._
 import coop.rchain.shared._
 
 import scala.util.Random
+import cats.effect.Ref
 
 object Connect {
 

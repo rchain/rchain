@@ -1,6 +1,6 @@
 package coop.rchain.comm.discovery
 
-import cats.effect.{Sync, Timer}
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.comm.{NodeIdentifier, PeerNode}
 import org.scalatest.matchers.should.Matchers
@@ -8,8 +8,9 @@ import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.concurrent.duration._
 import scala.util.Random
+import cats.effect.Temporal
 
-abstract class KademliaRPCSpec[F[_]: Sync: Timer, E <: Environment]
+abstract class KademliaRPCSpec[F[_]: Sync: Temporal, E <: Environment]
     extends KademliaRPCRuntime[F, E]
     with AnyWordSpecLike
     with Matchers {

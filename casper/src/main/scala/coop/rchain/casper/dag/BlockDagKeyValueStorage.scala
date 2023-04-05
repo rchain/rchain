@@ -1,7 +1,6 @@
 package coop.rchain.casper.dag
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
 import cats.{Monad, Show}
 import coop.rchain.blockstorage._
@@ -29,6 +28,8 @@ import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import fs2.Stream
 
 import scala.collection.concurrent.TrieMap
+import cats.effect.Ref
+import cats.effect.std.Semaphore
 
 final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     representationState: Ref[F, DagRepresentation],

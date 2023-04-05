@@ -3,12 +3,12 @@ package coop.rchain.rholang.interpreter
 import cats._
 import cats.data._
 import cats.effect.Sync
-import cats.effect.concurrent.Semaphore
 import cats.syntax.all._
 import cats.mtl._
 
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import cats.effect.std.Semaphore
 
 package object accounting extends Costs {
 

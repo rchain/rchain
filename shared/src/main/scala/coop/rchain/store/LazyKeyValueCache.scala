@@ -1,8 +1,8 @@
 package coop.rchain.store
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.{Deferred, Ref}
 import cats.syntax.all._
+import cats.effect.{Deferred, Ref}
 
 class LazyKeyValueCache[F[_]: Concurrent, K, V] private[LazyKeyValueCache] (
     cache: Ref[F, Map[K, Deferred[F, V]]],

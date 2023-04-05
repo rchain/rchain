@@ -1,6 +1,5 @@
 package coop.rchain.rspace.concurrent
 
-import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.catscontrib.ski.kp
@@ -8,6 +7,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.Source
 
 import scala.collection.concurrent.TrieMap
+import cats.effect.std.Semaphore
 
 class MultiLock[F[_]: Concurrent: Metrics, K](metricSource: Metrics.Source) {
 

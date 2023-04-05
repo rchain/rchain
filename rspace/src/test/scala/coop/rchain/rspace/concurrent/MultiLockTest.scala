@@ -87,7 +87,7 @@ class MultiLockTest extends AnyFlatSpec with Matchers {
   }
 
   "FunctionalMultiLock" should "not allow concurrent modifications of same keys" in {
-    import cats.effect.{Concurrent, ContextShift, IO}
+    import cats.effect.{Concurrent, IO}
     import cats.implicits._
 
     implicit val metrics: Metrics.MetricsNOP[IO] = new Metrics.MetricsNOP[IO]

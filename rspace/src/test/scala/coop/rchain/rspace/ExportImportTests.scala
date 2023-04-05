@@ -1,7 +1,6 @@
 package coop.rchain.rspace
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -19,6 +18,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
 import coop.rchain.shared.RChainScheduler._
+import cats.effect.Ref
 
 class ExportImportTests
     extends AnyFlatSpec

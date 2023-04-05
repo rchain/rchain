@@ -2,7 +2,6 @@ package coop.rchain.casper.addblock
 
 import cats.Applicative
 import cats.effect.IO
-import cats.effect.concurrent.Deferred
 import cats.syntax.all._
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer._
@@ -18,6 +17,7 @@ import coop.rchain.shared.scalatestcontrib._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import coop.rchain.shared.RChainScheduler._
+import cats.effect.Deferred
 
 class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture {
 

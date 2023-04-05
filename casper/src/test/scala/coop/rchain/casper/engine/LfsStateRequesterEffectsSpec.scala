@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, IO, Timer}
+import cats.effect.{Concurrent, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsTupleSpaceRequester.{ST, StatePartPath}
@@ -18,6 +18,7 @@ import scodec.bits.ByteVector
 
 import java.nio.ByteBuffer
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import cats.effect.Temporal
 
 class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
 
@@ -69,7 +70,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * @param test test definition
     */
-  def createMock[F[_]: Concurrent: Timer: Log](requestTimeout: FiniteDuration)(
+  def createMock[F[_]: Concurrent: Temporal: Log](requestTimeout: FiniteDuration)(
       test: Mock[F] => F[Unit]
   ): F[Unit] = {
 

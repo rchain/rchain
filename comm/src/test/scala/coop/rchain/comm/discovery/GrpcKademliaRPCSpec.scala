@@ -1,7 +1,7 @@
 package coop.rchain.comm.discovery
 
 import cats.Applicative
-import cats.effect.{ContextShift, IO, Resource, Sync, Timer}
+import cats.effect.{IO, Resource, Sync}
 import cats.mtl.DefaultApplicativeAsk
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk

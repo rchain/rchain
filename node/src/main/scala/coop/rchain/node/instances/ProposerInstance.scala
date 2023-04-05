@@ -1,7 +1,7 @@
 package coop.rchain.node.instances
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.{Deferred, MVar, Ref, Semaphore}
+import cats.effect.concurrent.MVar
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.blocks.proposer._
@@ -10,6 +10,8 @@ import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.shared.Log
 import fs2.Stream
 import fs2.concurrent.Queue
+import cats.effect.{Deferred, Ref}
+import cats.effect.std.Semaphore
 
 object ProposerInstance {
   def create[F[_]: Concurrent: Log](

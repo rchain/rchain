@@ -1,7 +1,7 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
+import cats.effect.{ConcurrentEffect, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.protocol.client.{DeployRuntime, GrpcDeployService, GrpcProposeService}
 import coop.rchain.crypto.PrivateKey
@@ -23,6 +23,7 @@ import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.tools.jline.console.ConsoleReader
 import scala.tools.jline.console.completer.StringsCompleter
+import cats.effect.Temporal
 
 object NodeMain {
 
@@ -33,7 +34,7 @@ object NodeMain {
     *
     * @param options command line options
     */
-  def startNode[F[_]: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log](
+  def startNode[F[_]: ConcurrentEffect: Parallel: ContextShift: Temporal: ConsoleIO: Log](
       options: commandline.Options
   ): F[Unit] = Sync[F].defer {
     // Create merged configuration from CLI options and config file
@@ -86,7 +87,7 @@ object NodeMain {
     * @param options command line options
     * @param console console
     */
-  def runCLI[F[_]: Sync: ConcurrentEffect: ConsoleIO: Timer](
+  def runCLI[F[_]: Sync: ConcurrentEffect: ConsoleIO: Temporal](
       options: commandline.Options
   ): F[Unit] = {
     val grpcPort =

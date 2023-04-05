@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.Logger
@@ -21,6 +20,7 @@ import coop.rchain.rspace.{ContResult, Result}
 import coop.rchain.shared.Base16
 
 import scala.util.Try
+import cats.effect.Ref
 
 //TODO: Make each of the system processes into a case class,
 //      so that implementation is not repetitive.

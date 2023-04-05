@@ -1,9 +1,9 @@
 package coop.rchain.node.dag.implementation
 
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import coop.rchain.sdk.block.BlockRequester
 import fs2.Stream
+import cats.effect.Ref
 
 object NetworkBlockRequester {
   def apply[F[_]: Concurrent, B, BId](

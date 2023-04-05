@@ -51,7 +51,7 @@ object NodeCallCtx {
         t.runAsync(envToEff(fa))(cb)
       // Async
       override def async[A](k: (Either[Throwable, A] => Unit) => Unit): ReaderNodeCallCtx[A] =
-        c.async(k)
+        c.async_(k)
       override def asyncF[A](
           k: (Either[Throwable, A] => Unit) => ReaderNodeCallCtx[Unit]
       ): ReaderNodeCallCtx[A] =

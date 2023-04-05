@@ -1,7 +1,6 @@
 package coop.rchain.node.runtime
 
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ContextShift, Timer}
+import cats.effect.Concurrent
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import cats.{Parallel, Show}
@@ -46,9 +45,10 @@ import coop.rchain.store.KeyValueStoreManager
 import fs2.Stream
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
+import cats.effect.{Deferred, Ref, Temporal}
 
 object Setup {
-  def setupNodeProgram[F[_]: Concurrent: Parallel: ContextShift: Timer: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](
+  def setupNodeProgram[F[_]: Concurrent: Parallel: ContextShift: Temporal: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](
       storeManager: KeyValueStoreManager[F],
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
@@ -67,7 +67,7 @@ object Setup {
   ] = {
     // TODO: temporary until Time is removed completely
     //  https://github.com/rchain/rchain/issues/3730
-    implicit val time = Time.fromTimer(Timer[F])
+    implicit val time = Time.fromTimer(Temporal[F])
 
     for {
       // Block execution tracker

@@ -1,7 +1,6 @@
 package coop.rchain.casper.blocks
 
 import cats.Show
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
@@ -15,6 +14,7 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
 import fs2.concurrent.Queue
+import cats.effect.Ref
 
 sealed trait RecvStatus
 // Begin checking and storing block

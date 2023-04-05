@@ -1,7 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{BlockMessage, FinalizedFringe}
@@ -14,6 +13,7 @@ import fs2.concurrent.Queue
 
 import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
+import cats.effect.{Ref, Temporal}
 
 /**
   * Last Finalized State processor for receiving blocks.
@@ -148,7 +148,7 @@ object LfsBlockRequester {
     * @param validateBlock Check if received block is valid
     * @return fs2.Stream processing all blocks
     */
-  def stream[F[_]: Concurrent: Timer: Log](
+  def stream[F[_]: Concurrent: Temporal: Log](
       fringe: FinalizedFringe,
       incomingBlocks: Stream[F, BlockMessage],
       blockHeightsBeforeFringe: Int,

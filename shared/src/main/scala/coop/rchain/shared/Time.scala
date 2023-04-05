@@ -2,12 +2,12 @@ package coop.rchain.shared
 
 import cats.Monad
 import cats.data.EitherT
-import cats.effect.Timer
 import cats.tagless._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, NANOSECONDS}
+import cats.effect.Temporal
 
 // TODO: there is no reason for custom Timer definition, remove it
 //  - for testing TestScheduler (monix) ot TestContext (cats-laws) (TestControl cats.effect 3) should be used
@@ -33,7 +33,7 @@ object Time extends TimeInstances {
   /**
     * Default implementation from cats [[Timer]]
     */
-  def fromTimer[F[_]](implicit timer: Timer[F]): Time[F] =
+  def fromTimer[F[_]](implicit timer: Temporal[F]): Time[F] =
     new Time[F] {
       def currentMillis: F[Long]                   = timer.clock.realTime(MILLISECONDS)
       def nanoTime: F[Long]                        = timer.clock.monotonic(NANOSECONDS)

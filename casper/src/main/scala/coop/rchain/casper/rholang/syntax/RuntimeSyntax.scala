@@ -2,7 +2,6 @@ package coop.rchain.casper.rholang.syntax
 
 import cats.data.{EitherT, OptionT}
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
@@ -48,6 +47,7 @@ import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.merger.EventLogMergingLogic.NumberChannelsEndVal
 import coop.rchain.shared.{Base16, Log}
+import cats.effect.Ref
 
 trait RuntimeSyntax {
   implicit final def casperSyntaxRholangRuntime[F[_]](

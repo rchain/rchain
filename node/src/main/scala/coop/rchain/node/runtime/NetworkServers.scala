@@ -1,6 +1,6 @@
 package coop.rchain.node.runtime
 
-import cats.effect.{Async, Concurrent, ConcurrentEffect, ContextShift, IO, Resource, Sync, Timer}
+import cats.effect.{Async, Concurrent, ConcurrentEffect, IO, Resource, Sync}
 import cats.syntax.all._
 import com.typesafe.config.Config
 import coop.rchain.casper.protocol.deploy.v1
@@ -36,6 +36,7 @@ import coop.rchain.shared.RChainScheduler._
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
+import cats.effect.Temporal
 
 object NetworkServers {
 
@@ -44,7 +45,7 @@ object NetworkServers {
     */
   // format: off
   def create[F[_]
-    /* Execution */   : ConcurrentEffect: Timer: ContextShift
+    /* Execution */   : ConcurrentEffect: Temporal: ContextShift
     /* Comm */        : TransportLayer: NodeDiscovery: KademliaStore: RPConfAsk: ConnectionsCell
     /* Diagnostics */ : Log: Metrics] // format: on
   (
@@ -131,7 +132,7 @@ object NetworkServers {
       nodeConf.apiServer.maxConnectionAgeGrace
     )
 
-  def protocolServer[F[_]: Concurrent: ConcurrentEffect: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics: Timer](
+  def protocolServer[F[_]: Concurrent: ConcurrentEffect: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics: Temporal](
       nodeConf: NodeConf,
       routingMessageQueue: Queue[F, RoutingMessage]
   ): Resource[F, Unit] = {
@@ -163,7 +164,7 @@ object NetworkServers {
       grpcEC
     )
 
-  def webApiServer[F[_]: ContextShift: ConcurrentEffect: Timer: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
+  def webApiServer[F[_]: ContextShift: ConcurrentEffect: Temporal: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
       nodeConf: NodeConf,
       webApi: WebApi[F],
       reportingRoutes: ReportingHttpRoutes[F],
@@ -179,7 +180,7 @@ object NetworkServers {
       reportingRoutes
     )
 
-  def adminWebApiServer[F[_]: ContextShift: ConcurrentEffect: Timer: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
+  def adminWebApiServer[F[_]: ContextShift: ConcurrentEffect: Temporal: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
       nodeConf: NodeConf,
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
@@ -209,7 +210,7 @@ object NetworkServers {
     }
 
     // TODO: check new version of Kamon if supports custom effect
-    def stop: F[Unit] = Async[F].async { cb =>
+    def stop: F[Unit] = Async[F].async_ { cb =>
       Kamon.stopAllReporters().onComplete {
         case Success(value) => cb(Right(value))
         case Failure(error) => cb(Left(error))

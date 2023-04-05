@@ -1,8 +1,7 @@
 package coop.rchain.casper.blocks.proposer
 
 import cats.data.OptionT
-import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, Timer}
+import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -24,6 +23,7 @@ import coop.rchain.sdk.consensus.Stake
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
+import cats.effect.{Deferred, Temporal}
 
 sealed abstract class ProposerResult
 object ProposerEmpty                                                         extends ProposerResult
@@ -114,7 +114,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
 object Proposer {
   // format: off
   def apply[F[_]
-    /* Execution */   : Concurrent: Timer: Time
+    /* Execution */   : Concurrent: Temporal: Time
     /* Storage */     : BlockStore: BlockDagStorage
     /* Rholang */     : RuntimeManager
     /* Comm */        : CommUtil

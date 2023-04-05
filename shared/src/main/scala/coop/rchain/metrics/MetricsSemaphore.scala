@@ -1,10 +1,10 @@
 package coop.rchain.metrics
 
 import cats.effect._
-import cats.effect.concurrent.Semaphore
 import cats.syntax.all._
 
 import coop.rchain.catscontrib.ski.kp
+import cats.effect.std.Semaphore
 
 class MetricsSemaphore[F[_]: Sync: Metrics](
     underlying: Semaphore[F]

@@ -1,13 +1,13 @@
 package coop.rchain.fs2
 
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Timer}
+import cats.effect.Concurrent
 import cats.syntax.all._
 import fs2.Stream
 import fs2.Stream._
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{FiniteDuration, NANOSECONDS}
+import cats.effect.{Ref, Temporal}
 
 trait Fs2StreamSyntax {
   implicit final def sharedSyntaxFs2Stream[F[_], A](stream: Stream[F, A]): Fs2StreamOps[F, A] =
@@ -79,9 +79,9 @@ class Fs2StreamOps[F[_], A](
   def evalOnIdle[B](
       action: F[B],
       timeout: FiniteDuration
-  )(implicit c: Concurrent[F], t: Timer[F]): Stream[F, A] = {
+  )(implicit c: Concurrent[F], t: Temporal[F]): Stream[F, A] = {
     // Current time in nano seconds
-    val nanoTime = Timer[F].clock.monotonic(NANOSECONDS)
+    val nanoTime = Temporal[F].clock.monotonic(NANOSECONDS)
     // Timeout in nano seconds
     val timeoutNano = timeout.toNanos
 
@@ -112,7 +112,7 @@ class Fs2StreamOps[F[_], A](
       // Stream to execute action when timeout is reached, wait for next checking
       val nextStream = Stream.eval(elapsed) flatMap {
         case (sleep, isTimeout) =>
-          Stream.eval(action).whenA(isTimeout) ++ Stream.eval(Timer[F].sleep(sleep))
+          Stream.eval(action).whenA(isTimeout) ++ Stream.eval(Temporal[F].sleep(sleep))
       }
 
       // On each element reset idle timer to current time | run next check recursively

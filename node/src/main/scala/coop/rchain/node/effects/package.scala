@@ -1,7 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Blocker, Concurrent, ConcurrentEffect, ContextShift, IO, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, IO, Sync}
 import cats.mtl._
 import cats.syntax.all._
 import cats.{Applicative, Monad, Parallel}
@@ -21,6 +20,7 @@ import scala.concurrent.duration._
 import scala.io.Source
 import scala.tools.jline.console._
 import scala.util.Using
+import cats.effect.{Deferred, Ref}
 
 package object effects {
 

@@ -1,7 +1,6 @@
 package coop.rchain.casper.batch2
 
 import cats.Applicative
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore

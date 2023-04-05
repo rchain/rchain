@@ -1,6 +1,6 @@
 package coop.rchain.casper.helper
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Resource}
+import cats.effect.{Concurrent, Resource}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rholang.Resources.mkRuntimes
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository

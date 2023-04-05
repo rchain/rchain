@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
 import com.google.protobuf.ByteString
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._

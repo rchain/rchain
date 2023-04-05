@@ -1,7 +1,6 @@
 package coop.rchain.casper.sync
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.casper.blocks.BlockRetriever
 import coop.rchain.casper.blocks.BlockRetriever.{RequestState, RequestedBlocks}
@@ -16,6 +15,7 @@ import coop.rchain.shared.{Log, Time}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+import cats.effect.Ref
 
 class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 

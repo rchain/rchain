@@ -1,6 +1,6 @@
 package coop.rchain.rspace.bench
 
-import cats.effect.{ContextShift, Sync}
+import cats.effect.Sync
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}

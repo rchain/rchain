@@ -1,7 +1,7 @@
 package coop.rchain.casper.genesis
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, IO, Sync}
+import cats.effect.{Concurrent, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.syntax._
@@ -238,7 +238,6 @@ object GenesisTest {
   )(
       implicit genesisPath: Path,
       runtimeManager: RuntimeManager[IO],
-      c: Concurrent[IO],
       log: LogStub[IO]
   ): IO[BlockMessage] =
     for {

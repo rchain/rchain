@@ -1,6 +1,6 @@
 package coop.rchain.casper.util
 
-import cats.effect.{Blocker, ContextShift, Sync}
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Secp256k1
@@ -9,6 +9,7 @@ import coop.rchain.models.syntax._
 import fs2.{io, text, Pipe, Stream}
 
 import java.nio.file.Path
+import cats.effect.Resource
 
 object BondsParser {
 
@@ -20,7 +21,7 @@ object BondsParser {
     *     - https://typelevel.org/cats-effect/docs/migration-guide#blocker
     */
   def parse[F[_]: Sync: ContextShift: Log](bondsPath: Path): F[Map[PublicKey, Long]] = {
-    def readLines(blocker: Blocker) =
+    def readLines =
       io.file
         .readAll[F](bondsPath, blocker, chunkSize = 4096)
         .through(text.utf8Decode)
@@ -58,7 +59,7 @@ object BondsParser {
           case ex: Throwable =>
             new Exception(s"FAILED PARSING BONDS FILE: $bondsPath\n$ex")
         }
-    Blocker[F].use(readLines)
+    Resource.unit[F].use(readLines)
   }
 
   def parse[F[_]: Sync: ContextShift: Log](
@@ -67,7 +68,7 @@ object BondsParser {
   ): F[Map[PublicKey, Long]] = {
     val bondsPath = Path.of(bondsPathStr)
 
-    def readLines(blocker: Blocker) =
+    def readLines =
       io.file
         .exists(blocker, bondsPath)
         .ifM(
@@ -75,7 +76,7 @@ object BondsParser {
           Log[F].warn(s"BONDS FILE NOT FOUND: $bondsPath. Creating file with random bonds.") >>
             newValidators[F](autogenShardSize, bondsPath.toAbsolutePath)
         )
-    Blocker[F].use(readLines)
+    Resource.unit[F].use(readLines)
   }
 
   private def newValidators[F[_]: Sync: ContextShift: Log](
@@ -89,11 +90,11 @@ object BondsParser {
     val (_, pubKeys) = keys.unzip
     val bonds        = pubKeys.iterator.zipWithIndex.toMap.mapValues(_.toLong + 1L)
 
-    def toFile(filePath: Path, blocker: Blocker): Pipe[F, String, Unit] =
+    def toFile(filePath: Path): Pipe[F, String, Unit] =
       _.through(text.utf8Encode).through(io.file.writeAll(filePath, blocker))
 
     // Write generated `<public_key>.sk` files with private key as content
-    def writeSkFiles(blocker: Blocker) =
+    def writeSkFiles =
       Stream
         .fromIterator(keys.iterator)
         .flatMap {
@@ -107,7 +108,7 @@ object BondsParser {
         .drain
 
     // Create bonds file with generated public keys
-    def writeBondsFile(blocker: Blocker) = {
+    def writeBondsFile = {
       val br = System.lineSeparator()
       val bondsStream = Stream
         .fromIterator(bonds.iterator)
@@ -120,7 +121,7 @@ object BondsParser {
     }
 
     // Write .sk files and bonds file
-    Blocker[F].use { blocker =>
+    Resource.unit[F].use { blocker =>
       io.file.createDirectories(blocker, genesisFolder) *>
         writeSkFiles(blocker) *> writeBondsFile(blocker) *> bonds.pure[F]
     }

@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.Parallel
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -23,6 +22,7 @@ import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
+import cats.effect.Ref
 
 /**
   * ReportingRspace works exactly like how ReplayRspace works. It can replay the deploy and try to find if the

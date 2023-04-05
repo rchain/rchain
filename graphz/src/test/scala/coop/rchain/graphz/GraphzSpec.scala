@@ -1,11 +1,11 @@
 package coop.rchain.graphz
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import org.scalatest._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+import cats.effect.Ref
 
 class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 

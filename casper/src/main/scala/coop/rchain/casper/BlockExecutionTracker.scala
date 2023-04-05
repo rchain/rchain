@@ -1,11 +1,11 @@
 package coop.rchain.casper
 
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.rholang.interpreter.EvaluateResult
 import coop.rchain.sdk.syntax.all._
+import cats.effect.Ref
 
 trait BlockExecutionTracker[F[_]] {
   def execStarted(d: DeployId): F[Unit]

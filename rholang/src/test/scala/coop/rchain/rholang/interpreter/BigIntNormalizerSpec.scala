@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.testing.scalatest.AsyncIOSpec
-import cats.effect.{Concurrent, ContextShift, IO}
+import cats.effect.{Concurrent, IO}
 import cats.syntax.all._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}

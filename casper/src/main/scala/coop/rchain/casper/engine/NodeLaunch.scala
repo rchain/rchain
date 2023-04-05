@@ -1,8 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.Parallel
-import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, ContextShift, Timer}
+import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -28,6 +27,7 @@ import fs2.Stream
 import fs2.concurrent.Queue
 
 import scala.concurrent.duration.DurationInt
+import cats.effect.{Deferred, Temporal}
 
 final case class PeerMessage(peer: PeerNode, message: CasperMessage)
 
@@ -35,7 +35,7 @@ object NodeLaunch {
 
   // format: off
   def apply[F[_]
-    /* Execution */   : Concurrent: Parallel: ContextShift: Time: Timer
+    /* Execution */   : Concurrent: Parallel: ContextShift: Time: Temporal
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever
     /* State */       : RPConfAsk: ConnectionsCell
     /* Rholang */     : RuntimeManager
@@ -118,7 +118,7 @@ object NodeLaunch {
     def waitForFirstConnection: F[Unit] =
       for {
         isEmpty <- ConnectionsCell[F].get.map(_.isEmpty)
-        _       <- (Timer[F].sleep(250.millis) *> waitForFirstConnection).whenA(isEmpty)
+        _       <- (Temporal[F].sleep(250.millis) *> waitForFirstConnection).whenA(isEmpty)
       } yield ()
 
     for {

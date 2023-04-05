@@ -2,7 +2,6 @@ package coop.rchain.casper.rholang.syntax
 
 import cats.data.EitherT
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol.{
@@ -43,6 +42,7 @@ import RuntimeReplaySyntax._
 import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.hash.Blake2b512Random
+import cats.effect.Ref
 
 trait RuntimeReplaySyntax {
   implicit final def casperSyntaxRholangRuntimeReplay[F[_]](

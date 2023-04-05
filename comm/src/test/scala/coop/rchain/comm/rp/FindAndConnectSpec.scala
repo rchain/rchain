@@ -1,6 +1,5 @@
 package coop.rchain.comm.rp
 
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{catsInstancesForId => _, _}
 import org.scalatest.funspec.AnyFunSpec
@@ -16,6 +15,7 @@ import coop.rchain.shared._
 import org.scalatest._
 
 import scala.concurrent.duration._
+import cats.effect.Ref
 
 class FindAndConnectSpec
     extends AnyFunSpec

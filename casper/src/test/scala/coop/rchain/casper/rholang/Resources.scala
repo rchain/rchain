@@ -1,7 +1,7 @@
 package coop.rchain.casper.rholang
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.metrics

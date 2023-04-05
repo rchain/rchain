@@ -2,7 +2,6 @@ package coop.rchain.casper.util.comm
 
 import cats.Monad
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.comm.CommError.CommErr
@@ -14,6 +13,7 @@ import io.grpc.Server
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.FiniteDuration
+import cats.effect.Ref
 
 object TestNetwork {
   type NodeMessageQueues = Map[PeerNode, Queue[Protocol]]

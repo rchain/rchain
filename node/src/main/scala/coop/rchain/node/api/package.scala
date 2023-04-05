@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Resource, Sync}
+import cats.effect.{Concurrent, ConcurrentEffect, Resource, Sync}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceFs2Grpc
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceFs2Grpc
 import coop.rchain.node.model.ReplFs2Grpc

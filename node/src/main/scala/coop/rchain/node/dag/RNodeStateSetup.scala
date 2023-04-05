@@ -1,9 +1,9 @@
 package coop.rchain.node.dag
 
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.node.dag.implementation.{BlockStatus, NetworkBlockRequester, RNodeDagManager}
+import cats.effect.Ref
 
 object RNodeStateSetup {
 

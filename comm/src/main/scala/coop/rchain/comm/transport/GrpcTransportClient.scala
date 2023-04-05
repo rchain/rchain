@@ -1,7 +1,6 @@
 package coop.rchain.comm.transport
 
 import cats.Applicative
-import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.syntax.all._
 import cats.effect.{Concurrent, ConcurrentEffect, Sync}
 import cats.syntax.all._
@@ -23,6 +22,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util._
+import cats.effect.{Deferred, Ref}
 
 /**
   * GRPC channel with a message buffer protecting it from resource exhaustion

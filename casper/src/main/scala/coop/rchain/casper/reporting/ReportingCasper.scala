@@ -1,8 +1,7 @@
 package coop.rchain.casper.reporting
 
 import cats.Parallel
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.models.syntax._
@@ -33,6 +32,7 @@ import coop.rchain.rspace.{ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
 
 import scala.concurrent.ExecutionContext
+import cats.effect.Ref
 
 /**
   * @param processedDeploy Deploy details

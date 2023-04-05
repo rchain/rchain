@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.Functor
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.ski._
@@ -26,6 +25,7 @@ import org.scalatestplus.scalacheck._
 import scala.collection.SortedSet
 import scala.util.Random
 import scala.util.Random.shuffle
+import cats.effect.Ref
 
 object SchedulerPools {
   implicit val global = Scheduler.fixedPool("GlobalPool", 20)

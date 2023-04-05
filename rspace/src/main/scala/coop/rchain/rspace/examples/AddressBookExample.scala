@@ -1,6 +1,6 @@
 package coop.rchain.rspace.examples
 
-import cats.effect.{Concurrent, ContextShift, IO}
+import cats.effect.{Concurrent, IO}
 import cats.{Applicative, Id}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager

@@ -1,8 +1,8 @@
 package coop.rchain.graphz
 
 import cats._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import cats.effect.Ref
 
 trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]

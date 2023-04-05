@@ -1,6 +1,5 @@
 package coop.rchain.node.web
 
-import cats.effect.concurrent.Deferred
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.casper.api.BlockReportApi
@@ -22,6 +21,7 @@ import scodec.codecs.utf8
 
 import scala.collection.concurrent.TrieMap
 import scala.language.higherKinds
+import cats.effect.Deferred
 
 final case class Transaction(
     fromAddr: String,

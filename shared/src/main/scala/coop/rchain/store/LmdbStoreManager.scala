@@ -3,13 +3,13 @@ package coop.rchain.store
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
-import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.shared.{Log, LogSource}
 import enumeratum.{Enum, EnumEntry}
 import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 import org.lmdbjava.{DbiFlags, Env, EnvFlags}
+import cats.effect.{Deferred, Ref}
 
 object LmdbStoreManager {
   def apply[F[_]: Concurrent: Log](dirPath: Path, maxEnvSize: Long): F[KeyValueStoreManager[F]] =

@@ -1,7 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, IO, Timer}
+import cats.effect.{Concurrent, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsBlockRequester.ST
@@ -16,6 +15,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
+import cats.effect.{Ref, Temporal}
 
 class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
 
@@ -81,7 +81,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * @param test test definition
     */
-  def createMock[F[_]: Concurrent: Timer: Log](
+  def createMock[F[_]: Concurrent: Temporal: Log](
       startBlock: BlockMessage,
       requestTimeout: FiniteDuration
   )(test: Mock[F] => F[Unit]): F[Unit] = {

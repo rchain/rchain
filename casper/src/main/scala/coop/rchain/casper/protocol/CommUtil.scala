@@ -18,6 +18,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared._
 
 import scala.concurrent.duration._
+import cats.effect.Temporal
 
 // TODO: remove CommUtil completely and move to extensions (syntax) on TransportLayer
 @autoFunctorK
@@ -49,7 +50,7 @@ object CommUtil {
 
   def apply[F[_]](implicit ev: CommUtil[F]): CommUtil[F] = ev
 
-  def of[F[_]: Concurrent: Timer: TransportLayer: RPConfAsk: ConnectionsCell: Log]: CommUtil[F] =
+  def of[F[_]: Concurrent: Temporal: TransportLayer: RPConfAsk: ConnectionsCell: Log]: CommUtil[F] =
     new CommUtil[F] {
 
       def sendToPeers(message: Packet, scopeSize: Option[Int]): F[Unit] =
@@ -86,7 +87,7 @@ object CommUtil {
               Log[F].warn(
                 s"Failed to send ${msgTypeName} to $peer because of ${CommError
                   .errorMessage(error)}. Retrying in $retryAfter..."
-              ) >> Timer[F].sleep(retryAfter) >> keepOnRequestingTillRunning(peer, msg)
+              ) >> Temporal[F].sleep(retryAfter) >> keepOnRequestingTillRunning(peer, msg)
           }
 
         RPConfAsk[F].ask >>= { conf =>

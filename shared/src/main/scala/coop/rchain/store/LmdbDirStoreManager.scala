@@ -1,12 +1,12 @@
 package coop.rchain.store
 
-import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.{Db, LmdbEnvConfig}
 
 import java.nio.file.Path
+import cats.effect.{Deferred, Ref}
 
 object LmdbDirStoreManager {
   // TODO: Return instance as Resource with the call to _shutdown_.

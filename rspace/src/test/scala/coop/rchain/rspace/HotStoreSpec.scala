@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.Parallel
 import cats.effect.{Concurrent, IO, Sync}
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples.{StringsCaptor, _}
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -20,6 +19,7 @@ import scodec.bits.ByteVector
 import scala.collection.SortedSet
 import scala.concurrent.duration._
 import scala.util.Random
+import cats.effect.Ref
 
 trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 

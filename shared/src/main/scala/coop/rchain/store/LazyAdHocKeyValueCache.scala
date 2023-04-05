@@ -2,8 +2,8 @@ package coop.rchain.store
 
 import cats.Applicative
 import cats.effect.Concurrent
-import cats.effect.concurrent.{Deferred, Ref}
 import cats.syntax.all._
+import cats.effect.{Deferred, Ref}
 
 trait KeyValueCache[F[_], K, V] {
   def get(key: K, fallback: F[V]): F[V]

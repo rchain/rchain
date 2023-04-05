@@ -1,8 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats.Parallel
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ContextShift, IO, Resource, Sync, Timer}
+import cats.effect.{Concurrent, IO, Resource, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -40,8 +39,9 @@ import monix.execution.Scheduler
 
 import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import cats.effect.{Deferred, Ref, Temporal}
 
-case class TestNode[F[_]: Concurrent: Timer](
+case class TestNode[F[_]: Concurrent: Temporal](
     name: String,
     local: PeerNode,
     tle: TransportLayerTestImpl[F],
@@ -285,7 +285,7 @@ object TestNode {
 
   import scala.concurrent.ExecutionContext.Implicits.global
   implicit val cs: ContextShift[IO] = IO.contextShift(global)
-  implicit val t: Timer[IO]         = IO.timer(global)
+  implicit val t: Temporal[IO]      = IO.timer(global)
 
   def standaloneEff(genesis: GenesisContext): Resource[Effect, TestNode[Effect]] =
     networkEff(
@@ -315,7 +315,7 @@ object TestNode {
     )
   }
 
-  private def networkF[F[_]: Concurrent: Parallel: ContextShift: Timer: TestNetwork](
+  private def networkF[F[_]: Concurrent: Parallel: ContextShift: Temporal: TestNetwork](
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageMatrixPath: Path,
@@ -373,7 +373,7 @@ object TestNode {
     }
   }
 
-  private def createNode[F[_]: Concurrent: Timer: Parallel: ContextShift: TestNetwork](
+  private def createNode[F[_]: Concurrent: Temporal: Parallel: ContextShift: TestNetwork](
       name: String,
       currentPeerNode: PeerNode,
       genesis: BlockMessage,

@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.scalatest
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
 import fs2.Stream
 import org.scalatest.matchers.{MatchResult, Matcher}
 

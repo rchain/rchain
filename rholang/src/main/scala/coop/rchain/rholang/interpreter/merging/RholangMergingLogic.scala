@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter.merging
 
 import cats.Monad
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -20,6 +19,7 @@ import coop.rchain.scodec.codecs
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{bytes, int64, uint16, variableSizeBytes, vlong}
+import cats.effect.Ref
 
 object RholangMergingLogic {
 

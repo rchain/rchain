@@ -1,7 +1,7 @@
 package coop.rchain.comm.discovery
 
 import cats._
-import cats.effect.{Resource, Sync, Timer}
+import cats.effect.{Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.comm._
 import io.grpc
@@ -10,8 +10,9 @@ import java.net.ServerSocket
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{Try, Using}
+import cats.effect.Temporal
 
-abstract class KademliaRPCRuntime[F[_]: Sync: Timer, E <: Environment] {
+abstract class KademliaRPCRuntime[F[_]: Sync: Temporal, E <: Environment] {
 
   def createEnvironment(port: Int): F[E]
 
@@ -117,24 +118,24 @@ trait Environment {
   def port: Int
 }
 
-abstract class Handler[F[_]: Monad: Timer, R] {
+abstract class Handler[F[_]: Monad: Temporal, R] {
   def received: Seq[(PeerNode, R)] = receivedMessages
   protected val receivedMessages: mutable.MutableList[(PeerNode, R)] =
     mutable.MutableList.empty[(PeerNode, R)]
 }
 
-final class PingHandler[F[_]: Monad: Timer](
+final class PingHandler[F[_]: Monad: Temporal](
     delay: Option[FiniteDuration] = None
 ) extends Handler[F, PeerNode] {
   def handle(peer: PeerNode): PeerNode => F[Unit] =
     p =>
       for {
         _ <- receivedMessages.synchronized(receivedMessages += ((peer, p))).pure[F]
-        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
+        _ <- delay.fold(().pure[F])(implicitly[Temporal[F]].sleep)
       } yield ()
 }
 
-final class LookupHandler[F[_]: Monad: Timer](
+final class LookupHandler[F[_]: Monad: Temporal](
     response: Seq[PeerNode],
     delay: Option[FiniteDuration] = None
 ) extends Handler[F, (PeerNode, Array[Byte])] {
@@ -142,21 +143,21 @@ final class LookupHandler[F[_]: Monad: Timer](
     (p, a) =>
       for {
         _ <- receivedMessages.synchronized(receivedMessages += ((peer, (p, a)))).pure[F]
-        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
+        _ <- delay.fold(().pure[F])(implicitly[Temporal[F]].sleep)
       } yield response
 }
 
 object Handler {
-  def pingHandler[F[_]: Monad: Timer]: PingHandler[F] = new PingHandler[F]
+  def pingHandler[F[_]: Monad: Temporal]: PingHandler[F] = new PingHandler[F]
 
-  def pingHandlerWithDelay[F[_]: Monad: Timer](delay: FiniteDuration): PingHandler[F] =
+  def pingHandlerWithDelay[F[_]: Monad: Temporal](delay: FiniteDuration): PingHandler[F] =
     new PingHandler[F](Some(delay))
 
-  def lookupHandlerNil[F[_]: Monad: Timer]: LookupHandler[F] = new LookupHandler[F](Nil)
+  def lookupHandlerNil[F[_]: Monad: Temporal]: LookupHandler[F] = new LookupHandler[F](Nil)
 
-  def lookupHandlerWithDelay[F[_]: Monad: Timer](delay: FiniteDuration): LookupHandler[F] =
+  def lookupHandlerWithDelay[F[_]: Monad: Temporal](delay: FiniteDuration): LookupHandler[F] =
     new LookupHandler[F](Nil, Some(delay))
 
-  def lookupHandler[F[_]: Monad: Timer](result: Seq[PeerNode]): LookupHandler[F] =
+  def lookupHandler[F[_]: Monad: Temporal](result: Seq[PeerNode]): LookupHandler[F] =
     new LookupHandler[F](result)
 }

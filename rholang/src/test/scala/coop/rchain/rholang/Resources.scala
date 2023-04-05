@@ -2,7 +2,7 @@ package coop.rchain.rholang
 
 import cats.Parallel
 import cats.effect.ExitCase.Error
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}

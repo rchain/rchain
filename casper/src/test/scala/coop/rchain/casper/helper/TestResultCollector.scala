@@ -1,6 +1,5 @@
 package coop.rchain.casper.helper
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
@@ -10,6 +9,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Expr, ListParWithRandom, Par}
 import coop.rchain.rholang.interpreter.ContractCall
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
+import cats.effect.Ref
 
 object IsAssert {
   def unapply(

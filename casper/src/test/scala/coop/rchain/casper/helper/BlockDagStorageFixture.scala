@@ -1,6 +1,6 @@
 package coop.rchain.casper.helper
 
-import cats.effect.{Concurrent, IO, Resource, Timer}
+import cats.effect.{Concurrent, IO, Resource}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore

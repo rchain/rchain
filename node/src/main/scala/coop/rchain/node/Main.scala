@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
 import coop.rchain.node.runtime.NodeMain
