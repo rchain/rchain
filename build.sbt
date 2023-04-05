@@ -54,6 +54,7 @@ lazy val projectSettings = Seq(
   ),
   scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
   ThisBuild / scapegoatVersion := "1.4.11",
+  ThisBuild / scalacOptions += "semanticdb:synthetics:on",
   Test / testOptions += Tests.Argument("-oD"), //output test durations
   javacOptions ++= Seq("-source", "11", "-target", "11"),
   Test / fork := true,

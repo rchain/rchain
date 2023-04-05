@@ -21,3 +21,4 @@ addSbtPlugin("com.sksamuel.scapegoat" %% "sbt-scapegoat"       % "1.1.1")
 // TODO replace with addSbtPlugin("org.typelevel" % "sbt-fs2-grpc" % "<latest-version>")
 //   when migrated top CE3 since latest fs2-grpc is not available for CE2
 addSbtPlugin("org.lyranthe.fs2-grpc" % "sbt-java-gen" % "0.11.2")
+addSbtPlugin("ch.epfl.scala"         % "sbt-scalafix" % "0.10.4")
