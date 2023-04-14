@@ -1,5 +1,6 @@
 package coop.rchain.casper.rholang
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
 import cats.syntax.all._
 import cats.implicits.catsSyntaxApplicativeId
@@ -23,7 +24,6 @@ import org.scalatest.matchers.should.Matchers
 class DeployIdTest extends AnyFlatSpec with Matchers {
   implicit val log: Log[IO]      = new Log.NOPLog[IO]()
   private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
-  import coop.rchain.shared.RChainScheduler._
 
   private val runtimeManager: Resource[IO, RuntimeManager[IO]] =
     mkRuntimeManager[IO]("deploy-id-runtime-manager-test", dummyMergeableName)

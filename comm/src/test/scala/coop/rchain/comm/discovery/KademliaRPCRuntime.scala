@@ -1,7 +1,7 @@
 package coop.rchain.comm.discovery
 
 import cats._
-import cats.effect.{Resource, Sync}
+import cats.effect.{Async, Resource, Sync, Temporal}
 import cats.syntax.all._
 import coop.rchain.comm._
 import io.grpc
@@ -10,9 +10,8 @@ import java.net.ServerSocket
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{Try, Using}
-import cats.effect.Temporal
 
-abstract class KademliaRPCRuntime[F[_]: Sync: Temporal, E <: Environment] {
+abstract class KademliaRPCRuntime[F[_]: Async, E <: Environment] {
 
   def createEnvironment(port: Int): F[E]
 
@@ -131,7 +130,7 @@ final class PingHandler[F[_]: Monad: Temporal](
     p =>
       for {
         _ <- receivedMessages.synchronized(receivedMessages += ((peer, p))).pure[F]
-        _ <- delay.fold(().pure[F])(implicitly[Temporal[F]].sleep)
+        _ <- delay.fold(().pure[F])(Temporal[F].sleep)
       } yield ()
 }
 

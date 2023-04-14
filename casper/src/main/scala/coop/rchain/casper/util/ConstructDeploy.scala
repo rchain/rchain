@@ -1,5 +1,6 @@
 package coop.rchain.casper.util
 
+import cats.effect.Clock
 import coop.rchain.models.PCost
 import cats.syntax.all._
 import cats.{Functor, Monad}
@@ -7,7 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedDeployProto}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.shared.{Base16, Time}
+import coop.rchain.shared.Base16
 
 object ConstructDeploy {
 
@@ -60,7 +61,7 @@ object ConstructDeploy {
       shardId = shardId
     )
 
-  def sourceDeployNowF[F[_]: Time: Functor](
+  def sourceDeployNowF[F[_]: Clock: Functor](
       source: String,
       phloLimit: Long = 1000000,
       phloPrice: Long = 1L,
@@ -68,7 +69,7 @@ object ConstructDeploy {
       vabn: Long = 0,
       shardId: String = ""
   ): F[Signed[DeployData]] =
-    Time[F].nanoTime.map {
+    Clock[F].monotonic.map(_.toNanos).map {
       sourceDeploy(
         source,
         _,
@@ -81,25 +82,25 @@ object ConstructDeploy {
     }
 
   // TODO: replace usages with basicSendDeployData
-  def basicDeployData[F[_]: Monad: Time](
+  def basicDeployData[F[_]: Monad: Clock](
       id: Int,
       sec: PrivateKey = defaultSec,
       shardId: String = ""
   ): F[Signed[DeployData]] =
     sourceDeployNowF(source = s"@$id!($id)", sec = sec, shardId = shardId)
 
-  def basicSendDeployData[F[_]: Monad: Time](
+  def basicSendDeployData[F[_]: Monad: Clock](
       id: Int,
       shardId: String = ""
   ): F[Signed[DeployData]] = basicDeployData[F](id, shardId = shardId)
 
-  def basicReceiveDeployData[F[_]: Monad: Time](
+  def basicReceiveDeployData[F[_]: Monad: Clock](
       id: Int,
       shardId: String = ""
   ): F[Signed[DeployData]] =
     sourceDeployNowF(source = s"for(_ <- @$id){ Nil }", shardId = shardId)
 
-  def basicProcessedDeploy[F[_]: Monad: Time](
+  def basicProcessedDeploy[F[_]: Monad: Clock](
       id: Int,
       shardId: String = ""
   ): F[ProcessedDeploy] =

@@ -17,7 +17,7 @@ import scala.concurrent.duration.FiniteDuration
 
 package object api {
 
-  def acquireInternalServer[F[_]: Sync: AsyncEffect](
+  def acquireInternalServer[F[_]: Async](
       host: String,
       port: Int,
       grpcEC: ExecutionContext,
@@ -52,7 +52,7 @@ package object api {
     Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.awaitTermination()))
   }
 
-  def acquireExternalServer[F[_]: Async: AsyncEffect: Log](
+  def acquireExternalServer[F[_]: Async: Log](
       host: String,
       port: Int,
       grpcEC: ExecutionContext,

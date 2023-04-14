@@ -1,6 +1,7 @@
 package coop.rchain.comm.transport
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.comm.protocol.routing._
 import org.scalacheck.Gen
@@ -14,9 +15,6 @@ import scala.util.Random
 class PacketStoreRestoreSpec extends AnyFunSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
   import PacketOps._
-
-  import scala.concurrent.ExecutionContext.Implicits.global
-  implicit val cs: ContextShift[IO] = IO.contextShift(global)
 
   describe("Packet store & restore") {
     it("should store and restore to the original Packet") {

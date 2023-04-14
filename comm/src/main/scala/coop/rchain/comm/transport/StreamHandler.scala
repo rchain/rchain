@@ -2,7 +2,6 @@ package coop.rchain.comm.transport
 
 import cats.data._
 import cats.effect.Sync
-import cats.effect.implicits.catsEffectSyntaxBracket
 import cats.syntax.all._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing._

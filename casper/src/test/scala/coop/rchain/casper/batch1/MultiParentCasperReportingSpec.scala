@@ -19,7 +19,6 @@ import org.scalatest.matchers.should.Matchers
 class MultiParentCasperReportingSpec extends AnyFlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
-  import coop.rchain.shared.RChainScheduler._
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 

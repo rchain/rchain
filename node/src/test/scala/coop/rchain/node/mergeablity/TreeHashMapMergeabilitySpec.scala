@@ -1,7 +1,7 @@
 package coop.rchain.node.mergeablity
 
 import cats.effect.{IO, Sync}
-import cats.implicits.catsSyntaxApplicative
+import cats.effect.unsafe.implicits.global
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
@@ -16,7 +16,7 @@ import coop.rchain.node.revvaultexport.RhoTrieTraverser
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.shared.{Log, RChainScheduler}
+import coop.rchain.shared.Log
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -480,7 +480,6 @@ class TreeHashMapMergeabilitySpec
     implicit val metricsEff: Metrics[IO] = new Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
     implicit val logger: Log[IO]         = Log.log[IO]
-    import RChainScheduler._
     val baseDeploy =
       ConstructDeploy.sourceDeploy(base, 1L, phloLimit = Cost.UNSAFE_MAX.value)
     val leftDeploy =

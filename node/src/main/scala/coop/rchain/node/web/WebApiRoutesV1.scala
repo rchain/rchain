@@ -1,5 +1,6 @@
 package coop.rchain.node.web
 
+import cats.effect.kernel.Concurrent
 import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.node.api.json.JsonEntitiesCirceFromSchema
@@ -80,7 +81,7 @@ final case class WebApiRoutesV1[F[_]: Async: Log](
 /**
   * Defines implementation (interpreter) for Admin Web API endpoints.
   */
-final case class AdminWebApiRoutesV1[F[_]: Sync](
+final case class AdminWebApiRoutesV1[F[_]: Concurrent](
     adminWebApi: AdminWebApi[F]
 ) extends Endpoints[F]
     with JsonEntitiesCirceFromSchema

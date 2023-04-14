@@ -1,15 +1,13 @@
 package coop.rchain.casper.util
 
-import cats.effect.Sync
+import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.models.syntax._
+import fs2.io.file.{Files, Path}
 import fs2.{io, text, Pipe, Stream}
-
-import java.nio.file.Path
-import cats.effect.Resource
 
 object BondsParser {
 
@@ -20,7 +18,7 @@ object BondsParser {
     *   Cats Effect 3 removed ContextShift and Blocker.
     *     - https://typelevel.org/cats-effect/docs/migration-guide#blocker
     */
-  def parse[F[_]: Sync: ContextShift: Log](bondsPath: Path): F[Map[PublicKey, Long]] = {
+  def parse[F[_]: Async: Log](bondsPath: Path): F[Map[PublicKey, Long]] = {
     def readLines =
       io.file
         .readAll[F](bondsPath, blocker, chunkSize = 4096)
@@ -62,7 +60,7 @@ object BondsParser {
     Resource.unit[F].use(readLines)
   }
 
-  def parse[F[_]: Sync: ContextShift: Log](
+  def parse[F[_]: Async: Log](
       bondsPathStr: String,
       autogenShardSize: Int
   ): F[Map[PublicKey, Long]] = {
@@ -79,7 +77,7 @@ object BondsParser {
     Resource.unit[F].use(readLines)
   }
 
-  private def newValidators[F[_]: Sync: ContextShift: Log](
+  private def newValidators[F[_]: Async: Log](
       autogenShardSize: Int,
       bondsFilePath: Path
   ): F[Map[PublicKey, Long]] = {
@@ -96,7 +94,7 @@ object BondsParser {
     // Write generated `<public_key>.sk` files with private key as content
     def writeSkFiles =
       Stream
-        .fromIterator(keys.iterator)
+        .fromIterator(keys.iterator, 1)
         .flatMap {
           case (privateKey, publicKey) =>
             val sk     = Base16.encode(privateKey.bytes)
@@ -111,7 +109,7 @@ object BondsParser {
     def writeBondsFile = {
       val br = System.lineSeparator()
       val bondsStream = Stream
-        .fromIterator(bonds.iterator)
+        .fromIterator(bonds.iterator, 1)
         .evalMap {
           case (publicKey, stake) =>
             val pk = Base16.encode(publicKey.bytes)

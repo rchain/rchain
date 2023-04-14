@@ -125,7 +125,7 @@ object StateChange {
       // compute all changes
       allChanges = (computeProduceChanges ++ computeConsumeChanges ++ computeJoinsMap)
         .map(Stream.eval)
-      _              <- fs2.Stream.fromIterator(allChanges.iterator).parJoinProcBounded.compile.drain
+      _              <- fs2.Stream.fromIterator(allChanges.iterator, 1).parJoinProcBounded.compile.drain
       produceChanges <- datumsDiffRef.get
       _ <- new Exception("State change compute logic error: empty channel change for produce.")
             .raiseError[F, StateChange]

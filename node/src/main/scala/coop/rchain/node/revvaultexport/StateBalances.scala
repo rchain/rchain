@@ -41,7 +41,7 @@ object StateBalances {
     } yield unf
   }
 
-  def read[F[_]: Async: Parallel: ContextShift](
+  def read[F[_]: Async: Parallel](
       shardId: String,
       blockHash: String,
       vaultTreeHashMapDepth: Int,

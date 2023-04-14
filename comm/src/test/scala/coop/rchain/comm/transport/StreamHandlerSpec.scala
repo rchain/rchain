@@ -1,6 +1,7 @@
 package coop.rchain.comm.transport
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._

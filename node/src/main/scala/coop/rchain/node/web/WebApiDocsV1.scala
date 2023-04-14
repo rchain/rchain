@@ -1,6 +1,6 @@
 package coop.rchain.node.web
 
-import cats.effect.Sync
+import cats.effect.kernel.Concurrent
 import coop.rchain.node.api.v1.{WebApiAdminEndpoints, WebApiEndpoints}
 import endpoints4s.http4s.server
 import endpoints4s.http4s.server.Endpoints
@@ -43,7 +43,7 @@ object WebApiDocs
 /**
   * OpenAPI endpoint definition (GET /openapi.json).
   */
-final case class WebApiDocServer[F[_]: Sync]()
+final case class WebApiDocServer[F[_]: Concurrent]()
     extends Endpoints[F]
     with server.JsonEntitiesFromEncodersAndDecoders {
   implicit val jCodec: endpoints4s.Encoder[OpenApi, String] = OpenApi.stringEncoder

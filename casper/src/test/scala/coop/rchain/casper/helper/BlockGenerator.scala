@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats.Applicative
-import cats.effect.{Async, IO, Sync}
+import cats.effect.{Async, IO, Sync, Temporal}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -25,7 +25,7 @@ import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, LogSource, Time}
+import coop.rchain.shared.{Log, LogSource}
 
 object BlockGenerator {
   private[this] val GenerateBlockMetricsSource =
@@ -182,7 +182,7 @@ trait BlockGenerator {
     sendersLatest.map(_.senderSeq).toList.maximumOption.getOrElse(-1L)
   }
 
-  def createValidatorBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
+  def createValidatorBlock[F[_]: Async: BlockStore: BlockDagStorage](
       justifications: Seq[BlockMessage],
       validator: Validator,
       bonds: Map[Validator, Long],

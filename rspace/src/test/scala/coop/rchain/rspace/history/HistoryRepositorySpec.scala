@@ -21,6 +21,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.OptionValues
 import scodec.bits.ByteVector
+import cats.effect.unsafe.implicits.global
 
 import java.nio.ByteBuffer
 import scala.collection.SortedSet
@@ -177,7 +178,6 @@ class HistoryRepositorySpec
     val pastRoots               = rootRepository
     implicit val log: Log[IO]   = new NOPLog()
     implicit val span: Span[IO] = new NoopSpan[IO]()
-    import coop.rchain.shared.RChainScheduler._
 
     (for {
       emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[IO])

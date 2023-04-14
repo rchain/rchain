@@ -1,6 +1,7 @@
 package coop.rchain.casper.batch2
 
-import cats.effect.{IO, Sync}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -25,7 +26,7 @@ import coop.rchain.models.blockImplicits._
 import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared.Time
+import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -51,14 +52,12 @@ class ValidateTest
   implicit val metrics: Metrics[IO] = new Metrics.MetricsNOP[IO]()
   implicit val s                    = Sync[IO]
 
-  import coop.rchain.shared.RChainScheduler._
-
   override def beforeEach(): Unit = {
     log.reset()
     timeEff.reset()
   }
 
-  def createChain[F[_]: Sync: Time: BlockStore: BlockDagStorage](
+  def createChain[F[_]: Async: BlockStore: BlockDagStorage](
       length: Int,
       bonds: Map[Validator, Long] = Map.empty
   ): F[Vector[BlockMessage]] =
@@ -71,7 +70,7 @@ class ValidateTest
                }
     } yield blocks
 
-  def createChainWithRoundRobinValidators[F[_]: Sync: Time: BlockStore: BlockDagStorage](
+  def createChainWithRoundRobinValidators[F[_]: Async: BlockStore: BlockDagStorage](
       length: Int,
       validatorLength: Int
   ): F[Vector[BlockMessage]] = {

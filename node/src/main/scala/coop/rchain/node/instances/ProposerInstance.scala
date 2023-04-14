@@ -9,18 +9,18 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.shared.Log
 import fs2.Stream
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 import cats.effect.{Deferred, Ref}
-import cats.effect.std.Semaphore
+import cats.effect.std.{PQueue, Semaphore}
 
 object ProposerInstance {
   def create[F[_]: Async: Log](
-      proposeRequestsQueue: Queue[F, (Boolean, Deferred[F, ProposerResult])],
+      proposeRequestsQueue: Channel[F, (Boolean, Deferred[F, ProposerResult])],
       proposer: Proposer[F],
       state: Ref[F, ProposerState[F]]
   ): Stream[F, (ProposeResult, Option[BlockMessage])] = {
     // stream of requests to propose
-    val in = proposeRequestsQueue.dequeue
+    val in = proposeRequestsQueue.stream
 
     // max number of concurrent attempts to propose. Actual propose can happen only one at a time, but clients
     // are free to make propose attempt. In that case proposeID returned will be None.

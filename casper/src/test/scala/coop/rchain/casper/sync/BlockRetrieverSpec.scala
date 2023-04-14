@@ -11,11 +11,12 @@ import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.{createRPConfAsk, LogStub, TransportLayerStub}
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.Log
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
 
 class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
@@ -38,8 +39,7 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
     Ref.unsafe[IO, Connections](List(local))
   implicit val transportLayer = new TransportLayerStub[IO]
   implicit val rpConf         = createRPConfAsk[IO](local)
-  import coop.rchain.shared.RChainScheduler._
-  implicit val time           = Time.fromTimer[IO]
+
   implicit val commUtil       = CommUtil.of[IO]
   implicit val blockRetriever = BlockRetriever.of[IO]
 

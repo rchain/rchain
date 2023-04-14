@@ -1,5 +1,6 @@
 package coop.rchain.casper.helper
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO, Resource}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
@@ -11,7 +12,7 @@ import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.rholang
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.Log
 import org.scalatest.{BeforeAndAfter, Suite}
 
 import java.nio.file.Path
@@ -24,7 +25,6 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   )(f: BlockStore[IO] => BlockDagStorage[IO] => RuntimeManager[IO] => IO[R]): R = {
     implicit val metrics = new MetricsNOP[IO]()
     implicit val log     = Log.log[IO]
-    import coop.rchain.shared.RChainScheduler._
 
     def create(dir: Path) =
       for {
@@ -48,7 +48,6 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   def withStorage[R](f: BlockStore[IO] => BlockDagStorage[IO] => IO[R]): R = {
     implicit val metrics = new MetricsNOP[IO]()
     implicit val log     = Log.log[IO]
-    import coop.rchain.shared.RChainScheduler._
 
     BlockDagStorageTestFixture.withStorageF[IO].use(Function.uncurried(f).tupled).unsafeRunSync
   }
@@ -56,8 +55,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
 
 object BlockDagStorageTestFixture {
 
-  def withStorageF[F[_]: Async: Metrics: Log]
-      : Resource[F, (BlockStore[F], BlockDagStorage[F])] = {
+  def withStorageF[F[_]: Async: Metrics: Log]: Resource[F, (BlockStore[F], BlockDagStorage[F])] = {
     def create(dir: Path) =
       for {
         kvm        <- Resources.mkTestRNodeStoreManager[F](dir)

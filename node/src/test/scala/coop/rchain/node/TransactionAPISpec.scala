@@ -16,6 +16,7 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
 import org.scalatest.matchers.should.Matchers
+import cats.effect.unsafe.implicits.global
 
 class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
   val genesis: GenesisContext = buildGenesis()
@@ -24,7 +25,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
     TestNode.networkEff(genesis, networkSize = 1, withReadOnlySize = 1).use { nodes =>
       val validator = nodes(0)
       val readonly  = nodes(1)
-      import coop.rchain.shared.RChainScheduler._
+
       import readonly._
       for {
         kvm         <- Resources.mkTestRNodeStoreManager[IO](readonly.dataDir)
@@ -37,7 +38,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
           reportingStore,
           readonly.validatorIdOpt
         )
-        deploy <- ConstructDeploy.sourceDeployNowF(
+        deploy <- ConstructDeploy.sourceDeployNowF[IO](
                    term,
                    sec = deployKey,
                    phloLimit = phloLimit,

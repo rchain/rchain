@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.matcher
 
 import cats.effect._
+import cats.effect.unsafe.implicits.global
 import cats.mtl.implicits._
 import cats.syntax.all._
 import cats.{Alternative, Foldable, MonoidK, SemigroupK}
@@ -16,7 +17,6 @@ import org.scalatest.matchers.should.Matchers
 class MatcherMonadSpec extends AnyFlatSpec with Matchers {
   implicit val metrics: Metrics[IO] = new Metrics.MetricsNOP[IO]
   implicit val ms: Metrics.Source   = Metrics.BaseSource
-  import coop.rchain.shared.RChainScheduler._
 
   type F[A] = MatcherMonadT[IO, A]
 

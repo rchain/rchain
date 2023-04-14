@@ -1,8 +1,9 @@
 package coop.rchain.rspace
 
+import cats.effect.IO
+
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.Path
-
 import com.google.common.io.CharStreams
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
@@ -10,7 +11,6 @@ import coop.rchain.rholang.interpreter.{Reduce, RhoRuntime}
 
 import scala.collection.immutable.Seq
 import coop.rchain.shared.PathOps.RichPath
-import monix.eval.Task
 import org.scalacheck._
 import org.scalacheck.rng.Seed
 import org.scalacheck.Gen.Parameters
@@ -74,11 +74,11 @@ package object bench {
   }
 
   def createTest(t: Option[Par])(
-      implicit runtime: RhoRuntime[Task],
+      implicit runtime: RhoRuntime[IO],
       rand: Blake2b512Random
-  ): Task[Unit] =
+  ): IO[Unit] =
     t match {
       case Some(par) => runtime.inj(par)
-      case None      => Task.delay(())
+      case None      => IO.delay(())
     }
 }

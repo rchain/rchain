@@ -34,14 +34,14 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 import monix.execution.Scheduler
 
 import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import cats.effect.{Deferred, Ref, Temporal}
 
-case class TestNode[F[_]: Async: Temporal](
+case class TestNode[F[_]: Async](
     name: String,
     local: PeerNode,
     tle: TransportLayerTestImpl[F],
@@ -66,11 +66,10 @@ case class TestNode[F[_]: Async: Temporal](
     rhoHistoryRepositoryEffect: RhoHistoryRepository[F],
     logEffect: LogStub[F],
     requestedBlocksEffect: RequestedBlocks[F],
-    timeEffect: Time[F],
     transportLayerEffect: TransportLayerTestImpl[F],
     connectionsCellEffect: Ref[F, Connections],
     rpConfAskEffect: RPConfAsk[F],
-    routingMessageQueue: Queue[F, RoutingMessage],
+    routingMessageQueue: Channel[F, RoutingMessage],
     shardName: String,
     minPhloPrice: Long
 ) {
@@ -90,7 +89,6 @@ case class TestNode[F[_]: Async: Temporal](
   implicit val sp: Span[F]                                   = spanEffect
   implicit val runtimeManager: RuntimeManager[F]             = runtimeManagerEffect
   implicit val rhoHistoryRepository: RhoHistoryRepository[F] = rhoHistoryRepositoryEffect
-  implicit val t: Time[F]                                    = timeEffect
   implicit val transportLayerEff: TransportLayerTestImpl[F]  = transportLayerEffect
   implicit val connectionsCell: Ref[F, Connections]          = connectionsCellEffect
   implicit val rp: RPConfAsk[F]                              = rpConfAskEffect
@@ -283,10 +281,6 @@ case class TestNode[F[_]: Async: Temporal](
 object TestNode {
   type Effect[A] = IO[A]
 
-  import scala.concurrent.ExecutionContext.Implicits.global
-  implicit val cs: ContextShift[IO] = IO.contextShift(global)
-  implicit val t: Temporal[IO]      = IO.timer(global)
-
   def standaloneEff(genesis: GenesisContext): Resource[Effect, TestNode[Effect]] =
     networkEff(
       genesis,
@@ -315,7 +309,7 @@ object TestNode {
     )
   }
 
-  private def networkF[F[_]: Async: Parallel: ContextShift: Temporal: TestNetwork](
+  private def networkF[F[_]: Async: Parallel: TestNetwork](
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageMatrixPath: Path,
@@ -373,7 +367,7 @@ object TestNode {
     }
   }
 
-  private def createNode[F[_]: Async: Temporal: Parallel: ContextShift: TestNetwork](
+  private def createNode[F[_]: Async: Parallel: TestNetwork](
       name: String,
       currentPeerNode: PeerNode,
       genesis: BlockMessage,
@@ -390,7 +384,6 @@ object TestNode {
     implicit val log       = Log.log[F]
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val spanEff   = new NoopSpan[F]
-    import RChainScheduler._
     for {
       newStorageDir   <- Resources.copyStorage[F](storageDir)
       kvm             <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
@@ -404,8 +397,7 @@ object TestNode {
                            rSpaceStore,
                            mStore,
                            BlockRandomSeed.nonNegativeMergeableTagName(genesis.shardId),
-                           RuntimeManager.noOpExecutionTracker[F],
-                           rholangEC
+                           RuntimeManager.noOpExecutionTracker[F]
                          )
                        )
 
@@ -420,7 +412,6 @@ object TestNode {
                implicit val rm                    = runtimeManager
                implicit val rhr                   = runtimeManager.getHistoryRepo
                implicit val logEff                = new LogStub[F](Log.log[F])
-               implicit val timeEff               = logicalTime
                implicit val connectionsCell       = Ref.unsafe[F, Connections](Connect.Connections.empty)
                implicit val transportLayerEff     = tle
                implicit val rpConfAsk             = createRPConfAsk[F](currentPeerNode)
@@ -465,7 +456,7 @@ object TestNode {
                  }
 
                  // Remove TransportLayer handling in TestNode (too low level for these tests)
-                 routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
+                 routingMessageQueue <- Channel.unbounded[F, RoutingMessage]
 
                  node = new TestNode[F](
                    name,
@@ -489,7 +480,6 @@ object TestNode {
                    rhoHistoryRepositoryEffect = rhr,
                    spanEffect = spanEff,
                    logEffect = logEff,
-                   timeEffect = timeEff,
                    connectionsCellEffect = connectionsCell,
                    transportLayerEffect = transportLayerEff,
                    rpConfAskEffect = rpConfAsk,

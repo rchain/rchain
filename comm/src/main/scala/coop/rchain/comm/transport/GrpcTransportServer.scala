@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import cats.effect.{Async, ConcurrentEffect, Resource, Sync}
+import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -18,7 +18,7 @@ import java.nio.file.Path
 import scala.collection.concurrent.TrieMap
 import scala.io.Source
 import scala.util.{Left, Right, Using}
-import cats.effect.{Deferred, Ref, Temporal}
+import cats.effect.{Deferred, Ref}
 
 trait TransportLayerServer[F[_]] {
   def resource(
@@ -38,7 +38,7 @@ object TransportLayerServer {
     }
 }
 
-class GrpcTransportServer[F[_]: Async: AsyncEffect: RPConfAsk: Log: Metrics: Temporal](
+class GrpcTransportServer[F[_]: Async: RPConfAsk: Log: Metrics](
     networkId: String,
     port: Int,
     cert: String,
@@ -108,7 +108,7 @@ class GrpcTransportServer[F[_]: Async: AsyncEffect: RPConfAsk: Log: Metrics: Tem
 
 object GrpcTransportServer {
 
-  def acquireServer[F[_]: Async: AsyncEffect: RPConfAsk: Log: Metrics: Temporal](
+  def acquireServer[F[_]: Async: RPConfAsk: Log: Metrics](
       networkId: String,
       port: Int,
       certPath: Path,

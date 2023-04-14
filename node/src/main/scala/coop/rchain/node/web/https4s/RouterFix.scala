@@ -3,6 +3,7 @@ package coop.rchain.node.web.https4s
 import cats.data.Kleisli
 import cats.syntax.all._
 import cats.{Functor, Monad}
+import org.http4s.Uri.Path
 import org.http4s.server.Router
 import org.http4s.{HttpRoutes, Request}
 
@@ -39,7 +40,7 @@ object RouterFix {
         else
           Kleisli { req =>
             (
-              if (toSegments(req.pathInfo).startsWith(prefixSegments))
+              if (toSegments(req.pathInfo.renderString).startsWith(prefixSegments))
                 routes.local(translate(prefix)) <+> acc
               else
                 acc
@@ -52,8 +53,8 @@ object RouterFix {
     /**
       * Difference from original http4s [[Router]] is here, prefix is removed from request uri.
       */
-    val path = req.uri.path.replaceAll(s"^$prefix", "")
-    req.withUri(req.uri.copy(path = path))
+    val path = req.uri.path.renderString.replaceAll(s"^$prefix", "")
+    req.withUri(req.uri.copy(path = Path.unsafeFromString(path)))
   }
 
   private def toSegments(path: String): List[String] =

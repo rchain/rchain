@@ -8,9 +8,9 @@ import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.concurrent.duration._
 import scala.util.Random
-import cats.effect.Temporal
+import cats.effect.kernel.Async
 
-abstract class KademliaRPCSpec[F[_]: Sync: Temporal, E <: Environment]
+abstract class KademliaRPCSpec[F[_]: Async, E <: Environment]
     extends KademliaRPCRuntime[F, E]
     with AnyWordSpecLike
     with Matchers {

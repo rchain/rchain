@@ -14,7 +14,7 @@ final case class NodeCallCtx(trace: TraceId) {
 object NodeCallCtx {
   def init: NodeCallCtx = NodeCallCtx(Trace.next)
 
-  final case class NodeCallCtxReader[F[_]: AsyncEffect]() {
+  final case class NodeCallCtxReader[F[_]: Async]() {
 
     /**
       * Current implementation of Span uses ReaderT layer to hold the local state for tracing.

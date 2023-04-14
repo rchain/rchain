@@ -312,7 +312,7 @@ class BlockApiImpl[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log
     val reverseHeightMap = heightMap.toIndexedSeq.reverse
     val iterBlockHashes  = reverseHeightMap.iterator.map(_._2.toList)
     Stream
-      .fromIterator(iterBlockHashes)
+      .fromIterator(iterBlockHashes, 1)
       .evalMap(_.traverse(BlockStore[F].getUnsafe))
       .evalMap(_.traverse(transform))
   }

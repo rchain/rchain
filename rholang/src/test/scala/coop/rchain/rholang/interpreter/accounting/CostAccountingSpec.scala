@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter.accounting
 import cats.Parallel
 import cats.data.Chain
 import cats.effect._
+import cats.effect.unsafe.implicits.global
 import cats.mtl.FunctorTell
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -31,7 +32,6 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
-import coop.rchain.shared.RChainScheduler._
 
 class CostAccountingSpec
     extends AnyFlatSpec
@@ -64,7 +64,7 @@ class CostAccountingSpec
     }.unsafeRunSync
   }
 
-  private def createRuntimesWithCostLog[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
+  private def createRuntimesWithCostLog[F[_]: Async: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       costLog: FunctorTell[F, Chain[Cost]],
       initRegistry: Boolean = false,

@@ -12,7 +12,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 import cats.effect.Temporal
 
 object BlockProcessor {
@@ -22,9 +22,9 @@ object BlockProcessor {
     * - input block must have all dependencies in the DAG
     * - blocks created by node itself are not processed here, but in Proposer
     */
-  def apply[F[_]: Async: Temporal: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
+  def apply[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
       inputBlocks: Stream[F, BlockMessage],
-      validatedQueue: Queue[F, BlockMessage],
+      validatedQueue: Channel[F, BlockMessage],
       shardId: String,
       minPhloPrice: Long
   ): Stream[F, (BlockMessage, ValidBlockProcessing)] =
@@ -34,14 +34,14 @@ object BlockProcessor {
         result <- validateAndAddToDag(block, shardId, minPhloPrice)
 
         // Notify finished block validation
-        _ <- validatedQueue.enqueue1(block)
+        _ <- validatedQueue.send(block)
 
         // Broadcast block to the peers
         _ <- CommUtil[F].sendBlockHash(block.blockHash, block.sender)
       } yield (block, result)
     }
 
-  def validateAndAddToDag[F[_]: Async: Temporal: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
+  def validateAndAddToDag[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: CommUtil: Log: Metrics: Span](
       block: BlockMessage,
       shardId: String,
       minPhloPrice: Long

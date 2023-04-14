@@ -12,7 +12,7 @@ package object utils {
 
   def costLog[M[_]: Sync](): M[FunctorListen[M, Chain[Cost]]] =
     for {
-      ref <- Ref.of(Chain.empty[Cost])
+      ref <- Ref[M].of(Chain.empty[Cost])
     } yield (new DefaultFunctorListen[M, Chain[Cost]] {
       override val functor: Functor[M]  = implicitly[Functor[M]]
       def tell(l: Chain[Cost]): M[Unit] = ref.modify(c => (c.concat(l), ()))

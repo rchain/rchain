@@ -1,14 +1,12 @@
 package coop.rchain.casper.util
 
-import cats.effect.Sync
+import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
-import fs2.{io, text}
-
-import java.nio.file.Path
-import cats.effect.Resource
+import fs2.text
+import fs2.io.file.{Files, Path}
 
 object VaultParser {
 
@@ -19,7 +17,7 @@ object VaultParser {
     *   Cats Effect 3 removed ContextShift and Blocker.
     *    - https://typelevel.org/cats-effect/docs/migration-guide#blocker
     */
-  def parse[F[_]: Sync: ContextShift: Log](vaultsPath: Path): F[Seq[Vault]] = {
+  def parse[F[_]: Async: Log](vaultsPath: Path): F[Seq[Vault]] = {
     def readLines =
       io.file
         .readAll[F](vaultsPath, blocker, chunkSize = 4096)
@@ -65,8 +63,8 @@ object VaultParser {
     Resource.unit[F].use(readLines)
   }
 
-  def parse[F[_]: Sync: ContextShift: Log](vaultsPathStr: String): F[Seq[Vault]] = {
-    val vaultsPath = Path.of(vaultsPathStr)
+  def parse[F[_]: Async: Log](vaultsPathStr: String): F[Seq[Vault]] = {
+    val vaultsPath = Path(vaultsPathStr)
 
     def readLines =
       io.file

@@ -1,7 +1,7 @@
 package coop.rchain.rholang
 
 import cats.Parallel
-import cats.effect.ExitCase.Error
+import cats.effect.kernel.Resource.ExitCase
 import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
@@ -14,7 +14,7 @@ import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.shared.{Log, RChainScheduler}
+import coop.rchain.shared.Log
 import coop.rchain.store.KeyValueStoreManager
 import monix.execution.Scheduler
 
@@ -29,7 +29,7 @@ object Resources {
     Resource.makeCase(Sync[F].delay(Files.createTempDirectory(prefix)))(
       (path, exitCase) =>
         Sync[F].delay(exitCase match {
-          case Error(ex) =>
+          case ExitCase.Errored(ex) =>
             logger
               .error(
                 s"Exception thrown while using the tempDir '$path'. Temporary dir NOT deleted.",
@@ -39,7 +39,7 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Async: Parallel: ContextShift: KeyValueStoreManager: Metrics: Span: Log]
+  def mkRhoISpace[F[_]: Async: Parallel: KeyValueStoreManager: Metrics: Span: Log]
       : F[RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage._
 
@@ -54,7 +54,7 @@ object Resources {
     } yield space
   }
 
-  def mkRuntime[F[_]: Async: Parallel: ContextShift: Metrics: Span: Log](
+  def mkRuntime[F[_]: Async: Parallel: Metrics: Span: Log](
       prefix: String
   ): Resource[F, RhoRuntime[F]] =
     mkTempDir(prefix)
@@ -62,7 +62,7 @@ object Resources {
       .evalMap(_.rSpaceStores)
       .evalMap(RhoRuntime.createRuntime(_, Par(), RChainScheduler.rholangEC))
 
-  def mkRuntimes[F[_]: Async: Parallel: ContextShift: Metrics: Span: Log](
+  def mkRuntimes[F[_]: Async: Parallel: Metrics: Span: Log](
       prefix: String,
       initRegistry: Boolean = false
   ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
@@ -71,7 +71,7 @@ object Resources {
       .evalMap(_.rSpaceStores)
       .evalMap(createRuntimes(_, initRegistry = initRegistry))
 
-  def createRuntimes[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
+  def createRuntimes[F[_]: Async: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty

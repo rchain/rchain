@@ -1,6 +1,5 @@
 package coop.rchain.rspace
 
-import cats.effect._
 import cats.syntax.all._
 import cats.{Parallel, _}
 import com.typesafe.scalalogging.Logger
@@ -10,16 +9,15 @@ import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared.{Log, RChainScheduler, Serialize}
+import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval._
 import monix.execution.atomic.AtomicAny
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import scala.concurrent.ExecutionContext.Implicits.global
-import cats.effect.Ref
+import cats.effect.{Async, IO, Ref}
+import cats.effect.unsafe.implicits.global
 
 trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with OptionValues {
   type T    = ISpace[F, C, P, A, K]
@@ -33,7 +31,6 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
   implicit def metricsF: Metrics[F]
   implicit def spanF: Span[F]
   implicit def monadF: Monad[F]
-  implicit def contextShiftF: ContextShift[F]
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
@@ -88,14 +85,13 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
   }
 }
 
-trait TaskTests[C, P, A, R, K] extends StorageTestsBase[IO, C, P, R, K] {
-  implicit val logF: Log[IO]                   = Log.log[IO]
-  implicit val metricsF: Metrics[IO]           = new Metrics.MetricsNOP[IO]()
-  implicit val spanF: Span[IO]                 = NoopSpan[IO]()
-  implicit val contextShiftF: ContextShift[IO] = coop.rchain.shared.RChainScheduler.csIO
-  implicit val concurrentF: Async[IO]     = Async[IO]
-  implicit val monadF: Monad[IO]               = Monad[IO]
-  override def run[RES](f: IO[RES]): RES       = f.unsafeRunSync
+trait IOTests[C, P, A, R, K] extends StorageTestsBase[IO, C, P, R, K] {
+  implicit val concurrentF: Async[IO]    = IO.asyncForIO
+  implicit val monadF: Monad[IO]         = Monad[IO]
+  implicit val logF: Log[IO]             = Log.log[IO]
+  implicit val metricsF: Metrics[IO]     = new Metrics.MetricsNOP[IO]()
+  implicit val spanF: Span[IO]           = NoopSpan[IO]()
+  override def run[RES](f: IO[RES]): RES = f.unsafeRunSync
 }
 
 abstract class InMemoryHotStoreTestsBase[F[_]]

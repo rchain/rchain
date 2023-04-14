@@ -1,9 +1,9 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.effect.Async.catsStateTAsync
 import cats.effect._
 import cats.mtl.implicits._
 import cats.Eval
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.MonadError_._
 import coop.rchain.models.Connective.ConnectiveInstance._

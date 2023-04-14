@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import cats._
 import cats.effect._
+import cats.effect.unsafe.implicits.global
 import cats.syntax.all._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -80,7 +81,7 @@ object CostAccountingPropertyTest {
     tasks.toList
       .sequence[IO, A]
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
-      .unsafeRunTimed(duration)
+      .unsafeRunTimed(FiniteDuration(duration._1, duration._2))
       .get
 
   def execute[F[_]: Sync](runtime: RhoRuntime[F], p: Proc): F[Long] =
@@ -99,7 +100,7 @@ object CostAccountingPropertyTest {
   }
 
   def costOfExecution(procs: Proc*): IO[Long] = {
-    import coop.rchain.shared.RChainScheduler._
+
     implicit val logF: Log[IO]            = new Log.NOPLog[IO]
     implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[IO]       = NoopSpan[IO]()

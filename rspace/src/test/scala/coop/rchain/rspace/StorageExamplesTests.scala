@@ -9,11 +9,10 @@ import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.util.{getK, runK, unpackOption}
-import coop.rchain.shared.RChainScheduler
 import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import cats.effect.unsafe.implicits.global
 
 trait StorageExamplesTests[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
@@ -287,7 +286,7 @@ abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
 
 class InMemoryHotStoreStorageExamplesTests
     extends InMemoryHotStoreStorageExamplesTestsBase[IO]
-    with TaskTests[Channel, Pattern, Entry, Entry, EntriesCaptor]
+    with IOTests[Channel, Pattern, Entry, Entry, EntriesCaptor]
     with StorageExamplesTests[IO] {
-  implicit val parF: Parallel[IO] = IO.ioParallel
+  implicit val parF: Parallel[IO] = IO.parallelForIO
 }

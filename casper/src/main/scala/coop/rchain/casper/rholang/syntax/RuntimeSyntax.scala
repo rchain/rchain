@@ -195,7 +195,7 @@ final class RuntimeOps[F[_]](private val runtime: RhoRuntime[F]) extends AnyVal 
       )
 
     // Event logs and mergeable channels are accumulated inside local state
-    Ref.of(EvalCollector()) flatMap { st =>
+    Ref[F].of(EvalCollector()) flatMap { st =>
       // System deploy result of evaluation
       type R[S <: SystemDeploy] = Either[SystemDeployUserError, S#Result]
 

@@ -11,14 +11,14 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceImporter, StateValidationError}
 import coop.rchain.shared.Log
 import fs2.Stream
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
 
 import java.nio.ByteBuffer
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
-import cats.effect.Temporal
+import cats.effect.unsafe.implicits.global
 
 class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
 
@@ -70,7 +70,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * @param test test definition
     */
-  def createMock[F[_]: Async: Temporal: Log](requestTimeout: FiniteDuration)(
+  def createMock[F[_]: Async: Log](requestTimeout: FiniteDuration)(
       test: Mock[F] => F[Unit]
   ): F[Unit] = {
 
@@ -96,14 +96,14 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
 
     for {
       // Queue for received store messages
-      responseQueue <- Queue.unbounded[F, StoreItemsMessage]
+      responseQueue <- Channel.unbounded[F, StoreItemsMessage]
 
       // Queue for requested state chunks
-      requestQueue <- Queue.unbounded[F, (StatePartPath, Int)]
+      requestQueue <- Channel.unbounded[F, (StatePartPath, Int)]
 
       // Queues for saved chunks
-      savedHistoryQueue <- Queue.unbounded[F, SavedStoreItems]
-      savedDataQueue    <- Queue.unbounded[F, SavedStoreItems]
+      savedHistoryQueue <- Channel.unbounded[F, SavedStoreItems]
+      savedDataQueue    <- Channel.unbounded[F, SavedStoreItems]
 
       importer = new RSpaceImporter[F] {
         override type KeyHash = Blake2b256Hash
@@ -113,7 +113,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
             toBuffer: Value => ByteBuffer
         ): F[Unit] = {
           val items = data.map(_.map(toBuffer andThen ByteString.copyFrom))
-          savedHistoryQueue.enqueue1(items)
+          savedHistoryQueue.send(items).void
         }
 
         override def setDataItems[Value](
@@ -121,7 +121,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
             toBuffer: Value => ByteBuffer
         ): F[Unit] = {
           val items = data.map(_.map(toBuffer andThen ByteString.copyFrom))
-          savedDataQueue.enqueue1(items)
+          savedDataQueue.send(items).void
         }
 
         override def setRoot(key: KeyHash): F[Unit] = ().pure[F]
@@ -131,10 +131,10 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       }
 
       // Queue for processing the internal state (ST)
-      processingStream <- LfsTupleSpaceRequester.stream(
+      processingStream <- LfsTupleSpaceRequester.stream[F](
                            finalizedFringe,
                            responseQueue,
-                           requestQueue.enqueue1(_, _),
+                           requestQueue.send(_, _).void,
                            requestTimeout,
                            importer,
                            mockValidateStateChunk
@@ -142,14 +142,11 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
 
       mock = new Mock[F] {
         override def receive(msgs: StoreItemsMessage*): F[Unit] =
-          responseQueue.enqueue(Stream.emits(msgs)).compile.drain
+          Stream.emits(msgs).evalMap(responseQueue.send).compile.drain
 
-        override val sentRequests: Stream[F, (StatePartPath, Int)] =
-          Stream.eval(requestQueue.dequeue1).repeat
-        override val savedHistory: Stream[F, SavedStoreItems] =
-          Stream.eval(savedHistoryQueue.dequeue1).repeat
-        override val savedData: Stream[F, SavedStoreItems] =
-          Stream.eval(savedDataQueue.dequeue1).repeat
+        override val sentRequests: Stream[F, (StatePartPath, Int)] = requestQueue.stream
+        override val savedHistory: Stream[F, SavedStoreItems]      = savedHistoryQueue.stream
+        override val savedData: Stream[F, SavedStoreItems]         = savedDataQueue.stream
 
         override val stream: Stream[F, ST[StatePartPath]] = processingStream
       }
@@ -160,8 +157,6 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
   }
 
   implicit val logEff: Log[IO] = Log.log[IO]
-
-  import coop.rchain.shared.RChainScheduler._
 
   /**
     * Test runner

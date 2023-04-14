@@ -6,6 +6,7 @@ import org.scalatest._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
 
 class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 

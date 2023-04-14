@@ -19,7 +19,7 @@ final case class DeployStatusError(status: String) extends DeployStatus
 object StatefulExecutionTracker {
   def apply[F[_]: Sync]: F[StatefulExecutionTracker[F]] =
     for {
-      ref <- Ref.of(Map.empty[DeployId, DeployStatus])
+      ref <- Ref[F].of(Map.empty[DeployId, DeployStatus])
     } yield new StatefulExecutionTracker(ref)
 }
 

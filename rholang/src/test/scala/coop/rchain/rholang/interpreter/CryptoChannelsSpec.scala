@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -220,7 +221,6 @@ class CryptoChannelsSpec
     implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
     implicit val kvm                      = InMemoryStoreManager[IO]
-    import coop.rchain.shared.RChainScheduler._
 
     val runtime = (for {
       store                       <- kvm.rSpaceStores

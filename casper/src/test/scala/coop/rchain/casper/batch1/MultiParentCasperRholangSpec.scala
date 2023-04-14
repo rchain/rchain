@@ -80,13 +80,16 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
 
       for {
         registerDeploy <- ConstructDeploy
-                           .sourceDeployNowF(registerSource, shardId = genesis.genesisBlock.shardId)
+                           .sourceDeployNowF[Effect](
+                             registerSource,
+                             shardId = genesis.genesisBlock.shardId
+                           )
         block0 <- node.addBlock(registerDeploy)
         registryId <- getDataAtPrivateChannel[Effect](
                        block0,
                        calculateDeployUnforgeableName(block0)
                      )
-        callDeploy <- ConstructDeploy.sourceDeployNowF(
+        callDeploy <- ConstructDeploy.sourceDeployNowF[Effect](
                        callSource(registryId.head),
                        shardId = genesis.genesisBlock.shardId
                      )

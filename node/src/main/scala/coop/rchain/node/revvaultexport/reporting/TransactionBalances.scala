@@ -116,13 +116,13 @@ object TransactionBalances {
     } yield perValidatorVaultAddr
   }
 
-  def generateRevAccountFromWalletAndBond[F[_]: Sync: ContextShift: Log](
+  def generateRevAccountFromWalletAndBond[F[_]: Async: Log](
       walletPath: Path,
       bondsPath: Path
   ): F[Map[String, RevAccount]] =
     for {
-      bondsMap <- BondsParser.parse(bondsPath)
-      vaults   <- VaultParser.parse(walletPath)
+      bondsMap <- BondsParser.parse[F](fs2.io.file.Path.fromNioPath(bondsPath))
+      vaults   <- VaultParser.parse[F](fs2.io.file.Path.fromNioPath(walletPath))
       accountMap = vaults
         .map(v => (v.revAddress.toBase58, RevAccount(v.revAddress, v.initialBalance, NormalVault)))
         .toMap
@@ -169,7 +169,7 @@ object TransactionBalances {
     genesisVault.copy(vaultMaps = resultMap)
   }
 
-  def getGenesisVaultMap[F[_]: Sync: ContextShift: Span: Log](
+  def getGenesisVaultMap[F[_]: Async: Span: Log](
       walletPath: Path,
       bondsPath: Path,
       runtime: RhoRuntime[F],
@@ -221,7 +221,7 @@ object TransactionBalances {
     } yield blockMes
   }
 
-  def main[F[_]: Async: Parallel: ContextShift](
+  def main[F[_]: Async: Parallel](
       dataDir: Path,
       walletPath: Path,
       bondPath: Path,

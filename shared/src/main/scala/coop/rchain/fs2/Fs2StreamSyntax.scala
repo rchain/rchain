@@ -80,7 +80,7 @@ class Fs2StreamOps[F[_], A](
       timeout: FiniteDuration
   )(implicit t: Temporal[F]): Stream[F, A] = {
     // Current time in nano seconds
-    val nanoTime = Temporal[F].realTime.map(_.toNanos)
+    val nanoTime = Temporal[F].monotonic.map(_.toNanos)
     // Timeout in nano seconds
     val timeoutNano = timeout.toNanos
 

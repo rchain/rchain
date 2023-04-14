@@ -2,6 +2,7 @@ package coop.rchain.rholang
 
 import cats.Eval
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
@@ -202,7 +203,7 @@ class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Ma
       val ast = Compiler[Eval].sourceToADT(rho).value
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
-        import coop.rchain.shared.RChainScheduler._
+
         mkRuntime[IO](tmpPrefix).use { runtime =>
           runtime.evaluate(rho)
         }

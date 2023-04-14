@@ -31,7 +31,10 @@ class MultiParentCasperMergeSpec extends AnyFlatSpec with Matchers with Inspecto
                         shardId = shardId
                       )
         deployData1 <- ConstructDeploy
-                        .sourceDeployNowF("@1!(1) | for(@x <- @1){ @1!(x) }", shardId = shardId)
+                        .sourceDeployNowF[Effect](
+                          "@1!(1) | for(@x <- @1){ @1!(x) }",
+                          shardId = shardId
+                        )
         deployData2 <- ConstructDeploy.basicDeployData[Effect](2, shardId = shardId)
         deploys = Vector(
           deployData0,

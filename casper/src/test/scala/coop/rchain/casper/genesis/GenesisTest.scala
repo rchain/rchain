@@ -1,6 +1,7 @@
 package coop.rchain.casper.genesis
 
 import cats.Parallel
+import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
@@ -23,7 +24,6 @@ import coop.rchain.shared.syntax._
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import coop.rchain.shared.RChainScheduler._
 
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
@@ -79,7 +79,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
           _ <- fromInputFiles()(
                 genesisPath,
                 runtimeManager,
-                implicitly[Async[IO]],
                 log
               )
           _ = log.warns.count(
@@ -103,7 +102,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
           genesisAttempt <- fromInputFiles(maybeBondsPath = Some(nonExistingPath))(
                              genesisPath,
                              runtimeManager,
-                             implicitly[Async[IO]],
                              log
                            ).attempt
         } yield log.warns.exists(_.contains("BONDS FILE NOT FOUND"))
@@ -127,7 +125,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
           genesisAttempt <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
                              genesisPath,
                              runtimeManager,
-                             implicitly[Async[IO]],
                              log
                            ).attempt
         } yield genesisAttempt.left.value.getMessage should include(
@@ -150,7 +147,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
           genesis <- fromInputFiles(maybeBondsPath = Some(bondsFile))(
                       genesisPath,
                       runtimeManager,
-                      implicitly[Async[IO]],
                       log
                     )
           bonds = genesis.bonds.toList
@@ -177,7 +173,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
             genesis <- fromInputFiles()(
                         genesisPath,
                         runtimeManager,
-                        implicitly[Async[IO]],
                         log
                       )
             _         <- BlockStore[IO].put(genesis.blockHash, genesis)
@@ -201,7 +196,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
           genesis <- fromInputFiles()(
                       genesisPath,
                       runtimeManager,
-                      implicitly[Async[IO]],
                       log
                     )
           bonds = genesis.bonds.toList
@@ -251,7 +245,7 @@ object GenesisTest {
       // Initial set of validators
       validators = bonds.toSeq.map(Validator.tupled)
       validator  = ValidatorIdentity(Secp256k1.newKeyPair._1)
-      genesisBlock <- createGenesisBlock(
+      genesisBlock <- createGenesisBlock[IO](
                        validator,
                        Genesis(
                          sender = validator.publicKey,
@@ -274,7 +268,7 @@ object GenesisTest {
                      )
     } yield genesisBlock
 
-  def withGenResources[F[_]: Async: ContextShift: Parallel](
+  def withGenResources[F[_]: Async: Parallel](
       body: (RuntimeManager[F], Path, LogStub[F]) => F[Unit]
   ): F[Unit] = {
     val storePath                        = storageLocation

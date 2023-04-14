@@ -72,7 +72,7 @@ object ReportingRspace {
   /**
     * Creates [[RSpace]] from [[KeyValueStore]]'s,
     */
-  def create[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span, C, P, A, K](
+  def create[F[_]: Async: Parallel: Log: Metrics: Span, C, P, A, K](
       store: RSpaceStore[F]
   )(
       implicit sc: Serialize[C],
@@ -88,7 +88,7 @@ object ReportingRspace {
     } yield reportingRSpace
 }
 
-class ReportingRspace[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
+class ReportingRspace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(

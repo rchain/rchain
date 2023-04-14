@@ -1,9 +1,10 @@
 package coop.rchain.models.rholang.sorter
 
-import cats.effect.{ExitCase, Sync}
+import cats.effect.{Sync}
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.sorter.ScoredTerm._
 import cats.Eval
+import cats.effect.kernel.Resource.ExitCase
 import cats.implicits._
 import coop.rchain.catscontrib.effect.implicits.sEval
 

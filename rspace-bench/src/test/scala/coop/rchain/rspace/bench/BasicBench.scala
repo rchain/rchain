@@ -1,6 +1,7 @@
 package coop.rchain.rspace.bench
 
-import cats.effect.Sync
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Sync}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -13,8 +14,6 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{State => _, _}
 import org.openjdk.jmh.infra.Blackhole
 import org.scalacheck.Gen.Parameters
@@ -46,22 +45,22 @@ class BasicBench {
           state.tc.head,
           false
         )
-        .runSyncUnsafe()
+        .unsafeRunSync()
 
       assert(c1.isEmpty)
       bh.consume(c1)
 
       val r2 =
-        space.produce(state.channels(i), state.data(i), false).runSyncUnsafe()
+        space.produce(state.channels(i), state.data(i), false).unsafeRunSync()
 
       assert(r2.nonEmpty)
       bh.consume(r2)
       if (state.debug) {
-        assert(space.toMap.runSyncUnsafe().isEmpty)
+        assert(space.toMap.unsafeRunSync().isEmpty)
       }
     }
     if (state.debug) {
-      assert(space.createCheckpoint().runSyncUnsafe().log.size == 303)
+      assert(space.createCheckpoint().unsafeRunSync().log.size == 303)
     }
   }
 
@@ -71,7 +70,7 @@ class BasicBench {
     val space = state.testSpace
     for (i <- 0 to 100) {
       val r2 =
-        space.produce(state.channels(i), state.data(i), false).runSyncUnsafe()
+        space.produce(state.channels(i), state.data(i), false).unsafeRunSync
 
       assert(r2.isEmpty)
       bh.consume(r2)
@@ -83,16 +82,16 @@ class BasicBench {
           state.tc.head,
           false
         )
-        .runSyncUnsafe()
+        .unsafeRunSync()
 
       assert(c1.nonEmpty)
       bh.consume(c1)
       if (state.debug) {
-        assert(space.toMap.runSyncUnsafe().isEmpty)
+        assert(space.toMap.unsafeRunSync().isEmpty)
       }
     }
     if (state.debug) {
-      assert(space.createCheckpoint().runSyncUnsafe().log.size == 303)
+      assert(space.createCheckpoint().unsafeRunSync().log.size == 303)
     }
   }
 }
@@ -104,19 +103,17 @@ object BasicBench {
     val debug: Boolean = false
 
     import coop.rchain.rholang.interpreter.storage._
-    implicit val syncF: Sync[Task]                              = Task.catsEffect
-    implicit val logF: Log[Task]                                = new Log.NOPLog[Task]
-    implicit val noopMetrics: Metrics[Task]                     = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]                           = NoopSpan[Task]()
-    implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
-    implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
-    implicit val ms: Metrics.Source                             = Metrics.BaseSource
-    private val dbDir: Path                                     = Files.createTempDirectory("rchain-storage-test-")
-    implicit val kvm                                            = RholangCLI.mkRSpaceStoreManager[Task](dbDir).runSyncUnsafe()
-    val rSpaceStore                                             = kvm.rSpaceStores.runSyncUnsafe()
-    import coop.rchain.shared.RChainScheduler._
+    implicit val logF: Log[IO]                                = new Log.NOPLog[IO]
+    implicit val noopMetrics: Metrics[IO]                     = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]                           = NoopSpan[IO]()
+    implicit val m: Match[IO, BindPattern, ListParWithRandom] = matchListPar[IO]
+    implicit val ms: Metrics.Source                           = Metrics.BaseSource
+    private val dbDir: Path                                   = Files.createTempDirectory("rchain-storage-test-")
+    implicit val kvm                                          = RholangCLI.mkRSpaceStoreManager[IO](dbDir).unsafeRunSync()
+    val rSpaceStore                                           = kvm.rSpaceStores.unsafeRunSync()
+
     val testSpace: ISpace[
-      Task,
+      IO,
       Par,
       BindPattern,
       ListParWithRandom,
@@ -124,14 +121,14 @@ object BasicBench {
     ] =
       RSpace
         .create[
-          Task,
+          IO,
           Par,
           BindPattern,
           ListParWithRandom,
           TaggedContinuation
-        ](rSpaceStore, rholangEC)
-        .runSyncUnsafe()
-    implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).runSyncUnsafe()
+        ](rSpaceStore)
+        .unsafeRunSync()
+    implicit val cost = CostAccounting.initialCost[IO](Cost.UNSAFE_MAX).unsafeRunSync()
 
     val initSeed = 123456789L
 

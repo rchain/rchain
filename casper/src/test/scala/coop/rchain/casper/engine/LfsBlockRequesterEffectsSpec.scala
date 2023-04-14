@@ -1,5 +1,6 @@
 package coop.rchain.casper.engine
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -10,7 +11,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits
 import coop.rchain.shared.Log
 import fs2.Stream
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,8 +19,6 @@ import scala.concurrent.duration._
 import cats.effect.{Ref, Temporal}
 
 class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
-
-  import coop.rchain.shared.RChainScheduler._
 
   def mkHash(s: String) = ByteString.copyFromUtf8(s)
 
@@ -81,7 +80,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * @param test test definition
     */
-  def createMock[F[_]: Async: Temporal: Log](
+  def createMock[F[_]: Async: Log](
       startBlock: BlockMessage,
       requestTimeout: FiniteDuration
   )(test: Mock[F] => F[Unit]): F[Unit] = {
@@ -96,35 +95,33 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       testState <- Ref.of[F, TestST](TestST(blocks = savedBlocks, invalid = Set()))
 
       // Queue for received blocks
-      responseQueue <- Queue.unbounded[F, BlockMessage]
+      responseQueue <- Channel.unbounded[F, BlockMessage]
 
       // Queue for requested block hashes
-      requestQueue <- Queue.unbounded[F, BlockHash]
+      requestQueue <- Channel.unbounded[F, BlockHash]
 
       // Queue for saved blocks
-      savedBlocksQueue <- Queue.unbounded[F, (BlockHash, BlockMessage)]
+      savedBlocksQueue <- Channel.unbounded[F, (BlockHash, BlockMessage)]
 
       // Queue for processing the internal state (ST)
-      processingStream <- LfsBlockRequester.stream(
+      processingStream <- LfsBlockRequester.stream[F](
                            finalizedFringe,
-                           responseQueue.dequeue,
+                           responseQueue.stream,
                            blockHeightsBeforeFringe = 0,
-                           requestQueue.enqueue1,
+                           requestQueue.send(_).void,
                            requestTimeout,
                            hash => testState.get.map(_.blocks.contains(hash)),
                            hash => testState.get.map(_.blocks(hash)),
-                           savedBlocksQueue.enqueue1(_, _),
+                           savedBlocksQueue.send(_, _).void,
                            block => testState.get.map(!_.invalid.contains(block.blockHash))
                          )
 
       mock = new Mock[F] {
         override def receiveBlock(blocks: BlockMessage*): F[Unit] =
-          responseQueue.enqueue(Stream.emits(blocks)).compile.drain
+          Stream.emits(blocks).evalMap(responseQueue.send).compile.drain
 
-        override val sentRequests: Stream[F, BlockHash] =
-          Stream.eval(requestQueue.dequeue1).repeat
-        override val savedBlocks: Stream[F, (BlockHash, BlockMessage)] =
-          Stream.eval(savedBlocksQueue.dequeue1).repeat
+        override val sentRequests: Stream[F, BlockHash]                = requestQueue.stream
+        override val savedBlocks: Stream[F, (BlockHash, BlockMessage)] = savedBlocksQueue.stream
 
         override val setup: Ref[F, TestST] = testState
 

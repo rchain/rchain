@@ -1,6 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.TestData._
@@ -274,8 +275,6 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
             }
       } yield ()
   }
-
-  import coop.rchain.shared.RChainScheduler._
 
   protected def withEmptyHistory(f: IO[History[IO]] => IO[Unit]): Unit = {
     val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[IO])

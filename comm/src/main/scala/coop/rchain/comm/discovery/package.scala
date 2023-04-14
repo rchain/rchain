@@ -1,18 +1,20 @@
 package coop.rchain.comm
 
-import cats.effect.{AsyncEffect, Resource, Sync}
+import cats.effect.std.Dispatcher
+import cats.effect.{Async, Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.metrics.Metrics
 import coop.rchain.sdk.syntax.all._
 import io.grpc
 import io.grpc.netty.NettyServerBuilder
+
 import scala.concurrent.ExecutionContext
 
 package object discovery {
   val DiscoveryMetricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
-  def acquireKademliaRPCServer[F[_]: Sync: AsyncEffect](
+  def acquireKademliaRPCServer[F[_]: Async](
       networkId: String,
       port: Int,
       pingHandler: PeerNode => F[Unit],

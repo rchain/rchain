@@ -35,7 +35,7 @@ final case class BufferedGrpcStreamChannel[F[_]](
     buferSubscriber: Stream[F, Unit]
 )
 
-class GrpcTransportClient[F[_]: Async: AsyncEffect: Log: Metrics](
+class GrpcTransportClient[F[_]: Async: Log: Metrics](
     networkId: String,
     cert: String,
     key: String,

@@ -83,7 +83,7 @@ object ReportingCasper {
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def rhoReporter[F[_]: Async: ContextShift: Parallel: BlockDagStorage: Log: Metrics: Span](
+  def rhoReporter[F[_]: Async: Parallel: BlockDagStorage: Log: Metrics: Span](
       rspaceStore: RSpaceStore[F],
       shardId: String
   ): ReportingCasper[F] =
@@ -169,7 +169,7 @@ object ReportingRuntime {
   implicit val RuntimeMetricsSource: Source =
     Metrics.Source(RholangMetricsSource, "reportingRuntime")
 
-  def createReportingRSpace[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
+  def createReportingRSpace[F[_]: Async: Parallel: Log: Metrics: Span](
       store: RSpaceStore[F]
   ): F[RhoReportingRspace[F]] = {
     import coop.rchain.rholang.interpreter.storage._

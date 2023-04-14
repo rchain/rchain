@@ -134,7 +134,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
           }
         }
     }
-    val refT = Ref.of(Vector[NumberChannelsEndVal]()).liftEitherT[ReplayFailure]
+    val refT = Ref[F].of(Vector[NumberChannelsEndVal]()).liftEitherT[ReplayFailure]
 
     refT.flatMap { mergeable =>
       EitherT
@@ -158,7 +158,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
       span: Span[F],
       log: Log[F]
   ): EitherT[F, ReplayFailure, NumberChannelsEndVal] = {
-    val refT = Ref.of(Set[Par]()).liftEitherT[ReplayFailure]
+    val refT = Ref[F].of(Set[Par]()).liftEitherT[ReplayFailure]
     refT flatMap { mergeable =>
       val expectedFailure = processedDeploy.systemDeployError
       val preChargeF =

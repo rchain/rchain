@@ -36,7 +36,7 @@ object Resources {
     dbMappings >>= (xs => LmdbDirStoreManager[F](dirPath, xs.toMap))
   }
 
-  def mkRuntimeManager[F[_]: Async: Parallel: ContextShift: Log](
+  def mkRuntimeManager[F[_]: Async: Parallel: Log](
       prefix: String,
       mergeableTagName: Par
   ): Resource[F, RuntimeManager[F]] =
@@ -46,14 +46,13 @@ object Resources {
 
   // TODO: This is confusing to create another instances for Log, Metrics and Span.
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
-  def mkRuntimeManagerAt[F[_]: Async: Parallel: ContextShift](
+  def mkRuntimeManagerAt[F[_]: Async: Parallel](
       kvm: KeyValueStoreManager[F],
       mergeableTagName: Par
   ): F[RuntimeManager[F]] = {
     implicit val log               = Log.log[F]
     implicit val metricsEff        = new metrics.Metrics.MetricsNOP[F]
     implicit val noopSpan: Span[F] = NoopSpan[F]()
-    import coop.rchain.shared.RChainScheduler._
 
     for {
       rStore <- kvm.rSpaceStores

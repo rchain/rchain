@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter.accounting
 
 import cats.data._
 import cats.effect.Async
-import cats.effect.concurrent._
 import cats.syntax.all._
 import cats.mtl._
 import cats.Monad

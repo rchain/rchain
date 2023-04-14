@@ -1,6 +1,7 @@
 package coop.rchain.casper.protocol.client
 
-import cats.effect.{AsyncEffect, Sync}
+import cats.effect.{Async, Sync}
+import cats.effect.std.Dispatcher
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.propose.v1._
 import coop.rchain.models.either.implicits._
@@ -19,7 +20,7 @@ object ProposeService {
   def apply[F[_]](implicit ev: ProposeService[F]): ProposeService[F] = ev
 }
 
-class GrpcProposeService[F[_]: Sync: AsyncEffect](host: String, port: Int, maxMessageSize: Int)
+class GrpcProposeService[F[_]: Async](host: String, port: Int, maxMessageSize: Int)
     extends ProposeService[F]
     with Closeable {
 

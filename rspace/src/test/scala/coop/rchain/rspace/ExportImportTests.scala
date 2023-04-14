@@ -17,7 +17,6 @@ import monix.execution.atomic.AtomicAny
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
-import coop.rchain.shared.RChainScheduler._
 import cats.effect.Ref
 
 class ExportImportTests
@@ -247,7 +246,7 @@ class ExportImportTests
 }
 
 trait InMemoryExportImportTestsBase[C, P, A, K] {
-  import SchedulerPools.global
+  import cats.effect.unsafe.implicits.global
   def fixture[S](
       f: (
           ISpace[IO, C, P, A, K],

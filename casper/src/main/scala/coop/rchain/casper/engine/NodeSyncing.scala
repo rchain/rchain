@@ -19,7 +19,7 @@ import coop.rchain.models.BlockMetadata
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 
 import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
@@ -32,7 +32,7 @@ object NodeSyncing {
     */
   // format: off
   def apply[F[_]
-  /* Execution */   : Async: Time: Temporal
+  /* Execution */   : Async
   /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
@@ -44,8 +44,8 @@ object NodeSyncing {
       trimState: Boolean = true
   ): F[NodeSyncing[F]] =
     for {
-      incomingBlocksQueue <- Queue.bounded[F, BlockMessage](50)
-      stateResponseQueue  <- Queue.bounded[F, StoreItemsMessage](50)
+      incomingBlocksQueue <- Channel.bounded[F, BlockMessage](50)
+      stateResponseQueue  <- Channel.bounded[F, StoreItemsMessage](50)
       engine = new NodeSyncing(
         finished,
         incomingBlocksQueue,
@@ -62,7 +62,7 @@ object NodeSyncing {
   */
 // format: off
 class NodeSyncing[F[_]
-  /* Execution */   : Async: Time: Temporal
+  /* Execution */   : Async
   /* Transport */   : TransportLayer: CommUtil
   /* State */       : RPConfAsk: ConnectionsCell
   /* Rholang */     : RuntimeManager
@@ -70,9 +70,9 @@ class NodeSyncing[F[_]
   /* Diagnostics */ : Log: Metrics: Span] // format: on
 (
     finished: Deferred[F, Unit],
-    incomingBlocksQueue: Queue[F, BlockMessage],
+    incomingBlocksQueue: Channel[F, BlockMessage],
     validatorId: Option[ValidatorIdentity],
-    tupleSpaceQueue: Queue[F, StoreItemsMessage],
+    tupleSpaceQueue: Channel[F, StoreItemsMessage],
     trimState: Boolean = true
 ) {
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
@@ -136,7 +136,7 @@ class NodeSyncing[F[_]
       // Request all blocks for Last Finalized State
       blockRequestStream <- LfsBlockRequester.stream(
                              fringe,
-                             incomingBlocksQueue.dequeue,
+                             incomingBlocksQueue.stream,
                              MultiParentCasper.deployLifespan,
                              hash => CommUtil[F].broadcastRequestForBlock(hash, 1.some),
                              requestTimeout = 30.seconds,

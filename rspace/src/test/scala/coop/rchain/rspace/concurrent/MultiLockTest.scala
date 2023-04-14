@@ -1,5 +1,6 @@
 package coop.rchain.rspace.concurrent
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Sync}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -8,7 +9,6 @@ import scala.collection._
 import scala.collection.immutable.Seq
 import coop.rchain.metrics
 import coop.rchain.metrics.Metrics
-import coop.rchain.shared.RChainScheduler._
 
 class MultiLockTest extends AnyFlatSpec with Matchers {
 

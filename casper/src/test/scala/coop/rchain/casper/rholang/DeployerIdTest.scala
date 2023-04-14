@@ -24,7 +24,6 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
   implicit val time              = new LogicalTime[IO]
   implicit val log: Log[IO]      = new Log.NOPLog[IO]()
   private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
-  import coop.rchain.shared.RChainScheduler._
 
   val runtimeManager: Resource[IO, RuntimeManager[IO]] =
     mkRuntimeManager[IO]("deployer-id-runtime-manager-test", dummyMergeableName)
@@ -36,7 +35,7 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
     val pk = ByteString.copyFrom(Secp256k1.toPublic(sk).bytes)
     runtimeManager.use { mgr =>
       for {
-        deploy <- ConstructDeploy.sourceDeployNowF(
+        deploy <- ConstructDeploy.sourceDeployNowF[IO](
                    s"""new return, auth(`rho:rchain:deployerId`) in { return!(*auth) }""",
                    sec = sk
                  )
@@ -81,14 +80,15 @@ class DeployerIdTest extends AnyFlatSpec with Matchers {
 
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
-        contract <- ConstructDeploy.sourceDeployNowF(
+        contract <- ConstructDeploy.sourceDeployNowF[IO](
                      checkDeployerDefinition,
                      sec = deployer,
                      shardId = genesisContext.genesisBlock.shardId
                    )
-        block           <- node.addBlock(contract)
-        stateHash       = block.postStateHash
-        checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)
+        block     <- node.addBlock(contract)
+        stateHash = block.postStateHash
+        checkAuthDeploy <- ConstructDeploy
+                            .sourceDeployNowF[IO](checkDeployerCall, sec = contractUser)
         result <- node.runtimeManager.spawnRuntime >>= {
                    _.captureResults(stateHash, checkAuthDeploy)
                  }

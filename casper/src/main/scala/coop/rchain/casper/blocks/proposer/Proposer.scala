@@ -22,7 +22,7 @@ import coop.rchain.models.syntax._
 import coop.rchain.sdk.consensus.Stake
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.Log
 
 sealed abstract class ProposerResult
 object ProposerEmpty                                                         extends ProposerResult
@@ -113,7 +113,7 @@ class Proposer[F[_]: Async: Log: Span](
 object Proposer {
   // format: off
   def apply[F[_]
-    /* Execution */   : Async: Temporal: Time
+    /* Execution */   : Async
     /* Storage */     : BlockStore: BlockDagStorage
     /* Rholang */     : RuntimeManager
     /* Comm */        : CommUtil

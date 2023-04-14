@@ -1,6 +1,7 @@
 package coop.rchain.comm.transport
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
@@ -20,7 +21,6 @@ import scala.util.Random
 
 class GrpcTransportSpec extends AnyWordSpecLike with Matchers with Inside {
 
-  import coop.rchain.shared.RChainScheduler._
   implicit val metrics: Metrics[IO] = new Metrics.MetricsNOP
   private val networkId             = "test"
   private val peerLocal             = createPeerNode

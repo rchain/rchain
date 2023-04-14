@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter.storage
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -306,7 +307,6 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
   override type FixtureParam = TestFixture
 
   protected override def withFixture(test: OneArgTest): Outcome = {
-    import coop.rchain.shared.RChainScheduler._
     val cost: _cost[IO] = CostAccounting.emptyCost[IO].unsafeRunSync
     implicit val span   = NoopSpan[IO]
     implicit val kvm    = InMemoryStoreManager[IO]

@@ -25,7 +25,7 @@ class MultiParentCasperCommunicationSpec extends AnyFlatSpec with Matchers with 
   "MultiParentCasper" should "ask peers for blocks it is missing" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deploy1 <- ConstructDeploy.sourceDeployNowF(
+        deploy1 <- ConstructDeploy.sourceDeployNowF[Effect](
                     "for(_ <- @1){ Nil } | @1!(1)",
                     shardId = genesis.genesisBlock.shardId
                   )
@@ -35,7 +35,7 @@ class MultiParentCasperCommunicationSpec extends AnyFlatSpec with Matchers with 
         _            <- nodes(2).shutoff() //nodes(2) misses this block
 
         deploy2 <- ConstructDeploy
-                    .sourceDeployNowF("@2!(2)", shardId = genesis.genesisBlock.shardId)
+                    .sourceDeployNowF[Effect]("@2!(2)", shardId = genesis.genesisBlock.shardId)
         signedBlock2 <- nodes(0).addBlock(deploy2)
 
         _ <- nodes(2).addBlock(signedBlock2)
@@ -79,7 +79,7 @@ class MultiParentCasperCommunicationSpec extends AnyFlatSpec with Matchers with 
   // TODO reenable when merging of REV balances is done
   it should "ask peers for blocks it is missing and add them" ignore effectTest {
     def makeDeploy(i: Int): Effect[Signed[DeployData]] =
-      ConstructDeploy.sourceDeployNowF(
+      ConstructDeploy.sourceDeployNowF[Effect](
         Vector("@2!(2)", "@1!(1)")(i),
         sec = if (i == 0) ConstructDeploy.defaultSec else ConstructDeploy.defaultSec2
       )

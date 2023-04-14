@@ -8,7 +8,7 @@ import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.shared.Log
 
 object TestRhoRuntime {
-  def rhoRuntimeEff[F[_]: Log: Metrics: Span: Async: Parallel: ContextShift](
+  def rhoRuntimeEff[F[_]: Log: Metrics: Span: Async: Parallel](
       initRegistry: Boolean = true
   ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
     mkRuntimes[F]("hash-set-casper-test-genesis-", initRegistry = initRegistry)

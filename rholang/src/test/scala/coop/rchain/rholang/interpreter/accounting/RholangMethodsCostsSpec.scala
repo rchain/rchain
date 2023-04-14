@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.accounting
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -23,7 +24,6 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks._
 import java.nio.file.{Files, Path}
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
-import coop.rchain.shared.RChainScheduler._
 
 class RholangMethodsCostsSpec
     extends AnyWordSpec
@@ -1042,7 +1042,6 @@ class RholangMethodsCostsSpec
   implicit val ms: Metrics.Source       = Metrics.BaseSource
   implicit val kvm                      = InMemoryStoreManager[IO]
   val rSpaceStore                       = kvm.rSpaceStores.unsafeRunSync
-  import coop.rchain.shared.RChainScheduler._
 
   protected override def beforeAll(): Unit = {
     import coop.rchain.rholang.interpreter.storage._

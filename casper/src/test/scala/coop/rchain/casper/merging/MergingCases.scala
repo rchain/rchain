@@ -13,17 +13,16 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.merger.{EventLogIndex, EventLogMergingLogic}
 import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
 import coop.rchain.shared.scalatestcontrib.effectTest
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.Log
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class MergingCases extends AnyFlatSpec with Matchers {
 
-  val genesisContext           = GenesisBuilder.buildGenesis(validatorsNum = 5)
-  val genesis                  = genesisContext.genesisBlock
-  implicit val logEff          = Log.log[IO]
-  implicit val timeF: Time[IO] = new LogicalTime[IO]
-  import coop.rchain.shared.RChainScheduler._
+  val genesisContext  = GenesisBuilder.buildGenesis(validatorsNum = 5)
+  val genesis         = genesisContext.genesisBlock
+  implicit val logEff = Log.log[IO]
+  implicit val ioP    = IO.parallelForIO
 
   val runtimeManagerResource: Resource[IO, RuntimeManager[IO]] = for {
     dir <- Resources.copyStorage[IO](genesisContext.storageDirectory)
@@ -50,8 +49,8 @@ class MergingCases extends AnyFlatSpec with Matchers {
         val blockNum               = 1L
 
         for {
-          d1          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer1Key)
-          d2          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer2Key)
+          d1          <- ConstructDeploy.sourceDeployNowF[IO]("Nil", sec = payer1Key)
+          d2          <- ConstructDeploy.sourceDeployNowF[IO]("Nil", sec = payer2Key)
           userDeploys = Seq(d1, d2)
           blockData = BlockData(
             blockNum,

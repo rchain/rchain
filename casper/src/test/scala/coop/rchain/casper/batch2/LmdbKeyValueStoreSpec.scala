@@ -1,5 +1,7 @@
 package coop.rchain.casper.batch2
 
+import cats.effect.unsafe.implicits.global
+
 import java.nio.file.Files
 import cats.effect.{Async, IO}
 import cats.syntax.all._
@@ -19,7 +21,6 @@ class LmdbKeyValueStoreSpec
     with Matchers
     with ScalaCheckDrivenPropertyChecks
     with BeforeAndAfterAll {
-  implicit val scheduler = monix.execution.Scheduler.global
 
   val tempPath = Files.createTempDirectory(s"lmdb-test-")
   val tempDir  = Directory(Path(tempPath.toFile))
@@ -45,7 +46,6 @@ class LmdbKeyValueStoreSpec
   }
 
   implicit val log: Log[IO] = new Log.NOPLog[IO]()
-  import coop.rchain.shared.RChainScheduler._
 
   it should "put and get data from the store" in {
     forAll(genData) { expected =>

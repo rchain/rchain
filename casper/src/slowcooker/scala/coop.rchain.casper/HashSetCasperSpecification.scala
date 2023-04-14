@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId

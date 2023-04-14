@@ -39,7 +39,6 @@ class RholangMergingLogicSpec extends AnyFlatSpec with Matchers {
     def getDataOnHash[F[_]: Applicative](hash: String): F[Option[Long]] =
       initValues.get(hash).pure[F]
 
-    import coop.rchain.shared.RChainScheduler._
     RholangMergingLogic.calculateNumChannelDiff(input, getDataOnHash[IO]).map { res =>
       res shouldBe Seq(Map(("A", 10)), Map(("B", 3)), Map(("A", -5), ("C", -10)))
     }

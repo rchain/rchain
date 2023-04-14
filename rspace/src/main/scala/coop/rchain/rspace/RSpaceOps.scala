@@ -21,7 +21,7 @@ import scala.concurrent.{ExecutionContext, SyncVar}
 import scala.util.Random
 import cats.effect.Ref
 
-abstract class RSpaceOps[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
+abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     val storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
     rholangEC: ExecutionContext
@@ -182,30 +182,28 @@ abstract class RSpaceOps[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A,
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
   ): F[MaybeActionResult] =
-    ContextShift[F].evalOn(rholangEC) {
-      if (channels.isEmpty) {
-        val msg = "channels can't be empty"
-        Log[F].error(msg) >> Sync[F]
-          .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
-      } else if (channels.length =!= patterns.length) {
-        val msg = "channels.length must equal patterns.length"
-        Log[F].error(msg) >> Sync[F]
-          .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
-      } else
-        (for {
-          consumeRef <- Sync[F].delay(Consume(channels, patterns, continuation, persist))
-          result <- consumeLockF(channels) {
-                     lockedConsume(
-                       channels,
-                       patterns,
-                       continuation,
-                       persist,
-                       peeks,
-                       consumeRef
-                     )
-                   }
-        } yield result).timer(consumeTimeCommLabel)(Metrics[F], MetricsSource)
-    }
+    if (channels.isEmpty) {
+      val msg = "channels can't be empty"
+      Log[F].error(msg) >> Sync[F]
+        .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
+    } else if (channels.length =!= patterns.length) {
+      val msg = "channels.length must equal patterns.length"
+      Log[F].error(msg) >> Sync[F]
+        .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
+    } else
+      (for {
+        consumeRef <- Sync[F].delay(Consume(channels, patterns, continuation, persist))
+        result <- consumeLockF(channels) {
+                   lockedConsume(
+                     channels,
+                     patterns,
+                     continuation,
+                     persist,
+                     peeks,
+                     consumeRef
+                   )
+                 }
+      } yield result).timer(consumeTimeCommLabel)(Metrics[F], MetricsSource)
 
   protected[this] def lockedConsume(
       channels: Seq[C],
@@ -221,14 +219,12 @@ abstract class RSpaceOps[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A,
       data: A,
       persist: Boolean
   ): F[MaybeActionResult] =
-    ContextShift[F].evalOn(rholangEC) {
-      (for {
-        produceRef <- Sync[F].delay(Produce(channel, data, persist))
-        result <- produceLockF(channel)(
-                   lockedProduce(channel, data, persist, produceRef)
-                 )
-      } yield result).timer(produceTimeCommLabel)(Metrics[F], MetricsSource)
-    }
+    (for {
+      produceRef <- Sync[F].delay(Produce(channel, data, persist))
+      result <- produceLockF(channel)(
+                 lockedProduce(channel, data, persist, produceRef)
+               )
+    } yield result).timer(produceTimeCommLabel)(Metrics[F], MetricsSource)
 
   protected[this] def lockedProduce(
       channel: C,

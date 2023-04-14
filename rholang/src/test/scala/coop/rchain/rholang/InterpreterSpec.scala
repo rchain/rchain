@@ -13,7 +13,7 @@ import coop.rchain.rholang.syntax._
 import coop.rchain.shared.Log
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import coop.rchain.shared.RChainScheduler._
+import cats.effect.unsafe.implicits.global
 
 import scala.concurrent.duration._
 

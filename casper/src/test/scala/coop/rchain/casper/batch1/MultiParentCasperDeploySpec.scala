@@ -18,12 +18,9 @@ class MultiParentCasperDeploySpec
 
   import coop.rchain.casper.util.GenesisBuilder._
 
-  implicit val timeEff = new LogicalTime[Effect]
-
   val genesis = buildGenesis()
 
   it should "not create a block with a repeated deploy" in effectTest {
-    implicit val timeEff = new LogicalTime[Effect]
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
@@ -38,8 +35,6 @@ class MultiParentCasperDeploySpec
 
   it should "fail when deploying with insufficient phlos" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      implicit val timeEff = new LogicalTime[Effect]
-
       for {
         deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
         r              <- node.createBlock(deployData)
@@ -50,8 +45,6 @@ class MultiParentCasperDeploySpec
 
   it should "succeed if given enough phlos for deploy" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      implicit val timeEff = new LogicalTime[Effect]
-
       for {
         deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
         r              <- node.createBlock(deployData)

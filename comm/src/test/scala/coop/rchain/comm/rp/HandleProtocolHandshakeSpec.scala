@@ -8,11 +8,11 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import coop.rchain.shared.scalatestcontrib.convertToAnyShouldWrapper
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import RChainScheduler._
 import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
 
 class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChecks {
 
@@ -121,7 +121,7 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
     implicit val connectionRef = Ref.unsafe(Connect.Connections.empty)
 
     for {
-      routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
+      routingMessageQueue <- Channel.unbounded[F, RoutingMessage]
 
       // Remote peer protocol handshake message
       protocol = ProtocolHelper.protocolHandshake(remotePeer, networkId = "test-network")

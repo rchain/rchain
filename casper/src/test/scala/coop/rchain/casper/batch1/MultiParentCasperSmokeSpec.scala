@@ -21,7 +21,7 @@ class MultiParentCasperSmokeSpec extends AnyFlatSpec with Matchers with Inspecto
   it should "perform the most basic deploy successfully" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       ConstructDeploy
-        .sourceDeployNowF("new x in { x!(0) }", shardId = genesis.genesisBlock.shardId) >>= (node
+        .sourceDeployNowF[Effect]("new x in { x!(0) }", shardId = genesis.genesisBlock.shardId) >>= (node
         .addBlock(_))
     }
   }

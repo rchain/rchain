@@ -1,6 +1,6 @@
 package coop.rchain.node.diagnostics
 
-import cats.effect.{ExitCase, Sync}
+import cats.effect.{Outcome, Sync}
 import cats.syntax.all._
 import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.Metrics.Source
@@ -104,9 +104,9 @@ package object effects {
         Sync[F].bracketCase(
           mark(s"started-$label")
         )(_ => block) {
-          case (_, ExitCase.Completed) => mark(s"finished-$label")
-          case (_, ExitCase.Error(_))  => mark(s"failed-$label")
-          case (_, ExitCase.Canceled)  => mark(s"cancelled-$label")
+          case (_, Outcome.Succeeded(_)) => mark(s"finished-$label")
+          case (_, Outcome.Errored(_))   => mark(s"failed-$label")
+          case (_, Outcome.Canceled())   => mark(s"cancelled-$label")
         }
     }
 

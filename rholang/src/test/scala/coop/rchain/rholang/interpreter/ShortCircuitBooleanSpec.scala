@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -15,7 +16,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, ReduceError}
 
 class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
-  import coop.rchain.shared.RChainScheduler._
+
   implicit val logF: Log[IO]            = Log.log[IO]
   implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
   implicit val noopSpan: Span[IO]       = NoopSpan[IO]()

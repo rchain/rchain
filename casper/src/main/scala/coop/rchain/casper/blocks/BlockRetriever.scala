@@ -15,7 +15,7 @@ import coop.rchain.shared.Log
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
-import cats.effect.{Ref, Temporal}
+import cats.effect.{Clock, Ref, Temporal}
 
 /**
   * BlockRetriever makes sure block is received once Casper request it.
@@ -91,7 +91,7 @@ object BlockRetriever {
 
   def apply[F[_]](implicit ev: BlockRetriever[F]): BlockRetriever[F] = ev
 
-  def of[F[_]: Monad: RequestedBlocks: Log: Temporal: RPConfAsk: TransportLayer: CommUtil: Metrics]
+  def of[F[_]: Monad: RequestedBlocks: Log: Clock: RPConfAsk: TransportLayer: CommUtil: Metrics]
       : BlockRetriever[F] =
     new BlockRetriever[F] {
 
@@ -136,7 +136,7 @@ object BlockRetriever {
           admitHashReason: AdmitHashReason
       ): F[AdmitHashResult] =
         for {
-          now <- Temporal[F].clock.realTime(TimeUnit.MILLISECONDS)
+          now <- Clock[F].realTime.map(_.toMillis)
           result <- RequestedBlocks[F]
                      .modify[AdmitHashResult] { state =>
                        val unknownHash = !state.contains(hash)
@@ -229,7 +229,7 @@ object BlockRetriever {
                         s"Remain waiting: ${waitingListTail.map(_.endpoint.host).mkString(", ")}."
                     )
                 _  <- CommUtil[F].requestForBlock(nextPeer, hash)
-                ts <- Temporal[F].clock.realTime(TimeUnit.MILLISECONDS)
+                ts <- Clock[F].realTime.map(_.toMillis)
                 _ <- RequestedBlocks.put(
                       hash,
                       requested.copy(
@@ -260,8 +260,8 @@ object BlockRetriever {
           _ <- state.keySet.toList.traverse(hash => {
                 val requested = state(hash)
                 for {
-                  expired <- Temporal[F].clock
-                              .realTime(TimeUnit.MILLISECONDS)
+                  expired <- Clock[F].realTime
+                              .map(_.toMillis)
                               .map(_ - requested.timestamp > ageThreshold.toMillis)
                   _ <- Log[F]
                         .debug(

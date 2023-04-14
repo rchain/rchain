@@ -1,5 +1,6 @@
 package coop.rchain.rspace.concurrent
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Sync}
 import coop.rchain.metrics.Metrics
 import org.scalatest.flatspec.AnyFlatSpec
@@ -8,7 +9,6 @@ import cats.syntax.all._
 
 class TwoStepLockTest extends AnyFlatSpec with Matchers {
 
-  import coop.rchain.shared.RChainScheduler._
   implicit val metrics = new Metrics.MetricsNOP[IO]
 
   "DefaultTwoStepLock" should "gate concurrent access to shared resources" in {

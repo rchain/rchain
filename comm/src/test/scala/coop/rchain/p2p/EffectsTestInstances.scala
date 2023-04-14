@@ -19,7 +19,7 @@ object EffectsTestInstances {
 
   val networkId = "test"
 
-  class LogicalTime[F[_]: Sync] extends Time[F] {
+  class LogicalTime[F[_]: Sync] {
     var clock: Long = 0
 
     def currentMillis: F[Long] = Sync[F].delay {

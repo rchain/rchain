@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -801,7 +802,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
           InMemoryKeyValueStore[IO]
       ) => IO[Unit]
   ): Unit = {
-    import coop.rchain.shared.RChainScheduler._
+
     val store         = InMemoryKeyValueStore[IO]
     val typedStore    = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
     val radixTreeImpl = new RadixTreeImpl[IO](typedStore)

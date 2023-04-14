@@ -9,7 +9,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 
 import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
@@ -148,7 +148,7 @@ object LfsBlockRequester {
     * @param validateBlock Check if received block is valid
     * @return fs2.Stream processing all blocks
     */
-  def stream[F[_]: Async: Temporal: Log](
+  def stream[F[_]: Async: Log](
       fringe: FinalizedFringe,
       incomingBlocks: Stream[F, BlockMessage],
       blockHeightsBeforeFringe: Int,
@@ -166,15 +166,15 @@ object LfsBlockRequester {
 
     def createStream(
         st: Ref[F, ST[BlockHash]],
-        requestQueue: Queue[F, Boolean],
-        responseHashQueue: Queue[F, BlockHash]
+        requestQueue: Channel[F, Boolean],
+        responseHashQueue: Channel[F, BlockHash]
     ): Stream[F, ST[BlockHash]] = {
 
       def broadcastStreams(ids: Set[BlockHash]): Stream[F, Stream[F, Unit]] = {
         // Create broadcast requests to peers
         val broadcastRequests = ids.map(requestForBlock andThen Stream.eval)
         // Create stream of requests
-        Stream.fromIterator(broadcastRequests.iterator)
+        Stream.fromIterator(broadcastRequests.iterator, 1)
       }
 
       def processBlock(block: BlockMessage): F[Unit] =
@@ -186,7 +186,7 @@ object LfsBlockRequester {
           _ <- saveBlock(block).whenA(isValid)
 
           // Trigger request queue (without resend of already requested)
-          _ <- requestQueue.enqueue1(false)
+          _ <- requestQueue.send(false)
         } yield ()
 
       /**
@@ -259,11 +259,7 @@ object LfsBlockRequester {
           existingHashes <- hashes.toList.filterA(containsBlock)
 
           // Enqueue hashes of exiting blocks
-          _ <- responseHashQueue
-                .enqueue(Stream.emits(existingHashes))
-                .compile
-                .drain
-                .whenA(existingHashes.nonEmpty)
+          _ <- existingHashes.traverse(responseHashQueue.send)
 
           // Missing blocks not already in the block store
           missingBlocks = hashes -- existingHashes
@@ -276,14 +272,14 @@ object LfsBlockRequester {
       /**
         * Request stream is pulling new block hashes ready for broadcast requests.
         */
-      val requestStream = requestQueue.dequeueChunk(maxSize = 1).evalTap(requestNext)
+      val requestStream = requestQueue.stream.evalTap(requestNext)
 
       /**
         * Response stream is handling incoming block messages. Responses can be processed in parallel.
         */
       val responseStream1 = incomingBlocks.parEvalMapProcBounded(processBlock)
 
-      val responseStream2 = responseHashQueue.dequeue
+      val responseStream2 = responseHashQueue.stream
         .parEvalMapProcBounded { hash =>
           for {
             block <- getBlockFromStore(hash)
@@ -300,7 +296,7 @@ object LfsBlockRequester {
         */
       val timeoutMsg = s"No block responses for $requestTimeout. Resending requests."
       // Triggers request queue (resend already requested)
-      val resendRequests = requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
+      val resendRequests = requestQueue.send(true) <* Log[F].warn(timeoutMsg)
 
       /**
         * Final result! Concurrently pulling requests and handling responses
@@ -323,13 +319,13 @@ object LfsBlockRequester {
            )
 
       // Queue to trigger processing of requests. `True` to resend requests.
-      requestQueue <- Queue.bounded[F, Boolean](maxSize = 2)
+      requestQueue <- Channel.bounded[F, Boolean](capacity = 2)
       // Response queue for existing blocks in the store.
-      responseHashQueue <- Queue.unbounded[F, BlockHash]
+      responseHashQueue <- Channel.unbounded[F, BlockHash]
 
       // Light the fire! / Starts the first request for block
       // - `true` if requested blocks should be re-requested
-      _ <- requestQueue.enqueue1(false)
+      _ <- requestQueue.send(false)
 
       // Create block receiver stream
     } yield createStream(st, requestQueue, responseHashQueue)

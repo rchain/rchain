@@ -1,6 +1,6 @@
 package coop.rchain.node.web
 
-import cats.effect.Sync
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
@@ -12,7 +12,7 @@ import org.http4s.{HttpRoutes, Response}
 
 object WebApiRoutes {
 
-  def service[F[_]: Sync: Log](webApi: WebApi[F]): HttpRoutes[F] = {
+  def service[F[_]: Async: Log](webApi: WebApi[F]): HttpRoutes[F] = {
     import coop.rchain.casper.protocol.{BlockInfo, LightBlockInfo}
     import io.circe._
     import io.circe.generic.auto._

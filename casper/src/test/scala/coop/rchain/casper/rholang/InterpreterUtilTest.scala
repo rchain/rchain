@@ -24,7 +24,7 @@ import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.scalatestcontrib._
-import coop.rchain.shared.{Log, LogSource, Time}
+import coop.rchain.shared.{Log, LogSource}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -41,8 +41,6 @@ class InterpreterUtilTest
   implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
   implicit val span: Span[IO]          = new NoopSpan[IO]
   implicit val logSource: LogSource    = LogSource(this.getClass)
-  import coop.rchain.shared.RChainScheduler._
-  implicit private val timeEff = Time.fromTimer[IO]
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
@@ -310,9 +308,9 @@ class InterpreterUtilTest
     //deploy each Rholang program separately and record its cost
 
     for {
-      deploy1 <- ConstructDeploy.sourceDeployNowF("@1!(Nil)")
-      deploy2 <- ConstructDeploy.sourceDeployNowF("@3!([1,2,3,4])")
-      deploy3 <- ConstructDeploy.sourceDeployNowF("for(@x <- @0) { @4!(x.toByteArray()) }")
+      deploy1 <- ConstructDeploy.sourceDeployNowF[IO]("@1!(Nil)")
+      deploy2 <- ConstructDeploy.sourceDeployNowF[IO]("@3!([1,2,3,4])")
+      deploy3 <- ConstructDeploy.sourceDeployNowF[IO]("for(@x <- @0) { @4!(x.toByteArray()) }")
 
       cost1        <- computeDeployCosts(deploy1)
       cost2        <- computeDeployCosts(deploy2)

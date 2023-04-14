@@ -31,7 +31,7 @@ import cats.effect.{Ref, Temporal}
 object NodeRuntime {
   type LocalEnvironment[F[_]] = ApplicativeLocal[F, NodeCallCtx]
 
-  def start[F[_]: AsyncEffect: Parallel: ContextShift: Temporal: Log](
+  def start[F[_]: Async: Parallel: Log](
       nodeConf: NodeConf,
       kamonConf: Config
   )(implicit mainEC: ExecutionContext): F[Unit] = {
@@ -75,7 +75,7 @@ object NodeRuntime {
     } yield ()
 }
 
-class NodeRuntime[F[_]: AsyncEffect: Parallel: Temporal: ContextShift: LocalEnvironment: Log] private[node] (
+class NodeRuntime[F[_]: Parallel: Async: LocalEnvironment: Log] private[node] (
     nodeConf: NodeConf,
     kamonConf: Config,
     id: NodeIdentifier

@@ -26,17 +26,12 @@ import scala.collection.SortedSet
 import scala.util.Random
 import scala.util.Random.shuffle
 import cats.effect.Ref
-
-object SchedulerPools {
-  implicit val global = Scheduler.fixedPool("GlobalPool", 20)
-  val rspacePool      = Scheduler.fixedPool("RSpacePool", 5)
-}
+import cats.effect.unsafe.implicits.global
 
 //noinspectTaskn ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
 
-  import coop.rchain.shared.RChainScheduler._
-  implicit val pIO = IO.ioParallel
+  implicit val pIO = IO.parallelForIO
 
   implicit val log: Log[IO]        = new Log.NOPLog[IO]
   val arbitraryRangeSize: Gen[Int] = Gen.chooseNum[Int](1, 10)
@@ -1256,7 +1251,6 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
 }
 
 trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
-  import SchedulerPools.global
   override def fixture[S](
       f: (
           AtomicAny[HotStore[IO, C, P, A, K]],
@@ -1272,7 +1266,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       sk: Serialize[K],
       m: Match[IO, P, A]
   ): S = {
-    import coop.rchain.shared.RChainScheduler._
+
     implicit val log: Log[IO]          = Log.log[IO]
     implicit val metricsF: Metrics[IO] = new Metrics.MetricsNOP[IO]()
     implicit val spanF: Span[IO]       = NoopSpan[IO]()

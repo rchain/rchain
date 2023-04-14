@@ -106,7 +106,7 @@ object GrpcTransport {
       packetChunkSize: Int
   ): F[CommErr[Unit]] = {
     val chunkIt = Stream.eval(Chunker.chunkIt[F](networkId, blob, packetChunkSize)).flatMap { i =>
-      Stream.fromIterator(i)
+      Stream.fromIterator(i, 1)
     }
     transport.stream(chunkIt, new Metadata).attempt.map(processResponse(peer, _))
   }

@@ -92,7 +92,7 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
     RhoName(baseRhoSeed.next())
   }
 
-  def testCase[F[_]: Async: ContextShift: Parallel: Span: Log](
+  def testCase[F[_]: Async: Parallel: Span: Log](
       baseTerms: Seq[String],
       leftTerms: Seq[DeployTestInfo],
       rightTerms: Seq[DeployTestInfo],
@@ -304,8 +304,6 @@ class MergeNumberChannelSpec extends AnyFlatSpec {
   implicit val timeEff = new LogicalTime[IO]
   implicit val logEff  = Log.log[IO]
   implicit val spanEff = Span.noop[IO]
-
-  import coop.rchain.shared.RChainScheduler._
 
   "multiple branches" should "reject deploy when mergeable number channels got negative number" in effectTest {
     testCase[IO](

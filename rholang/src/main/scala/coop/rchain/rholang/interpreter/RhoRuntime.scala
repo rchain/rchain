@@ -420,7 +420,7 @@ object RhoRuntime {
     replayReducer
   }
 
-  def setupMapsAndRefs[F[_]: Sync](
+  def setupMapsAndRefs[F[_]: Async](
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[
     (Ref[F, BlockData], Map[String, Name], Seq[(Name, Arity, Remainder, BodyRef)])
@@ -554,7 +554,7 @@ object RhoRuntime {
       } yield runtime
     }
 
-  def createRuntimes[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
+  def createRuntimes[F[_]: Async: Parallel: Log: Metrics: Span](
       space: RhoISpace[F],
       replaySpace: RhoReplayISpace[F],
       initRegistry: Boolean,
@@ -580,7 +580,7 @@ object RhoRuntime {
    * Create from KeyValueStore's
    */
 
-  def createRuntime[F[_]: Async: ContextShift: Parallel: Log: Metrics: Span](
+  def createRuntime[F[_]: Async: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       mergeableTagName: Par,
       rholangEC: ExecutionContext,

@@ -1,6 +1,7 @@
 package rholang.rosette
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
@@ -42,8 +43,7 @@ class CompilerTests extends AnyFunSuite with Matchers {
     }
   }
 
-  private def execute(file: Path): EvaluateResult = {
-    import coop.rchain.shared.RChainScheduler._
+  private def execute(file: Path): EvaluateResult =
     mkRuntime[IO](tmpPrefix).use { runtime =>
       Using.resource(Source.fromFile(file.toString))(
         fileContents => {
@@ -51,6 +51,5 @@ class CompilerTests extends AnyFunSuite with Matchers {
         }
       )
     }.unsafeRunSync
-  }
 
 }

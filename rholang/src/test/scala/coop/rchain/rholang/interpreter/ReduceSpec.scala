@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -873,7 +874,6 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
 
     val result = withTestSpace {
       case TestFixture(space, _) =>
-        import coop.rchain.shared.RChainScheduler._
         implicit val cost          = CostAccounting.emptyCost[IO].unsafeRunSync
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer                = RholangOnlyDispatcher(space, Map("rho:test:foo" -> byteName(42)))._2

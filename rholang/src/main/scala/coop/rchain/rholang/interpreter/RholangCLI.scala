@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats._
+import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -57,15 +58,13 @@ object RholangCLI {
   }
 
   def main(args: Array[String]): Unit = {
-    import scala.concurrent.ExecutionContext.Implicits.global
-    implicit val cs: ContextShift[IO] = IO.contextShift(global)
 
     val conf = new Conf(args.toList)
 
     implicit val log: Log[IO]          = Log.log[IO]
     implicit val metricsF: Metrics[IO] = new Metrics.MetricsNOP[IO]()
     implicit val spanF: Span[IO]       = NoopSpan[IO]()
-    implicit val parF: Parallel[IO]    = IO.ioParallel
+    implicit val parF: Parallel[IO]    = IO.parallelForIO
 
     val kvm = mkRSpaceStoreManager[IO](conf.dataDir(), conf.mapSize()).unsafeRunSync
 

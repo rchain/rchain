@@ -1,6 +1,7 @@
 package coop.rchain.casper.protocol.client
 
-import cats.effect.{AsyncEffect, Sync}
+import cats.effect.std.Dispatcher
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1.{DeployExecStatus, DeployServiceFs2Grpc}
@@ -39,7 +40,7 @@ object DeployService {
   def apply[F[_]](implicit ev: DeployService[F]): DeployService[F] = ev
 }
 
-class GrpcDeployService[F[_]: Sync: AsyncEffect](host: String, port: Int, maxMessageSize: Int)
+class GrpcDeployService[F[_]: Async](host: String, port: Int, maxMessageSize: Int)
     extends DeployService[F]
     with Closeable {
 

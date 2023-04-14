@@ -1,11 +1,13 @@
 package coop.rchain.casper.util.scalatest
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import org.scalatest.matchers.{MatchResult, Matcher}
+import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import java.util.concurrent.TimeoutException
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.duration.FiniteDuration
 
 trait Fs2StreamMatchers {
 
@@ -15,7 +17,6 @@ trait Fs2StreamMatchers {
     * @param timeout duration to wait for new elements
     */
   class EmptyMatcher[A](timeout: FiniteDuration) extends Matcher[Stream[IO, A]] {
-    import coop.rchain.shared.RChainScheduler._
 
     def apply(left: Stream[IO, A]) = {
       val res = left.take(1).timeout(timeout).compile.toList.attempt.unsafeRunSync

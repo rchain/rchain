@@ -18,10 +18,10 @@ import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
+import cats.effect.unsafe.implicits.global
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
-import coop.rchain.shared.RChainScheduler._
 
 class LMDBHistoryRepositoryGenerativeSpec
     extends HistoryRepositoryGenerativeDefinition

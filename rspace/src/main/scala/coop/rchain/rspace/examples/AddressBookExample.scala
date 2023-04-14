@@ -17,7 +17,6 @@ import scala.concurrent.ExecutionContext
 
 @SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
 object AddressBookExample {
-  import coop.rchain.shared.RChainScheduler._
 
   /* Here we define a type for channels */
 
@@ -81,15 +80,7 @@ object AddressBookExample {
 
   object implicits {
 
-    implicit val concurrentF: Async[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
-
-    implicit val contextShiftId: ContextShift[Id] =
-      new ContextShift[Id] {
-        def shift: Id[Unit]                                   = ???
-        def evalOn[A](ec: ExecutionContext)(fa: Id[A]): Id[A] = fa
-      }
-
-    /* Now I will troll Greg... */
+    import coop.rchain.catscontrib.effect.implicits._
 
     /* Serialize instances */
 

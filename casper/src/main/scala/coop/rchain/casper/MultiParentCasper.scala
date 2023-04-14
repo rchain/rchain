@@ -169,7 +169,7 @@ object MultiParentCasper {
       rejectedDeploys = csRejectedDeploys
     )
 
-  def validate[F[_]: Async: Temporal: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def validate[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
       shardId: String,
       minPhloPrice: Long
