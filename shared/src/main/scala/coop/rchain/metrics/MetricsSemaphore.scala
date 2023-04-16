@@ -2,9 +2,10 @@ package coop.rchain.metrics
 
 import cats.effect._
 import cats.syntax.all._
-
 import coop.rchain.catscontrib.ski.kp
 import cats.effect.std.Semaphore
+import cats.~>
+import coop.rchain.metrics.implicits.MetricsSyntaxConversion
 
 class MetricsSemaphore[F[_]: Sync: Metrics](
     underlying: Semaphore[F]
@@ -23,12 +24,14 @@ class MetricsSemaphore[F[_]: Sync: Metrics](
 
   def tryAcquireN(n: Long): F[Boolean] = underlying.tryAcquireN(n)
   def releaseN(n: Long): F[Unit]       = underlying.releaseN(n)
-  def withPermit[A](t: F[A]): F[A] =
-    for {
-      _      <- Metrics[F].incrementGauge("lock.permit")
-      result <- Sync[F].bracket(acquire)(kp(t))(kp(release))
-      _      <- Metrics[F].decrementGauge("lock.permit")
-    } yield result
+  def withPermit[A](t: F[A]): F[A]     = permit.use(_ => t)
+
+  override def permit: Resource[F, Unit] =
+    Resource.make(Metrics[F].incrementGauge("lock.permit"))(
+      _ => Metrics[F].decrementGauge("lock.permit")
+    )
+
+  override def mapK[G[_]](f: F ~> G)(implicit G: MonadCancel[G, _]): Semaphore[G] = ???
 }
 
 object MetricsSemaphore {
