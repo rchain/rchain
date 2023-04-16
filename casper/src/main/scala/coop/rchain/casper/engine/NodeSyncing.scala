@@ -75,17 +75,31 @@ class NodeSyncing[F[_]
     tupleSpaceQueue: Channel[F, StoreItemsMessage],
     trimState: Boolean = true
 ) {
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case ab: FinalizedFringe =>
       onFinalizedFringeMessage(peer, ab)
 
     case s: StoreItemsMessage =>
-      Log[F].info(s"Received ${s.pretty} from $peer.") *> tupleSpaceQueue.enqueue1(s)
+      Log[F].info(s"Received ${s.pretty} from $peer.") *>
+        tupleSpaceQueue
+          .send(s)
+          .map(
+            _.leftTraverse(
+              _ => new Exception("Channel received store item is closed").raiseError[F, Unit]
+            ).map(_.merge)
+          )
 
     case b: BlockMessage =>
       Log[F]
         .info(s"BlockMessage received ${PrettyPrinter.buildString(b, short = true)} from $peer.") *>
-        incomingBlocksQueue.enqueue1(b)
+        incomingBlocksQueue
+          .send(b)
+          .map(
+            _.leftTraverse(
+              _ => new Exception("Channel received block message is closed").raiseError[F, Unit]
+            ).map(_.merge)
+          )
 
     case _ => ().pure
   }

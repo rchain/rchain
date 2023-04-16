@@ -75,7 +75,25 @@ object GrpcTransportReceiver {
                       s"Inbound gRPC channel with ${peer.toAddress} closed because fiber has been cancelled."
                     )
                   )
-          } yield (tellBuffer.offer1 _, blobBuffer.offer1 _, stream)
+          } yield (
+            (x: Send) =>
+              tellBuffer
+                .trySend(x)
+                .flatMap(
+                  _.leftTraverse(
+                    _ => new Exception("Send channel is closed").raiseError[F, Boolean]
+                  ).map(_.merge)
+                ),
+            (x: StreamMessage) =>
+              blobBuffer
+                .trySend(x)
+                .flatMap(
+                  _.leftTraverse(
+                    _ => new Exception("Stream channel is closed").raiseError[F, Boolean]
+                  ).map(_.merge)
+                ),
+            stream
+          )
 
         for {
           bDefNew <- Deferred[F, MessageBuffers[F]]

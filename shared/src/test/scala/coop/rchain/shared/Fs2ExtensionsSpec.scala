@@ -10,17 +10,18 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.util.Success
-import RChainScheduler._
-import cats.effect.{Ref, Temporal}
+import cats.effect.unsafe.implicits.global
+import cats.effect.Ref
+import cats.effect.testkit.TestControl
 
 class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
 
   /**
     * Creates a Stream of 2 elements creating String "11", if timeout occurs it will insert zeroes e.g. "101"
     */
-  def test[F[_]: Async: Temporal](timeout: FiniteDuration): F[String] = Ref.of("") flatMap { st =>
+  def test[F[_]: Async](timeout: FiniteDuration): F[String] = Ref.of("") flatMap { st =>
     val addOne  = Stream.eval(st.updateAndGet(_ + "1"))
-    val pause   = Stream.sleep(1.second)(Temporal[F]).drain
+    val pause   = Stream.sleep[F](1.second).drain
     val addZero = st.update(_ + "0")
 
     (addOne ++ pause ++ addOne).evalOnIdle(addZero, timeout).compile.lastOrError

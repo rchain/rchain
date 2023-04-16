@@ -1,13 +1,13 @@
 package coop.rchain.comm.transport
 
 import cats.effect.{IO, Sync}
-import cats.effect.concurrent.MVar
+import cats.effect.std.PQueue
+import cats.effect.unsafe.implicits.global
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.shared.RChainScheduler._
 import coop.rchain.shared.{Base16, Log}
 import cats.effect.{Deferred, Ref}
 
@@ -49,7 +49,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[IO, TcpTlsEnvironment] {
   def extract[A](fa: IO[A]): A = fa.unsafeRunSync
 
   def createDispatcherCallback: IO[DispatcherCallback[IO]] =
-    MVar.empty[IO, Unit].map(new DispatcherCallback(_))
+    PQueue.bounded[IO, Unit](1).map(new DispatcherCallback(_))
 
   def createTransportLayerServer(env: TcpTlsEnvironment): IO[TransportLayerServer[IO]] =
     IO.delay {

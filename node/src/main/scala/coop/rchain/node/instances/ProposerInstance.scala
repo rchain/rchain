@@ -1,7 +1,6 @@
 package coop.rchain.node.instances
 
 import cats.effect.Async
-import cats.effect.concurrent.MVar
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.blocks.proposer._
@@ -30,9 +29,9 @@ object ProposerInstance {
     // propose permit
       .eval(for {
         lock    <- Semaphore[F](1)
-        trigger <- MVar[F].of(())
+        trigger <- PQueue.bounded[F, Int](1)
         // initial position for propose trigger - inactive
-        _ <- trigger.take
+        _ <- trigger.offer(1)
       } yield (lock, trigger))
       .flatMap {
         case (lock, trigger) =>
@@ -44,7 +43,7 @@ object ProposerInstance {
                 // if propose is in progress - resolve proposeID to ProposerEmpty result and stop here.
                 // Cock the trigger, so propose is called again after the one that occupies the lock finishes.
                 .evalFilter { v =>
-                  (trigger.tryPut(()) >> proposeIDDef.complete(ProposerResult.empty))
+                  (trigger.tryTake >> proposeIDDef.complete(ProposerResult.empty))
                     .unlessA(v)
                     .as(v)
                 }
@@ -77,13 +76,14 @@ object ProposerInstance {
                     _ <- Log[F].info(infoMsg)
 
                     // propose on more time if trigger is cocked
-                    _ <- trigger.tryTake.flatMap {
-                          case Some(_) =>
+                    _ <- trigger
+                          .tryOffer(1)
+                          .ifM(
                             Deferred[F, ProposerResult] >>= { d =>
-                              proposeRequestsQueue.enqueue1(false, d)
-                            }
-                          case None => ().pure[F]
-                        }
+                              proposeRequestsQueue.send(false, d).void
+                            },
+                            ().pure[F]
+                          )
                   } yield r
                 }
             }
