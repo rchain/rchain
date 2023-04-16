@@ -161,18 +161,19 @@ object GrpcTransportReceiver {
         )
     }
 
-    import coop.rchain.shared.RChainScheduler.mainEC
-    val server = NettyServerBuilder
-      .forPort(port)
-      .executor(mainEC.execute)
-      .maxInboundMessageSize(maxMessageSize)
-      .sslContext(serverSslContext)
-      .addService(TransportLayerFs2Grpc.bindService(service))
-      .intercept(new SslSessionServerInterceptor(networkId))
-      .build
+    Dispatcher.parallel[F].flatMap { d =>
+      val startF = Sync[F].delay(
+        NettyServerBuilder
+          .forPort(port)
+          .maxInboundMessageSize(maxMessageSize)
+          .sslContext(serverSslContext)
+          .addService(TransportLayerFs2Grpc.bindService(d, service))
+          .intercept(new SslSessionServerInterceptor(networkId, d))
+          .build
+          .start
+      )
+      Resource.make(startF)(server => Sync[F].delay(server.shutdown().awaitTermination())).void
+    }
 
-    val startF = Sync[F].delay(server.start())
-    val stopF  = Sync[F].delay(server.shutdown().awaitTermination())
-    Resource.make(startF)(_ => stopF).map(_ => ())
   }
 }

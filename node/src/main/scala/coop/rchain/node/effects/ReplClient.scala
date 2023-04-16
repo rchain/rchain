@@ -37,14 +37,15 @@ class GrpcReplClient[F[_]: Async](host: String, port: Int, maxMessageSize: Int)
       .usePlaintext()
       .build
 
-  private val stub = ReplFs2Grpc.stub(channel)
+  private val stub = Dispatcher.parallel[F].map(ReplFs2Grpc.stub(_, channel))
 
   def run(line: String): F[Either[Throwable, String]] =
-    stub
-      .run(CmdRequest(line), new Metadata())
-      .map(_.output)
-      .attempt
-      .map(_.leftMap(processError))
+    stub.use(
+      _.run(CmdRequest(line), new Metadata())
+        .map(_.output)
+        .attempt
+        .map(_.leftMap(processError))
+    )
 
   def eval(
       fileNames: List[String],
@@ -55,11 +56,12 @@ class GrpcReplClient[F[_]: Async](host: String, port: Int, maxMessageSize: Int)
   def eval(fileName: String, printUnmatchedSendsOnly: Boolean): F[Either[Throwable, String]] = {
     val filePath = Paths.get(fileName)
     if (Files.exists(filePath))
-      stub
-        .eval(EvalRequest(readContent(filePath), printUnmatchedSendsOnly), new Metadata())
-        .map(_.output)
-        .attempt
-        .map(_.leftMap(processError))
+      stub.use(
+        _.eval(EvalRequest(readContent(filePath), printUnmatchedSendsOnly), new Metadata())
+          .map(_.output)
+          .attempt
+          .map(_.leftMap(processError))
+      )
     else Sync[F].delay(new FileNotFoundException("File not found").asLeft)
   }
 

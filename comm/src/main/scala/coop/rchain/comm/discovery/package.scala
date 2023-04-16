@@ -18,20 +18,19 @@ package object discovery {
       networkId: String,
       port: Int,
       pingHandler: PeerNode => F[Unit],
-      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]],
-      grpcEC: ExecutionContext
-  ): Resource[F, grpc.Server] = {
-    val server = NettyServerBuilder
-      .forPort(port)
-      .executor(grpcEC.execute)
-      .addService(
-        KademliaRPCServiceFs2Grpc
-          .bindService(new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler))
-      )
-      .build
+      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
+  ): Resource[F, grpc.Server] =
+    Dispatcher.parallel[F].flatMap { d =>
+      val server = NettyServerBuilder
+        .forPort(port)
+        .addService(
+          KademliaRPCServiceFs2Grpc
+            .bindService(d, new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler))
+        )
+        .build
 
-    Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.void()))
-  }
+      Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.void()))
+    }
 
   def toPeerNode(n: Node): PeerNode =
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))

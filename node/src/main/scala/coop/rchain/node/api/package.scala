@@ -1,6 +1,7 @@
 package coop.rchain.node
 
-import cats.effect.{Async, ConcurrentEffect, Resource, Sync}
+import cats.effect.std.Dispatcher
+import cats.effect.{Async, Resource, Sync}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceFs2Grpc
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceFs2Grpc
 import coop.rchain.node.model.ReplFs2Grpc
@@ -30,26 +31,26 @@ package object api {
       maxConnectionIdle: FiniteDuration,
       maxConnectionAge: FiniteDuration,
       maxConnectionAgeGrace: FiniteDuration
-  ): Resource[F, grpc.Server] = {
-    val server = NettyServerBuilder
-      .forAddress(new InetSocketAddress(host, port))
-      .executor(grpcEC.execute)
-      .maxInboundMessageSize(maxMessageSize)
-      .addService(ReplFs2Grpc.bindService(replService))
-      .addService(ProposeServiceFs2Grpc.bindService(proposeService))
-      .addService(DeployServiceFs2Grpc.bindService(deployService))
-      .keepAliveTime(keepAliveTime.length, keepAliveTime.unit)
-      .keepAliveTimeout(keepAliveTimeout.length, keepAliveTimeout.unit)
-      .permitKeepAliveTime(permitKeepAliveTime.length, permitKeepAliveTime.unit)
-      .maxConnectionIdle(maxConnectionIdle.length, maxConnectionIdle.unit)
-      .maxConnectionAge(maxConnectionAge.length, maxConnectionAge.unit)
-      .maxConnectionAgeGrace(maxConnectionAgeGrace.length, maxConnectionAgeGrace.unit)
-      .addService(ProtoReflectionService.newInstance())
-      .compressorRegistry(null)
-      .build
+  ): Resource[F, grpc.Server] =
+    Dispatcher.parallel[F].flatMap { d =>
+      val server = NettyServerBuilder
+        .forAddress(new InetSocketAddress(host, port))
+        .maxInboundMessageSize(maxMessageSize)
+        .addService(ReplFs2Grpc.bindService(d, replService))
+        .addService(ProposeServiceFs2Grpc.bindService(d, proposeService))
+        .addService(DeployServiceFs2Grpc.bindService(d, deployService))
+        .addService(ProtoReflectionService.newInstance())
+        .keepAliveTime(keepAliveTime.length, keepAliveTime.unit)
+        .keepAliveTimeout(keepAliveTimeout.length, keepAliveTimeout.unit)
+        .permitKeepAliveTime(permitKeepAliveTime.length, permitKeepAliveTime.unit)
+        .maxConnectionIdle(60, SECONDS)
+        .maxConnectionAge(maxConnectionAge.length, maxConnectionAge.unit)
+        .maxConnectionAgeGrace(60, SECONDS)
+        .compressorRegistry(null)
+        .build
 
-    Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.awaitTermination()))
-  }
+      Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.awaitTermination()))
+    }
 
   def acquireExternalServer[F[_]: Async: Log](
       host: String,
@@ -62,22 +63,22 @@ package object api {
       maxConnectionIdle: FiniteDuration,
       maxConnectionAge: FiniteDuration,
       maxConnectionAgeGrace: FiniteDuration
-  ): Resource[F, grpc.Server] = {
-    val server = NettyServerBuilder
-      .forAddress(new InetSocketAddress(host, port))
-      .executor(grpcEC.execute)
-      .maxInboundMessageSize(maxMessageSize)
-      .addService(DeployServiceFs2Grpc.bindService(deployGrpcService))
-      .compressorRegistry(null)
-      .keepAliveTime(keepAliveTime.length, keepAliveTime.unit)
-      .keepAliveTimeout(keepAliveTimeout.length, keepAliveTimeout.unit)
-      .permitKeepAliveTime(permitKeepAliveTime.length, permitKeepAliveTime.unit)
-      .maxConnectionIdle(maxConnectionIdle.length, maxConnectionIdle.unit)
-      .maxConnectionAge(maxConnectionAge.length, maxConnectionAge.unit)
-      .maxConnectionAgeGrace(maxConnectionAgeGrace.length, maxConnectionAgeGrace.unit)
-      .addService(ProtoReflectionService.newInstance())
-      .build
+  ): Resource[F, grpc.Server] =
+    Dispatcher.parallel[F].flatMap { d =>
+      val server = NettyServerBuilder
+        .forAddress(new InetSocketAddress(host, port))
+        .maxInboundMessageSize(maxMessageSize)
+        .addService(DeployServiceFs2Grpc.bindService(d, deployGrpcService))
+        .compressorRegistry(null)
+        .keepAliveTime(keepAliveTime.length, keepAliveTime.unit)
+        .keepAliveTimeout(keepAliveTimeout.length, keepAliveTimeout.unit)
+        .permitKeepAliveTime(permitKeepAliveTime.length, permitKeepAliveTime.unit)
+        .maxConnectionIdle(maxConnectionIdle.length, maxConnectionIdle.unit)
+        .maxConnectionAge(maxConnectionAge.length, maxConnectionAge.unit)
+        .maxConnectionAgeGrace(maxConnectionAgeGrace.length, maxConnectionAgeGrace.unit)
+        .addService(ProtoReflectionService.newInstance())
+        .build
 
-    Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.awaitTermination()))
-  }
+      Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.awaitTermination()))
+    }
 }
