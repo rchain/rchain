@@ -1,7 +1,18 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.mtl.lifting.MonadLayerControl
-import cats.{~>, Alternative, Applicative, Functor, FunctorFilter, Monad, MonadError, MonoidK}
+import cats.{
+  ~>,
+  Alternative,
+  Applicative,
+  FlatMap,
+  Functor,
+  FunctorFilter,
+  Monad,
+  MonadError,
+  MonoidK
+}
 import cats.data.OptionT
+import cats.syntax.all._
 import cats.effect.Sync
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
@@ -10,6 +21,9 @@ import scala.collection.immutable.Stream
 import scala.collection.immutable.Stream.Cons
 import scala.util.{Left, Right}
 import cats.effect.Ref
+import cats.effect.kernel.{CancelScope, MonadCancel, Poll}
+
+import scala.concurrent.duration.FiniteDuration
 
 /**
   * Shamelessly transcribed minimal version of Gabriel Gonzalez's beginner-friendly ListT
@@ -195,53 +209,48 @@ trait StreamTInstances2 {
 
   implicit def streamTSync[F[_]](
       implicit F0: Sync[F],
-      M0: Monad[StreamT[F, *]],
-      AL0: Alternative[StreamT[F, *]]
+      M0: FlatMap[StreamT[F, *]]
   ): Sync[StreamT[F, *]] =
     new StreamTSync[F]() {
-      implicit val F  = F0
-      implicit val M  = M0
-      implicit val AL = AL0
-    }
-}
 
-private trait StreamTSync[F[_]] extends Sync[StreamT[F, *]] with StreamTMonadError[F, Throwable] {
-  implicit def F: Sync[F]
-  implicit def M: Monad[StreamT[F, *]]
-  implicit def AL: Alternative[StreamT[F, *]]
+      override def suspend[A](hint: Sync.Type)(thunk: => A): StreamT[F, A] =
+        StreamT.liftF(F0.delay(thunk))
 
-  import cats.effect.ExitCase
+      override def monotonic: StreamT[F, FiniteDuration] = StreamT.liftF(F0.monotonic)
 
-  def bracketCase[A, B](acquire: StreamT[F, A])(use: A => StreamT[F, B])(
-      release: (A, ExitCase[Throwable]) => StreamT[F, Unit]
-  ): StreamT[F, B] =
-    flatMap(StreamT.liftF(Ref.of[F, Boolean](false))) { ref =>
-      StreamT(F.flatMap(F.bracketCase[Step[F, A], Step[F, B]](acquire.next) {
-        case SNil() => F.pure(SNil())
-        case SCons(head, tail) => {
-          AL.combineK(use(head), M.flatMap(tail)(use)).next
-        }
-      } {
-        case (SNil(), _) => F.pure(())
-        case (SCons(head, _), ExitCase.Completed) => {
-          F.flatMap(release(head, ExitCase.Completed).next) {
-            case SNil()      => ref.set(true)
-            case SCons(_, _) => F.unit
+      override def realTime: StreamT[F, FiniteDuration] = StreamT.liftF(F0.realTime)
+
+      override def rootCancelScope: CancelScope = F0.rootCancelScope
+
+      override def forceR[A, B](fa: StreamT[F, A])(fb: StreamT[F, B]): StreamT[F, B] =
+        M0.flatMap(fa)(_ => fb)
+
+      override def uncancelable[A](body: Poll[StreamT[F, *]] => StreamT[F, A]): StreamT[F, A] = {
+        val natT: Poll[StreamT[F, *]] = new Poll[StreamT[F, *]] {
+          override def apply[B](fa: StreamT[F, B]): StreamT[F, B] = {
+            val step: F[Step[F, B]] = fa.next.flatMap {
+              case SCons(h, t) =>
+                F0.uncancelable { nat: Poll[F] =>
+                  nat(h.pure[F]).map(SCons[F, B](_, t))
+                }
+              case x @ SNil() => x.asInstanceOf[Step[F, B]].pure[F]
+            }
+            StreamT[F, B](step)
           }
         }
-        case (SCons(head, _), ec) => {
-          F.map(release(head, ec).next)(_ => ())
-        }
-      }) {
-        case s @ SCons(_, _) => F.map(ref.get)(b => if (b) SNil() else s)
-        case SNil()          => F.pure(SNil())
-      })
+        body(natT)
+      }
+
+      override def canceled: StreamT[F, Unit] = StreamT.liftF(F0.canceled)
+
+      override def onCancel[A](fa: StreamT[F, A], fin: StreamT[F, Unit]): StreamT[F, A] =
+        StreamT[F, A](F0.onCancel(fa.next, fin.next.void))
+
+      override def F: MonadError[F, Throwable] = F0
     }
-
-  def suspend[A](thunk: => StreamT[F, A]): StreamT[F, A] =
-    StreamT(F.defer(thunk.next))
-
 }
+
+private trait StreamTSync[F[_]] extends Sync[StreamT[F, *]] with StreamTMonadError[F, Throwable]
 
 private trait StreamTMonadErrorMonad[F[_]]
     extends MonadError[StreamT[F, *], Unit]
