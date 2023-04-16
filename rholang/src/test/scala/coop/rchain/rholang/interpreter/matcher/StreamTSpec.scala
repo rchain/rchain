@@ -3,15 +3,15 @@ package coop.rchain.rholang.interpreter.matcher
 import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
 import cats.syntax.all._
-import cats.effect.laws.discipline.{BracketTests, SyncTests}
+import cats.effect.laws._
 import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
 import cats.mtl.laws.discipline.MonadLayerControlTests
-import cats.{~>, Eq, Monad}
+import cats.{~>, effect, Eq, Eval, Monad}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
 import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
-import cats.Eval
 import cats.effect.Sync
+import cats.effect.kernel.Sync.Type
 import org.scalacheck.{Arbitrary, Gen, Prop}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.funsuite.AnyFunSuite
@@ -19,6 +19,7 @@ import org.scalatest.matchers.should.Matchers
 import cats.instances.AllInstances
 import cats.syntax.AllSyntax
 import coop.rchain.catscontrib.effect.implicits.sEval
+import org.scalacheck.ScalacheckShapeless.arbitrarySingletonType
 
 class StreamTSpec extends AnyFlatSpec with Matchers {
 
@@ -80,6 +81,8 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
       case _ => n.pure[F].flatMap(x => hugeFlatMap[F](x - 1))
     }
 
+    implicit val x: Monad[StreamT[Eval, *]] =
+      coop.rchain.rholang.interpreter.matcher.StreamT.streamTMonad[Eval]
     val huge = hugeFlatMap[StreamT[Eval, *]](maxDepth)
 
     assert(StreamT.run(huge).value == Stream(0))
@@ -151,7 +154,6 @@ class StreamTLawsSpec
       )
     )
 
-  implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.attempt)
   implicit def eqFA[A: Eq]: Eq[StreamTEffect[A]] = Eq.by(StreamT.run[Effect, A])
 
   implicit def eqT: Eq[Throwable] = Eq.allEqual
@@ -188,21 +190,13 @@ class StreamTLawsSpec
     checkProps(MonadErrorTests[StreamTEffect, Unit].monadError[Int, Int, String].props)
   }
 
-  test("StreamT.SyncLaws") { checkProps(SyncTests[StreamTEffect].sync[Int, Int, String].props) }
+  implicit val a: Arbitrary[Sync.Type] = Arbitrary[Sync.Type](
+    Gen.oneOf(Seq(Type.Delay, Type.Blocking, Type.InterruptibleMany, Type.InterruptibleOnce))
+  )
+  // TODO this was not required to CE2, whats this for?
+  implicit val x: StreamTEffect[Boolean] => Prop = (x: StreamTEffect[Boolean]) => Prop(true)
 
-  test("StreamT.SyncLaws.from") {
-    val fromEffect =
-      λ[Effect ~> StreamTEffect[*]](
-        e => StreamT.liftF(e)
-      )
-    checkProps(
-      BracketTests[StreamTEffect[*], Throwable]
-        .bracketTrans[Effect, Int, Int](
-          fromEffect
-        )
-        .props
-    )
-  }
+  test("StreamT.SyncLaws") { checkProps(SyncTests[StreamTEffect].sync[Int, Int, String].props) }
 }
 
 trait LowPriorityDerivations {

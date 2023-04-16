@@ -211,8 +211,7 @@ class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Ma
     }
   }
 
-  private def checkSuccess(rho: String)(task: => IO[_]): Unit = {
-    import coop.rchain.shared.RChainScheduler._
+  private def checkSuccess(rho: String)(task: => IO[_]): Unit =
     task.attempt
       .timeout(maxDuration)
       .unsafeRunSync
@@ -220,7 +219,6 @@ class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Ma
       .foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:
                                                |$error""".stripMargin))
-  }
 
 }
 
