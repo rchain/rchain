@@ -20,9 +20,9 @@ object BondsParser {
     */
   def parse[F[_]: Async: Log](bondsPath: Path): F[Map[PublicKey, Long]] = {
     def readLines =
-      io.file
-        .readAll[F](bondsPath, blocker, chunkSize = 4096)
-        .through(text.utf8Decode)
+      Files[F]
+        .readAll(bondsPath)
+        .through(text.utf8.decode)
         .through(text.lines)
         .filter(_.trim.nonEmpty)
         .evalMap { line =>
@@ -57,31 +57,31 @@ object BondsParser {
           case ex: Throwable =>
             new Exception(s"FAILED PARSING BONDS FILE: $bondsPath\n$ex")
         }
-    Resource.unit[F].use(readLines)
+    Resource.unit[F].use(_ => readLines)
   }
 
   def parse[F[_]: Async: Log](
       bondsPathStr: String,
       autogenShardSize: Int
   ): F[Map[PublicKey, Long]] = {
-    val bondsPath = Path.of(bondsPathStr)
+    val bondsPath = Path(bondsPathStr)
 
     def readLines =
-      io.file
-        .exists(blocker, bondsPath)
+      Files[F]
+        .exists(bondsPath)
         .ifM(
           Log[F].info(s"Parsing bonds file $bondsPath.") >> parse(bondsPath),
           Log[F].warn(s"BONDS FILE NOT FOUND: $bondsPath. Creating file with random bonds.") >>
-            newValidators[F](autogenShardSize, bondsPath.toAbsolutePath)
+            newValidators[F](autogenShardSize, bondsPath.absolute)
         )
-    Resource.unit[F].use(readLines)
+    Resource.unit[F].use(_ => readLines)
   }
 
   private def newValidators[F[_]: Async: Log](
       autogenShardSize: Int,
       bondsFilePath: Path
   ): F[Map[PublicKey, Long]] = {
-    val genesisFolder = bondsFilePath.getParent
+    val genesisFolder = bondsFilePath.parent.get
 
     // Generate private/public key pairs
     val keys         = Vector.fill(autogenShardSize)(Secp256k1.newKeyPair)
@@ -89,7 +89,7 @@ object BondsParser {
     val bonds        = pubKeys.iterator.zipWithIndex.toMap.mapValues(_.toLong + 1L)
 
     def toFile(filePath: Path): Pipe[F, String, Unit] =
-      _.through(text.utf8Encode).through(io.file.writeAll(filePath, blocker))
+      _.through(text.utf8.encode).through(Files[F].writeAll(filePath))
 
     // Write generated `<public_key>.sk` files with private key as content
     def writeSkFiles =
@@ -100,7 +100,7 @@ object BondsParser {
             val sk     = Base16.encode(privateKey.bytes)
             val pk     = Base16.encode(publicKey.bytes)
             val skFile = genesisFolder.resolve(s"$pk.sk")
-            toFile(skFile, blocker)(Stream.emit(sk))
+            toFile(skFile)(Stream.emit(sk))
         }
         .compile
         .drain
@@ -115,14 +115,12 @@ object BondsParser {
             val pk = Base16.encode(publicKey.bytes)
             Log[F].info(s"Bond generated $pk => $stake") *> s"$pk $stake$br".pure
         }
-      toFile(bondsFilePath, blocker)(bondsStream).compile.drain
+      toFile(bondsFilePath)(bondsStream).compile.drain
     }
 
-    // Write .sk files and bonds file
-    Resource.unit[F].use { blocker =>
-      io.file.createDirectories(blocker, genesisFolder) *>
-        writeSkFiles(blocker) *> writeBondsFile(blocker) *> bonds.pure[F]
-    }
+    Files[F].createDirectories(genesisFolder) *>
+      writeSkFiles *> writeBondsFile *> bonds.pure[F]
+
   }
 
   private def tryWithMsg[F[_]: Sync, A](f: => A)(failMsg: => String) =

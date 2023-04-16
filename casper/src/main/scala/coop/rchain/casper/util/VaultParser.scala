@@ -19,9 +19,9 @@ object VaultParser {
     */
   def parse[F[_]: Async: Log](vaultsPath: Path): F[Seq[Vault]] = {
     def readLines =
-      io.file
-        .readAll[F](vaultsPath, blocker, chunkSize = 4096)
-        .through(text.utf8Decode)
+      Files[F]
+        .readAll(vaultsPath)
+        .through(text.utf8.decode)
         .through(text.lines)
         .filter(_.trim.nonEmpty)
         .evalMap { line =>
@@ -60,22 +60,22 @@ object VaultParser {
           case ex: Throwable =>
             new Exception(s"FAILED PARSING WALLETS FILE: $vaultsPath\n$ex")
         }
-    Resource.unit[F].use(readLines)
+    Resource.unit[F].use(_ => readLines)
   }
 
   def parse[F[_]: Async: Log](vaultsPathStr: String): F[Seq[Vault]] = {
     val vaultsPath = Path(vaultsPathStr)
 
     def readLines =
-      io.file
-        .exists(blocker, vaultsPath)
+      Files[F]
+        .exists(vaultsPath)
         .ifM(
           Log[F].info(s"Parsing wallets file $vaultsPath.") >> parse(vaultsPath),
           Log[F]
             .warn(s"WALLETS FILE NOT FOUND: $vaultsPath. No vaults will be put in genesis block.")
             .as(Seq.empty[Vault])
         )
-    Resource.unit[F].use(readLines)
+    Resource.unit[F].use(_ => readLines)
   }
 
   private def tryWithMsg[F[_]: Sync, A](f: => A)(failMsg: => String) =
