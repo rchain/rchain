@@ -144,6 +144,7 @@ object Substitute {
 
       override def substituteNoSort(term: Par)(implicit depth: Int, env: Env[Par]): M[Par] =
         for {
+          _           <- Sync[M].delay(()) // TODO why removing this breaks StackSafetySpec?
           exprs       <- subExp(term.exprs)
           connectives <- subConn(term.connectives)
           sends       <- term.sends.toVector.traverse(substituteSend[M].substituteNoSort(_))

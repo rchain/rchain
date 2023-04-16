@@ -4,6 +4,8 @@ import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.errors.LexerError
 import cats.Eval
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import org.scalatest.EitherValues._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +15,8 @@ class LexerTest extends AnyFlatSpec with Matchers {
 
   def attemptMkTerm(input: String): Either[Throwable, Par] =
     try {
-      Right(Compiler[Eval].sourceToADT(input).value)
+      // TODO why this tests break when EVAL is used instead of IO
+      Right(Compiler[IO].sourceToADT(input).unsafeRunSync())
     } catch { case x: Throwable => Left(x) }
 
   "Lexer" should "return LexerError for unterminated string at EOF" in {
