@@ -1,32 +1,41 @@
 package coop.rchain.comm.transport
 
+import cats.effect.Async
+import cats.effect.std.Dispatcher
 import coop.rchain.comm.protocol.routing.{Header => RHeader, _}
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
 import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.shared.{Log, LogSource}
-
 import io.grpc._
+
 import javax.net.ssl.SSLSession
 
-class SslSessionClientInterceptor(networkID: String) extends ClientInterceptor {
+class SslSessionClientInterceptor[F[_]: Async](networkID: String, d: Dispatcher[F])
+    extends ClientInterceptor {
   def interceptCall[ReqT, RespT](
       method: MethodDescriptor[ReqT, RespT],
       callOptions: CallOptions,
       next: Channel
   ): ClientCall[ReqT, RespT] =
-    new SslSessionClientCallInterceptor(next.newCall(method, callOptions), networkID)
+    new SslSessionClientCallInterceptor[F, ReqT, RespT](
+      next.newCall(method, callOptions),
+      networkID,
+      d
+    )
 }
 
 /**
   * This wart exists because that's how grpc works
   */
 @SuppressWarnings(Array("org.wartremover.warts.Var"))
-class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT], networkID: String)
-    extends ClientCall[ReqT, RespT] {
+class SslSessionClientCallInterceptor[F[_]: Async, ReqT, RespT](
+    next: ClientCall[ReqT, RespT],
+    networkID: String,
+    d: Dispatcher[F]
+) extends ClientCall[ReqT, RespT] {
   self =>
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
-  private val log                           = Log.logId
 
   def cancel(message: String, cause: Throwable): Unit = next.cancel(message, cause)
   def request(numMessages: Int): Unit                 = next.request(numMessages)
@@ -59,7 +68,8 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
               self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)
             )
             if (sslSession.isEmpty) {
-              log.warn("No TLS Session. Closing connection")
+              val logPure = Log.log[F].warn("No TLS Session. Closing connection")
+              d.unsafeRunSync(logPure)
               close(Status.UNAUTHENTICATED.withDescription("No TLS Session"))
             } else {
               sslSession.foreach { session =>
@@ -69,14 +79,17 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
                 if (verified)
                   next.onMessage(message)
                 else {
-                  log.warn("Certificate verification failed. Closing connection")
+                  val logPure =
+                    Log.log[F].warn("Certificate verification failed. Closing connection")
+                  d.unsafeRunSync(logPure)
                   close(Status.UNAUTHENTICATED.withDescription("Certificate verification failed"))
                 }
               }
             }
           } else {
-            val nidStr = if (nid.isEmpty) "<empty>" else nid
-            log.warn(s"Wrong network id '$nidStr'. Closing connection")
+            val nidStr  = if (nid.isEmpty) "<empty>" else nid
+            val logPure = Log.log[F].warn(s"Wrong network id '$nidStr'. Closing connection")
+            d.unsafeRunSync(logPure)
             close(Status.PERMISSION_DENIED.withDescription(s"Wrong network id '$nidStr'"))
           }
 
@@ -84,7 +97,8 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
           next.onMessage(message)
 
         case TLResponse(_) =>
-          log.warn(s"Malformed response $message")
+          val logPure = Log.log[F].warn(s"Malformed response $message")
+          d.unsafeRunSync(logPure)
           close(Status.INVALID_ARGUMENT.withDescription("Malformed message"))
         case _ => next.onMessage(message)
       }

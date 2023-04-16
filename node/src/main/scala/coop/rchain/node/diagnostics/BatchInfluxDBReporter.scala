@@ -1,47 +1,37 @@
 package coop.rchain.node.diagnostics
 
-import java.io.IOException
-import java.util.concurrent.atomic.AtomicReference
-import scala.concurrent.duration._
-import scala.util.Try
-import coop.rchain.node.diagnostics.BatchInfluxDBReporter.Settings
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
+import cats.implicits.catsSyntaxOptionId
 import com.typesafe.config.Config
-import kamon.{Kamon, MetricReporter}
+import coop.rchain.node.diagnostics.BatchInfluxDBReporter.Settings
+import fs2.concurrent.Channel
 import kamon.metric._
 import kamon.util.EnvironmentTagBuilder
-import monix.eval.Task
-import monix.execution.Cancelable
-import monix.execution.Scheduler.Implicits.global
-import monix.reactive.subjects._
+import kamon.{Kamon, MetricReporter}
 import okhttp3._
 import org.slf4j.LoggerFactory
+
+import java.io.IOException
+import scala.concurrent.duration._
+import scala.util.Try
 
 // TODO get rid of monix
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporter {
   private val logger = LoggerFactory.getLogger(classOf[BatchInfluxDBReporter])
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
-  private var settings     = readSettings(config)
-  private val client       = buildClient(settings)
-  private val subject      = PublishSubject[String]
-  private val subscription = new AtomicReference(Option.empty[Cancelable])
+  private var settings = readSettings(config)
+  private val client   = buildClient(settings)
+  private val subject  = Channel.unbounded[IO, Option[Seq[String]]].unsafeRunSync()
+  override def start(): Unit =
+    subject.stream.unNoneTerminate
+      .evalMap(postMetrics)
+      .compile
+      .drain
+      .unsafeRunSync()
 
-  override def start(): Unit = {
-    subscription.getAndSet(None).foreach(_.cancel())
-    val s =
-      Some(
-        subject
-          .bufferTimed(settings.batchInterval)
-          .mapEval(postMetrics)
-          .subscribe()
-      )
-
-    if (!subscription.compareAndSet(None, s))
-      s.get.cancel()
-  }
-
-  override def stop(): Unit =
-    subscription.getAndSet(None).foreach(_.cancel())
+  override def stop(): Unit = subject.send(None) // finish stream
 
   override def reconfigure(config: Config): Unit = {
     stop()
@@ -77,41 +67,40 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   }
 
   override def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit =
-    subject.onNext(translateToLineProtocol(snapshot))
+    subject.send(Seq(translateToLineProtocol(snapshot)).some).unsafeRunSync()
 
-  private def postMetrics(metrics: Seq[String]): Task[Unit] =
-    Task.create { (_, cb) =>
-      val body = RequestBody.create(MediaType.parse("text/plain"), metrics.mkString)
-      val request = new Request.Builder()
-        .url(settings.url)
-        .post(body)
-        .build()
+  private def postMetrics(metrics: Seq[String]): IO[Unit] =
+    IO.async_ {
+      case cb =>
+        val body = RequestBody.create(MediaType.parse("text/plain"), metrics.mkString)
+        val request = new Request.Builder()
+          .url(settings.url)
+          .post(body)
+          .build()
 
-      client
-        .newCall(request)
-        .enqueue(
-          new Callback {
-            def onFailure(call: Call, e: IOException): Unit = {
-              logger.error("Failed to POST metrics to InfluxDB", e)
-              cb.onSuccess(())
-            }
-
-            def onResponse(call: Call, response: Response): Unit = {
-              if (response.isSuccessful)
-                logger.trace("Successfully sent metrics to InfluxDB")
-              else {
-                logger.error(
-                  "Metrics POST to InfluxDB failed with status code [{}], response body: {}",
-                  response.code(),
-                  response.body().string()
-                )
+        client
+          .newCall(request)
+          .enqueue(
+            new Callback {
+              def onFailure(call: Call, e: IOException): Unit = {
+                logger.error("Failed to POST metrics to InfluxDB", e)
+                cb(Right(()))
               }
-              cb.onSuccess(())
-            }
-          }
-        )
 
-      Cancelable.empty
+              def onResponse(call: Call, response: Response): Unit = {
+                if (response.isSuccessful)
+                  logger.trace("Successfully sent metrics to InfluxDB")
+                else {
+                  logger.error(
+                    "Metrics POST to InfluxDB failed with status code [{}], response body: {}",
+                    response.code(),
+                    response.body().string()
+                  )
+                }
+                cb(Right(()))
+              }
+            }
+          )
     }
 
   private def translateToLineProtocol(periodSnapshot: PeriodSnapshot): String = {
