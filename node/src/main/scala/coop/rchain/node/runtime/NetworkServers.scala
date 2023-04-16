@@ -51,25 +51,24 @@ object NetworkServers {
       adminWebApi: AdminWebApi[F],
       reportingRoutes: ReportingHttpRoutes[F],
       nodeConf: NodeConf,
-      kamonConf: Config,
-      grpcEC: ExecutionContext
+      kamonConf: Config
   ): Resource[F, Unit] = {
     val GrpcServices(deploySrv, proposeSrv, replSrv) = grpcServices
     val host                                         = nodeConf.apiServer.host
     for {
       nodeAddress <- Resource.eval(RPConfAsk[F].ask.map(_.local.toAddress))
 
-      intServer <- internalServer(nodeConf, replSrv, deploySrv, proposeSrv, grpcEC)
+      intServer <- internalServer(nodeConf, replSrv, deploySrv, proposeSrv)
       _         <- Resource.eval(Log[F].info(s"Internal API server started at $host:${intServer.getPort}."))
 
-      extServer    <- externalServer(nodeConf, deploySrv, grpcEC)
+      extServer    <- externalServer(nodeConf, deploySrv)
       extServerMsg = s"External API server started at $host:${extServer.getPort}."
       _            <- Resource.eval(Log[F].info(extServerMsg))
 
       _ <- protocolServer(nodeConf, routingMessageQueue)
       _ <- Resource.eval(Log[F].info(s"Listening for traffic on $nodeAddress."))
 
-      discovery <- discoveryServer(nodeConf, grpcEC)
+      discovery <- discoveryServer(nodeConf)
       _         <- Resource.eval(Log[F].info(s"Kademlia RPC server started at $host:${discovery.getPort}."))
 
       prometheusRep = new NewPrometheusReporter()
@@ -90,13 +89,11 @@ object NetworkServers {
       nodeConf: NodeConf,
       replService: ReplFs2Grpc[F, Metadata],
       deployService: DeployServiceFs2Grpc[F, Metadata],
-      proposeService: ProposeServiceFs2Grpc[F, Metadata],
-      grpcEC: ExecutionContext
+      proposeService: ProposeServiceFs2Grpc[F, Metadata]
   ): Resource[F, Server] =
     api.acquireInternalServer[F](
       nodeConf.apiServer.host,
       nodeConf.apiServer.portGrpcInternal,
-      grpcEC,
       replService,
       deployService,
       proposeService,
@@ -111,13 +108,11 @@ object NetworkServers {
 
   def externalServer[F[_]: Async: Log](
       nodeConf: NodeConf,
-      deployService: v1.DeployServiceFs2Grpc[F, Metadata],
-      grpcEC: ExecutionContext
+      deployService: v1.DeployServiceFs2Grpc[F, Metadata]
   ): Resource[F, Server] =
     api.acquireExternalServer[F](
       nodeConf.apiServer.host,
       nodeConf.apiServer.portGrpcExternal,
-      grpcEC,
       deployService,
       nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
       nodeConf.apiServer.keepAliveTime,
@@ -148,24 +143,22 @@ object NetworkServers {
     )
   }
 
-  def discoveryServer[F[_]: Async: AsyncEffect: KademliaStore: Log: Metrics](
-      nodeConf: NodeConf,
-      grpcEC: ExecutionContext
+  def discoveryServer[F[_]: Async: KademliaStore: Log: Metrics](
+      nodeConf: NodeConf
   ): Resource[F, Server] =
     discovery.acquireKademliaRPCServer(
       nodeConf.protocolServer.networkId,
       nodeConf.peersDiscovery.port,
       KademliaHandleRPC.handlePing[F],
-      KademliaHandleRPC.handleLookup[F],
-      grpcEC
+      KademliaHandleRPC.handleLookup[F]
     )
 
-  def webApiServer[F[_]: ContextShift: AsyncEffect: Temporal: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
+  def webApiServer[F[_]: Async: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
       nodeConf: NodeConf,
       webApi: WebApi[F],
       reportingRoutes: ReportingHttpRoutes[F],
       prometheusReporter: NewPrometheusReporter
-  ): Resource[F, server.Server[F]] =
+  ): Resource[F, server.Server] =
     web.acquireHttpServer[F](
       nodeConf.apiServer.enableReporting,
       nodeConf.apiServer.host,
@@ -176,12 +169,12 @@ object NetworkServers {
       reportingRoutes
     )
 
-  def adminWebApiServer[F[_]: ContextShift: AsyncEffect: Temporal: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
+  def adminWebApiServer[F[_]: Async: NodeDiscovery: ConnectionsCell: RPConfAsk: Log](
       nodeConf: NodeConf,
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       reportingRoutes: ReportingHttpRoutes[F]
-  ): Resource[F, server.Server[F]] =
+  ): Resource[F, server.Server] =
     web.acquireAdminHttpServer[F](
       nodeConf.apiServer.host,
       nodeConf.apiServer.portAdminHttp,
@@ -205,6 +198,7 @@ object NetworkServers {
       if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
     }
 
+    import scala.concurrent.ExecutionContext.Implicits.global
     // TODO: check new version of Kamon if supports custom effect
     def stop: F[Unit] = Async[F].async_ { cb =>
       Kamon.stopAllReporters().onComplete {

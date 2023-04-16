@@ -281,10 +281,9 @@ object RuntimeManager {
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
       mergeableTagName: Par,
-      executionTracker: BlockExecutionTracker[F],
-      rholangEC: ExecutionContext
+      executionTracker: BlockExecutionTracker[F]
   ): F[RuntimeManagerImpl[F]] =
-    createWithHistory(store, mergeableStore, mergeableTagName, executionTracker, rholangEC).map(
+    createWithHistory(store, mergeableStore, mergeableTagName, executionTracker).map(
       _._1
     )
 
@@ -292,16 +291,14 @@ object RuntimeManager {
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
       mergeableTagName: Par,
-      executionTracker: BlockExecutionTracker[F],
-      rholangEC: ExecutionContext
+      executionTracker: BlockExecutionTracker[F]
   ): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
     RSpace
       .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-        store,
-        rholangEC
+        store
       )
       .flatMap {
         case (rSpacePlay, rSpaceReplay) =>

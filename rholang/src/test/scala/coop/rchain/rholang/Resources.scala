@@ -48,8 +48,7 @@ object Resources {
     for {
       store <- KeyValueStoreManager[F].rSpaceStores
       space <- RSpace.create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                store,
-                RChainScheduler.rholangEC
+                store
               )
     } yield space
   }
@@ -60,7 +59,7 @@ object Resources {
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
       .evalMap(_.rSpaceStores)
-      .evalMap(RhoRuntime.createRuntime(_, Par(), RChainScheduler.rholangEC))
+      .evalMap(RhoRuntime.createRuntime(_, Par()))
 
   def mkRuntimes[F[_]: Async: Parallel: Metrics: Span: Log](
       prefix: String,
@@ -81,8 +80,7 @@ object Resources {
     for {
       hrstores <- RSpace
                    .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                     stores,
-                     RChainScheduler.rholangEC
+                     stores
                    )
       (space, replay) = hrstores
       runtimes <- RhoRuntime

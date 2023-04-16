@@ -77,8 +77,7 @@ class CostAccountingSpec
     for {
       hrstores <- RSpace
                    .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                     stores,
-                     rholangEC
+                     stores
                    )
       (space, replay) = hrstores
       rhoRuntime <- RhoRuntime

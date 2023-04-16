@@ -286,8 +286,7 @@ object GenesisTest {
                          rStore,
                          mStore,
                          BlockRandomSeed.nonNegativeMergeableTagName(rchainShardId),
-                         t,
-                         rholangEC
+                         t
                        )
       result <- body(runtimeManager, genesisPath, log)
       _      <- Sync[F].delay { storePath.recursivelyDelete() }

@@ -275,8 +275,7 @@ abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
         val space =
           new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](
             hr,
-            atomicStore,
-            RChainScheduler.rholangEC
+            atomicStore
           )
         Applicative[F].pure((ts, atomicStore, space))
       }

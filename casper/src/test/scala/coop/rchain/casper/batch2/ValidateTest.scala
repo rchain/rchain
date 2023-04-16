@@ -463,8 +463,7 @@ class ValidateTest
                            BlockRandomSeed.nonNegativeMergeableTagName(
                              genesis.shardId
                            ),
-                           RuntimeManager.noOpExecutionTracker[IO],
-                           rholangEC
+                           RuntimeManager.noOpExecutionTracker[IO]
                          )
         result <- {
           implicit val rm = runtimeManager

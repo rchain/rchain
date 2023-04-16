@@ -1,15 +1,15 @@
 package coop.rchain.comm.discovery
 
 import cats.Applicative
+import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource, Sync}
 import cats.mtl.DefaultApplicativeAsk
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.metrics.Metrics
-import coop.rchain.shared.{Log, RChainScheduler}
+import coop.rchain.shared.Log
 import io.grpc
-import coop.rchain.shared.RChainScheduler._
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -37,7 +37,7 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[IO, GrpcEnvironment] {
           RPConf(local = env.peer, null, null, null, 0, null)
         )
       }
-    IO.delay(new GrpcKademliaRPC(networkId, 500.millis, RChainScheduler.mainEC))
+    IO.delay(new GrpcKademliaRPC(networkId, 500.millis))
   }
 
   def extract[A](fa: IO[A]): A = fa.unsafeRunSync
@@ -51,8 +51,7 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[IO, GrpcEnvironment] {
       networkId,
       env.port,
       pingHandler,
-      lookupHandler,
-      RChainScheduler.mainEC
+      lookupHandler
     )
 }
 

@@ -286,8 +286,7 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       }
       space1 = new RSpace[IO, C, P, A, K](
         historyRepository1,
-        store1,
-        rholangEC
+        store1
       )
       exporter1 <- historyRepository1.exporter
       importer1 <- historyRepository1.importer
@@ -308,8 +307,7 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       }
       space2 = new RSpace[IO, C, P, A, K](
         historyRepository2,
-        store2,
-        rholangEC
+        store2
       )
       exporter2 <- historyRepository2.exporter
       importer2 <- historyRepository2.importer

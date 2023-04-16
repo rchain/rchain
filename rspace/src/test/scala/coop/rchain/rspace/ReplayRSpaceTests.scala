@@ -1290,8 +1290,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
 
       space = new RSpace[IO, C, P, A, K](
         historyRepository,
-        store,
-        rholangEC
+        store
       )
       historyCache <- Ref[IO].of(HotStoreState[C, P, A, K]())
       replayStore <- {
@@ -1300,8 +1299,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       }
       replaySpace = new ReplayRSpace[IO, C, P, A, K](
         historyRepository,
-        replayStore,
-        rholangEC
+        replayStore
       )
       res <- f(store, replayStore, space, replaySpace)
     } yield { res }).unsafeRunSync

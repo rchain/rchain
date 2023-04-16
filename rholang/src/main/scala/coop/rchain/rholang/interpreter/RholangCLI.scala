@@ -13,7 +13,6 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
-import coop.rchain.shared.RChainScheduler.rholangEC
 import coop.rchain.store.LmdbDirStoreManager.{mb, Db, LmdbEnvConfig}
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
 import monix.execution.{CancelableFuture, Scheduler}
@@ -70,7 +69,7 @@ object RholangCLI {
 
     val runtime = (for {
       store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime[IO](store, Par(), rholangEC)
+      runtime <- RhoRuntime.createRuntime[IO](store, Par())
     } yield runtime).unsafeRunSync
 
     val problems = try {

@@ -15,13 +15,11 @@ import coop.rchain.rspace.ReportingRspace.{
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.RChainScheduler.rholangEC
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
-import scala.concurrent.ExecutionContext
 import cats.effect.Ref
 
 /**
@@ -54,7 +52,7 @@ object ReportingRspace {
   /**
     * Creates [[ReportingRspace]] from [[HistoryRepository]] and [[HotStore]].
     */
-  def apply[F[_]: Async: ContextShift: Span: Metrics: Log, C, P, A, K](
+  def apply[F[_]: Async: Span: Metrics: Log, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K]
   )(
@@ -98,7 +96,7 @@ class ReportingRspace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     m: Match[F, P, A]
-) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeAtom, rholangEC) {
+) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeAtom) {
 
   protected[this] override val logger: Logger = Logger[this.type]
 

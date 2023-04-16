@@ -1048,7 +1048,7 @@ class RholangMethodsCostsSpec
     implicit val m: Match[IO, BindPattern, ListParWithRandom] = matchListPar[IO]
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     space = RSpace
-      .create[IO, Par, BindPattern, ListParWithRandom, TaggedContinuation](rSpaceStore, rholangEC)
+      .create[IO, Par, BindPattern, ListParWithRandom, TaggedContinuation](rSpaceStore)
       .unsafeRunSync
   }
 

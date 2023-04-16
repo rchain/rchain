@@ -18,10 +18,9 @@ import monix.execution.atomic.AtomicAny
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
-class RSpace[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
+class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
-    rholangEC: ExecutionContext
+    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
     implicit
     serializeC: Serialize[C],
@@ -29,7 +28,7 @@ class RSpace[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val m: Match[F, P, A]
-) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom, rholangEC)
+) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
     with ISpace[F, C, P, A, K] {
 
   protected[this] override val logger: Logger = Logger[this.type]
@@ -215,7 +214,7 @@ class RSpace[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
       nextHistory   <- historyRepo.reset(historyRepo.history.root)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       hotStore      <- HotStore(historyReader.base)
-      rSpace        <- RSpace(nextHistory, hotStore, rholangEC)
+      rSpace        <- RSpace(nextHistory, hotStore)
       _             <- rSpace.restoreInstalls()
     } yield rSpace
   }
@@ -235,10 +234,9 @@ object RSpace {
   /**
     * Creates [[RSpace]] from [[HistoryRepository]] and [[HotStore]].
     */
-  def apply[F[_]: Async: ContextShift: Span: Metrics: Log, C, P, A, K](
+  def apply[F[_]: Async: Span: Metrics: Log, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
-      store: HotStore[F, C, P, A, K],
-      rholangEC: ExecutionContext
+      store: HotStore[F, C, P, A, K]
   )(
       implicit
       sc: Serialize[C],
@@ -247,14 +245,13 @@ object RSpace {
       sk: Serialize[K],
       m: Match[F, P, A]
   ): F[RSpace[F, C, P, A, K]] =
-    Sync[F].delay(new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store), rholangEC))
+    Sync[F].delay(new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store)))
 
   /**
     * Creates [[RSpace]] from [[KeyValueStore]]'s,
     */
-  def create[F[_]: Async: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
-      store: RSpaceStore[F],
-      rholangEC: ExecutionContext
+  def create[F[_]: Async: Parallel: Span: Metrics: Log, C, P, A, K](
+      store: RSpaceStore[F]
   )(
       implicit
       sc: Serialize[C],
@@ -266,15 +263,14 @@ object RSpace {
     for {
       setup                  <- createHistoryRepo[F, C, P, A, K](store)
       (historyReader, store) = setup
-      space                  <- RSpace(historyReader, store, rholangEC)
+      space                  <- RSpace(historyReader, store)
     } yield space
 
   /**
     * Creates [[RSpace]] and [[ReplayRSpace]] from [[KeyValueStore]]'s.
     */
-  def createWithReplay[F[_]: Async: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
-      store: RSpaceStore[F],
-      rholangEC: ExecutionContext
+  def createWithReplay[F[_]: Async: Parallel: Span: Metrics: Log, C, P, A, K](
+      store: RSpaceStore[F]
   )(
       implicit sc: Serialize[C],
       sp: Serialize[P],
@@ -286,11 +282,11 @@ object RSpace {
       setup                <- createHistoryRepo[F, C, P, A, K](store)
       (historyRepo, store) = setup
       // Play
-      space <- RSpace(historyRepo, store, rholangEC)
+      space <- RSpace(historyRepo, store)
       // Replay
       historyReader <- historyRepo.getHistoryReader(historyRepo.root)
       replayStore   <- HotStore(historyReader.base)
-      replay        <- ReplayRSpace(historyRepo, replayStore, rholangEC)
+      replay        <- ReplayRSpace(historyRepo, replayStore)
     } yield (space, replay)
 
   /**

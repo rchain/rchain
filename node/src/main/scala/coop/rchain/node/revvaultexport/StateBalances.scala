@@ -18,8 +18,6 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 
 import java.nio.file.Path
-import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContext.global
 
 object StateBalances {
 
@@ -60,8 +58,7 @@ object StateBalances {
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                   store,
-                   global
+                   store
                  )
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())

@@ -80,8 +80,6 @@ object AddressBookExample {
 
   object implicits {
 
-    import coop.rchain.catscontrib.effect.implicits._
-
     /* Serialize instances */
 
     /**
@@ -185,15 +183,17 @@ object AddressBookExample {
     phone = "232-555-1212"
   )
 
+  import coop.rchain.catscontrib.effect.implicits._
+
   def exampleOne(): Unit = {
-    implicit val log: Log[Id]          = Log.log
+    implicit val log: Log[Id]          = Log.log[Id]
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
     implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store, rholangEC)
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -228,7 +228,7 @@ object AddressBookExample {
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store, rholangEC)
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -315,7 +315,7 @@ object AddressBookExample {
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store, rholangEC)
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
     try {
       f(space)
     } finally {

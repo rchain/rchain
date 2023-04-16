@@ -1,7 +1,7 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect.{AsyncEffect, Resource, Sync}
+import cats.effect.{Async, Ref, Resource, Sync, Temporal}
 import cats.mtl._
 import cats.syntax.all._
 import com.typesafe.config.Config
@@ -34,7 +34,7 @@ object NodeRuntime {
   def start[F[_]: Async: Parallel: Log](
       nodeConf: NodeConf,
       kamonConf: Config
-  )(implicit mainEC: ExecutionContext): F[Unit] = {
+  ): F[Unit] = {
 
     val nodeCallCtxReader: NodeCallCtxReader[F] = NodeCallCtxReader[F]()
     import nodeCallCtxReader._
@@ -44,8 +44,7 @@ object NodeRuntime {
       * although they can be generated with cats.tagless @autoFunctorK macros but support is missing for IntelliJ.
       * https://github.com/typelevel/cats-tagless/issues/60 (Cheers, Marcin!!)
       */
-    implicit val lg: Log[ReaderNodeCallCtx]      = Log[F].mapK(effToEnv)
-    implicit val tm: Temporal[ReaderNodeCallCtx] = Temporal[F].mapK(effToEnv)
+    implicit val lg: Log[ReaderNodeCallCtx] = Log[F].mapK(effToEnv)
 
     for {
       id <- NodeEnvironment.create[F](nodeConf)
@@ -79,24 +78,7 @@ class NodeRuntime[F[_]: Parallel: Async: LocalEnvironment: Log] private[node] (
     nodeConf: NodeConf,
     kamonConf: Config,
     id: NodeIdentifier
-)(implicit mainEC: ExecutionContext) {
-
-  // TODO: revise use of schedulers for gRPC
-  private[this] val grpcEC = mainEC
-
-  val ioScheduler = Executors.newCachedThreadPool(new ThreadFactory {
-    private val counter = new AtomicLong(0L)
-
-    def newThread(r: Runnable) = {
-      val th = new Thread(r)
-      th.setName(
-        "io-thread-" +
-          counter.getAndIncrement.toString
-      )
-      th.setDaemon(true)
-      th
-    }
-  })
+) {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
@@ -156,8 +138,7 @@ class NodeRuntime[F[_]: Parallel: Async: LocalEnvironment: Log] private[node] (
         implicit val (p, m) = (rpConfAsk, metrics)
         effects.kademliaRPC(
           nodeConf.protocolServer.networkId,
-          nodeConf.protocolClient.networkTimeout,
-          grpcEC
+          nodeConf.protocolClient.networkTimeout
         )
       }
 
@@ -225,8 +206,7 @@ class NodeRuntime[F[_]: Parallel: Async: LocalEnvironment: Log] private[node] (
                 adminWebApi,
                 reportRoutes,
                 nodeConf,
-                kamonConf,
-                grpcEC
+                kamonConf
               )
           // Return node launch stream
         } yield nodeLaunch

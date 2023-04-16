@@ -1,6 +1,8 @@
 package coop.rchain.comm.discovery
 
-import cats.effect.{AsyncEffect, Sync}
+import cats.effect.kernel.Resource
+import cats.effect.std.Dispatcher
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.ski._
@@ -9,15 +11,16 @@ import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.implicits.MetricsSyntaxConversion
 import coop.rchain.shared.syntax._
+import fs2.grpc.client.ClientOptions
+import fs2.grpc.syntax.all._
 import io.grpc._
 import io.grpc.netty._
-import scala.concurrent.ExecutionContext
+
 import scala.concurrent.duration._
 
-class GrpcKademliaRPC[F[_]: Sync: AsyncEffect: RPConfAsk: Metrics](
+class GrpcKademliaRPC[F[_]: Async: RPConfAsk: Metrics](
     networkId: String,
-    timeout: FiniteDuration,
-    grpcEC: ExecutionContext
+    timeout: FiniteDuration
 ) extends KademliaRPC[F] {
 
   implicit private val metricsSource: Metrics.Source =
@@ -51,28 +54,20 @@ class GrpcKademliaRPC[F[_]: Sync: AsyncEffect: RPConfAsk: Metrics](
       }
     } yield peers
 
-  private def withClient[A](peer: PeerNode, timeout: FiniteDuration, enforce: Boolean = false)(
+  private def withClient[A](peer: PeerNode, timeout: FiniteDuration)(
       f: KademliaRPCServiceFs2Grpc[F, Metadata] => F[A]
-  ): F[A] =
-    for {
-      channel <- clientChannel(peer, timeout)
-      stub = KademliaRPCServiceFs2Grpc.stub(
-        channel,
-        callOptions = CallOptions.DEFAULT.withDeadlineAfter(timeout.length, timeout.unit)
-      )
-      result <- f(stub)
-      _      <- Sync[F].delay(channel.shutdown())
-    } yield result
+  ): F[A] = {
+    val channelResource = NettyChannelBuilder
+      .forAddress(peer.endpoint.host, peer.endpoint.udpPort)
+      .usePlaintext()
+      .resource[F]
 
-  private def clientChannel(peer: PeerNode, timeout: FiniteDuration): F[ManagedChannel] =
-    for {
-      c <- Sync[F].delay {
-            NettyChannelBuilder
-              .forAddress(peer.endpoint.host, peer.endpoint.udpPort)
-              .idleTimeout(timeout.toMillis, MILLISECONDS)
-              .executor(grpcEC.execute)
-              .usePlaintext()
-              .build()
-          }
-    } yield c
+    val co = ClientOptions.default.configureCallOptions(
+      _.withDeadlineAfter(timeout.toMillis, MILLISECONDS)
+    )
+
+    val clientResource = channelResource.flatMap(x => KademliaRPCServiceFs2Grpc.stubResource(x, co))
+
+    clientResource.use(f)
+  }
 }

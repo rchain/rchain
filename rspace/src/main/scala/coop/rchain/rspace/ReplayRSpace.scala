@@ -18,10 +18,9 @@ import scala.collection.JavaConverters._
 import scala.collection.{immutable, SortedSet}
 import scala.concurrent.ExecutionContext
 
-class ReplayRSpace[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
+class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
-    rholangEC: ExecutionContext
+    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
     implicit
     serializeC: Serialize[C],
@@ -29,7 +28,7 @@ class ReplayRSpace[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val m: Match[F, P, A]
-) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom, rholangEC)
+) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
     with IReplaySpace[F, C, P, A, K] {
 
   protected override def logF: Log[F] = Log[F]
@@ -306,7 +305,7 @@ class ReplayRSpace[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
       nextHistory   <- historyRepo.reset(historyRepo.history.root)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       hotStore      <- HotStore(historyReader.base)
-      rSpaceReplay  <- ReplayRSpace(nextHistory, hotStore, rholangEC)
+      rSpaceReplay  <- ReplayRSpace(nextHistory, hotStore)
       _             <- rSpaceReplay.restoreInstalls()
     } yield rSpaceReplay
   }
@@ -317,10 +316,9 @@ object ReplayRSpace {
   /**
     * Creates [[ReplayRSpace]] from [[HistoryRepository]] and [[HotStore]].
     */
-  def apply[F[_]: Async: ContextShift: Log: Metrics: Span, C, P, A, K](
+  def apply[F[_]: Async: Log: Metrics: Span, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
-      store: HotStore[F, C, P, A, K],
-      rholangEC: ExecutionContext
+      store: HotStore[F, C, P, A, K]
   )(
       implicit
       sc: Serialize[C],
@@ -329,7 +327,7 @@ object ReplayRSpace {
       sk: Serialize[K],
       m: Match[F, P, A]
   ): F[ReplayRSpace[F, C, P, A, K]] = Sync[F].delay {
-    new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store), rholangEC)
+    new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
   }
 
 }

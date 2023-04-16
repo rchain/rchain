@@ -158,7 +158,6 @@ object MergeBalanceMain {
     implicit val metrics: Metrics.MetricsNOP[IO] = new Metrics.MetricsNOP[IO]()
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[IO, BindPattern, ListParWithRandom] = matchListPar[IO]
-    import coop.rchain.shared.RChainScheduler._
 
     val task: IO[Vector[Account]] = for {
       accountMap        <- getVaultMap(stateBalanceFile, transactionBalanceFile).pure[IO]
@@ -167,8 +166,7 @@ object MergeBalanceMain {
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[IO, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                   store,
-                   rholangEC
+                   store
                  )
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[IO](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
@@ -203,6 +201,7 @@ object MergeBalanceMain {
                          }
     } yield adjustedAccounts
 
+    import cats.effect.unsafe.implicits.global
     val accountMap = task.unsafeRunSync
 
     val file = mergeFile.toFile

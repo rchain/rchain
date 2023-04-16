@@ -86,14 +86,12 @@ object Setup {
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        import RChainScheduler._
-        storeManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par(), rholangEC))
+        storeManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
       }
 
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
-        import RChainScheduler._
         for {
           rStores    <- storeManager.rSpaceStores
           mergeStore <- RuntimeManager.mergeableStore(storeManager)
@@ -102,8 +100,7 @@ object Setup {
                    rStores,
                    mergeStore,
                    BlockRandomSeed.nonNegativeMergeableTagName(conf.casper.shardName),
-                   executionTracker,
-                   rholangEC
+                   executionTracker
                  )
         } yield rm
       }

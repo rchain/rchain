@@ -61,8 +61,7 @@ object Resources {
                          rStore,
                          mStore,
                          mergeableTagName,
-                         RuntimeManager.noOpExecutionTracker[F],
-                         rholangEC
+                         RuntimeManager.noOpExecutionTracker[F]
                        )
     } yield runtimeManager
   }

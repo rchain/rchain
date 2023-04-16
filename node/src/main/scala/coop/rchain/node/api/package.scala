@@ -13,14 +13,13 @@ import monix.execution.Scheduler
 
 import java.net.InetSocketAddress
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{FiniteDuration, SECONDS}
 
 package object api {
 
   def acquireInternalServer[F[_]: Async](
       host: String,
       port: Int,
-      grpcEC: ExecutionContext,
       replService: ReplFs2Grpc[F, Metadata],
       deployService: DeployServiceFs2Grpc[F, Metadata],
       proposeService: ProposeServiceFs2Grpc[F, Metadata],
@@ -55,7 +54,6 @@ package object api {
   def acquireExternalServer[F[_]: Async: Log](
       host: String,
       port: Int,
-      grpcEC: ExecutionContext,
       deployGrpcService: DeployServiceFs2Grpc[F, Metadata],
       maxMessageSize: Int,
       keepAliveTime: FiniteDuration,

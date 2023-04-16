@@ -145,7 +145,6 @@ class RhoSpec(
           RhoRuntime.createRuntime(
             _,
             BlockRandomSeed.nonNegativeMergeableTagName(shardId),
-            rholangEC,
             additionalSystemProcesses = testFrameworkContracts(testResultCollector)
           )
         )

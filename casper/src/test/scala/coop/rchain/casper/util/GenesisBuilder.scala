@@ -24,6 +24,7 @@ import coop.rchain.shared.syntax._
 import java.nio.file.{Files, Path}
 import scala.collection.compat.immutable.LazyList
 import scala.collection.mutable
+import cats.effect.unsafe.implicits.global
 
 object GenesisBuilder {
 
@@ -167,8 +168,6 @@ object GenesisBuilder {
     implicit val metricsEff: Metrics[IO]                            = new metrics.Metrics.MetricsNOP[IO]
     implicit val spanEff                                            = NoopSpan[IO]()
 
-    import coop.rchain.shared.RChainScheduler._
-
     (for {
       kvsManager <- mkTestRNodeStoreManager[IO](storageDirectory)
       rStore     <- kvsManager.rSpaceStores
@@ -178,8 +177,7 @@ object GenesisBuilder {
                          rStore,
                          mStore,
                          BlockRandomSeed.nonNegativeMergeableTagName(parameters._3.shardId),
-                         t,
-                         rholangEC
+                         t
                        )
       // First bonded validator is the creator
       creator = ValidatorIdentity(parameters._1.head._1)
