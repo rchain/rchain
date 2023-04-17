@@ -26,7 +26,6 @@ import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.util.unpackOption
 import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.Log
-import monix.execution.Scheduler
 
 import scala.concurrent.ExecutionContext
 import cats.effect.Ref

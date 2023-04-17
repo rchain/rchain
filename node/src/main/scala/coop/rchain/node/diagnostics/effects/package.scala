@@ -8,7 +8,6 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.node.runtime.NodeCallCtx
 import kamon.Kamon
 import kamon.trace.{Span => KSpan}
-import monix.execution.atomic.AtomicLong
 
 import scala.collection.concurrent.TrieMap
 
@@ -52,8 +51,8 @@ object Trace {
 
   def source(s: Source, networkId: String, host: String): Trace = SourceTrace(s, networkId, host)
 
+  private val counter = new java.util.concurrent.atomic.AtomicLong(0)
   def next: TraceId   = TraceId(counter.incrementAndGet())
-  private val counter = AtomicLong(0L)
 
   final case class TraceId(id: Long) extends AnyVal
 }

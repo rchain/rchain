@@ -8,7 +8,6 @@ import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.transport.StreamHandler.CircuitBreaker
 import coop.rchain.shared.Log
-import monix.reactive.Observable
 import org.scalatest.Inside
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers

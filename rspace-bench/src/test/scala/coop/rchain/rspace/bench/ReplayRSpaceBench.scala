@@ -1,6 +1,6 @@
 package coop.rchain.rspace.bench
 
-import cats.Id
+import cats.effect.{Async, IO, Sync}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter.RholangCLI
@@ -16,6 +16,7 @@ import org.openjdk.jmh.infra.Blackhole
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
+import cats.effect.unsafe.implicits.global
 class ReplayRSpaceBench {
 
   import ReplayRSpaceBench._
@@ -27,7 +28,7 @@ class ReplayRSpaceBench {
   @Fork(value = 1)
   @Measurement(iterations = 1)
   def singleProduce(bh: Blackhole, state: ProduceInMemBenchState) = {
-    val res = state.replaySpace.produce(state.produceChannel, bob, persist = true)
+    val res = state.replaySpace.produce(state.produceChannel, bob, persist = true).unsafeRunSync()
     assert(res.isDefined)
     bh.consume(res)
   }
@@ -39,12 +40,14 @@ class ReplayRSpaceBench {
   @Fork(value = 1)
   @Measurement(iterations = 1)
   def singleConsume(bh: Blackhole, state: ConsumeInMemBenchState) = {
-    val res = state.replaySpace.consume(
-      List(state.consumeChannel),
-      state.matches,
-      state.captor,
-      persist = true
-    )
+    val res = state.replaySpace
+      .consume(
+        List(state.consumeChannel),
+        state.matches,
+        state.captor,
+        persist = true
+      )
+      .unsafeRunSync()
     assert(res.isDefined)
     bh.consume(res)
   }
@@ -55,32 +58,33 @@ object ReplayRSpaceBench {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
-    var space: ISpace[Id, Channel, Pattern, Entry, EntriesCaptor] = null
-    var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Entry, EntriesCaptor] =
+
+    import cats.effect.unsafe.implicits.global
+    var space: ISpace[IO, Channel, Pattern, Entry, EntriesCaptor] = null
+    var replaySpace: IReplaySpace[IO, Channel, Pattern, Entry, EntriesCaptor] =
       null
-    implicit val logF: Log[Id]            = new Log.NOPLog[Id]
-    implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
-    implicit val noopSpan: Span[Id]       = NoopSpan[Id]()
+    implicit val logF: Log[IO]            = new Log.NOPLog[IO]
+    implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
     val consumeChannel                    = Channel("consume")
     val produceChannel                    = Channel("produce")
     val matches                           = List(CityMatch(city = "Crystal Lake"))
     val captor                            = new EntriesCaptor()
 
     def initSpace() = {
-      val rigPoint = space.createCheckpoint()
-      replaySpace.rigAndReset(rigPoint.root, rigPoint.log)
+      val rigPoint = space.createCheckpoint().unsafeRunSync()
+      replaySpace.rigAndReset(rigPoint.root, rigPoint.log).unsafeRunSync()
     }
 
     private var dbDir: Path = null
 
     @Setup
     def setup() = {
-      import coop.rchain.shared.RChainScheduler._
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
-      val kvm   = RholangCLI.mkRSpaceStoreManager[Id](dbDir)
-      val store = kvm.rSpaceStores
+      val kvm   = RholangCLI.mkRSpaceStoreManager[IO](dbDir).unsafeRunSync()
+      val store = kvm.rSpaceStores.unsafeRunSync()
       val (space, replaySpace) =
-        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](store, rholangEC)
+        RSpace.createWithReplay[IO, Channel, Pattern, Entry, EntriesCaptor](store).unsafeRunSync()
       this.space = space
       this.replaySpace = replaySpace
     }

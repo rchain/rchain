@@ -10,8 +10,6 @@ import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
 import io.grpc.{Metadata, Status, StatusRuntimeException}
-import monix.execution.Scheduler
-import monix.reactive.Observable
 import org.scalatest._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike

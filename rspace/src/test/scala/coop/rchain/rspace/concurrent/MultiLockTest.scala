@@ -12,8 +12,6 @@ import coop.rchain.metrics.Metrics
 
 class MultiLockTest extends AnyFlatSpec with Matchers {
 
-  import monix.execution.Scheduler
-  implicit val s       = Scheduler.fixedPool("test-scheduler", 8)
   implicit val metrics = new Metrics.MetricsNOP[IO]
 
   implicit class TaskOps[A](task: IO[A]) {

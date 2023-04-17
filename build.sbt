@@ -301,8 +301,8 @@ lazy val node = (project in file("node"))
         scalapbRuntimegGrpc,
         circeParser,
         circeGenericExtras,
-        pureconfig,
-        monix // remove when BatchInfluxDBReporter is adjusted to work w/o monix
+        monix, // remove when BatchInfluxDBReporter is adjusted to work w/o monix
+        pureconfig
       ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",

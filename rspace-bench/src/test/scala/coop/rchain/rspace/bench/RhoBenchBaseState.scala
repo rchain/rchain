@@ -11,7 +11,6 @@ import coop.rchain.rholang.Resources
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.shared.Log
-import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
@@ -32,8 +31,7 @@ abstract class RhoBenchBaseState {
     bh.consume(r)
   }
 
-  implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "rho-1", poolSize = 100)
-  lazy val dbDir: Path              = Files.createTempDirectory(BenchStorageDirPrefix)
+  lazy val dbDir: Path = Files.createTempDirectory(BenchStorageDirPrefix)
 
   var runtime: RhoRuntime[IO]             = null
   var replayRuntime: ReplayRhoRuntime[IO] = null

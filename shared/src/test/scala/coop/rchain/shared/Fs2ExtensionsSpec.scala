@@ -4,7 +4,6 @@ import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import fs2.Stream
-import monix.execution.schedulers.TestScheduler
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -30,6 +29,7 @@ class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
   // Helper to construct success result
   def success[A](a: A): Option[Success[A]] = Success(a).some
 
+  // TODO fix using TestControl
 //  "evalOnIdle" should "NOT trigger timeout if element IS produced within timeout period" in {
 //    val t = TestControl.execute(test[IO](1001.millis))
 //

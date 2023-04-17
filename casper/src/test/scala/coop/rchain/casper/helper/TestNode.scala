@@ -35,7 +35,6 @@ import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
 import fs2.concurrent.Channel
-import monix.execution.Scheduler
 
 import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}

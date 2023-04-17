@@ -7,13 +7,11 @@ import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import monix.execution.Scheduler
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class LimitedParentDepthSpec extends AnyFlatSpec with Matchers {
-  implicit val scheduler = Scheduler.fixedPool("limited-parent-depth-scheduler", 2)
-  implicit val timeEff   = new LogicalTime[IO]
+  implicit val timeEff = new LogicalTime[IO]
 
   val genesisContext = buildGenesis()
 

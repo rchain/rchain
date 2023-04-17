@@ -10,10 +10,8 @@ import io.grpc
 import io.grpc.Metadata
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.services.ProtoReflectionService
-import monix.execution.Scheduler
 
 import java.net.InetSocketAddress
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, SECONDS}
 
 package object api {

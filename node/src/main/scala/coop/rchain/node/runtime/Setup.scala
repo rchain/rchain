@@ -44,9 +44,7 @@ import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
 import fs2.Stream
 import fs2.concurrent.Channel
-import monix.execution.Scheduler
 import cats.effect.{Deferred, Ref, Temporal}
-import monix.eval.Coeval
 
 object Setup {
   def setupNodeProgram[F[_]: Async: Parallel: LocalEnvironment: TransportLayer: NodeDiscovery: Log: Metrics](

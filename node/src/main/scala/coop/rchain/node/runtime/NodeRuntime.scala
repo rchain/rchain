@@ -20,13 +20,7 @@ import coop.rchain.node.{diagnostics, effects}
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import monix.execution.Scheduler
-
-import java.util.concurrent.{Executors, ThreadFactory}
-import java.util.concurrent.atomic.AtomicLong
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import cats.effect.{Ref, Temporal}
 
 object NodeRuntime {
   type LocalEnvironment[F[_]] = ApplicativeLocal[F, NodeCallCtx]
