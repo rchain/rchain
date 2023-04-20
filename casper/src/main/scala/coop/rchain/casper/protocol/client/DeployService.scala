@@ -97,8 +97,8 @@ class GrpcDeployService[F[_]: Async](host: String, port: Int, maxMessageSize: In
         .toList
         .map { bs =>
           val (l, r) = bs.partition(_.isLeft)
-          if (l.isEmpty) Right(r.map(_.right.get).mkString)
-          else Left(l.flatMap(_.left.get))
+          if (l.isEmpty) Right(r.map(_.toOption.get).mkString)
+          else Left(l.flatMap(_.swap.getOrElse(Seq())))
         }
     )
 
@@ -132,8 +132,8 @@ class GrpcDeployService[F[_]: Async](host: String, port: Int, maxMessageSize: In
              |count: ${r.length}
              |""".stripMargin
 
-            Right(r.map(_.right.get).mkString("\n") + "\n" + showLength)
-          } else Left(l.flatMap(_.left.get))
+            Right(r.map(_.toOption.get).mkString("\n") + "\n" + showLength)
+          } else Left(l.flatMap(_.swap.getOrElse(Seq())))
         }
     )
 

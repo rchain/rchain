@@ -120,7 +120,7 @@ final class BlockDagKeyValueStorage[F[_]: Async: Log] private (
         _                       <- pruneDiff(dag.dagMessageState, dagState, childMap).whenA(shouldPrune)
 
         _ <- removeExpiredFromPool(deployStore, dag).map(
-              _.map((_, ())).map((expiredMap.update _).tupled)
+              _.map((_, ())).foreach((expiredMap.update _).tupled)
             )
       } yield ()
 

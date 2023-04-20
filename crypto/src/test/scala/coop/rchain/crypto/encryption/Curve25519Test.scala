@@ -29,13 +29,13 @@ class Curve25519Test extends AnyFunSpec with Matchers with BeforeAndAfterEach wi
     }
 
     it("decrypts") {
-      val result = Curve25519.decrypt(bobPub, aliceSec, nonce, cipher).deep
-      result shouldBe message.deep
+      val result = Curve25519.decrypt(bobPub, aliceSec, nonce, cipher).toIndexedSeq
+      result shouldBe message.toIndexedSeq
     }
 
     it("gets public") {
-      val result = Curve25519.toPublic(aliceSec).deep
-      result shouldBe alicePub.deep
+      val result = Curve25519.toPublic(aliceSec).toIndexedSeq
+      result shouldBe alicePub.toIndexedSeq
     }
   }
 }

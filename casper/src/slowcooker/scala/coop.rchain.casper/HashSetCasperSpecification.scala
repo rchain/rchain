@@ -60,7 +60,7 @@ object HashSetCasperActions {
     ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, shardId = "root")
 
   implicit class EffectOps[A](f: Effect[A]) {
-    def result: A = f.unsafeRunSync
+    def result: A = f.unsafeRunSync()
   }
 }
 
@@ -77,8 +77,8 @@ object HashSetCasperSpecification extends Commands {
 
   override def canCreateNewSut(
       newState: State,
-      initSuts: Traversable[State],
-      runningSuts: Traversable[Sut]
+      initSuts: Iterable[State],
+      runningSuts: Iterable[Sut]
   ): Boolean =
     true
 
@@ -160,7 +160,7 @@ object HashSetCasperSpecification extends Commands {
 
     override def run(sut: Sut): Result = {
       val validator = sut.nodes(node.idx)
-      val result    = add(validator.node, validator.lastBlock.get).result.right.get
+      val result    = add(validator.node, validator.lastBlock.get).result.toOption.get
       validator.update(None)
       (result, validator.node.logEff.errors ++ validator.node.logEff.warns)
     }
@@ -180,7 +180,7 @@ object HashSetCasperSpecification extends Commands {
       val validator = sut.nodes(node.idx).node
       val result = (deploy(validator, deployment(0)) >> create(validator) >>= (
           b => add(validator, b)
-      )).result.right.get
+      )).result.toOption.get
       (result, validator.logEff.errors ++ validator.logEff.warns)
     }
 

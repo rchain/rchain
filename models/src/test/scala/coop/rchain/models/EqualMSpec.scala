@@ -82,18 +82,19 @@ class EqualMSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers
     // We are going to override the generated hashCode for our generated AST classes,
     // so in this test we rely on the underlying implementation from ScalaRuntime,
     // and hard-code the current definition for the handmade AST classes.
-
     def reference(self: Any, other: Any): Boolean = (self, other) match {
       case (left: ParSet, right: ParSet) =>
-        Equiv.by((x: ParSet) => (x.ps, x.remainder, x.connectiveUsed)).equiv(left, right)
+        val eqF = (x: ParSet) => (x.ps, x.remainder, x.connectiveUsed)
+        Equiv.universal.equiv(eqF(left), eqF(right))
       case (left: ParMap, right: ParMap) =>
-        Equiv.by((x: ParMap) => (x.ps, x.remainder, x.connectiveUsed)).equiv(left, right)
+        val eqF = (x: ParMap) => (x.ps, x.remainder, x.connectiveUsed)
+        Equiv.universal.equiv(eqF(left), eqF(right))
       case (left: Product, right: Product) =>
         left.getClass.isInstance(other) &&
           left.productIterator
             .zip(right.productIterator)
             .forall(tupled(reference))
-      case _ => self.equals(other)
+      case _ => self == other
     }
 
     val referenceResult = reference(x, y)

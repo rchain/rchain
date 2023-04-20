@@ -22,6 +22,7 @@ trait SeqInstances {
           case Nil    => lb
           case h +: t => f(h, Eval.defer(loop(t)))
         }
+
       Eval.defer(loop(fa))
     }
   }

@@ -106,7 +106,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
           case _ => ()
         }
       }
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync()
   }
 
   "no user deploy log" should "return only precharge and refund transaction" in {
@@ -136,7 +136,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
         }
       }
 
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync()
   }
 
   "preCharge failed case" should "return 1 preCharge transaction" in {
@@ -153,7 +153,7 @@ class TransactionAPISpec extends AnyFlatSpec with Matchers with Inspectors {
 
       _ = t.transaction.failReason should be(Some("Insufficient funds"))
 
-    } yield (t, block)).unsafeRunSync
+    } yield (t, block)).unsafeRunSync()
     transaction.transactionType shouldBe a[PreCharge]
     transaction.transaction.fromAddr shouldBe fromAddr
     transaction.transaction.amount shouldBe phloLimit * phloPrice - block.state.deploys.head.cost.cost

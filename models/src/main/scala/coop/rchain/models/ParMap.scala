@@ -4,8 +4,8 @@ import java.util.Objects
 
 import cats.Eval
 
+import java.util.Objects
 import scala.collection.immutable.BitSet
-import coop.rchain.models.rholang.implicits._
 
 final case class ParMap(
     ps: SortedParMap,

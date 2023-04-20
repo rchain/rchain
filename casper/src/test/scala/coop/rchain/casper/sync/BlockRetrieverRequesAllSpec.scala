@@ -23,6 +23,8 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.duration._
 import cats.effect.unsafe.implicits.global
 
+import scala.collection.compat.immutable.ArraySeq
+
 class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
@@ -46,15 +48,15 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
   val conf      = RPConf(local, networkId, null, null, 0, null)
 
   private def toBlockRequest(protocol: Protocol): BlockRequest =
-    BlockRequest.from(convert[PacketTypeTag.BlockRequest.type](toPacket(protocol).right.get).get)
+    BlockRequest.from(convert[PacketTypeTag.BlockRequest.type](toPacket(protocol).toOption.get).get)
   private def toHasBlockRequest(protocol: Protocol): HasBlockRequest =
     HasBlockRequest.from(
-      convert[PacketTypeTag.HasBlockRequest.type](toPacket(protocol).right.get).get
+      convert[PacketTypeTag.HasBlockRequest.type](toPacket(protocol).toOption.get).get
     )
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int = 40400): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 
@@ -64,7 +66,7 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
   override def beforeEach(): Unit = {
     transportLayer.reset()
     transportLayer.setResponses(alwaysSuccess)
-    currentRequests.set(Map.empty).unsafeRunSync
+    currentRequests.set(Map.empty).unsafeRunSync()
   }
 
   describe("Running") {
@@ -72,12 +74,12 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
       describe("if block request is still within a timeout") {
         it("should keep the request not touch") {
           val requested =
-            RequestState(timestamp = Clock[IO].realTime.map(_.toMillis).unsafeRunSync)
-          currentRequests.set(Map(hash -> requested)).unsafeRunSync
+            RequestState(timestamp = Clock[IO].realTime.map(_.toMillis).unsafeRunSync())
+          currentRequests.set(Map(hash -> requested)).unsafeRunSync()
           // when
-          blockRetriever.requestAll(timeout).unsafeRunSync
+          blockRetriever.requestAll(timeout).unsafeRunSync()
           // then
-          val requestedBlocksMapAfter = currentRequests.get.unsafeRunSync
+          val requestedBlocksMapAfter = currentRequests.get.unsafeRunSync()
           requestedBlocksMapAfter.size should be(1)
         }
       }
@@ -91,9 +93,9 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
               peers = Set(peerNode("peer")),
               waitingList = waitingList
             )
-            currentRequests.set(Map(hash -> requested)).unsafeRunSync
+            currentRequests.set(Map(hash -> requested)).unsafeRunSync()
             // when
-            blockRetriever.requestAll(timeout).unsafeRunSync
+            blockRetriever.requestAll(timeout).unsafeRunSync()
             // then
             val (recipient, msg) = transportLayer.getRequest(0)
             toBlockRequest(msg).hash should be(hash)
@@ -108,27 +110,27 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
               peers = Set(peerNode("peer")),
               waitingList = waitingList
             )
-            currentRequests.set(Map(hash -> requested)).unsafeRunSync
+            currentRequests.set(Map(hash -> requested)).unsafeRunSync()
             // when
-            blockRetriever.requestAll(timeout).unsafeRunSync
+            blockRetriever.requestAll(timeout).unsafeRunSync()
             // then
-            val Some(requestedAfter) = currentRequests.get.unsafeRunSync.get(hash)
+            val requestedAfter = currentRequests.get.unsafeRunSync().get(hash).get
             requestedAfter.waitingList shouldBe List(peerNode("waiting2"))
             requestedAfter.peers shouldBe Set(peerNode("peer"), peerNode("waiting1"))
           }
           it("timestamp is reset") {
             val waitingList = List(peerNode("waiting1"), peerNode("waiting2"))
-            val initTime    = Clock[IO].realTime.map(_.toMillis).unsafeRunSync
+            val initTime    = Clock[IO].realTime.map(_.toMillis).unsafeRunSync()
             val requested = RequestState(
               timestamp = initTime - timeout.toMillis - 1,
               peers = Set(peerNode("peer")),
               waitingList = waitingList
             )
-            currentRequests.set(Map(hash -> requested)).unsafeRunSync
+            currentRequests.set(Map(hash -> requested)).unsafeRunSync()
             // when
-            blockRetriever.requestAll(timeout).unsafeRunSync
+            blockRetriever.requestAll(timeout).unsafeRunSync()
             // then
-            val Some(requestedAfter) = currentRequests.get.unsafeRunSync.get(hash)
+            val requestedAfter = currentRequests.get.unsafeRunSync().get(hash).get
             requestedAfter.timestamp != initTime shouldBe true
           }
         }
@@ -141,9 +143,9 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
               peers = Set(peerNode("peer")),
               waitingList = waitingList
             )
-            currentRequests.set(Map(hash -> requested)).unsafeRunSync
+            currentRequests.set(Map(hash -> requested)).unsafeRunSync()
             // when
-            blockRetriever.requestAll(timeout).unsafeRunSync
+            blockRetriever.requestAll(timeout).unsafeRunSync()
             // then
             val (_, msg) = transportLayer.getRequest(0)
             toHasBlockRequest(msg).hash should be(hash)
@@ -160,11 +162,11 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
             peers = Set(peerNode("peer")),
             waitingList = waitingList
           )
-          currentRequests.set(Map(hash -> requested)).unsafeRunSync
+          currentRequests.set(Map(hash -> requested)).unsafeRunSync()
           // when
-          blockRetriever.requestAll(timeout).unsafeRunSync
+          blockRetriever.requestAll(timeout).unsafeRunSync()
           // then
-          val requestedBlocksMapAfter = currentRequests.get.unsafeRunSync
+          val requestedBlocksMapAfter = currentRequests.get.unsafeRunSync()
           requestedBlocksMapAfter.size should be(0)
         }
       }

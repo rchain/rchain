@@ -170,7 +170,7 @@ object Proposer {
           newlySeen.toList.traverse(BlockStore[F].getUnsafe).map { newBlocks =>
             val newStateTransition = newBlocks.exists(hasDeploys)
             val attestationStake =
-              preStateBonds.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
+              preStateBonds.view.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
             val preStateBondsStake = preStateBonds.values.toList.sum
 
             !(newStateTransition || Stake.isSuperMajority(attestationStake, preStateBondsStake))

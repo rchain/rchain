@@ -65,7 +65,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       _         = assert(res === Right(substTerm))
       finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(termCost)))
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync()
   }
 
   it should "charge for failed substitution" in {
@@ -85,7 +85,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       _         = assert(res.isLeft)
       finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(originalTermCost)))
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync()
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {
@@ -112,10 +112,10 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
     }
 
     implicit val rand        = Blake2b512Random.defaultRandom
-    implicit val cost        = CostAccounting.initialCost[IO](Cost(1000)).unsafeRunSync
+    implicit val cost        = CostAccounting.initialCost[IO](Cost(1000)).unsafeRunSync()
     val (_, chargingReducer) = createDispatcher(iSpace, Map.empty, Map.empty)
     val send                 = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test                 = chargingReducer.inj(send).attempt.unsafeRunSync
+    val test                 = chargingReducer.inj(send).attempt.unsafeRunSync()
     assert(test === Left(OutOfPhlogistonsError))
   }
 
@@ -134,7 +134,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
 
     implicit val rand          = Blake2b512Random(Array.empty[Byte])
     implicit val logF: Log[IO] = Log.log[IO]
-    implicit val kvm           = InMemoryStoreManager[IO]
+    implicit val kvm           = InMemoryStoreManager[IO]()
 
     def testImplementation(pureRSpace: RhoISpace[IO]): IO[
       (
@@ -143,7 +143,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       )
     ] = {
 
-      implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
+      implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
 
       lazy val (_, reducer) =
         createDispatcher(pureRSpace, Map.empty, Map.empty)

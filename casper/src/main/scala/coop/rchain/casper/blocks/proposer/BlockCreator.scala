@@ -55,7 +55,7 @@ final case class BlockCreator(id: ValidatorIdentity, shardId: String) {
       val closeDeploy  = CloseBlockDeploy(closeSeed)
 
       BlockDagStorage[F].pooledDeploys
-        .map(_.filterKeys(deploys.toSet).values.toSeq)
+        .map(_.view.filterKeys(deploys.toSet).values.toSeq)
         .flatMap(
           InterpreterUtil.computeDeploysCheckpoint[F](
             _,

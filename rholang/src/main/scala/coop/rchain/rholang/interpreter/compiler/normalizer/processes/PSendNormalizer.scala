@@ -8,7 +8,7 @@ import coop.rchain.models.Send
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{NameVisitInputs, ProcVisitInputs, ProcVisitOutputs}
 
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PSend, SendMultiple, SendSingle}
 import coop.rchain.rholang.interpreter.compiler.normalizer.NameNormalizeMatcher
 
@@ -29,7 +29,7 @@ object PSendNormalizer {
         BitSet(),
         false
       )
-      dataResults <- p.listproc_.toList.reverse.foldM(initAcc)(
+      dataResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)(
                       (acc, e) => {
                         normalizeMatch[F](e, acc._2).map(
                           procMatchResult =>

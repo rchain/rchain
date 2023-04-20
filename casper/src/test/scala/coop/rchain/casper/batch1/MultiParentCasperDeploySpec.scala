@@ -68,7 +68,7 @@ class MultiParentCasperDeploySpec
         err      <- blockApi.deploy(deployData).attempt
       } yield {
         err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.swap.toOption.get
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe s"Phlo price $phloPrice is less than minimum price $minPhloPrice."
       }

@@ -142,27 +142,27 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
       } yield ref
       graph.show shouldBe
         """digraph "Process" {
-            |  "0"
-            |  subgraph {
-            |    "A"
-            |    "B"
-            |    "C"
-            |    "A" -> "B"
-            |    "B" -> "C"
-            |  }
-            |  "0" -> "A"
-            |  subgraph {
-            |    "K"
-            |    "L"
-            |    "M"
-            |    "K" -> "L"
-            |    "L" -> "M"
-            |  }
-            |  "0" -> "K"
-            |  "1"
-            |  "M" -> "1"
-            |  "C" -> "1"
-            |}""".stripMargin
+          |  "0"
+          |  subgraph {
+          |    "A"
+          |    "B"
+          |    "C"
+          |    "A" -> "B"
+          |    "B" -> "C"
+          |  }
+          |  "0" -> "A"
+          |  subgraph {
+          |    "K"
+          |    "L"
+          |    "M"
+          |    "K" -> "L"
+          |    "L" -> "M"
+          |  }
+          |  "0" -> "K"
+          |  "1"
+          |  "M" -> "1"
+          |  "C" -> "1"
+          |}""".stripMargin
     }
 
     it("digraph with fancy subgraphs") {
@@ -292,30 +292,30 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
       yield ref
       graph.show shouldBe
         """digraph "Blockchain" {
-            |  rankdir=BT
-            |  subgraph {
-            |    rank=same
-            |    "1"
-            |    "ddeecc" [shape=box]
-            |    "ffeeff" [shape=box]
-            |  }
-            |  "000000" -> "ffeeff"
-            |  "000000" -> "ddeecc"
-            |  subgraph {
-            |    rank=same
-            |    "0"
-            |    "000000" [shape=box]
-            |  }
-            |  subgraph "timeline" {
-            |    "3" [shape=plaintext]
-            |    "2" [shape=plaintext]
-            |    "1" [shape=plaintext]
-            |    "0" [shape=plaintext]
-            |    "0" -> "1"
-            |    "1" -> "2"
-            |    "2" -> "3"
-            |  }
-            |}""".stripMargin
+          |  rankdir=BT
+          |  subgraph {
+          |    rank=same
+          |    "1"
+          |    "ddeecc" [shape=box]
+          |    "ffeeff" [shape=box]
+          |  }
+          |  "000000" -> "ffeeff"
+          |  "000000" -> "ddeecc"
+          |  subgraph {
+          |    rank=same
+          |    "0"
+          |    "000000" [shape=box]
+          |  }
+          |  subgraph "timeline" {
+          |    "3" [shape=plaintext]
+          |    "2" [shape=plaintext]
+          |    "1" [shape=plaintext]
+          |    "0" [shape=plaintext]
+          |    "0" -> "1"
+          |    "1" -> "2"
+          |    "2" -> "3"
+          |  }
+          |}""".stripMargin
     }
 
     // from https://github.com/xflr6/graphviz/blob/master/examples/process.py
@@ -370,6 +370,6 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
   }
 
   implicit class RefOps(ref: IO[Ref[IO, StringBuffer]]) {
-    def show: String = ref.flatMap(_.get).map(_.toString).unsafeRunSync
+    def show: String = ref.flatMap(_.get).map(_.toString).unsafeRunSync()
   }
 }

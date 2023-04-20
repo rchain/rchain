@@ -2,11 +2,11 @@ package coop.rchain.comm.discovery
 
 import scala.collection.mutable
 import scala.util.Random
-
 import cats._
 import cats.syntax.all._
-
 import coop.rchain.comm._
+
+import scala.collection.immutable.ArraySeq
 
 object KademliaNodeDiscovery {
 
@@ -28,19 +28,20 @@ object KademliaNodeDiscovery {
         potentials: Set[PeerNode],
         i: Int
     ): F[List[PeerNode]] =
-      if (peerSet.nonEmpty && potentials.size < limit && i < dists.length) {
+      if (peerSet.nonEmpty && potentials.sizeIs < limit && i < dists.length) {
         val dist = dists(i)
         /*
          * The general idea is to ask a peer for its peers around a certain
          * distance from our own key. So, construct a key that first differs
          * from ours at bit position dist.
          */
-        val target       = id.key.to[mutable.ArrayBuffer] // Our key
+        val target       = id.key.toArray // Our key
         val byteIndex    = dist / 8
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
 
-        KademliaRPC[F].lookup(target, peerSet.head) >>= (filter(_, potentials)) >>= (
+        KademliaRPC[F]
+          .lookup(ArraySeq.unsafeWrapArray(target), peerSet.head) >>= (filter(_, potentials)) >>= (
             ps => find(limit, dists, peerSet.tail, potentials ++ ps, i + 1)
         )
       } else {

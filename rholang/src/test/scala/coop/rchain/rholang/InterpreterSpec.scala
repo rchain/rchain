@@ -30,32 +30,35 @@ class InterpreterSpec extends AnyFlatSpec with Matchers {
 
     val sendRho = "@{0}!(0)"
 
-    mkRuntime[IO](tmpPrefix).use { runtime =>
-      for {
-        initStorage           <- storageContents(runtime)
-        _                     <- success(runtime, sendRho)
-        beforeError           <- storageContents(runtime)
-        _                     = assert(beforeError.contains(sendRho))
-        beforeErrorCheckpoint <- runtime.createCheckpoint
-        _                     <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
-        afterErrorCheckpoint  <- runtime.createCheckpoint
-        _                     = assert(afterErrorCheckpoint.root == beforeErrorCheckpoint.root)
-        _                     <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
-        afterSendCheckpoint   <- runtime.createCheckpoint
-        _                     = assert(afterSendCheckpoint.root == beforeErrorCheckpoint.root)
-        _                     <- success(runtime, "for (_ <- @0) { Nil }")
-        finalContent          <- storageContents(runtime)
-        _                     = assert(finalContent == initStorage)
-      } yield ()
-    }.unsafeRunSync
+    mkRuntime[IO](tmpPrefix)
+      .use { runtime =>
+        for {
+          initStorage           <- storageContents(runtime)
+          _                     <- success(runtime, sendRho)
+          beforeError           <- storageContents(runtime)
+          _                     = assert(beforeError.contains(sendRho))
+          beforeErrorCheckpoint <- runtime.createCheckpoint
+          _                     <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
+          afterErrorCheckpoint  <- runtime.createCheckpoint
+          _                     = assert(afterErrorCheckpoint.root == beforeErrorCheckpoint.root)
+          _                     <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
+          afterSendCheckpoint   <- runtime.createCheckpoint
+          _                     = assert(afterSendCheckpoint.root == beforeErrorCheckpoint.root)
+          _                     <- success(runtime, "for (_ <- @0) { Nil }")
+          finalContent          <- storageContents(runtime)
+          _                     = assert(finalContent == initStorage)
+        } yield ()
+      }
+      .unsafeRunSync()
   }
 
   it should "yield correct results for the PrimeCheck contract" in {
-    val tupleSpace = mkRuntime[IO](tmpPrefix).use { runtime =>
-      for {
-        _ <- success(
-              runtime,
-              """
+    val tupleSpace = mkRuntime[IO](tmpPrefix)
+      .use { runtime =>
+        for {
+          _ <- success(
+                runtime,
+                """
               |new loop, primeCheck, stdoutAck(`rho:io:stdoutAck`) in {
               |            contract loop(@x) = {
               |              match x {
@@ -79,11 +82,12 @@ class InterpreterSpec extends AnyFlatSpec with Matchers {
               |            loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
               |  }
             """.stripMargin
-            )
+              )
 
-        tupleSpace <- runtime.getHotChanges
-      } yield tupleSpace
-    }.unsafeRunSync
+          tupleSpace <- runtime.getHotChanges
+        } yield tupleSpace
+      }
+      .unsafeRunSync()
 
     def rhoPar(e: Expr)      = Seq(Par(exprs = Seq(e)))
     def rhoInt(n: Long)      = rhoPar(Expr(GInt(n)))
@@ -102,9 +106,11 @@ class InterpreterSpec extends AnyFlatSpec with Matchers {
   it should "signal syntax errors to the caller" in {
     val badRholang = "new f, x in { f(x) }"
     val EvaluateResult(_, errors, _) =
-      mkRuntime[IO](tmpPrefix).use { runtime =>
-        execute(runtime, badRholang)
-      }.unsafeRunSync
+      mkRuntime[IO](tmpPrefix)
+        .use { runtime =>
+          execute(runtime, badRholang)
+        }
+        .unsafeRunSync()
 
     errors should not be empty
     errors(0) shouldBe a[coop.rchain.rholang.interpreter.errors.SyntaxError]
@@ -113,9 +119,11 @@ class InterpreterSpec extends AnyFlatSpec with Matchers {
   it should "capture rholang parsing errors and charge for parsing" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     val EvaluateResult(cost, errors, _) =
-      mkRuntime[IO](tmpPrefix).use { runtime =>
-        execute(runtime, badRholang)
-      }.unsafeRunSync
+      mkRuntime[IO](tmpPrefix)
+        .use { runtime =>
+          execute(runtime, badRholang)
+        }
+        .unsafeRunSync()
 
     errors should not be empty
     cost.value shouldEqual (parsingCost(badRholang).value)
@@ -125,9 +133,11 @@ class InterpreterSpec extends AnyFlatSpec with Matchers {
     val sendRho     = "@{0}!(0)"
     val initialPhlo = parsingCost(sendRho) - Cost(1)
     val EvaluateResult(cost, errors, _) =
-      mkRuntime[IO](tmpPrefix).use { runtime =>
-        runtime.evaluate(sendRho, initialPhlo)
-      }.unsafeRunSync
+      mkRuntime[IO](tmpPrefix)
+        .use { runtime =>
+          runtime.evaluate(sendRho, initialPhlo)
+        }
+        .unsafeRunSync()
 
     errors should not be empty
     cost.value shouldEqual initialPhlo.value

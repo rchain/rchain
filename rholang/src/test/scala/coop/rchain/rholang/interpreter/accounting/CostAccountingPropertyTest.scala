@@ -112,7 +112,8 @@ object CostAccountingPropertyTest {
         _    <- runtime.cost.set(Cost.UNSAFE_MAX)
         cost <- CostAccounting.emptyCost[IO]
         res <- {
-          procs.toStream
+          procs
+            .to(LazyList)
             .traverse(execute(runtime, _))
             .map(_.sum)
         }

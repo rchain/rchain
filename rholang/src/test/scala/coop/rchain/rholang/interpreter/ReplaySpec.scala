@@ -54,16 +54,18 @@ class ReplaySpec extends AnyFlatSpec with Matchers {
       case (runtime, replayRuntime) =>
         for (i <- 1 to iterations) {
           val (playRes, replayRes) =
-            evaluateWithRuntime(runtime, replayRuntime)(term, Cost(Integer.MAX_VALUE)).onError {
-              case _: Throwable =>
-                println(s"Test retry count: $i").pure[IO]
-            }.unsafeRunSync
+            evaluateWithRuntime(runtime, replayRuntime)(term, Cost(Integer.MAX_VALUE))
+              .onError {
+                case _: Throwable =>
+                  println(s"Test retry count: $i").pure[IO]
+              }
+              .unsafeRunSync()
 
           assert(playRes.errors.isEmpty)
           assert(replayRes.errors.isEmpty)
         }
         ().pure[IO]
-    }.unsafeRunSync
+    }.unsafeRunSync()
 
   def evaluateWithRuntime(
       runtime: RhoRuntime[IO],

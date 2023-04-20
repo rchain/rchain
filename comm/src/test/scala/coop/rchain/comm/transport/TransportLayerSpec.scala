@@ -37,7 +37,7 @@ abstract class TransportLayerSpec[F[_]: Async, E <: Environment]
           val (_, protocol2)   = protocolDispatcher.received.head
           val sender: PeerNode = ProtocolHelper.sender(protocol2)
           sender shouldEqual result.localNode
-          protocol2.message shouldBe 'heartbeat
+          protocol2.message shouldBe Symbol("heartbeat")
         }
     }
 
@@ -59,8 +59,8 @@ abstract class TransportLayerSpec[F[_]: Async, E <: Environment]
           val sender2: PeerNode       = ProtocolHelper.sender(p2)
           sender1 shouldEqual result.localNode
           sender2 shouldEqual result.localNode
-          p1.message shouldBe 'heartbeat
-          p2.message shouldBe 'heartbeat
+          p1.message shouldBe Symbol("heartbeat")
+          p2.message shouldBe Symbol("heartbeat")
           r1 should (equal(result.remoteNode1) or equal(result.remoteNode2))
           r2 should (equal(result.remoteNode1) or equal(result.remoteNode2))
         }

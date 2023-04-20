@@ -3,7 +3,7 @@ package coop.rchain.node.effects
 import scala.tools.jline._
 import scala.tools.jline.console._
 import completer.StringsCompleter
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import cats._
 import cats.data._
 import cats.implicits._

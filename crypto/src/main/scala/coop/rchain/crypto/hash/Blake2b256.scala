@@ -4,8 +4,6 @@ import org.bouncycastle.crypto.digests.Blake2bDigest
 import org.bouncycastle.crypto.io.DigestOutputStream
 import scodec.bits.ByteVector
 
-import scala.collection.immutable.Seq
-
 /**
   * Blake2b256 hashing algorithm
   */

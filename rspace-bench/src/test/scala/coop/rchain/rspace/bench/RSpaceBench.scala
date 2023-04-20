@@ -79,8 +79,8 @@ trait RSpaceBenchBase {
     )
 
     val results: IndexedSeq[Future[Unit]] = {
-      implicit val ioR = IORuntime.builder.setCompute(dupePool, () => ()).build()
-      tasks.map(f => f.unsafeToFuture)
+      implicit val ioR = IORuntime.builder().setCompute(dupePool, () => ()).build()
+      tasks.map(f => f.unsafeToFuture())
     }
 
     bh.consume(Await.ready(Future.sequence(results), Duration.Inf))

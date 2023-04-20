@@ -124,8 +124,8 @@ object RholangMergingLogic {
       storeAction = TrieInsertBinaryProduce(channelHash, Seq(datumEncoded))
     } yield storeAction
 
-  private val byteStringOrdering =
-    Ordering.by[ByteString, Iterable[Byte]](_.toByteArray)(Ordering.Iterable[Byte])
+  import scala.Ordering.Implicits._
+  private val byteStringOrdering = Ordering.by((x: ByteString) => x.toByteArray.toSeq)
 
   /* Number channel value encoders/decoders */
 

@@ -4,7 +4,7 @@ import cats.effect._
 import cats.effect.unsafe.implicits.global
 import cats.mtl.implicits._
 import cats.syntax.all._
-import cats.{Alternative, Foldable, MonoidK, SemigroupK}
+import cats.{Alternative, Foldable, Monad, MonadError, MonoidK, SemigroupK}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter._
@@ -20,11 +20,13 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
 
   type F[A] = MatcherMonadT[IO, A]
 
+  import StreamT.streamTSync
+
   val A: Alternative[F] = Alternative[F]
 
-  implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
+  implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
 
-  implicit val costF: _cost[F]   = matcherMonadCostLog[IO]
+  implicit val costF: _cost[F]   = matcherMonadCostLog[IO]()
   implicit val matcherMonadError = implicitly[Sync[F]]
 
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
@@ -35,18 +37,18 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
       _        <- cost.set(Cost(phlo, "initial cost"))
       result   <- f
       phloLeft <- cost.get
-    } yield (phloLeft, result)).unsafeRunSync
+    } yield (phloLeft, result)).unsafeRunSync()
 
   behavior of "MatcherMonad"
 
   it should "charge for each non-deterministic branch" in {
-    val possibleResults = Stream((0, 1), (0, 2))
-    val computation     = Alternative[F].unite(possibleResults.pure[F])
+    val possibleResults = LazyList((0, 1), (0, 2))
+    val computation     = A.unite(possibleResults.pure[F])
     val sum             = computation.map { case (x, y) => x + y } >>= (charge[F](Cost(1)).as(_))
     val (phloLeft, _)   = runWithCost(runMatcher(sum), possibleResults.size)
     assert(phloLeft.value == 0)
 
-    val moreVariants    = sum.flatMap(x => Alternative[F].unite(Stream(x, 0, -x).pure[F]))
+    val moreVariants    = sum.flatMap(x => A.unite(LazyList(x, 0, -x).pure[F]))
     val moreComputation = moreVariants.map(x => "Do sth with " + x) >>= (charge[F](Cost(1)).as(_))
     val (phloLeft2, _) =
       runWithCost(runMatcher(moreComputation), possibleResults.size * 3 + possibleResults.size)
@@ -96,7 +98,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
 
     val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
     assert(phloLeft.value == 0)
-    assert(res == Stream((Map.empty, 1), (Map.empty, 3)))
+    assert(res == LazyList((Map.empty, 1), (Map.empty, 3)))
   }
 
   it should "apply `_short[F].raiseError` separately to each computation branch" in {
@@ -107,7 +109,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
 
     val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
     assert(phloLeft.value == 0)
-    assert(res == Stream((Map.empty, 2)))
+    assert(res == LazyList((Map.empty, 2)))
   }
 
   it should "fail all branches when using `_error[F].raise`" in {
@@ -133,7 +135,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
     val (phloLeft, res) = runWithCost(runMatcher(combined), 1 + 2 + 8)
 
     assert(phloLeft.value == 0)
-    assert(res == Stream((Map.empty, ())))
+    assert(res == LazyList((Map.empty, ())))
 
   }
 

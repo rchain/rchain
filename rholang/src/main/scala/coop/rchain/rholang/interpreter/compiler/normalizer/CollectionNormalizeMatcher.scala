@@ -18,7 +18,7 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{KeyValuePair => AbsynKeyVa
 import coop.rchain.rholang.interpreter.compiler._
 import cats.Eval
 
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
 import scala.collection.immutable.{BitSet, Vector}
 
 object CollectionNormalizeMatcher {
@@ -78,6 +78,7 @@ object CollectionNormalizeMatcher {
                 acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
                 acc._4 || keyResult.par.connectiveUsed || valResult.par.connectiveUsed
               )
+
           }
         }
         .map { folded =>
@@ -113,13 +114,13 @@ object CollectionNormalizeMatcher {
                     )
                   }
 
-              foldMatch(knownFree, cl.listproc_.toList, constructor(optionalRemainder))
+              foldMatch(knownFree, cl.listproc_.asScala.toList, constructor(optionalRemainder))
           }
 
       case ct: CollectTuple =>
         val ps = ct.tuple_ match {
           case ts: TupleSingle   => Seq(ts.proc_)
-          case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.toList
+          case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.asScala.toList
         }
         foldMatch(input.freeMap, ps.toList, ETuple.apply)
 
@@ -132,13 +133,13 @@ object CollectionNormalizeMatcher {
                 optionalRemainder =>
                   (pars, locallyFree, connectiveUsed) => {
                     val tmpParSet =
-                      ParSet(pars, connectiveUsed, Eval.later(locallyFree.get()), optionalRemainder)
+                      ParSet(pars, connectiveUsed, Eval.later(locallyFree.get), optionalRemainder)
                     tmpParSet.copy(
                       connectiveUsed = tmpParSet.connectiveUsed || optionalRemainder.isDefined
                     )
                   }
 
-              foldMatch(knownFree, cs.listproc_.toList, constructor(optionalRemainder))
+              foldMatch(knownFree, cs.listproc_.asScala.toList, constructor(optionalRemainder))
           }
 
       case cm: CollectMap =>
@@ -146,8 +147,9 @@ object CollectionNormalizeMatcher {
           .normalizeMatchProc[F](cm.procremainder_, input.freeMap)
           .flatMap {
             case (optionalRemainder, knownFree) =>
-              foldMatchMap(knownFree, optionalRemainder, cm.listkeyvaluepair_.toList)
+              foldMatchMap(knownFree, optionalRemainder, cm.listkeyvaluepair_.asScala.toList)
           }
+
     }
   }
 }

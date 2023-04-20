@@ -83,7 +83,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         err          <- emptyHistory.process(data).attempt
       } yield {
         err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.swap.toOption.get
         ex shouldBe a[AssertionError]
         ex.getMessage shouldBe s"assertion failed: The length of all prefixes in the subtree must be the same."
       }
@@ -97,7 +97,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         err          <- emptyHistory.process(data1).attempt
       } yield {
         err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.swap.toOption.get
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe s"Cannot process duplicate actions on one key."
       }
@@ -107,7 +107,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         err          <- emptyHistory.process(data2).attempt
       } yield {
         err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.swap.toOption.get
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe s"Cannot process duplicate actions on one key."
       }
@@ -212,7 +212,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         err          <- newHistory.process(deleteRecord).attempt
       } yield {
         err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.swap.toOption.get
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe
           s"1 collisions in KVDB (first collision with key = " +
@@ -236,7 +236,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
                   List[InsertAction],
                   TrieMap[KeySegment, Blake2b256Hash]
               )
-            ](emptyHistory, inserts, state) {
+            ]((emptyHistory, inserts, state)) {
               case ((history, inserts, state), _) =>
                 val newInserts  = generateRandomInsert(sizeInserts)
                 val newUpdates  = generateRandomInsertFromInsert(sizeUpdates, inserts)
@@ -277,14 +277,14 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
   }
 
   protected def withEmptyHistory(f: IO[History[IO]] => IO[Unit]): Unit = {
-    val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[IO])
+    val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[IO]())
     f(emptyHistory).unsafeRunTimed(1.minute)
   }
 
   protected def withEmptyHistoryAndStore(
       f: (IO[History[IO]], InMemoryKeyValueStore[IO]) => IO[Unit]
   ): Unit = {
-    val store        = InMemoryKeyValueStore[IO]
+    val store        = InMemoryKeyValueStore[IO]()
     val emptyHistory = History.create(History.emptyRootHash, store)
     f(emptyHistory, store).unsafeRunTimed(20.seconds)
   }

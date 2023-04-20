@@ -118,9 +118,9 @@ trait Environment {
 }
 
 abstract class Handler[F[_]: Monad: Temporal, R] {
-  def received: Seq[(PeerNode, R)] = receivedMessages
-  protected val receivedMessages: mutable.MutableList[(PeerNode, R)] =
-    mutable.MutableList.empty[(PeerNode, R)]
+  def received: Seq[(PeerNode, R)] = receivedMessages.toSeq
+  protected val receivedMessages: mutable.ArrayDeque[(PeerNode, R)] =
+    mutable.ArrayDeque.empty[(PeerNode, R)]
 }
 
 final class PingHandler[F[_]: Monad: Temporal](

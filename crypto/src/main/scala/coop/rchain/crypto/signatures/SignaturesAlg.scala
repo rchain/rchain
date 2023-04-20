@@ -1,6 +1,8 @@
 package coop.rchain.crypto.signatures
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 
+import java.util.Locale
+
 trait SignaturesAlg {
   def verify(data: Array[Byte], signature: Array[Byte], pub: Array[Byte]): Boolean
   def sign(data: Array[Byte], sec: Array[Byte]): Array[Byte]
@@ -17,7 +19,7 @@ trait SignaturesAlg {
 
 object SignaturesAlg {
   def apply(algorithm: String): Option[SignaturesAlg] =
-    algorithm.toLowerCase match {
+    algorithm.toLowerCase(Locale.getDefault) match {
       // ed25519 signature algorithm is disabled
       // TODO: quick way to prevent use of ed25519 to sign deploys
       // https://rchain.atlassian.net/browse/RCHAIN-3560

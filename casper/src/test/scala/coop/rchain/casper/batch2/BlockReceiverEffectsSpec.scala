@@ -121,7 +121,7 @@ class BlockReceiverEffectsSpec
 
         val bsContainsCaptor = ArgCaptor[Seq[BlockHash]]
         bs.contains(bsContainsCaptor) wasCalled 4.times
-        bsContainsCaptor.values should contain allOf (Seq(a1.blockHash), Seq(a2.blockHash))
+        bsContainsCaptor.values should contain.allOf(Seq(a1.blockHash), Seq(a2.blockHash))
 
         br.ackReceived(a1.blockHash) wasCalled once
         br.ackReceived(a2.blockHash) wasCalled once
@@ -209,7 +209,7 @@ class BlockReceiverEffectsSpec
           sigAlgorithm = Secp256k1.name
         )
       )
-      .right
+      .toOption
       .get
 
   private def makeBlock(justifications: List[BlockHash] = List()): BlockMessage = {

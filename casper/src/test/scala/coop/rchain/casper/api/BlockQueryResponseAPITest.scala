@@ -53,7 +53,7 @@ class BlockQueryResponseAPITest
   private val randomDeploys =
     (0 until deployCount).toList
       .traverse(i => ConstructDeploy.basicProcessedDeploy[IO](i))
-      .unsafeRunSync
+      .unsafeRunSync()
 
   private val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"
@@ -75,11 +75,12 @@ class BlockQueryResponseAPITest
     for {
       _                  <- prepareDagStorage[IO]
       blockApi           <- createBlockApi[IO]("", 1)
-      _                  = Mockito.clearInvocations(bs, bds)
+      _                  = Mockito.clearInvocations(bs)
+      _                  = Mockito.clearInvocations(bds)
       hash               = secondBlock.blockHash.toHexString
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
-      blockQueryResponse shouldBe 'right
+      blockQueryResponse shouldBe Symbol("right")
       val blockInfo = blockQueryResponse.value
       blockInfo.deploys shouldBe randomDeploys.map(_.toDeployInfo)
       blockInfo.blockInfo shouldBe BlockApi.getLightBlockInfo(secondBlock)
@@ -102,7 +103,7 @@ class BlockQueryResponseAPITest
       hash               = badTestHashQuery
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
-      blockQueryResponse shouldBe 'left
+      blockQueryResponse shouldBe Symbol("left")
       blockQueryResponse.left.value shouldBe s"Error: Failure to find block with hash: $badTestHashQuery"
 
       bs.get(Seq(badTestHashQuery.unsafeHexToByteString)) wasCalled once
@@ -123,7 +124,7 @@ class BlockQueryResponseAPITest
       hash               = invalidHexQuery
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
-      blockQueryResponse shouldBe 'left
+      blockQueryResponse shouldBe Symbol("left")
       blockQueryResponse.left.value shouldBe s"Input hash value is not valid hex string: $invalidHexQuery"
 
       verifyNoMoreInteractions(bs)
@@ -143,7 +144,7 @@ class BlockQueryResponseAPITest
       hash               = tooShortQuery
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
-      blockQueryResponse shouldBe 'left
+      blockQueryResponse shouldBe Symbol("left")
       blockQueryResponse.left.value shouldBe s"Input hash value must be at least 6 characters: $tooShortQuery"
 
       verifyNoMoreInteractions(bs)
@@ -161,11 +162,12 @@ class BlockQueryResponseAPITest
     for {
       _                  <- prepareDagStorage[IO]
       blockApi           <- createBlockApi[IO]("", 1)
-      _                  = Mockito.clearInvocations(bs, bds)
+      _                  = Mockito.clearInvocations(bs)
+      _                  = Mockito.clearInvocations(bds)
       deployId           = randomDeploys.head.deploy.sig
       blockQueryResponse <- blockApi.findDeploy(deployId)
     } yield {
-      blockQueryResponse shouldBe 'right
+      blockQueryResponse shouldBe Symbol("right")
       blockQueryResponse.value shouldBe BlockApi.getLightBlockInfo(secondBlock)
 
       bs.get(Seq(secondBlock.blockHash)) wasCalled once
@@ -185,7 +187,7 @@ class BlockQueryResponseAPITest
       blockApi           <- createBlockApi[IO]("", 1)
       blockQueryResponse <- blockApi.findDeploy(unknownDeploy)
     } yield {
-      blockQueryResponse shouldBe 'left
+      blockQueryResponse shouldBe Symbol("left")
       blockQueryResponse.left.value shouldBe
         s"Couldn't find block containing deploy with id: ${PrettyPrinter.buildStringNoLimit(unknownDeploy)}"
 

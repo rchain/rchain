@@ -188,14 +188,14 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     ).filter(_.nonEmpty).flatten
 
     def split(id: Int): Blake2b512Random =
-      if (terms.size == 1) rand
-      else if (terms.size > 256) rand.splitShort(id.toShort)
+      if (terms.sizeIs == 1) rand
+      else if (terms.sizeIs > 256) rand.splitShort(id.toShort)
       else rand.splitByte(id.toByte)
 
     // Term split size is limited to half of Int16 because other half is for injecting
     // things to system deploys through NormalizerEnv
     val termSplitLimit = Short.MaxValue
-    if (terms.size > termSplitLimit)
+    if (terms.sizeIs > termSplitLimit.toInt)
       ReduceError(
         s"The number of terms in the Par is ${terms.size}, which exceeds the limit of ${termSplitLimit}."
       ).raiseError[M, Unit]
@@ -372,6 +372,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
                         ).map(_.asRight[(Par, Seq[MatchCase])])
                     }
             } yield res
+
         }
       }
       (target, cases).tailRecM(firstMatchM)
@@ -721,7 +722,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           )
           // TODO consider replacing while loop with tailrec recursion
           def interpolate(string: String, keyValuePairs: List[(String, String)]): String = {
-            val result  = StringBuilder.newBuilder
+            val result  = new StringBuilder()
             var current = string
             while (current.nonEmpty) {
               keyValuePairs.find {
@@ -1022,7 +1023,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       if (args.nonEmpty)
         MethodArgumentNumberMismatch("hexToBytes", 0, args.length).raiseError[M, Par]
       else {
-        p.singleExpr() match {
+        p.singleExpr match {
           case Some(Expr(GString(encoded))) =>
             for {
               _ <- charge[M](hexToBytesCost(encoded))
@@ -1050,7 +1051,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       if (args.nonEmpty)
         MethodArgumentNumberMismatch("bytesToHex", 0, args.length).raiseError[M, Par]
       else {
-        p.singleExpr() match {
+        p.singleExpr match {
           case Some(Expr(GByteArray(bytes))) =>
             for {
               _ <- charge[M](bytesToHexCost(bytes.toByteArray))
@@ -1078,7 +1079,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       if (args.nonEmpty)
         MethodArgumentNumberMismatch("toUtf8Bytes", 0, args.length).raiseError[M, Par]
       else {
-        p.singleExpr() match {
+        p.singleExpr match {
           case Some(Expr(GString(utf8string))) =>
             charge[M](hexToBytesCost(utf8string)) >>
               (GByteArray(ByteString.copyFrom(utf8string.getBytes("UTF-8"))): Par).pure[M]

@@ -41,7 +41,8 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         Seq[Par],
         Row[BindPattern, ListParWithRandom, TaggedContinuation]
     )
-  ] = mapDataEntries(elements.mapValues { case (data, rand) => DataMapEntry(data, rand) })
+  ] =
+    mapDataEntries(elements.view.mapValues { case (data, rand) => DataMapEntry(data, rand) }.toMap)
 
   private[this] def mapDataEntries(elements: Map[Par, DataMapEntry]): Iterable[
     (
@@ -65,7 +66,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
             ),
             List.empty
           )
-    }.toIterable
+    }.toSeq
 
   private[this] def checkContinuation(
       result: Map[
@@ -175,7 +176,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   it should "throw an error if names are used against their polarity" in {
@@ -232,7 +233,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GInt(7L), GInt(8L), GInt(9L)), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   it should "verify that Bundle is writeable before sending on Bundle " in {
@@ -255,7 +256,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GInt(7L)), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
@@ -366,7 +367,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
       )
     )
 
-    sendFirstResult.toIterable should contain theSameElementsAs expectedResult
+    sendFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
 
     val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
@@ -379,7 +380,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
 
-    receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
+    receiveFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of Send | Receive with peek" should "meet in the tuplespace and proceed." in {
@@ -423,7 +424,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         } yield res
     }
 
-    sendFirstResult.toIterable should contain theSameElementsAs expectedResult
+    sendFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
 
     val receiveFirstResult = fixture {
       case (space, reducer) =>
@@ -435,7 +436,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         } yield res
     }
 
-    receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
+    receiveFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of Send | Receive" should "when whole list is bound to list remainder, meet in the tuplespace and proceed. (RHOL-422)" in {
@@ -475,7 +476,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GString("Success")), mergeRand))
       )
     )
-    sendFirstResult.toIterable should contain theSameElementsAs expectedResult
+    sendFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
 
     val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
@@ -488,7 +489,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
 
-    receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
+    receiveFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
@@ -534,7 +535,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GString("Success")), mergeRand))
       )
     )
-    sendFirstResult.toIterable should contain theSameElementsAs expectedResult
+    sendFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
 
     val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
@@ -546,7 +547,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         } yield res
         Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
-    receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
+    receiveFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of Send of Receive | Receive" should "meet in the tuplespace and proceed." in {
@@ -673,7 +674,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GPrivateBuilder("one"), GPrivateBuilder("zero")), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of Send | Send | Receive join" should "meet in the tuplespace and proceed." in {
@@ -721,7 +722,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GString("Success")), mergeRand))
       )
     )
-    sendFirstResult.toIterable should contain theSameElementsAs expectedResult
+    sendFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
 
     val receiveFirstResult = withTestSpace {
       case TestFixture(space, reducer) =>
@@ -735,7 +736,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         Await.result(inspectTaskReceiveFirst.unsafeToFuture(), 3.seconds)
     }
 
-    receiveFirstResult.toIterable should contain theSameElementsAs expectedResult
+    receiveFirstResult.toSeq should contain theSameElementsAs expectedResult.toSeq
 
     val interleavedResult = withTestSpace {
       case TestFixture(space, reducer) =>
@@ -749,7 +750,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         Await.result(inspectTaskInterleaved.unsafeToFuture(), 3.seconds)
     }
 
-    interleavedResult.toIterable should contain theSameElementsAs expectedResult
+    interleavedResult.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of Send with remainder receive" should "capture the remainder." in {
@@ -781,7 +782,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(EList(List(GInt(7L), GInt(8L), GInt(9L)))), mergeRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of nth method" should "pick out the nth item from a list" in {
@@ -826,7 +827,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GString("Success")), splitRand))
       )
     )
-    indirectResult.toIterable should contain theSameElementsAs expectedIndirectResult
+    indirectResult.toSeq should contain theSameElementsAs expectedIndirectResult.toSeq
   }
 
   "eval of nth method" should "pick out the nth item from a ByteArray" in {
@@ -856,7 +857,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
   "eval of New" should "use deterministic names and provide urn-based resources" in {
     val splitRand   = rand.splitByte(42)
     val resultRand  = rand.splitByte(42)
-    val chosenName  = resultRand.next
+    val chosenName  = resultRand.next()
     val result0Rand = resultRand.splitByte(0)
     val result1Rand = resultRand.splitByte(1)
     val newProc: New =
@@ -874,10 +875,10 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
 
     val result = withTestSpace {
       case TestFixture(space, _) =>
-        implicit val cost          = CostAccounting.emptyCost[IO].unsafeRunSync
+        implicit val cost          = CostAccounting.emptyCost[IO].unsafeRunSync()
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer                = RholangOnlyDispatcher(space, Map("rho:test:foo" -> byteName(42)))._2
-        cost.set(Cost.UNSAFE_MAX).unsafeRunSync
+        cost.set(Cost.UNSAFE_MAX).unsafeRunSync()
         implicit val env = Env[Par]()
         val nthTask      = reducer.eval(newProc)(env, splitRand)
         val inspectTask = for {
@@ -952,7 +953,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         )
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of a method" should "substitute target before evaluating" in {
@@ -996,7 +997,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(Expr(GByteArray(serializedProcess))), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   it should "substitute before serialization" in {
@@ -1023,7 +1024,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(Expr(GByteArray(serializedProcess))), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   it should "return an error when `toByteArray` is called with arguments" in {
@@ -1069,7 +1070,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of bytesToHex" should "transform byte array to hex string (not the rholang term)" in {
@@ -1094,7 +1095,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(Expr(GString(base16Repr))), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
@@ -1118,7 +1119,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))), splitRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   it should "return an error when `toUtf8Bytes` is called with arguments" in {
@@ -1201,7 +1202,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GString("true")), mergeRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   it should "be substituted before being used in a match." in {
@@ -1234,7 +1235,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GString("true")), splitRandResult))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   it should "reference a variable that comes from a match in tuplespace" in {
@@ -1280,7 +1281,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
         channel -> ((Seq(GString("true")), mergeRand))
       )
     )
-    result.toIterable should contain theSameElementsAs expectedResult
+    result.toSeq should contain theSameElementsAs expectedResult.toSeq
   }
 
   "1 matches 1" should "return true" in {
@@ -2298,7 +2299,7 @@ class ReduceSpec extends AnyFlatSpec with Matchers with AppendedClues with Persi
           reducer.evalExpr(input).attempt
       }
 
-    task.unsafeRunSync
+    task.unsafeRunSync()
   }
 
   /**

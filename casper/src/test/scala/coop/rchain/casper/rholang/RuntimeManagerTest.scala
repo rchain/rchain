@@ -358,10 +358,10 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                                            blockData,
                                            withCostAccounting = true
                                          )
-        Right(replayStateHash0) = replayError0OrReplayStateHash0
-        _                       = assert(playStateHash0 == replayStateHash0)
-        bonds1                  <- runtimeManager.computeBonds(playStateHash0)
-        _                       = assert(bonds0 == bonds1)
+        replayStateHash0 = replayError0OrReplayStateHash0.toOption.get
+        _                = assert(playStateHash0 == replayStateHash0)
+        bonds1           <- runtimeManager.computeBonds(playStateHash0)
+        _                = assert(bonds0 == bonds1)
         rand2 = BlockRandomSeed.randomGenerator(
           genesis.shardId,
           genesisBlockNum,
@@ -385,10 +385,10 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                                            blockData,
                                            withCostAccounting = true
                                          )
-        Right(replayStateHash1) = replayError1OrReplayStateHash1
-        _                       = assert(playStateHash1 == replayStateHash1)
-        bonds3                  <- runtimeManager.computeBonds(playStateHash1)
-        _                       = assert(bonds2 == bonds3)
+        replayStateHash1 = replayError1OrReplayStateHash1.toOption.get
+        _                = assert(playStateHash1 == replayStateHash1)
+        bonds3           <- runtimeManager.computeBonds(playStateHash1)
+        _                = assert(bonds2 == bonds3)
       } yield ()
     }
   }
@@ -455,7 +455,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
         result1 <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy1) }
 
         _ = result1.size should be(1)
-        _ = result1.head should be(ParBuilderUtil.mkTerm(purseValue).right.get)
+        _ = result1.head should be(ParBuilderUtil.mkTerm(purseValue).toOption.get)
       } yield ()
     }
   }
@@ -476,7 +476,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy) }
             } yield res
         )
-        .unsafeRunSync
+        .unsafeRunSync()
     val noResults =
       runtimeManagerResource
         .use(
@@ -486,12 +486,12 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deployNoRes) }
             } yield res
         )
-        .unsafeRunSync
+        .unsafeRunSync()
 
     noResults.isEmpty should be(true)
 
     manyResults.size should be(n)
-    (1 to n).forall(i => manyResults.contains(ParBuilderUtil.mkTerm(i.toString).right.get)) should be(
+    (1 to n).forall(i => manyResults.contains(ParBuilderUtil.mkTerm(i.toString).toOption.get)) should be(
       true
     )
   }
@@ -509,10 +509,12 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             } yield res
         )
 
-    task.handleErrorWith {
-      case _: BugFoundError => true.pure[IO]
-      case _                => false.pure[IO]
-    }.unsafeRunSync shouldBe true
+    task.attempt
+      .map {
+        case Left(_: BugFoundError) => true
+        case _                      => false
+      }
+      .unsafeRunSync() shouldBe true
   }
 
   "emptyStateHash" should "not remember previous hot store state" in effectTest {
@@ -850,7 +852,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
                               blockData,
                               withCostAccounting = true
                             )
-                 } yield (stateHash, result.right.get)
+                 } yield (stateHash, result.toOption.get)
                }
       (playHash, replayHash) = result
       _                      = hex(playHash) shouldBe hex(replayHash)

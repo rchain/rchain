@@ -125,7 +125,7 @@ object InterpreterUtil {
         .fromBlock(block)
         .copy(
           validated = true,
-          validationFailed = result.isLeft || !result.right.get,
+          validationFailed = result.isLeft || !result.toOption.get,
           fringe = preState.fringe,
           fringeStateHash = preState.fringeState.bytes.toArray.toByteString
         )

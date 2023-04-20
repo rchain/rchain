@@ -214,7 +214,7 @@ class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Ma
   private def checkSuccess(rho: String)(task: => IO[_]): Unit =
     task.attempt
       .timeout(maxDuration)
-      .unsafeRunSync
+      .unsafeRunSync()
       .swap
       .foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:

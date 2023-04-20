@@ -137,7 +137,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
         leafItemOpt <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
         err         <- impl.update(leafItemOpt.get, wrongKVPair.rKey, wrongKVPair.rValue).attempt
 
-        ex = err.left.get
+        ex = err.swap.toOption.get
         _  = ex shouldBe a[AssertionError]
         _  = ex.getMessage shouldBe referenceErrorMessage
       } yield ()
@@ -151,7 +151,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
       for {
         err <- impl.update(initialItem, wrongKVPair.rKey, wrongKVPair.rValue).attempt
 
-        ex = err.left.get
+        ex = err.swap.toOption.get
         _  = ex shouldBe a[AssertionError]
         _  = ex.getMessage shouldBe referenceErrorMessage
       } yield ()
@@ -333,7 +333,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
         _    = impl.clearWriteCache()
 
         err                   <- impl.loadNode(hash).attempt
-        ex                    = err.left.get
+        ex                    = err.swap.toOption.get
         _                     = ex shouldBe a[AssertionError]
         referenceErrorMessage = s"assertion failed: Missing node in database. ptr=${hash.bytes.toHex}."
         _                     = ex.getMessage shouldBe referenceErrorMessage
@@ -392,7 +392,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
       _   = impl.saveNode(emptyNode)
       err <- impl.commit.attempt
 
-      ex = err.left.get
+      ex = err.swap.toOption.get
       _  = ex shouldBe a[RuntimeException]
       _  = ex.getMessage shouldBe referenceErrorMessage
     } yield ()
@@ -520,7 +520,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
                 exportSettings
               ).attempt
 
-        ex = err.left.get
+        ex = err.swap.toOption.get
         _  = ex shouldBe a[RuntimeException]
         _  = ex.getMessage shouldBe "Export error: invalid initial conditions (skipSize, takeSize)==(0,0)."
       } yield ()
@@ -803,7 +803,7 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
       ) => IO[Unit]
   ): Unit = {
 
-    val store         = InMemoryKeyValueStore[IO]
+    val store         = InMemoryKeyValueStore[IO]()
     val typedStore    = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
     val radixTreeImpl = new RadixTreeImpl[IO](typedStore)
     f(radixTreeImpl, store).unsafeRunTimed(20.seconds)

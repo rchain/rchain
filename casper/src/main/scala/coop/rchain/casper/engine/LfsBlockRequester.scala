@@ -70,8 +70,9 @@ object LfsBlockRequester {
               checkForRequest && latest(key)
             }
         }
+        .view
         .mapValues(_ => Requested)
-      this.copy(d ++ newRequests) -> newRequests.keySet
+      this.copy(d ++ newRequests) -> newRequests.keys.toSet
     }
 
     // Confirm key is Received if it was Requested.

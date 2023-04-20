@@ -52,7 +52,7 @@ class MultiLockTest extends AnyFlatSpec with Matchers {
       _  <- f4.join
       _  <- f5.join
       _  <- f6.join
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync()
 
     m.toList should contain theSameElementsAs (Map("d" -> 2, "b" -> 1, "c" -> 4, "a" -> 5).toList)
 
@@ -68,7 +68,7 @@ class MultiLockTest extends AnyFlatSpec with Matchers {
             tested.acquire(Seq("a", "c")) { throw new Exception() }
           }.attempt
       _ <- acquire(m)(Seq("a", "c"))
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync()
 
     m.toList should contain theSameElementsAs (Map("a" -> 2, "b" -> 1, "c" -> 1).toList)
   }
@@ -79,7 +79,7 @@ class MultiLockTest extends AnyFlatSpec with Matchers {
 
     (for {
       _ <- acquire(m)(Seq("a", "a"))
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync()
 
     m.toList should contain theSameElementsAs (Map("a" -> 2).toList)
   }
@@ -112,7 +112,7 @@ class MultiLockTest extends AnyFlatSpec with Matchers {
       _ <- acquire(List("c", "a"))
       _ <- acquire(List("a", "c"))
       _ <- acquire(List("a", "d"))
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync()
 
     m.toList should contain theSameElementsAs Map("d" -> 2, "b" -> 1, "c" -> 4, "a" -> 5).toList
 

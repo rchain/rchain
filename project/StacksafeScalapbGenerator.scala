@@ -152,7 +152,7 @@ class StacksafeMessagePrinter(
 
   // Generated as member method
   private def generateMergeM(message: Descriptor)(printer: FunctionalPrinter): FunctionalPrinter = {
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
     val requiredFieldMap: Map[FieldDescriptor, Int] =
       message.fields.filter(_.isRequired).zipWithIndex.toMap

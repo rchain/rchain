@@ -48,7 +48,7 @@ class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with Trip
       maybeResultWithCost <- runFirst(spatialMatch[F, Par, Par](target, pattern))
       result              = maybeResultWithCost.map(_._1)
       _                   = assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
-    } yield (assert(result === expectedCaptures))).unsafeRunSync
+    } yield (assert(result === expectedCaptures))).unsafeRunSync()
   }
 
   private def explainMatch(

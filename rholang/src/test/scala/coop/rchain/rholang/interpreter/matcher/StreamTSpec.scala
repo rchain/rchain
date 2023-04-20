@@ -37,7 +37,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   }
 
   it must "not trigger spurious evaluation of underlying stream for a lazy monad" in {
-    val stream: Stream[Int] = Stream.cons(1, ???)
+    val stream: LazyList[Int] = LazyList.cons(1, ???)
 
     var step2: Eval[Step[Eval, Int]] = null
 
@@ -63,11 +63,11 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   it must "be stacksafe for a stacksafe F when calling StreamT.run[F]" in {
     val huge = hugeStream[Eval](maxDepth - 1, StreamT.pure(maxDepth))
 
-    assert(StreamT.run(huge).value == Stream.range(1, maxDepth + 1))
+    assert(StreamT.run(huge).value == LazyList.range(1, maxDepth + 1))
   }
 
   it must "be stacksafe for a stacksafe F when calling StreamT.fromStream[F]" in {
-    val reference = Stream.range(0, maxDepth)
+    val reference = LazyList.range(0, maxDepth)
 
     val huge = StreamT.fromStream(Eval.now(reference))
 
@@ -85,14 +85,14 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
       coop.rchain.rholang.interpreter.matcher.StreamT.streamTMonad[Eval]
     val huge = hugeFlatMap[StreamT[Eval, *]](maxDepth)
 
-    assert(StreamT.run(huge).value == Stream(0))
+    assert(StreamT.run(huge).value == LazyList(0))
   }
 
   it must "be stacksafe for a stacksafe F when calling MonoidK[StreamT[F, *]].combineK" in {
     type StreamTEval[A] = StreamT[Eval, A]
 
     val huge: StreamTEval[Int] = hugeStream(maxDepth - 1, StreamT.pure(maxDepth))
-    val reference              = Stream.range(1, maxDepth + 1)
+    val reference              = LazyList.range(1, maxDepth + 1)
 
     val combined = huge.combineK(huge)
 
@@ -102,7 +102,7 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   it must "be stacksafe and lazy for a stacksafe F when calling dropTail" in {
     type StreamTEval[A] = StreamT[Eval, A]
 
-    val reference                  = Stream(1)
+    val reference                  = LazyList(1)
     val head: StreamTEval[Int]     = StreamT.fromStream(Eval.now(reference))
     val throwing: StreamTEval[Int] = StreamT.liftF[Eval, Int](Sync[Eval].delay(???))
     val combined                   = head.combineK(throwing)
@@ -139,18 +139,18 @@ class StreamTLawsSpec
           s <- Arbitrary.arbitrary[Effect[A]]
         } yield StreamT.liftF(s),
         for {
-          s <- Arbitrary.arbitrary[Effect[Stream[A]]]
+          s <- Arbitrary.arbitrary[Effect[LazyList[A]]]
         } yield StreamT.fromStream(s)
       )
     )
 
-  implicit val arbFunctionKStream: Arbitrary[Stream ~> Stream] =
+  implicit val arbFunctionKStream: Arbitrary[LazyList ~> LazyList] =
     Arbitrary(
       Gen.oneOf(
-        new (Stream ~> Stream) {
-          def apply[A](fa: Stream[A]): Stream[A] = Stream.Empty
+        new (LazyList ~> LazyList) {
+          def apply[A](fa: LazyList[A]): LazyList[A] = LazyList.empty[A]
         },
-        FunctionK.id[Stream]
+        FunctionK.id[LazyList]
       )
     )
 
@@ -162,9 +162,10 @@ class StreamTLawsSpec
     for {
       (testName, prop) <- props
       _                = info(testName)
-      _                = prop.check
+      _                = prop.check()
     } yield ()
 
+  import StreamT.streamTSync
   test("StreamT.MonadLaws") { checkProps(MonadTests[StreamTEffect].monad[Int, Int, String].props) }
 
   test("StreamT.AlternativeLaws") {
@@ -176,7 +177,7 @@ class StreamTLawsSpec
   }
   test("StreamT.MonadLayerControlLaws") {
     checkProps(
-      MonadLayerControlTests[StreamTEffect, Effect, Stream]
+      MonadLayerControlTests[StreamTEffect, Effect, LazyList]
         .monadLayerControl[Int, String]
         .props
     )

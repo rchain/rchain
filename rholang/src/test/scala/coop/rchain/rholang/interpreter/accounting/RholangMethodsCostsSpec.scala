@@ -52,7 +52,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
+          implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
           implicit val env  = Env[Par]()
           val method        = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -86,7 +86,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
+          implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
           implicit val env  = Env[Par]()
           val method        = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -109,7 +109,7 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
+    implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
     implicit val env  = Env[Par]()
     withReducer { reducer =>
       for {
@@ -1008,7 +1008,7 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(expr: Expr, expectedCost: Cost): Assertion = {
-    implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync
+    implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
     implicit val env  = Env[Par]()
     withReducer[Assertion] { reducer =>
       for {
@@ -1030,7 +1030,7 @@ class RholangMethodsCostsSpec
       _   <- cost.set(Cost.UNSAFE_MAX)
       res <- f(RholangOnlyDispatcher(space)._2)
     } yield res
-    test.unsafeRunSync
+    test.unsafeRunSync()
   }
 
   private var dbDir: Path              = null
@@ -1040,8 +1040,8 @@ class RholangMethodsCostsSpec
   implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
   implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
   implicit val ms: Metrics.Source       = Metrics.BaseSource
-  implicit val kvm                      = InMemoryStoreManager[IO]
-  val rSpaceStore                       = kvm.rSpaceStores.unsafeRunSync
+  implicit val kvm                      = InMemoryStoreManager[IO]()
+  val rSpaceStore                       = kvm.rSpaceStores.unsafeRunSync()
 
   protected override def beforeAll(): Unit = {
     import coop.rchain.rholang.interpreter.storage._
@@ -1049,7 +1049,7 @@ class RholangMethodsCostsSpec
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     space = RSpace
       .create[IO, Par, BindPattern, ListParWithRandom, TaggedContinuation](rSpaceStore)
-      .unsafeRunSync
+      .unsafeRunSync()
   }
 
   protected override def afterAll(): Unit = {

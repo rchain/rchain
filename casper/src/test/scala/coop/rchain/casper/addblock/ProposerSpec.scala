@@ -48,7 +48,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
 
   /** implicits for creating Proposer instance  */
   implicit val logEff: Log[IO]   = Log.log[IO]
-  implicit val spanEff: Span[IO] = NoopSpan[IO]
+  implicit val spanEff: Span[IO] = NoopSpan[IO]()
   implicit val metrics           = new MetricsNOP[IO]()
 
   it should "reject to propose if proposer is not active validator" in effectTest {
@@ -84,7 +84,7 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
       (for {
         d <- Deferred[IO, ProposerResult]
         _ <- p.propose(false, d)
-      } yield ()).unsafeRunSync
+      } yield ()).unsafeRunSync()
     }
   }
 

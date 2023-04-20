@@ -33,7 +33,7 @@ class Ed25519Test extends AnyFunSpec with Matchers with BeforeAndAfterEach with 
       )
       val sec =
         Base16.unsafeDecode("b18e1d0045995ec3d010c387ccfeb984d783af8fbb0f40fa7db126d889f6dadd")
-      Ed25519.sign(data, sec).deep shouldBe sig.deep
+      Ed25519.sign(data, sec).toIndexedSeq shouldBe sig.toIndexedSeq
     }
   }
 }

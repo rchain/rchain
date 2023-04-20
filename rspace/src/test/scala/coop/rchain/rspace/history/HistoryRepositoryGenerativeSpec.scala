@@ -29,7 +29,7 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-  val kvm = InMemoryStoreManager[IO]
+  val kvm = InMemoryStoreManager[IO]()
 
   override def repo: IO[HistoryRepository[IO, String, Pattern, String, StringsCaptor]] = {
     implicit val log: Log[IO]   = new Log.NOPLog[IO]
@@ -72,7 +72,7 @@ class InMemHistoryRepositoryGenerativeSpec
     implicit val log: Log[IO]   = new Log.NOPLog[IO]
     implicit val span: Span[IO] = new NoopSpan[IO]
     for {
-      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[IO])
+      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[IO]())
       r = HistoryRepositoryImpl[IO, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,

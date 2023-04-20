@@ -49,7 +49,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
         _ = assert(balance.get == genesisInitialBalance)
       } yield ()
     }
-    t.unsafeRunSync
+    t.unsafeRunSync()
   }
 
   "Get all vault" should "return all vault balance" in {
@@ -84,7 +84,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
           )
       } yield ()
     }
-    t.unsafeRunSync
+    t.unsafeRunSync()
   }
 
 }

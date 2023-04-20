@@ -60,7 +60,7 @@ final case class TransationOptions(arguments: Seq[String]) extends ScallopConf(a
 object TransactionBalanceMain {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
-    val options    = TransationOptions(args)
+    val options    = TransationOptions(args.toIndexedSeq)
     val dataDir    = options.dataDir()
     val blockHash  = options.blockHash()
     val walletPath = options.walletPath()
@@ -110,6 +110,6 @@ object TransactionBalanceMain {
     } yield ()
 
     import cats.effect.unsafe.implicits.global
-    task.unsafeRunSync
+    task.unsafeRunSync()
   }
 }

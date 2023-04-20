@@ -141,10 +141,14 @@ object StreamTSpec {
 
   def unsafeMErr[F[_]: Monad]: MonadError[F, Throwable] =
     new MonadError[F, Throwable] {
-      def pure[A](x: A): F[A]                                 = Monad[F].pure(x)
-      def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]         = Monad[F].flatMap(fa)(f)
+      def pure[A](x: A): F[A] = Monad[F].pure(x)
+
+      def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B] = Monad[F].flatMap(fa)(f)
+
       def tailRecM[A, B](a: A)(f: A => F[Either[A, B]]): F[B] = Monad[F].tailRecM(a)(f)
-      def raiseError[A](e: Throwable): F[A]                   = throw e
+
+      def raiseError[A](e: Throwable): F[A] = throw e
+
       def handleErrorWith[A](fa: F[A])(f: Throwable => F[A]): F[A] = Try(fa) match {
         case Success(x) => x
         case Failure(e) => f(e)

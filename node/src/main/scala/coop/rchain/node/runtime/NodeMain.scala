@@ -19,7 +19,7 @@ import org.slf4j.bridge.SLF4JBridgeHandler
 
 import java.io.File
 import java.nio.file.Path
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.tools.jline.console.ConsoleReader
 import scala.tools.jline.console.completer.StringsCompleter
 

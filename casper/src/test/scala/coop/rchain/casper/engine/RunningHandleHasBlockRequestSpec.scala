@@ -18,6 +18,8 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 import coop.rchain.catscontrib.effect.implicits.sEval
 
+import scala.collection.immutable.ArraySeq
+
 class RunningHandleHasBlockRequestSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   val hash = ByteString.copyFrom("hash", "UTF-8")
@@ -29,10 +31,10 @@ class RunningHandleHasBlockRequestSpec extends AnyFunSpec with BeforeAndAfterEac
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
 
   def toHasBlock(protocol: Protocol): HasBlock =
-    HasBlock.from(convert[PacketTypeTag.HasBlock.type](toPacket(protocol).right.get).get)
+    HasBlock.from(convert[PacketTypeTag.HasBlock.type](toPacket(protocol).toOption.get).get)
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 

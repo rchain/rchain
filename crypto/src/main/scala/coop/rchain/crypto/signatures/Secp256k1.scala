@@ -49,7 +49,7 @@ object Secp256k1 extends SignaturesAlg {
   }
 
   def parsePemFile[F[_]: Sync](path: Path, password: String): F[PrivateKey] = {
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
 
     def handleWith[A](f: => A, message: String): F[A] =
       Sync[F].delay(f).recoverWith { case t => Sync[F].raiseError(new Exception(message, t)) }

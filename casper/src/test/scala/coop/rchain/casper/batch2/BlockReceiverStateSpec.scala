@@ -91,9 +91,9 @@ class BlockReceiverStateSpec extends AnyFlatSpec with Matchers {
 
     // Finished storing of A2 with unseen parent A1
     val (st2, a2UnseenParents) = st1.endStored("A2", List("A1" -> true))
-    st2.blocksSt shouldBe Map("A2" -> Set("A1"))
-    st2.receiveSt should contain allOf ("A2" -> EndStoreBlock, "A1" -> Requested)
-    st2.childRelations shouldBe Map("A1" -> Set("A2"))
+    st2.blocksSt shouldBe Map("A2"          -> Set("A1"))
+    st2.receiveSt should contain.allOf("A2" -> EndStoreBlock, "A1" -> Requested)
+    st2.childRelations shouldBe Map("A1"    -> Set("A2"))
     a2UnseenParents shouldBe Set("A1")
 
     // Started storing of A1

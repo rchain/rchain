@@ -18,13 +18,15 @@ import org.scalatest.matchers.should.Matchers
 import cats.effect.Ref
 import cats.effect.unsafe.implicits.global
 
+import scala.collection.compat.immutable.ArraySeq
+
 class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
 
   val hash                 = ByteString.copyFrom("newHash", "utf-8")
   val local: PeerNode      = peerNode("src", 40400)
@@ -46,24 +48,24 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
   override def beforeEach(): Unit = {
     transportLayer.reset()
     transportLayer.setResponses(_ => p => Right(()))
-    currentRequests.set(Map.empty).unsafeRunSync
+    currentRequests.set(Map.empty).unsafeRunSync()
   }
 
   describe("BlockRetriever admitting hash") {
     describe("when hash is unknown") {
 
       it("should add record for hash") {
-        blockRetriever.admitHash(hash, peer = None, admitHashReason = testReason).unsafeRunSync
-        val requests = currentRequests.get.unsafeRunSync
+        blockRetriever.admitHash(hash, peer = None, admitHashReason = testReason).unsafeRunSync()
+        val requests = currentRequests.get.unsafeRunSync()
         requests.contains(hash) should be(true)
       }
 
       describe("when source peer is unknown") {
         it("should broadcast HasBlockRequest and only HasBlockRequest") {
-          blockRetriever.admitHash(hash, peer = None, admitHashReason = testReason).unsafeRunSync
+          blockRetriever.admitHash(hash, peer = None, admitHashReason = testReason).unsafeRunSync()
           val (_, msg) = transportLayer.getRequest(0)
           val hbr = HasBlockRequest.from(
-            convert[PacketTypeTag.HasBlockRequest.type](toPacket(msg).right.get).get
+            convert[PacketTypeTag.HasBlockRequest.type](toPacket(msg).toOption.get).get
           )
           (hbr.hash equals hash) should be(true)
           transportLayer.requests.size should be(1)
@@ -72,10 +74,10 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
 
       describe("when source peer is known") {
         it("should send BlockRequest and only BlockRequest") {
-          blockRetriever.admitHash(hash, Some(peer), admitHashReason = testReason).unsafeRunSync
+          blockRetriever.admitHash(hash, Some(peer), admitHashReason = testReason).unsafeRunSync()
           val (recipient, msg) = transportLayer.getRequest(0)
           val br = BlockRequest.from(
-            convert[PacketTypeTag.BlockRequest.type](toPacket(msg).right.get).get
+            convert[PacketTypeTag.BlockRequest.type](toPacket(msg).toOption.get).get
           )
           (br.hash equals hash) should be(true)
           (recipient equals peer) should be(true)
@@ -91,10 +93,10 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
         it("should ignore hash") {
           blockRetriever
             .admitHash(hash, peer = None, admitHashReason = testReason)
-            .unsafeRunSync
+            .unsafeRunSync()
           val status = blockRetriever
             .admitHash(hash, peer = None, admitHashReason = testReason)
-            .unsafeRunSync
+            .unsafeRunSync()
           status.status equals BlockRetriever.Ignore should be(true)
         }
       }
@@ -103,10 +105,10 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
         it("should request block from peer if sources list was empty") {
           blockRetriever
             .admitHash(hash, peer = Some(peer), admitHashReason = testReason)
-            .unsafeRunSync
+            .unsafeRunSync()
           val (recipient, msg) = transportLayer.getRequest(0)
           val br = BlockRequest.from(
-            convert[PacketTypeTag.BlockRequest.type](toPacket(msg).right.get).get
+            convert[PacketTypeTag.BlockRequest.type](toPacket(msg).toOption.get).get
           )
           (br.hash equals hash) should be(true)
           (recipient equals peer) should be(true)
@@ -116,21 +118,21 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
         it("should ignore hash if peer is already in sources list") {
           blockRetriever
             .admitHash(hash, peer = Some(peer), admitHashReason = testReason)
-            .unsafeRunSync
+            .unsafeRunSync()
           val status = blockRetriever
             .admitHash(hash, peer = Some(peer), admitHashReason = testReason)
-            .unsafeRunSync
+            .unsafeRunSync()
           status.status equals BlockRetriever.Ignore should be(true)
         }
 
         it("should add peer to sources list if it is absent") {
           blockRetriever
             .admitHash(hash, peer = Some(peer), admitHashReason = testReason)
-            .unsafeRunSync
+            .unsafeRunSync()
           blockRetriever
             .admitHash(hash, peer = Some(secondPeer), admitHashReason = testReason)
-            .unsafeRunSync
-          val requests = currentRequests.get.unsafeRunSync
+            .unsafeRunSync()
+          val requests = currentRequests.get.unsafeRunSync()
           val peerSize = requests(hash).waitingList.size
           peerSize should be(2)
         }
@@ -138,10 +140,10 @@ class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matcher
         it("should NOT request for block from peer if sources list was not empty") {
           blockRetriever
             .admitHash(hash, peer = Some(peer), admitHashReason = testReason)
-            .unsafeRunSync
+            .unsafeRunSync()
           blockRetriever
             .admitHash(hash, peer = Some(secondPeer), admitHashReason = testReason)
-            .unsafeRunSync
+            .unsafeRunSync()
           transportLayer.requests.size should be(1)
         }
       }

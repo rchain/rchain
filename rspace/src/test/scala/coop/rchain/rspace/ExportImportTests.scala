@@ -267,7 +267,7 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
     implicit val log: Log[IO]                  = Log.log[IO]
     implicit val metricsF: Metrics[IO]         = new Metrics.MetricsNOP[IO]()
     implicit val spanF: Span[IO]               = NoopSpan[IO]()
-    implicit val kvm: InMemoryStoreManager[IO] = InMemoryStoreManager[IO]
+    implicit val kvm: InMemoryStoreManager[IO] = InMemoryStoreManager[IO]()
 
     (for {
       roots1   <- kvm.store("roots1")
@@ -313,6 +313,6 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       importer2 <- historyRepository2.importer
 
       res <- f(space1, exporter1, importer1, space2, exporter2, importer2)
-    } yield { res }).unsafeRunSync
+    } yield { res }).unsafeRunSync()
   }
 }

@@ -74,7 +74,7 @@ class ValidateTest
       length: Int,
       validatorLength: Int
   ): F[Vector[BlockMessage]] = {
-    val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
+    val validatorRoundRobinCycle = LazyList.continually(0 until validatorLength).flatten
     val validators               = List.fill(validatorLength)(generateValidator())
     (0 until length).toList
       .zip(validatorRoundRobinCycle)
@@ -507,14 +507,14 @@ class ValidateTest
       val blockValidHash = block.copy(blockHash = hash)
 
       // Test valid block hash
-      val hashValid = Validate.blockHash[IO](blockValidHash).unsafeRunSync
+      val hashValid = Validate.blockHash[IO](blockValidHash).unsafeRunSync()
 
       hashValid shouldBe true
 
       val blockInValidHash = block.copy(blockHash = ByteString.copyFromUtf8("123"))
 
       // Test invalid block hash
-      val hashInValid = Validate.blockHash[IO](blockInValidHash).unsafeRunSync
+      val hashInValid = Validate.blockHash[IO](blockInValidHash).unsafeRunSync()
 
       hashInValid shouldBe false
     }
@@ -529,7 +529,7 @@ class ValidateTest
       // Expected one of hard-coded block versions supported by this version of RNode software
       val expectedValid = BlockVersion.Supported.contains(version)
       // Actual validation
-      val actualValid = Validate.version[IO](blockWithVersion).unsafeRunSync
+      val actualValid = Validate.version[IO](blockWithVersion).unsafeRunSync()
 
       actualValid shouldBe expectedValid
     }

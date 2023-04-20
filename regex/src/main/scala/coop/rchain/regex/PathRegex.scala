@@ -81,7 +81,7 @@ private[regex] final case class PathToken(
         case Some(singleValue) if singleValue.size == 1 =>
           val encValue = encode(singleValue.head)
           if (matchRegex.get.pattern.matcher(encValue).matches) {
-            prefix.getOrElse("") + encValue
+            s"${prefix.getOrElse("")}$encValue"
           } else {
             throw new IllegalArgumentException(
               s"Expected $argName to match pattern ${matchRegex.get.pattern}, but got value $encValue"
@@ -93,9 +93,9 @@ private[regex] final case class PathToken(
               yield
                 if (matchRegex.get.pattern.matcher(encValue).matches) {
                   if (idx == 0) {
-                    prefix.getOrElse("") + encValue
+                    s"${prefix.getOrElse("")}$encValue"
                   } else {
-                    delimiter.getOrElse("") + encValue
+                    s"${delimiter.getOrElse("")}$encValue"
                   }
                 } else {
                   throw new IllegalArgumentException(

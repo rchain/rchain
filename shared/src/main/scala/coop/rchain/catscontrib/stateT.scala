@@ -12,5 +12,5 @@ trait StateTMonadTrans[A] extends MonadTrans[StateT[*[_], A, *]] {
 
   def liftM[M[_], B](mb: M[B])(implicit M: Monad[M]): StateT[M, A, B] = StateT.liftF(mb)
 
-  implicit def apply[M[_]: Monad]: Monad[StateT[M, A, *]] = Monad[StateT[M, A, *]]
+  def apply[M[_]: Monad]: Monad[StateT[M, A, *]] = Monad[StateT[M, A, *]]
 }

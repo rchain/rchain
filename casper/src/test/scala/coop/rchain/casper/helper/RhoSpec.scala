@@ -207,7 +207,8 @@ class RhoSpec(
   }
 
   val result =
-    getResults(testObject, extraNonGenesisDeploys, executionTimeout, genesisParameters._3.shardId).unsafeRunSync
+    getResults(testObject, extraNonGenesisDeploys, executionTimeout, genesisParameters._3.shardId)
+      .unsafeRunSync()
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")

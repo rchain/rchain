@@ -19,11 +19,11 @@ trait Fs2StreamMatchers {
   class EmptyMatcher[A](timeout: FiniteDuration) extends Matcher[Stream[IO, A]] {
 
     def apply(left: Stream[IO, A]) = {
-      val res = left.take(1).timeout(timeout).compile.toList.attempt.unsafeRunSync
+      val res = left.take(1).timeout(timeout).compile.toList.attempt.unsafeRunSync()
 
-      val isEmpty = res.isLeft && res.left.get.isInstanceOf[TimeoutException]
+      val isEmpty = res.isLeft && res.swap.toOption.get.isInstanceOf[TimeoutException]
 
-      val onFail    = if (!isEmpty) s"Stream is not empty, emitted: ${res.right.get}" else ""
+      val onFail    = if (!isEmpty) s"Stream is not empty, emitted: ${res.toOption.get}" else ""
       val onSuccess = s"Stream is empty"
 
       MatchResult(isEmpty, onFail, onSuccess)

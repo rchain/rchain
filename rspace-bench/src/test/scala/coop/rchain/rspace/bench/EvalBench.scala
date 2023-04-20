@@ -29,7 +29,7 @@ class EvalBench {
   def reduceMVCEPPST(state: MVCEPPBenchState): Unit = {
     val runIO = createTest(state)
     import state.singleThreadedScheduler
-    runIO.unsafeRunSync
+    runIO.unsafeRunSync()
   }
 
   @Benchmark

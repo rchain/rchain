@@ -33,9 +33,7 @@ class ProcGenTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
       ProcGen.procShrinker
         .shrink(original.value)
         .headOption
-        .map(shrinked => Compiler[Eval].astToADT(shrinked))
-        .getOrElse(true)
-
+        .forall(shrinked => Compiler[Eval].astToADT(shrinked).map(_ => true).value)
     }
   }
 

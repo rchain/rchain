@@ -59,7 +59,7 @@ object Substitute {
 
   def apply[M[_], A](implicit ev: Substitute[M, A]): Substitute[M, A] = ev
 
-  def maybeSubstitute[M[+_]: Sync](
+  def maybeSubstitute[M[_]: Sync](
       term: Var
   )(implicit depth: Int, env: Env[Par]): M[Either[Var, Par]] =
     if (depth != 0) term.asLeft[Par].pure[M]
@@ -163,7 +163,7 @@ object Substitute {
               matches = matches,
               unforgeables = term.unforgeables,
               connectives = Nil,
-              locallyFree = term.locallyFree.until(env.shift),
+              locallyFree = term.locallyFree.rangeUntil(env.shift),
               connectiveUsed = term.connectiveUsed
             )
         } yield par
@@ -181,7 +181,7 @@ object Substitute {
             chan = channelsSub,
             data = parsSub,
             persistent = term.persistent,
-            locallyFree = term.locallyFree.until(env.shift),
+            locallyFree = term.locallyFree.rangeUntil(env.shift),
             connectiveUsed = term.connectiveUsed
           )
         } yield send
@@ -214,7 +214,7 @@ object Substitute {
             persistent = term.persistent,
             peek = term.peek,
             bindCount = term.bindCount,
-            locallyFree = term.locallyFree.until(env.shift),
+            locallyFree = term.locallyFree.rangeUntil(env.shift),
             connectiveUsed = term.connectiveUsed
           )
         } yield rec
@@ -235,7 +235,7 @@ object Substitute {
                 p = newSub,
                 uri = term.uri,
                 injections = term.injections,
-                locallyFree = term.locallyFree.until(env.shift)
+                locallyFree = term.locallyFree.rangeUntil(env.shift)
               )
           )
       override def substitute(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
@@ -257,7 +257,12 @@ object Substitute {
                            subCase <- substitutePar[M].substituteNoSort(_case)(depth + 1, env)
                          } yield MatchCase(subCase, par, freeCount)
                      }
-          mat = Match(targetSub, casesSub, term.locallyFree.until(env.shift), term.connectiveUsed)
+          mat = Match(
+            targetSub,
+            casesSub,
+            term.locallyFree.rangeUntil(env.shift),
+            term.connectiveUsed
+          )
         } yield mat
       override def substitute(term: Match)(implicit depth: Int, env: Env[Par]): M[Match] =
         substituteNoSort(term).flatMap(mat => Sortable.sortMatch(mat)).map(_.term)
@@ -314,13 +319,13 @@ object Substitute {
           case EListBody(EList(ps, locallyFree, connectiveUsed, rem)) =>
             for {
               pss            <- ps.toVector.traverse(s1)
-              newLocallyFree = locallyFree.until(env.shift)
+              newLocallyFree = locallyFree.rangeUntil(env.shift)
             } yield Expr(exprInstance = EListBody(EList(pss, newLocallyFree, connectiveUsed, rem)))
 
           case ETupleBody(ETuple(ps, locallyFree, connectiveUsed)) =>
             for {
               pss            <- ps.toVector.traverse(s1)
-              newLocallyFree = locallyFree.until(env.shift)
+              newLocallyFree = locallyFree.rangeUntil(env.shift)
             } yield Expr(exprInstance = ETupleBody(ETuple(pss, newLocallyFree, connectiveUsed)))
 
           case ESetBody(ParSet(shs, connectiveUsed, locallyFree, remainder)) =>
@@ -331,7 +336,7 @@ object Substitute {
                 ParSet(
                   SortedParHashSet(pss),
                   connectiveUsed,
-                  locallyFree.map(_.until(env.shift)),
+                  locallyFree.map(_.rangeUntil(env.shift)),
                   remainder
                 )
               )
@@ -342,7 +347,7 @@ object Substitute {
               kvps <- spm.sortedList.traverse(_.bimap(s1, s1).bisequence)
             } yield Expr(
               exprInstance = EMapBody(
-                ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
+                ParMap(kvps, connectiveUsed, locallyFree.map(_.rangeUntil(env.shift)), remainder)
               )
             )
           case EMethodBody(EMethod(mtd, target, arguments, locallyFree, connectiveUsed)) =>
@@ -355,7 +360,7 @@ object Substitute {
                   mtd,
                   subTarget,
                   subArguments,
-                  locallyFree.until(env.shift),
+                  locallyFree.rangeUntil(env.shift),
                   connectiveUsed
                 )
               )

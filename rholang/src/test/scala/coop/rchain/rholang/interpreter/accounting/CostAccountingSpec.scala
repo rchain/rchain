@@ -47,7 +47,7 @@ class CostAccountingSpec
     implicit val logF: Log[IO]           = new Log.NOPLog[IO]
     implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
-    implicit val kvm                     = InMemoryStoreManager[IO]
+    implicit val kvm                     = InMemoryStoreManager[IO]()
 
     val resources = for {
       costLog         <- costLog[IO]()
@@ -56,12 +56,14 @@ class CostAccountingSpec
       (runtime, _, _) = spaces
     } yield (runtime, costLog)
 
-    resources.flatMap {
-      case (runtime, costL) =>
-        costL.listen {
-          runtime.evaluate(contract, Cost(initialPhlo))
-        }
-    }.unsafeRunSync
+    resources
+      .flatMap {
+        case (runtime, costL) =>
+          costL.listen {
+            runtime.evaluate(contract, Cost(initialPhlo))
+          }
+      }
+      .unsafeRunSync()
   }
 
   private def createRuntimesWithCostLog[F[_]: Async: Parallel: Log: Metrics: Span](
@@ -100,7 +102,7 @@ class CostAccountingSpec
     implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
     implicit val ms: Metrics.Source      = Metrics.BaseSource
-    implicit val kvm                     = InMemoryStoreManager[IO]
+    implicit val kvm                     = InMemoryStoreManager[IO]()
 
     val evaluaResult = for {
       costLog                     <- costLog[IO]()
@@ -122,7 +124,7 @@ class CostAccountingSpec
       }
     } yield result
 
-    evaluaResult.unsafeRunSync
+    evaluaResult.unsafeRunSync()
   }
 
   // Uses Godel numbering and a https://en.wikipedia.org/wiki/Mixed_radix
@@ -264,7 +266,7 @@ class CostAccountingSpec
     assert(result2._1.cost == result2._2.cost)
 
     for (i <- 1 to 10000) {
-      val long     = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
+      val long     = ((r.nextLong() % 0X144000000L) + 0X144000000L) % 0X144000000L
       val contract = fromLong(long)
       if (contract != "") {
         val result = evaluateAndReplay(Cost(Integer.MAX_VALUE), contract)
@@ -279,14 +281,15 @@ class CostAccountingSpec
     val repetitions = 20
     val first       = block
     // execute in parallel to trigger different interleaves
-    val subsequents = (1 to repetitions).par.map(_ => block).toList
+    val subsequents = (1 to repetitions).map(_ => block).toList
     // check assertions sequentially to avoid "suppressed exceptions" output on assertion failure
     subsequents.foreach { subsequent =>
       val expected = first._1.cost.value
       val actual   = subsequent._1.cost.value
       if (expected != actual) {
-        assert(subsequent._2.map(_ + "\n") == first._2.map(_ + "\n"))
-          .withClue(s"Cost was not repeatable, expected $expected, got $actual.\n")
+        assert(
+          subsequent._2.map(_.toString).map(_ + "\n") == first._2.map(_.toString).map(_ + "\n")
+        ).withClue(s"Cost was not repeatable, expected $expected, got $actual.\n")
       }
     }
   }
@@ -333,7 +336,7 @@ class CostAccountingSpec
   }
 
   private def elementCounts[A](list: Iterable[A]): Set[(A, Int)] =
-    list.groupBy(identity).mapValues(_.size).toSet
+    list.groupBy(identity).view.mapValues(_.size).toSet
 
   it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in {
     forAll(contracts) { (contract: String, expectedTotalCost: Long) =>

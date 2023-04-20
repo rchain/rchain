@@ -68,5 +68,5 @@ final case class RadixHistory[F[_]: Sync: Parallel](
     } yield newHistoryOpt.getOrElse(this)
 
   private def hasNoDuplicates(actions: List[HistoryAction]) =
-    actions.map(_.key).distinct.size == actions.size
+    actions.map(_.key).distinct.sizeIs == actions.size
 }

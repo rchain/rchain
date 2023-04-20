@@ -70,7 +70,7 @@ class BasicBench {
     val space = state.testSpace
     for (i <- 0 to 100) {
       val r2 =
-        space.produce(state.channels(i), state.data(i), false).unsafeRunSync
+        space.produce(state.channels(i), state.data(i), false).unsafeRunSync()
 
       assert(r2.isEmpty)
       bh.consume(r2)

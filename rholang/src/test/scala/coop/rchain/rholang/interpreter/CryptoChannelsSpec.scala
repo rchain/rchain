@@ -109,7 +109,7 @@ class CryptoChannelsSpec
       // 2. hash input array
       // 3. send result on supplied ack channel
       (runtime.inj(send) >>
-        storeContainsTest(ListParWithRandom(Seq(expected), rand))).unsafeRunSync
+        storeContainsTest(ListParWithRandom(Seq(expected), rand))).unsafeRunSync()
       clearStore(ackChannel)
     }
   }
@@ -170,7 +170,7 @@ class CryptoChannelsSpec
         (runtime.inj(send) >>
           storeContainsTest(
             ListParWithRandom(Seq(Expr(GBool(true))), rand)
-          )).unsafeRunSync
+          )).unsafeRunSync()
         clearStore(ackChannel)
       }
   }
@@ -209,30 +209,30 @@ class CryptoChannelsSpec
         )
         (runtime.inj(send) >> storeContainsTest(
           ListParWithRandom(List(Expr(GBool(true))), rand)
-        )).unsafeRunSync
+        )).unsafeRunSync()
         clearStore(ackChannel)
       }
   }
 
   protected override def withFixture(test: OneArgTest): Outcome = {
-    val randomInt                         = scala.util.Random.nextInt
+    val randomInt                         = scala.util.Random.nextInt()
     val dbDir                             = Files.createTempDirectory(s"rchain-storage-test-$randomInt-")
     implicit val logF: Log[IO]            = new Log.NOPLog[IO]
     implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
-    implicit val kvm                      = InMemoryStoreManager[IO]
+    implicit val kvm                      = InMemoryStoreManager[IO]()
 
     val runtime = (for {
       store                       <- kvm.rSpaceStores
       spaces                      <- Resources.createRuntimes[IO](store)
       (runtime, replayRuntime, _) = spaces
       _                           <- runtime.cost.set(Cost.UNSAFE_MAX)
-    } yield runtime).unsafeRunSync
+    } yield runtime).unsafeRunSync()
 
     try {
       test(runtime)
     } finally {
-      kvm.shutdown.unsafeRunSync
+      kvm.shutdown.unsafeRunSync()
       dbDir.recursivelyDelete()
     }
   }

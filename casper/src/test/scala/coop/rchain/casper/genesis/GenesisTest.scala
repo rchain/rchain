@@ -236,10 +236,10 @@ object GenesisTest {
   ): IO[BlockMessage] =
     for {
       vaults <- VaultParser.parse[IO](
-                 maybeVaultsPath.getOrElse(genesisPath + "/wallets.txt")
+                 maybeVaultsPath.getOrElse(genesisPath.toString + "/wallets.txt")
                )
       bonds <- BondsParser.parse[IO](
-                maybeBondsPath.getOrElse(genesisPath + "/bonds.txt"),
+                maybeBondsPath.getOrElse(genesisPath.toString + "/bonds.txt"),
                 autogenShardSize
               )
       // Initial set of validators
@@ -295,5 +295,5 @@ object GenesisTest {
   }
 
   def taskTest[R](f: IO[R]): R =
-    f.unsafeRunSync
+    f.unsafeRunSync()
 }

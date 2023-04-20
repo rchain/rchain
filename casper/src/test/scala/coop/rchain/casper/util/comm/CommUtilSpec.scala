@@ -44,7 +44,7 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           implicit val commUtil        = CommUtil.of[IO]
           // when
-          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync
+          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync()
           // then
           val requested = transport.requests
             .map(_.msg)
@@ -66,7 +66,7 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           implicit val commUtil        = CommUtil.of[IO]
           // when
-          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync
+          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync()
           // then
           log.infos contains (s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
         }
@@ -76,9 +76,9 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           implicit val connectionsCell = initConnectionsCell()
           implicit val commUtil        = CommUtil.of[IO]
           // when
-          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync
+          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync()
           // then
-          requestedBlocks.read.unsafeRunSync.contains(hash) should be(true)
+          requestedBlocks.read.unsafeRunSync().contains(hash) should be(true)
         }
       }
       describe("if given block was already requested") {
@@ -97,7 +97,7 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
           implicit val connectionsCell = initConnectionsCell(connections = peers)
           implicit val commUtil        = CommUtil.of[IO]
           // when
-          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync
+          CommUtil[IO].sendBlockRequest(hash).unsafeRunSync()
           // then
           transport.requests.size shouldBe 0
           log.infos.size shouldBe 0
@@ -129,7 +129,7 @@ class CommUtilSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   private def toHasBlockRequest(protocol: Protocol): HasBlockRequest =
     HasBlockRequest.from(
-      convert[PacketTypeTag.HasBlockRequest.type](toPacket(protocol).right.get).get
+      convert[PacketTypeTag.HasBlockRequest.type](toPacket(protocol).toOption.get).get
     )
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))

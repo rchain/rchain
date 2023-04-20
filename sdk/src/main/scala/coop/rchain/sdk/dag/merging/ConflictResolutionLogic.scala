@@ -233,7 +233,8 @@ object ConflictResolutionLogic {
     )
     val conflictSetCompatible = conflictSet -- enforceRejected
     // conflict map accounting for dependencies
-    val fullConflictsMap = conflictsMap.mapValues(vs => vs ++ withDependencies(vs, dependencyMap))
+    val fullConflictsMap =
+      conflictsMap.view.mapValues(vs => vs ++ withDependencies(vs, dependencyMap)).toMap
     // find rejection combinations possible
     val rejectionOptions = computeRejectionOptions(fullConflictsMap)
     // add to rejection options rejections caused by mergeable channels overflow

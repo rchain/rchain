@@ -86,7 +86,7 @@ object BondsParser {
     // Generate private/public key pairs
     val keys         = Vector.fill(autogenShardSize)(Secp256k1.newKeyPair)
     val (_, pubKeys) = keys.unzip
-    val bonds        = pubKeys.iterator.zipWithIndex.toMap.mapValues(_.toLong + 1L)
+    val bonds        = pubKeys.iterator.zipWithIndex.toMap.view.mapValues(_.toLong + 1L).toMap
 
     def toFile(filePath: Path): Pipe[F, String, Unit] =
       _.through(text.utf8.encode).through(Files[F].writeAll(filePath))

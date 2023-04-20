@@ -29,7 +29,7 @@ object COMM {
       dataCandidates: Seq[ConsumeCandidate[C, A]],
       consumeRef: Consume,
       peeks: SortedSet[Int],
-      produceCounters: (Seq[Produce]) => F[Map[Produce, Int]]
+      produceCounters: Seq[Produce] => F[Map[Produce, Int]]
   ): F[COMM] =
     for {
       produceRefs <- Sync[F].delay(

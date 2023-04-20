@@ -42,7 +42,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for non-tuple arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplCons.fnSimple(newCtxt) should be('left)
+    tplCons.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** tuple-cons* */
@@ -70,7 +70,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for non-tuple arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplCons.fnSimple(newCtxt) should be('left)
+    tplCons.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** tuple-rcons */
@@ -84,7 +84,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for non-tuple arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(2, Niv))
-    tplRcons.fnSimple(newCtxt) should be('left)
+    tplRcons.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** tuple-concat */
@@ -126,7 +126,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for non-tuple arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplCons.fnSimple(newCtxt) should be('left)
+    tplCons.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** tuple-safe-nth */
@@ -143,7 +143,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplSafeNth.fnSimple(newCtxt) should be('left)
+    tplSafeNth.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** tuple-xchg */
@@ -167,12 +167,12 @@ class TupleSpec extends FlatSpec with Matchers {
         3,
         Tuple.rcons(Tuple.rcons(Tuple(Tuple(tup)), Fixnum(-100)), Fixnum(100))
       )
-    tplXchg.fnSimple(newCtxt) should be('left)
+    tplXchg.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplXchg.fnSimple(newCtxt) should be('left)
+    tplXchg.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** tuple-head */
@@ -188,7 +188,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplHead.fnSimple(newCtxt) should be('left)
+    tplHead.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   it should "return NIL for an empty Tuple" in {
@@ -210,7 +210,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplLast.fnSimple(newCtxt) should be('left)
+    tplLast.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   it should "return NIL for an empty Tuple" in {
@@ -233,7 +233,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplTail.fnSimple(newCtxt) should be('left)
+    tplTail.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   it should "return empty Tuple for an empty Tuple input" in {
@@ -290,7 +290,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplNewN.fnSimple(newCtxt) should be('left)
+    tplNewN.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** tuple-mem? */
@@ -317,7 +317,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplMemQ.fnSimple(newCtxt) should be('left)
+    tplMemQ.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** tuple-matches? */
@@ -350,7 +350,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 5, Tuple(5, Niv))
-    tplMemQ.fnSimple(newCtxt) should be('left)
+    tplMemQ.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
 }

@@ -14,9 +14,9 @@ import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Serialize}
 import monix.execution.atomic.AtomicAny
 
-import scala.collection.JavaConverters._
-import scala.collection.{immutable, SortedSet}
+import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
+import scala.jdk.CollectionConverters._
 
 class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
@@ -97,10 +97,7 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
                                    store
                                      .getData(c)
                                      .flatMap(
-                                       _.iterator.zipWithIndex
-                                       // Convert to immutable.Seq because of defined Traversable instance
-                                         .to[immutable.Seq]
-                                         .filterA(matches(comm))
+                                       _.iterator.zipWithIndex.to(Seq).filterA(matches(comm))
                                      )
                                      .map(c -> _)
                                  }
@@ -174,12 +171,10 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
       c =>
         store
           .getData(c)
-          // Convert to immutable.Seq because of defined Traversable instance
-          .map(_.iterator.zipWithIndex.to[immutable.Seq])
+          .map(_.iterator.zipWithIndex.to(Seq))
           .flatMap { datums =>
             (if (c == channel) (Datum(data, persist, produceRef), -1) +: datums else datums)
               .filterA(matches(comm))
-              .map(_.to[Seq])
           }
           .map(c -> _)
     )
@@ -229,7 +224,7 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     }
   }
 
-  override def createCheckpoint(): F[Checkpoint] = checkReplayData >> syncF.defer {
+  override def createCheckpoint(): F[Checkpoint] = checkReplayData() >> syncF.defer {
     for {
       changes       <- storeAtom.get().changes
       nextHistory   <- historyRepositoryAtom.get().checkpoint(changes.toList)
@@ -279,10 +274,6 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
         cs: Seq[COMM]
     ): F[Either[Seq[COMM], COMMOrCandidate]] =
       cs match {
-        case Nil =>
-          val msg = "List comms must not be empty"
-          logger.error(msg)
-          Sync[F].raiseError(new IllegalArgumentException(msg))
         case commRef :: Nil =>
           runMatcher(commRef).map {
             case Some(dataCandidates) =>
@@ -295,6 +286,10 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
               (commRef, dataCandidates).asRight[COMM].asRight[Seq[COMM]]
             case None => rem.asLeft[COMMOrCandidate]
           }
+        case _ =>
+          val msg = "List comms must not be empty"
+          logger.error(msg)
+          Sync[F].raiseError(new IllegalArgumentException(msg))
       }
     comms.tailRecM(go).map(_.toOption)
   }

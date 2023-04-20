@@ -14,7 +14,7 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.15",
+  scalaVersion := "2.13.10",
   version := "0.1.0-SNAPSHOT",
   resolvers ++=
     Resolver.sonatypeOssRepos("releases") ++
@@ -33,27 +33,38 @@ lazy val projectSettings = Seq(
     Wart.Nothing,
     Wart.Equals,
     Wart.PublicInference,
-    Wart.TraversableOps,
     Wart.ArrayEquals,
     Wart.While,
     Wart.Any,
     Wart.Product,
     Wart.Serializable,
     Wart.OptionPartial,
-    Wart.EitherProjectionPartial,
     Wart.Option2Iterable,
     Wart.ToString,
-    Wart.JavaConversions,
     Wart.MutableDataStructures,
     Wart.FinalVal,
     Wart.Null,
     Wart.AsInstanceOf,
     Wart.ExplicitImplicitTypes,
     Wart.StringPlusAny,
-    Wart.AnyVal
+    Wart.AnyVal,
+    // Added after migration to Scala 2.13
+    Wart.TripleQuestionMark,
+    Wart.IterableOps,
+    Wart.JavaSerializable,
+    Wart.ListUnapply,
+    Wart.GlobalExecutionContext,
+    Wart.NoNeedImport,
+    Wart.PlatformDefault,
+    Wart.JavaNetURLConstructors,
+    Wart.SizeIs,
+    Wart.SizeToLength,
+    Wart.ListAppend,
+    Wart.AutoUnboxing,
+    Wart.RedundantConversions
   ),
   scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
-  ThisBuild / scapegoatVersion := "1.4.11",
+  ThisBuild / scapegoatVersion := "2.1.1",
   ThisBuild / scalacOptions += "semanticdb:synthetics:on",
   Test / testOptions += Tests.Argument("-oD"), //output test durations
   javacOptions ++= Seq("-source", "11", "-target", "11"),
@@ -209,7 +220,6 @@ lazy val comm = (project in file("comm"))
       scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
-      hasher,
       catsCore,
       catsMtl,
       catsTagless,
@@ -431,7 +441,6 @@ lazy val rholang = (project in file("rholang"))
     scalacOptions ++= Seq(
       "-language:existentials",
       "-language:higherKinds",
-      "-Yno-adapted-args",
       "-Xfatal-warnings",
       "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
     ),

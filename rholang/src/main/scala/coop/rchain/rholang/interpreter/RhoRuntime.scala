@@ -267,7 +267,7 @@ object RhoRuntime {
         val channels = List(name)
         val patterns = List(
           BindPattern(
-            (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))),
+            (0 until arity).map(i => EVar(FreeVar(i))),
             remainder,
             freeCount = arity
           )

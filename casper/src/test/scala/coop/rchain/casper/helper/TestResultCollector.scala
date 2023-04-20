@@ -32,7 +32,7 @@ object IsComparison {
   def unapply(
       p: Par
   ): Option[(Par, String, Par)] =
-    p.singleExpr().collect {
+    p.singleExpr.collect {
       case Expr(ETupleBody(ETuple(List(expected, RhoType.RhoString(operator), actual), _, _))) =>
         (expected, operator, actual)
     }

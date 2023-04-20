@@ -19,7 +19,7 @@ import coop.rchain.rholang.interpreter.compiler.normalizer.{
   RemainderNormalizeMatcher
 }
 
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
 import scala.collection.immutable.{BitSet, Vector}
 
 object PContrNormalizer {
@@ -39,7 +39,7 @@ object PContrNormalizer {
       // Note that we go over these in the order they were given and reverse
       // down below. This is because it makes more sense to number the free
       // variables in the order given, rather than in reverse.
-      formalsResults <- p.listname_.toList.foldM(initAcc)(
+      formalsResults <- p.listname_.asScala.toList.foldM(initAcc)(
                          (acc, n: Name) => {
                            NameNormalizeMatcher
                              .normalizeMatch[F](
@@ -91,7 +91,7 @@ object PContrNormalizer {
           locallyFree = ParLocallyFree
             .locallyFree(nameMatchResult.par, input.boundMapChain.depth) | formalsResults._3
             | (bodyResult.par.locallyFree
-              .from(boundCount)
+              .rangeFrom(boundCount)
               .map(x => x - boundCount)),
           connectiveUsed = ParLocallyFree
             .connectiveUsed(nameMatchResult.par) || bodyResult.par.connectiveUsed

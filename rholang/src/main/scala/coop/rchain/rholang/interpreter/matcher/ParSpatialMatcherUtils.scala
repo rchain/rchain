@@ -28,7 +28,7 @@ private[matcher] object ParSpatialMatcherUtils {
       max: ParCount,
       minPrune: ParCount,
       maxPrune: ParCount
-  ): Stream[(Par, Par)] = {
+  ): LazyList[(Par, Par)] = {
 
     val sendMax    = math.min(max.sends, par.sends.size - minPrune.sends)
     val receiveMax = math.min(max.receives, par.receives.size - minPrune.receives)
@@ -76,11 +76,11 @@ private[matcher] object ParSpatialMatcherUtils {
     )
   }
 
-  def minMaxSubsets[A](as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A])] = {
+  def minMaxSubsets[A](as: Seq[A], minSize: Int, maxSize: Int): LazyList[(Seq[A], Seq[A])] = {
 
-    def countedMaxSubsets(as: Seq[A], maxSize: Int): Stream[(Seq[A], Seq[A], Int)] =
+    def countedMaxSubsets(as: Seq[A], maxSize: Int): LazyList[(Seq[A], Seq[A], Int)] =
       as match {
-        case Nil => Stream((as, as, 0))
+        case Nil => LazyList((as, as, 0))
         case head +: rem =>
           (as.slice(0, 0), as, 0) #::
             (for {
@@ -88,29 +88,29 @@ private[matcher] object ParSpatialMatcherUtils {
               (tail, complement, count) = countedTail
               result <- {
                 if (count == maxSize)
-                  Stream((tail, head +: complement, count))
+                  LazyList((tail, head +: complement, count))
                 else if (tail.isEmpty)
-                  Stream((head +: tail, complement, 1))
+                  LazyList((head +: tail, complement, 1))
                 else
-                  Stream((tail, head +: complement, count), (head +: tail, complement, count + 1))
+                  LazyList((tail, head +: complement, count), (head +: tail, complement, count + 1))
               }
             } yield result)
       }
 
-    def worker(as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A], Int)] =
+    def worker(as: Seq[A], minSize: Int, maxSize: Int): LazyList[(Seq[A], Seq[A], Int)] =
       if (maxSize < 0)
-        Stream.empty
+        LazyList.empty
       else if (minSize > maxSize)
-        Stream.empty
+        LazyList.empty
       else if (minSize <= 0)
         if (maxSize == 0)
-          Stream((as.slice(0, 0), as, 0))
+          LazyList((as.slice(0, 0), as, 0))
         else
           countedMaxSubsets(as, maxSize)
       else
         //TODO the below is duplicated in countedMaxSubsets. Deduplicate.
         as match {
-          case Nil => Stream.empty
+          case Nil => LazyList.empty
           case head +: rem =>
             val decr = minSize - 1
             for {
@@ -118,11 +118,11 @@ private[matcher] object ParSpatialMatcherUtils {
               (tail, complement, count) = countedTail
               result <- {
                 if (count == maxSize)
-                  Stream((tail, head +: complement, count))
+                  LazyList((tail, head +: complement, count))
                 else if (count == decr)
-                  Stream((head +: tail, complement, minSize))
+                  LazyList((head +: tail, complement, minSize))
                 else
-                  Stream((tail, head +: complement, count), (head +: tail, complement, count + 1))
+                  LazyList((tail, head +: complement, count), (head +: tail, complement, count + 1))
               }
             } yield result
         }

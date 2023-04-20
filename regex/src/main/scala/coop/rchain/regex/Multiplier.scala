@@ -25,7 +25,7 @@ private[regex] object Multiplier {
   }
 
   private[this] val rxRange =
-    """(^\{\s*(\d+)\s*(,\s*(\d+)?)?\s*\}).*""".r("all", "min", "hasMax", "max")
+    """(?<all>^\{\s*(?<min>\d+)\s*(?<hasMax>,\s*(?<max>\d+)?)?\s*\}).*""".r
 
   /**
     * Attempts to parse character sequence as regex repetitions bounds

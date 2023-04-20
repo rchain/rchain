@@ -71,7 +71,7 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
           _ = conn.size shouldBe 1
         } yield ()
 
-        run.unsafeRunSync
+        run.unsafeRunSync()
     }
   }
 
@@ -102,7 +102,7 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
           _ = conn.size shouldBe 0
         } yield ()
 
-        run.unsafeRunSync
+        run.unsafeRunSync()
     }
   }
 
@@ -135,5 +135,8 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
   }
 
   private def peerNode(host: String): PeerNode =
-    PeerNode(NodeIdentifier("node-name".getBytes), Endpoint(host, tcpPort = 0, udpPort = 0))
+    PeerNode(
+      NodeIdentifier("node-name".getBytes.toIndexedSeq),
+      Endpoint(host, tcpPort = 0, udpPort = 0)
+    )
 }

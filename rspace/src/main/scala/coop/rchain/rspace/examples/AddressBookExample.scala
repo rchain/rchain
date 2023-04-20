@@ -189,7 +189,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log[Id]
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]()
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
@@ -224,7 +224,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]()
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
@@ -283,13 +283,13 @@ object AddressBookExample {
       unpackOption(space.produce(Channel("friends"), alice, persist = false))
 
     println("Rollback example: First produce result should return some data")
-    assert(produceAlice.isDefined)
+    assert(produceAlice().isDefined)
 
     println("Rollback example: Second produce result should be empty")
-    assert(produceAlice.isEmpty)
+    assert(produceAlice().isEmpty)
 
     println("Rollback example: Every following produce result should be empty")
-    assert(produceAlice.isEmpty)
+    assert(produceAlice().isEmpty)
 
     println(
       "Rollback example: Let's reset RSpace to the state from before running the produce operations"
@@ -297,10 +297,10 @@ object AddressBookExample {
     space.reset(checkpointHash)
 
     println("Rollback example: Again, first produce result should return some data")
-    assert(produceAlice.isDefined)
+    assert(produceAlice().isDefined)
 
     println("Rollback example: And again second produce result should be empty")
-    assert(produceAlice.isEmpty)
+    assert(produceAlice().isEmpty)
 
   }
 
@@ -311,7 +311,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]()
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores

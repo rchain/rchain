@@ -65,16 +65,17 @@ package object util {
     if (c != 0) {
       c.toInt
     } else {
-      for (i <- 0L until a.length) {
-        //indexed access of two ByteVectors can be not fast enough,
-        //however it is used by ByteVector creators (see === implementation)
-        val ai = a(i)
-        val bi = b(i)
-        if (ai != bi) {
-          return (ai & 0xFF) - (bi & 0xFF)
+      (0L until a.length)
+        .map { i =>
+          //indexed access of two ByteVectors can be not fast enough,
+          //however it is used by ByteVector creators (see === implementation)
+          val ai = a(i)
+          val bi = b(i)
+          (ai != bi, (ai & 0xFF) - (bi & 0xFF))
         }
-      }
-      0
+        .find(_._1)
+        .map(_._2)
+        .getOrElse(0)
     }
   }
 

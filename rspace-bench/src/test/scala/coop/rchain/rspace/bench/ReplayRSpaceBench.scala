@@ -117,7 +117,7 @@ object ReplayRSpaceBench {
     override def setup() = {
       super.setup()
       prepareConsume()
-      initSpace
+      initSpace()
     }
   }
 
@@ -141,7 +141,7 @@ object ReplayRSpaceBench {
     override def setup() = {
       super.setup()
       prepareProduce()
-      initSpace
+      initSpace()
     }
   }
 }

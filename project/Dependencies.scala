@@ -14,7 +14,7 @@ object Dependencies {
   val circeVersion      = "0.14.3"
   val enumeratumVersion = "1.5.13"
   val slf4jVersion      = "2.0.7"
-  val kamonVersion      = "1.1.6"
+  val kamonVersion      = "2.6.0"
 
   // format: off
   val bouncyProvCastle    = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.68"
@@ -48,7 +48,6 @@ object Dependencies {
   val fs2Core             = "co.fs2"                     %% "fs2-core"                  % fs2Version
   val fs2Io               = "co.fs2"                     %% "fs2-io"                    % fs2Version
   val guava               = "com.google.guava"            % "guava"                     % "31.1-jre"
-  val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
   val http4sBlazeServer   = "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion
   val http4sCirce         = "org.http4s"                 %% "http4s-circe"              % http4sVersion
@@ -60,10 +59,10 @@ object Dependencies {
   // see https://jitpack.io/#rchain/kalium
   val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
-  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.1"
-  val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.2"
-  val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "1.0.2"
-  val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
+  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % kamonVersion
+  val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
+  val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % kamonVersion
+  val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % kamonVersion
   val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.2-Beta")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.8.2"
@@ -79,7 +78,7 @@ object Dependencies {
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.4"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "3.0.0"
-  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.15.0"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.17.0"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.16" % "1.3.1"  % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.2.13" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
@@ -95,13 +94,13 @@ object Dependencies {
   val scalaCompat         = "org.scala-lang.modules"     %% "scala-collection-compat"   % "2.6.0"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.2.13"  % "test"
   val scalatestPlus       = "org.scalatestplus"          %% "scalacheck-1-16"           % "3.2.13.0" % "test"
-  val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
-  val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.7"
-  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M4"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.23"
+  val scallop             = "org.rogach"                 %% "scallop"                   % "3.3.2"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
-  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.8"
+  val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.10"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.2.0"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.37"
+  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.10"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
   val sourcecode          = "com.lihaoyi"                %% "sourcecode"                % "0.2.1"
@@ -126,9 +125,10 @@ object Dependencies {
     kamonCore,
     sourcecode,
     scalatest,
-    // Overrides for transitive dependencies (we don't use them directly, hence no val-s)
+    // Overrides for transitive dependencies (we don't use them directly, hence no val-s),
+    "com.squareup.okhttp3"   % "okhttp"           % "3.12.1",
     "org.objenesis"          % "objenesis"        % "3.2",
-    "org.typelevel"          % "jawn-parser_2.12" % "1.4.0",
+    "org.typelevel"          % "jawn-parser_2.13" % "1.1.2",
     "com.github.jnr"         % "jnr-ffi"          % "2.2.13",
     "com.lihaoyi"            %% "geny"            % "1.0.0",
     "org.scala-lang.modules" %% "scala-xml"       % "2.1.0",
@@ -153,12 +153,6 @@ object Dependencies {
 
   private val kindProjector = compilerPlugin(
     "org.typelevel" %% "kind-projector" % "0.13.2" cross CrossVersion.full
-  )
-
-  // In Scala 2.13, the plugin's functionality has been included in the compiler directly under the -Ymacro-annotations flag.
-  // https://github.com/scalamacros/paradise
-  private val macroParadise = compilerPlugin(
-    "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
   )
 
   private val testing =
@@ -196,5 +190,5 @@ object Dependencies {
     http4sDependencies ++ circeDependencies
 
   val commonDependencies: Seq[ModuleID] =
-    logging ++ testing :+ kindProjector :+ macroParadise :+ scalaCompat :+ sourcecode
+    logging ++ testing :+ kindProjector :+ scalaCompat :+ sourcecode
 }

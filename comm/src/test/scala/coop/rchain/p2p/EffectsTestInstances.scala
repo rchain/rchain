@@ -89,13 +89,13 @@ object EffectsTestInstances {
 
     override def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
       Sync[F].delay {
-        atomically(requests = requests :+ Request(peer, msg))
+        atomically(this.requests = this.requests :+ Request(peer, msg))
         reqresp.get.apply(peer).apply(msg)
       }
 
     override def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
       Sync[F].delay {
-        atomically(requests = requests ++ peers.map(peer => Request(peer, msg)))
+        atomically(this.requests = this.requests ++ peers.map(peer => Request(peer, msg)))
         peers.map(_ => Right(()))
       }
 
@@ -121,17 +121,17 @@ object EffectsTestInstances {
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]     = false.pure[F]
     def trace(msg: => String)(implicit ev: LogSource): F[Unit] = ().pure[F]
     def debug(msg: => String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(debugs = debugs :+ msg) >> delegate.debug(msg)
+      Sync[F].delay(this.debugs = this.debugs :+ msg) >> delegate.debug(msg)
     def info(msg: => String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(infos = infos :+ msg) >> delegate.info(msg)
+      Sync[F].delay(this.infos = this.infos :+ msg) >> delegate.info(msg)
     def warn(msg: => String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(warns = warns :+ msg) >> delegate.warn(msg)
+      Sync[F].delay(this.warns = this.warns :+ msg) >> delegate.warn(msg)
     def warn(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(warns = warns :+ msg) >> delegate.warn(msg, cause)
+      Sync[F].delay(this.warns = this.warns :+ msg) >> delegate.warn(msg, cause)
     def error(msg: => String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(errors = errors :+ msg) >> delegate.error(msg)
+      Sync[F].delay(this.errors = this.errors :+ msg) >> delegate.error(msg)
     def error(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(errors = errors :+ msg) >> delegate.error(msg, cause)
+      Sync[F].delay(this.errors = this.errors :+ msg) >> delegate.error(msg, cause)
   }
 
 }

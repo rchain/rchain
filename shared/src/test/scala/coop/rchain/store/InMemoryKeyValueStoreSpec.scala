@@ -59,31 +59,31 @@ class InMemoryKeyValueStoreSpec
 
   it should "put and get data from the store" in {
     forAll(genData) { expected =>
-      implicit val kvm = InMemoryStoreManager[IO]
+      implicit val kvm = InMemoryStoreManager[IO]()
       val sut          = new KeyValueStoreSut[IO]
       val test = for {
         result <- sut.testPutGet(expected)
       } yield result shouldBe expected
 
-      test.unsafeRunSync
+      test.unsafeRunSync()
     }
   }
 
   it should "put and get all data from the store" in {
     forAll(genData) { expected =>
-      implicit val kvm = InMemoryStoreManager[IO]
+      implicit val kvm = InMemoryStoreManager[IO]()
       val sut          = new KeyValueStoreSut[IO]
       val test = for {
         result <- sut.testPutIterate(expected)
       } yield result shouldBe expected
 
-      test.unsafeRunSync
+      test.unsafeRunSync()
     }
   }
 
   it should "put and collect partial data from the store" in {
     forAll(genData) { expected =>
-      implicit val kvm = InMemoryStoreManager[IO]
+      implicit val kvm = InMemoryStoreManager[IO]()
       val sut          = new KeyValueStoreSut[IO]
 
       val keys = expected.toList.map(_._1)
@@ -102,13 +102,13 @@ class InMemoryKeyValueStoreSpec
                  }
       } yield result shouldBe expectedFiltered
 
-      test.unsafeRunSync
+      test.unsafeRunSync()
     }
   }
 
   it should "not have deleted keys in the store" in {
     forAll(genData) { input =>
-      implicit val kvm = InMemoryStoreManager[IO]
+      implicit val kvm = InMemoryStoreManager[IO]()
       val sut          = new KeyValueStoreSut[IO]
       val allKeys      = input.keysIterator.toVector
       // Take some keys for deletion
@@ -121,7 +121,7 @@ class InMemoryKeyValueStoreSpec
         result <- sut.testPutDeleteGet(input, deleteKeys)
       } yield result shouldBe expected
 
-      test.unsafeRunSync
+      test.unsafeRunSync()
     }
   }
 

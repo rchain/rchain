@@ -273,7 +273,7 @@ class BlockApiImpl[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log
             case None =>
               for {
                 result <- proposerState.get.map(
-                           _.latestProposeResult.getOrElse(ProposeResult.notEnoughBlocks, None)
+                           _.latestProposeResult.getOrElse(ProposeResult.notEnoughBlocks -> None)
                          )
                 msg = result._2 match {
                   case Some(block) =>

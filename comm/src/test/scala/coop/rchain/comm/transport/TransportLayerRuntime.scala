@@ -247,8 +247,8 @@ final class Dispatcher[F[_]: Monad: Temporal, R, S](
         _ <- callback.notifyThatDispatched()
       } yield r
 
-  def received: Seq[(PeerNode, R)] = receivedMessages
-  private val receivedMessages     = mutable.MutableList.empty[(PeerNode, R)]
+  def received: Seq[(PeerNode, R)] = receivedMessages.toSeq
+  private val receivedMessages     = mutable.ArrayDeque.empty[(PeerNode, R)]
 }
 
 object Dispatcher {

@@ -190,7 +190,8 @@ object GenesisBuilder {
       blockDagStorage <- BlockDagKeyValueStorage.create[IO](kvsManager)
       // Add genesis block to DAG
       _ <- blockDagStorage.insertGenesis(genesis)
-    } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory)).unsafeRunSync
+    } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory))
+      .unsafeRunSync()
   }
 
   case class GenesisContext(

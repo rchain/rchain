@@ -11,7 +11,7 @@ class MetricsSemaphore[F[_]: Sync: Metrics](
     underlying: Semaphore[F]
 )(implicit ms: Metrics.Source)
     extends Semaphore[F] {
-  import implicits._
+  import coop.rchain.metrics.implicits._
 
   def available: F[Long] = underlying.available
   def count: F[Long]     = underlying.count

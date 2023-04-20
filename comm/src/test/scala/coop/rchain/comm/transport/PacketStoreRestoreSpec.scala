@@ -23,8 +23,8 @@ class PacketStoreRestoreSpec extends AnyFunSpec with Matchers with ScalaCheckDri
         val cache  = TrieMap[String, Array[Byte]]()
         val packet = Packet("Test", ByteString.copyFrom(content))
         // when
-        val storedIn = packet.store[IO](cache).unsafeRunSync.right.get
-        val restored = PacketOps.restore[IO](storedIn, cache).unsafeRunSync.right.get
+        val storedIn = packet.store[IO](cache).unsafeRunSync().toOption.get
+        val restored = PacketOps.restore[IO](storedIn, cache).unsafeRunSync().toOption.get
         // then
         packet shouldBe restored
       }

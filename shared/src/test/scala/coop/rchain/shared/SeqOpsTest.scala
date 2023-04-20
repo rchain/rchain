@@ -1,9 +1,8 @@
 package coop.rchain.shared
 
+import coop.rchain.shared.SeqOps._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import scala.collection.immutable.Seq
-import coop.rchain.shared.SeqOps._
 
 class SeqOpsTest extends AnyFlatSpec with Matchers {
 

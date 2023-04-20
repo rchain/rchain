@@ -55,7 +55,7 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
   // Iterate self parent messages
   def selfParents(mv: Message[M, S], finalized: Set[Message[M, S]]): Seq[Message[M, S]] =
     unfold(mv) { m =>
-      m.parents.map(msgMap).filter(x => x.sender == mv.sender && !finalized(x)).toIterator
+      m.parents.map(msgMap).filter(x => x.sender == mv.sender && !finalized(x)).iterator
     }
 
   /**
@@ -63,7 +63,7 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
     */
   def checkMinMessages(minMsgs: List[Message[M, S]], bondsMap: Map[S, Long]): Boolean =
     // TODO: add support for epoch changes, simple comparison for senders count is not enough
-    minMsgs.size == bondsMap.size
+    minMsgs.sizeIs == bondsMap.size
 
   /**
     * Finds top messages referenced from minimum messages (next message from each sender)
@@ -123,7 +123,7 @@ final case class Finalizer[M, S](msgMap: Map[M, Message[M, S]]) {
   ): Boolean = {
     // Calculate stake supporting full partition
     val bondedSenders = bondsMap.keySet
-    val seeFullPartition = nextFringeSupportMap
+    val seeFullPartition = nextFringeSupportMap.view
       .mapValues(x => x.nonEmpty && x.values.forall(_ == bondedSenders))
       .filter(_._2)
       .keys

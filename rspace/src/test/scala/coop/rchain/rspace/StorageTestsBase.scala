@@ -59,7 +59,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
       sk: Serialize[K]
   ): S = {
 
-    val kvm = InMemoryStoreManager[F]
+    val kvm = InMemoryStoreManager[F]()
 
     run(for {
       stores                            <- kvm.rSpaceStores
@@ -91,7 +91,7 @@ trait IOTests[C, P, A, R, K] extends StorageTestsBase[IO, C, P, R, K] {
   implicit val logF: Log[IO]             = Log.log[IO]
   implicit val metricsF: Metrics[IO]     = new Metrics.MetricsNOP[IO]()
   implicit val spanF: Span[IO]           = NoopSpan[IO]()
-  override def run[RES](f: IO[RES]): RES = f.unsafeRunSync
+  override def run[RES](f: IO[RES]): RES = f.unsafeRunSync()
 }
 
 abstract class InMemoryHotStoreTestsBase[F[_]]

@@ -35,7 +35,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
     FreeMap.empty[VarSort]
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
-  def getNormalizedPar(rho: String): Par       = ParBuilderUtil.mkTerm(rho).right.get
+  def getNormalizedPar(rho: String): Par       = ParBuilderUtil.mkTerm(rho).toOption.get
   def assertEqualNormalized(rho1: String, rho2: String): Assertion =
     assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
 

@@ -19,5 +19,5 @@ object scalatestcontrib extends Matchers {
       )
   }
 
-  def effectTest[T](f: IO[T]): T = f.unsafeRunSync
+  def effectTest[T](f: IO[T]): T = f.unsafeRunSync()
 }

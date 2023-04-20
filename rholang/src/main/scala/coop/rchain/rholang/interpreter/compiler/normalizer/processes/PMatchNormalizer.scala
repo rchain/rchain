@@ -11,7 +11,7 @@ import coop.rchain.rholang.interpreter.errors.UnrecognizedNormalizerError
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Case, CaseImpl, PMatch, Proc}
 
 import scala.collection.immutable.{BitSet, Vector}
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
 
 object PMatchNormalizer {
   def normalize[F[_]: Sync](p: PMatch, input: ProcVisitInputs)(
@@ -26,7 +26,7 @@ object PMatchNormalizer {
 
     for {
       targetResult <- normalizeMatch[F](p.proc_, input.copy(par = VectorPar()))
-      cases        <- p.listcase_.toList.traverse(liftCase)
+      cases        <- p.listcase_.asScala.toList.traverse(liftCase)
 
       initAcc = (Vector[MatchCase](), targetResult.freeMap, BitSet(), false)
       casesResult <- cases.foldM(initAcc)(
@@ -52,7 +52,7 @@ object PMatchNormalizer {
                               MatchCase(patternResult.par, caseBodyResult.par, boundCount) +: acc._1,
                               caseBodyResult.freeMap,
                               acc._3 | patternResult.par.locallyFree | caseBodyResult.par.locallyFree
-                                .from(boundCount)
+                                .rangeFrom(boundCount)
                                 .map(x => x - boundCount),
                               acc._4 || caseBodyResult.par.connectiveUsed
                             )

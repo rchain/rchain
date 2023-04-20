@@ -20,7 +20,7 @@ class TwoStepLockTest extends AnyFlatSpec with Matchers {
     val t4   = acquireLock(lock, List("a", "b"), List("w1", "w2"), { a = a - 8 })
 
     val r = List(t1, t2, t3, t4).parSequence
-    r.unsafeRunSync
+    r.unsafeRunSync()
   }
 
   def acquireLock(

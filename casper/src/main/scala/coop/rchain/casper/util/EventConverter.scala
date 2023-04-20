@@ -67,7 +67,7 @@ object EventConverter {
         .fromHash(channelsHash, hash, persistent)
     case ConsumeEvent(channelsHashes, hash, persistent) =>
       RspaceConsume.fromHash(
-        collection.immutable.Seq(channelsHashes.map(byteStringToBlake2b256Hash): _*),
+        Seq(channelsHashes.map(byteStringToBlake2b256Hash): _*),
         hash,
         persistent
       )
@@ -86,7 +86,7 @@ object EventConverter {
         .withDefaultValue(0)
       RspaceComm(
         RspaceConsume.fromHash(
-          collection.immutable.Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
+          Seq(consume.channelsHashes.map(byteStringToBlake2b256Hash): _*),
           consume.hash,
           consume.persistent
         ),

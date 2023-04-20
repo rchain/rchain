@@ -152,13 +152,13 @@ class KademliaSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach {
       distance: Option[Int],
       table: PeerTable[PeerNode, Id]
   ): Seq[PeerNode] =
-    distance.map(d => table.table(d).map(_.entry)).getOrElse(Seq.empty[PeerNode])
+    distance.map(d => table.table(d).map(_.entry)).getOrElse(Seq.empty[PeerNode]).toSeq
 
   private val pingOk: KademliaRPCMock   = new KademliaRPCMock(returns = true)
   private val pingFail: KademliaRPCMock = new KademliaRPCMock(returns = false)
 
   private class KademliaRPCMock(returns: Boolean) extends KademliaRPC[Id] {
-    val pingedPeers: mutable.MutableList[PeerNode] = mutable.MutableList.empty[PeerNode]
+    val pingedPeers: mutable.ArrayDeque[PeerNode] = mutable.ArrayDeque.empty[PeerNode]
 
     def ping(peer: PeerNode): Boolean = {
       pingedPeers += peer

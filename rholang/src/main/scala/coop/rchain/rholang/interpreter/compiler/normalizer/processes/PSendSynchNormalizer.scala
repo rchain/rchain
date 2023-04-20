@@ -7,7 +7,8 @@ import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutpu
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 
 import java.util.UUID
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
+
 object PSendSynchNormalizer {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def normalize[F[_]: Sync](p: PSendSynch, input: ProcVisitInputs)(
@@ -17,7 +18,7 @@ object PSendSynchNormalizer {
     val nameVar    = new NameVar(identifier)
 
     val send: PSend = {
-      p.listproc_.prepend(new PEval(nameVar))
+      p.listproc_.asScala.prepend(new PEval(nameVar))
       new PSend(p.name_, new SendSingle(), p.listproc_)
     }
 

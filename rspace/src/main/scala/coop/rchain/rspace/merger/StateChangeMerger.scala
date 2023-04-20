@@ -70,6 +70,11 @@ object StateChangeMerger {
                       TrieInsertBinaryConsume(historyPointer, newVal),
                       None
                     ).pure
+                  case _ =>
+                    ConsumeAndJoinActions(
+                      TrieInsertBinaryConsume(historyPointer, Seq()),
+                      None
+                    ).pure
                 }
           } yield r
       }
@@ -90,6 +95,7 @@ object StateChangeMerger {
                 val err =
                   "Merging logic error: empty channel change for produce or join when computing trie action."
                 new Exception(err).raiseError[F, HotStoreTrieAction]
+
             }
       } yield r
 

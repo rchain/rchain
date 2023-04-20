@@ -110,7 +110,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
           })
         } yield ()
     }
-    t.unsafeRunSync
+    t.unsafeRunSync()
   }
 
 }

@@ -17,8 +17,7 @@ import cats.effect.Sync
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
-import scala.collection.immutable.Stream
-import scala.collection.immutable.Stream.Cons
+import scala.collection.immutable.LazyList
 import scala.util.{Left, Right}
 import cats.effect.Ref
 import cats.effect.kernel.{CancelScope, MonadCancel, Poll}
@@ -56,12 +55,12 @@ object StreamT extends StreamTInstances0 {
   def liftF[F[_]: Applicative, A](fa: F[A]): StreamT[F, A] =
     StreamT(Functor[F].map(fa)(value => SCons(value, empty)))
 
-  def fromStream[F[_]: Applicative, A](fs: F[Stream[A]]): StreamT[F, A] = {
+  def fromStream[F[_]: Applicative, A](fs: F[LazyList[A]]): StreamT[F, A] = {
 
-    def next(curr: Stream[A]): Step[F, A] =
+    def next(curr: LazyList[A]): Step[F, A] =
       curr match {
-        case Stream.Empty  => SNil()
-        case cons: Cons[A] => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
+        case LazyList() => SNil()
+        case cons       => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
       }
 
     StreamT[F, A](Functor[F].map(fs)(next))
@@ -72,10 +71,10 @@ object StreamT extends StreamTInstances0 {
   private def delay[F[_]: Applicative, A](a: => A): F[A] =
     Functor[F].map(Applicative[F].unit)(_ => a)
 
-  def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] = {
+  def run[F[_]: Monad, A](s: StreamT[F, A]): F[LazyList[A]] = {
     val F = Monad[F]
     F.flatMap(s.next) {
-      case SNil()            => F.pure(Stream.Empty)
+      case SNil()            => F.pure(LazyList())
       case SCons(head, tail) => F.map(run(tail))(t => head +: t)
     }
   }
@@ -183,9 +182,9 @@ trait StreamTInstances2 {
 
   implicit final def streamMonadLayerControl[M[_]](
       implicit M: Monad[M]
-  ): MonadLayerControl.Aux[StreamTC[M]#l, M, Stream] =
+  ): MonadLayerControl.Aux[StreamTC[M]#l, M, LazyList] =
     new MonadLayerControl[StreamTC[M]#l, M] {
-      type State[A] = Stream[A]
+      type State[A] = LazyList[A]
 
       val outerInstance: Monad[StreamTC[M]#l] =
         StreamT.streamTMonad
@@ -196,15 +195,15 @@ trait StreamTInstances2 {
 
       def layer[A](inner: M[A]): StreamT[M, A] = StreamT.liftF(inner)
 
-      def restore[A](state: Stream[A]): StreamT[M, A] =
+      def restore[A](state: LazyList[A]): StreamT[M, A] =
         StreamT.fromStream[M, A](innerInstance.pure(state))
 
-      def layerControl[A](cps: (StreamTC[M]#l ~> (M of Stream)#l) => M[A]): StreamT[M, A] =
-        StreamT.liftF(cps(new (StreamTC[M]#l ~> (M of Stream)#l) {
-          def apply[X](fa: StreamT[M, X]): M[Stream[X]] = StreamT.run(fa)
+      def layerControl[A](cps: (StreamTC[M]#l ~> (M of LazyList)#l) => M[A]): StreamT[M, A] =
+        StreamT.liftF(cps(new (StreamTC[M]#l ~> (M of LazyList)#l) {
+          def apply[X](fa: StreamT[M, X]): M[LazyList[X]] = StreamT.run(fa)
         }))
 
-      def zero[A](state: Stream[A]): Boolean = state.isEmpty
+      def zero[A](state: LazyList[A]): Boolean = state.isEmpty
     }
 
   implicit def streamTSync[F[_]](

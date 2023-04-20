@@ -100,7 +100,7 @@ object Configuration {
         System.exit(1)
       case _ =>
     }
-    val nodeConf = nodeConfE.right.get
+    val nodeConf = nodeConfE.toOption.get
 
     // Throw an error if pos-multi-sig-quorum greater than pos-multi-sig-public-keys length
     val posMultiSigQuorum           = nodeConf.casper.genesisBlockData.posMultiSigQuorum

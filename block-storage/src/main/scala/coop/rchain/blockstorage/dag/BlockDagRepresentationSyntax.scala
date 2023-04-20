@@ -54,7 +54,7 @@ final class DagRepresentationOps[F[_]](
         val parents = lvl
           .traverse(bds.lookupUnsafe)
           .flatMap(_.flatMap(_.justifications).distinct.filterA(filterF))
-        parents.map(p => p.nonEmpty.guard[Option].as(p, p))
+        parents.map(p => p.nonEmpty.guard[Option].as(p -> p))
       }
       .flatMap(Stream.emits)
       .compile

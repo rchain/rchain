@@ -39,7 +39,8 @@ class SubSpec extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
       ConnOrBody(ConnectiveBody(Vector()))
     ).map(Connective(_))
 
-    val connectiveSeqs: Gen[Seq[Connective]] = Gen.someOf(sampleConnectives ++ sampleConnectives)
+    val connectiveSeqs: Gen[Seq[Connective]] =
+      Gen.someOf(sampleConnectives ++ sampleConnectives).map(_.toSeq)
 
     forAll(connectiveSeqs) { connectives: Seq[Connective] =>
       val par          = connectives.foldLeft(Par())(_.prepend(_, depth))

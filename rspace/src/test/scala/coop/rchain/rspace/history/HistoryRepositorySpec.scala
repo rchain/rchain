@@ -180,7 +180,7 @@ class HistoryRepositorySpec
     implicit val span: Span[IO] = new NoopSpan[IO]()
 
     (for {
-      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[IO])
+      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[IO]())
       _            <- pastRoots.commit(History.emptyRootHash)
       repo = HistoryRepositoryImpl[IO, String, String, String, String](
         emptyHistory,
@@ -236,7 +236,7 @@ trait InMemoryHistoryRepositoryTestBase {
     new RootRepository[IO](inmemRootsStore)
 
   def inMemColdStore: ColdKeyValueStore[IO] = {
-    val store = InMemoryKeyValueStore[IO]
+    val store = InMemoryKeyValueStore[IO]()
     store.toTypedStore(codecBlake2b256Hash, codecPersistedData)
   }
 

@@ -8,7 +8,7 @@ object Language {
     * @param a A computation to run
     */
   def ignore[A](a: => A): Unit = {
-    val _: A = a
+    val _ = a
     ()
   }
 

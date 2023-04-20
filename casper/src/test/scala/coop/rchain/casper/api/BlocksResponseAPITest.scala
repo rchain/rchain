@@ -97,7 +97,7 @@ import scala.collection.immutable.SortedMap
 //      _              = Mockito.clearInvocations(blockStore, blockDagStorage)
 //      blocksResponse <- blockApi.getBlocks(10)
 //    } yield {
-//      blocksResponse shouldBe 'right
+//      blocksResponse shouldBe Symbol("right")
 //      blocksResponse.value.length shouldBe 8
 //
 //      blocks.map { b =>
@@ -119,7 +119,7 @@ import scala.collection.immutable.SortedMap
 //      _              = Mockito.clearInvocations(blockStore, blockDagStorage)
 //      blocksResponse <- blockApi.getBlocks(2)
 //    } yield {
-//      blocksResponse shouldBe 'right
+//      blocksResponse shouldBe Symbol("right")
 //      blocksResponse.value.length shouldBe 3
 //
 //      blocks.takeRight(3).map { b =>
@@ -142,7 +142,7 @@ import scala.collection.immutable.SortedMap
 //      _              = Mockito.clearInvocations(blockStore, blockDagStorage)
 //      blocksResponse <- blockApi.getBlocksByHeights(2, 5)
 //    } yield {
-//      blocksResponse shouldBe 'right
+//      blocksResponse shouldBe Symbol("right")
 //      blocksResponse.value shouldBe blocks.takeRight(5).map(BlockApi.getLightBlockInfo)
 //
 //      blocks.takeRight(5).map { b =>

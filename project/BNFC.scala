@@ -78,9 +78,9 @@ object BNFC {
       Defaults.configSettings ++ Seq(
         bnfcNamespace  := "coop.rchain.rholang.ast",
         bnfcGrammarDir := baseDirectory.value / "src" / "main" / "bnfc",
-        bnfcOutputDir  := (sourceManaged in Compile).value,
+        bnfcOutputDir  := (Compile / sourceManaged).value,
         generate := {
-          val fullCP = (fullClasspath in BNFCConfig).value
+          val fullCP = (BNFCConfig / fullClasspath).value
           val genCached = FileFunction.cached(
             streams.value.cacheDirectory / "bnfc",
             inStyle = FilesInfo.hash,

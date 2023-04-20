@@ -93,6 +93,7 @@ package object implicits {
 
     override def cont[K, R](body: Cont[Id, K, R]): Id[R] = ???
 
+    @SuppressWarnings(Array("org.wartremover.warts.ThreadSleep"))
     protected override def sleep(time: FiniteDuration): Id[Unit] = Thread.sleep(time.toMillis)
 
     override def ref[A](a: A): Id[Ref[Id, A]] = ???

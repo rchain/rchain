@@ -34,6 +34,7 @@ object CertificateHelper {
       case _ => false
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def publicAddress(publicKey: PublicKey): Option[Array[Byte]] =
     publicKey match {
       case p: ECPublicKey if isExpectedEllipticCurve(publicKey) =>
@@ -61,7 +62,7 @@ object CertificateHelper {
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def readKeyPair(keyFile: File): KeyPair = {
-    val str = Using.resource(Source.fromFile(keyFile)) {
+    val str = Using.resource(Source.fromFile(keyFile, "utf8")) {
       _.getLines().filter(!_.contains("KEY")).mkString
     }
     val spec     = new PKCS8EncodedKeySpec(Base64.getDecoder.decode(str))
@@ -167,7 +168,6 @@ object CertificateHelper {
           val Array(r, s, _*) = asnSeq.toArray
           toBytes(r) ++ toBytes(s)
         }
-
     if (signatureDER.isEmpty)
       Failure(new IllegalArgumentException("Input array must not be empty"))
     else
@@ -175,7 +175,6 @@ object CertificateHelper {
         new IllegalArgumentException("Input array is not valid DER message format", _)
       )
   }
-
 }
 
 final case class ParameterSpec(
@@ -196,6 +195,7 @@ case object ParameterSpec {
 }
 
 object CertificatePrinter {
+
   import scala.annotation.tailrec
 
   def print(certificate: X509Certificate): String = {

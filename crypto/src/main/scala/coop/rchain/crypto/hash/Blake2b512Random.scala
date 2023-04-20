@@ -31,7 +31,8 @@ class Blake2b512Random private (
 
   private val hashArray: Array[Byte] = new Array[Byte](64)
   private var position: Int          = 0
-  def getPosition: Int               = position
+
+  def getPosition: Int = position
 
   private def addByte(index: Byte): Unit = {
     if (pathView.position() == pathView.limit()) {
@@ -103,6 +104,7 @@ class Blake2b512Random private (
               .wrap(hashArray, position, 64 - position)
               .equals(ByteBuffer.wrap(that.hashArray, position, 64 - position))
         }
+
     }
 
   override def hashCode(): Int =
@@ -163,15 +165,15 @@ object Blake2b512Random {
         }
       }
 
-      val result = squashedBuilder.result
-      if (result.size == 1) {
+      val result = squashedBuilder.result()
+      if (result.sizeIs == 1) {
         result(0)
       } else
         internalMerge(result)
     }
 
     // Throw error if at least two random generators are merging
-    assert(children.size >= 2, {
+    assert(children.sizeIs >= 2, {
       s"Blake2b512Random should have at least 2 inputs to merge, received ${children.size}."
     })
 

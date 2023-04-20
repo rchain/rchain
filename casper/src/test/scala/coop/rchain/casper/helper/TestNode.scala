@@ -40,6 +40,8 @@ import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import cats.effect.{Deferred, Ref, Temporal}
 
+import scala.collection.compat.immutable.ArraySeq
+
 case class TestNode[F[_]: Async](
     name: String,
     local: PeerNode,
@@ -495,7 +497,7 @@ object TestNode {
   }
 
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
@@ -504,7 +506,7 @@ object TestNode {
     val peers     = nodesList.map(_.local).toSet
     val network   = nodesList.head.transportLayerEff.testNetworkF
     val heatDeath =
-      network.get.map(_.filterKeys(peers.contains).valuesIterator.forall(_.isEmpty))
+      network.get.map(_.view.filterKeys(peers.contains).valuesIterator.forall(_.isEmpty))
     val propagation = nodesList.traverse_(_.handleReceive())
 
     propagation.untilM_(heatDeath)

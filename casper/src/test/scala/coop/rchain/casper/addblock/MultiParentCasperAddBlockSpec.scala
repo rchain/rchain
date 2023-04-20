@@ -65,7 +65,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
 //        } yield result
 //      }
 //    val threadStatuses: (ValidBlockProcessing, ValidBlockProcessing) =
-//      testProgram.unsafeRunSync
+//      testProgram.unsafeRunSync()
 //
 //    threadStatuses should matchPattern {
 //      case (Left(CasperIsBusy), Right(Valid)) | (Right(Valid), Left(CasperIsBusy)) =>

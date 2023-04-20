@@ -134,7 +134,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       processingStream <- LfsTupleSpaceRequester.stream[F](
                            finalizedFringe,
                            responseQueue,
-                           requestQueue.send(_, _).void,
+                           (s, n) => requestQueue.send((s, n)).void,
                            requestTimeout,
                            importer,
                            mockValidateStateChunk
@@ -173,7 +173,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     createMock[IO](requestTimeout) { mock =>
       if (!runProcessingStream) test(mock)
       else (Stream.eval(test(mock)) concurrently mock.stream).compile.drain
-    }.unsafeRunSync
+    }.unsafeRunSync()
 
   val bootstrapTest = createBootstrapTest(runProcessingStream = true) _
 

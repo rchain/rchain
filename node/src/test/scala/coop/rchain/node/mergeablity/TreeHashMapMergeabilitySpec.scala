@@ -549,7 +549,7 @@ class TreeHashMapMergeabilitySpec
               )
         } yield (),
       rejectRight = rejectRight
-    ).unsafeRunSync
+    ).unsafeRunSync()
 
   }
 

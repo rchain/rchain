@@ -11,7 +11,7 @@ import scalapb.WireType
 import scalapb.compiler.Types
 import coop.rchain.catscontrib.effect.implicits.sEval
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object ProtoM {
 

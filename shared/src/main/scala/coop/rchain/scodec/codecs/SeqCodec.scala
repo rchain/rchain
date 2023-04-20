@@ -11,7 +11,7 @@ final class SeqCodec[A](codec: Codec[A], limit: Option[Int] = None) extends Code
   }
 
   def encode(list: Seq[A]): Attempt[BitVector] =
-    Encoder.encodeSeq(codec)(scala.collection.immutable.Seq(list: _*))
+    Encoder.encodeSeq(codec)(Seq(list: _*))
 
   def decode(buffer: BitVector): Attempt[DecodeResult[Seq[A]]] =
     Decoder.decodeCollect[Seq, A](codec, limit)(buffer)

@@ -18,24 +18,31 @@ trait ReportingTransformer[C, P, A, K, E] {
   type RhoReportingConsume = ReportingConsume[C, P, K]
 
   def serializeConsume(rc: RhoReportingConsume): E
+
   def serializeProduce(rp: RhoReportingProduce): E
+
   def serializeComm(rcm: RhoReportingComm): E
 
   def transformEvent(re: ReportingEvent): E =
     re match {
-      case comm: RhoReportingComm    => serializeComm(comm)
-      case cons: RhoReportingConsume => serializeConsume(cons)
-      case prod: RhoReportingProduce => serializeProduce(prod)
+      case comm @ ReportingComm(_, _) => serializeComm(comm.asInstanceOf[RhoReportingComm])
+      case cons @ ReportingConsume(_, _, _, _) =>
+        serializeConsume(cons.asInstanceOf[RhoReportingConsume])
+      case prod @ ReportingProduce(_, _) => serializeProduce(prod.asInstanceOf[RhoReportingProduce])
     }
 }
 
 object ReportingTransformer {
   object ReportingRhoStringTransformer {
     sealed trait RhoEvent
+
     final case class RhoComm(consume: RhoConsume, produces: List[RhoProduce]) extends RhoEvent
-    final case class RhoProduce(channel: String, data: String)                extends RhoEvent
+
+    final case class RhoProduce(channel: String, data: String) extends RhoEvent
+
     final case class RhoConsume(channels: String, patterns: String, continuation: String)
         extends RhoEvent
+
     class ReportingEventStringTransformer[C, P, A, K](
         serializeC: C => String,
         serializeP: P => String,

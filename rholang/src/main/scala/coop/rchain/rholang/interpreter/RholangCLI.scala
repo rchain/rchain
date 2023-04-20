@@ -57,22 +57,22 @@ object RholangCLI {
 
   def main(args: Array[String]): Unit = {
 
-    val conf = new Conf(args.toList)
+    val conf = new Conf(args.toIndexedSeq)
 
     implicit val log: Log[IO]          = Log.log[IO]
     implicit val metricsF: Metrics[IO] = new Metrics.MetricsNOP[IO]()
     implicit val spanF: Span[IO]       = NoopSpan[IO]()
     implicit val parF: Parallel[IO]    = IO.parallelForIO
 
-    val kvm = mkRSpaceStoreManager[IO](conf.dataDir(), conf.mapSize()).unsafeRunSync
+    val kvm = mkRSpaceStoreManager[IO](conf.dataDir(), conf.mapSize()).unsafeRunSync()
 
     val runtime = (for {
       store   <- kvm.rSpaceStores
       runtime <- RhoRuntime.createRuntime[IO](store, Par())
-    } yield runtime).unsafeRunSync
+    } yield runtime).unsafeRunSync()
 
     val problems = try {
-      if (conf.files.supplied) {
+      if (conf.files.isSupplied) {
         val problems = for {
           f <- conf.files()
           result = processFile(
@@ -82,7 +82,7 @@ object RholangCLI {
             conf.quiet.getOrElse(false),
             conf.unmatchedSendsOnly.getOrElse(false)
           ) if result.isFailure
-          Failure(problem) = result
+          problem = result.failed.getOrElse(new Exception("Failed to extract error from Try"))
         } yield (f, problem)
         problems.foreach {
           case (f, oops) => {
@@ -100,9 +100,9 @@ object RholangCLI {
       }
     } finally {
       // TODO: Refactor with Resource.
-      kvm.shutdown.unsafeRunSync
+      kvm.shutdown.unsafeRunSync()
     }
-    if (!problems.isEmpty) {
+    if (problems.nonEmpty) {
       System.exit(1)
     }
   }
@@ -176,7 +176,7 @@ object RholangCLI {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
-        evaluate(runtime, line).unsafeRunSync
+        evaluate(runtime, line).unsafeRunSync()
       case None =>
         Console.println("\nExiting...")
         return
@@ -286,7 +286,7 @@ object RholangCLI {
 
     Try(waitForSuccess(evaluatorIO.unsafeToFuture())).map { _ok =>
       if (!quiet) {
-        printStorageContents(runtime, unmatchedSendsOnly).unsafeRunSync
+        printStorageContents(runtime, unmatchedSendsOnly).unsafeRunSync()
       }
     }
   }

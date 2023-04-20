@@ -88,7 +88,8 @@ object StoragePrinter {
       deploys: Seq[Signed[DeployData]],
       runtime: RhoRuntime[F]
   ): F[String] =
-    deploys.toStream
+    deploys
+      .to(LazyList)
       .traverse(
         deploy =>
           prettyPrintUnmatchedSends(deploy, runtime)

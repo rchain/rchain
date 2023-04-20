@@ -85,8 +85,8 @@ object WhoAmI {
       r3 <- checkNext(r2, upnpIpCheck(externalAddress))
       r4 <- checkNext(r3, ("failed to guess", Option("localhost")).pure[F])
     } yield {
-      val (s, Some(a)) = r4
-      (s, a)
+      val (s, aOpt) = r4
+      (s, aOpt.get)
     }
 
   private def whoAmI[F[_]: Sync: Log](externalAddress: Option[String]): F[String] =

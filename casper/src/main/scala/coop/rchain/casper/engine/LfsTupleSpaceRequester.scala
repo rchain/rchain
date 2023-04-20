@@ -53,6 +53,7 @@ object LfsTupleSpaceRequester {
     def getNext(resend: Boolean): (ST[Key], Seq[Key]) = {
       val requested = d
         .filter { case (_, v) => v == Init || (resend && v == Requested) }
+        .view
         .mapValues(_ => Requested)
       ST(d ++ requested) -> requested.keysIterator.toSeq
     }

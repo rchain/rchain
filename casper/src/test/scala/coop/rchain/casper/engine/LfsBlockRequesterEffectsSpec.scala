@@ -54,7 +54,8 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
   val b2 = getBlock(hash2, number = 2, Seq())
   val b1 = getBlock(hash1, number = 1, Seq())
 
-  implicit val ordBytes = Ordering.by((_: ByteString).toByteArray.toIterable).reverse
+  import scala.math.Ordering.Implicits.seqOrdering
+  implicit val ordBytes = Ordering.by((_: ByteString).toByteArray.toSeq).reverse
 
   case class TestST(blocks: Map[BlockHash, BlockMessage], invalid: Set[BlockHash])
 
@@ -112,7 +113,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
                            requestTimeout,
                            hash => testState.get.map(_.blocks.contains(hash)),
                            hash => testState.get.map(_.blocks(hash)),
-                           savedBlocksQueue.send(_, _).void,
+                           (h, m) => savedBlocksQueue.send(h -> m).void,
                            block => testState.get.map(!_.invalid.contains(block.blockHash))
                          )
 

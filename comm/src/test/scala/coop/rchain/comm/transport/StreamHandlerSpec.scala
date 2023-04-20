@@ -67,7 +67,7 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
       val cache = TrieMap[String, Array[Byte]]()
       val streamWithoutHeader: Stream[IO, Chunk] = {
         val it: IO[Iterator[Chunk]] = createStreamIterator().map(_.toList).map {
-          case _ :: data => data.toIterator
+          case _ :: data => data.iterator
           case _         => throw new RuntimeException("")
         }
         Stream.eval(it).flatMap(Stream.fromIterator[IO](_, 1))
@@ -86,7 +86,7 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
       val cache = TrieMap[String, Array[Byte]]()
       val incompleteStream: Stream[IO, Chunk] = {
         val it: IO[Iterator[Chunk]] = createStreamIterator().map(_.toList).map {
-          case header :: _ :: data2 => (header :: data2).toIterator
+          case header :: _ :: data2 => (header :: data2).iterator
           case _                    => throw new RuntimeException("")
         }
         Stream.eval(it).flatMap(Stream.fromIterator[IO](_, 1))
@@ -107,8 +107,8 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
   ): StreamMessage =
     StreamHandler
       .handleStream(stream, circuitBreaker = neverBreak, cache)
-      .unsafeRunSync
-      .right
+      .unsafeRunSync()
+      .toOption
       .get
 
   private def handleStreamErr(
@@ -118,8 +118,9 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
   ): StreamHandler.StreamError =
     StreamHandler
       .handleStream(stream, circuitBreaker = circuitBreaker, cache)
-      .unsafeRunSync
-      .left
+      .unsafeRunSync()
+      .swap
+      .toOption
       .get
 
   private def createStream(
@@ -147,7 +148,7 @@ class StreamHandlerSpec extends AnyFunSpec with Matchers with Inside {
   }
 
   private def peerNode(name: String): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), Endpoint("", 80, 80))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), Endpoint("", 80, 80))
 
   private val neverBreak: CircuitBreaker = kp(Closed)
 }

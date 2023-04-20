@@ -37,7 +37,7 @@ class HoconConfigurationSpec extends AnyFunSuite with Matchers {
     implicit val myIntReader = ConfigReader.fromString[Long](
       ConvertHelpers.catchReadError(s => ConfigFactory.parseString(s"v = $s").getBytes("v"))
     )
-    val config = defaultConfig.load[NodeConf].right.get
+    val config = defaultConfig.load[NodeConf].toOption.get
 
     val expectedConfig = NodeConf(
       defaultDataDir = "/var/lib/rnode",
@@ -62,7 +62,7 @@ class HoconConfigurationSpec extends AnyFunSuite with Matchers {
           .fromAddress(
             "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
           )
-          .right
+          .toOption
           .get,
         disableLfs = false,
         batchMaxConnections = 20,

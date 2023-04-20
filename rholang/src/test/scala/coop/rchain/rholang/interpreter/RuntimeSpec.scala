@@ -51,7 +51,9 @@ class RuntimeSpec extends AnyFlatSpec with Matchers {
     assert(execute(rho).errors.nonEmpty, s"Expected $rho to fail - it didn't.")
 
   private def execute(source: String): EvaluateResult =
-    mkRuntime[IO](tmpPrefix).use { runtime =>
-      runtime.evaluate(source)
-    }.unsafeRunSync
+    mkRuntime[IO](tmpPrefix)
+      .use { runtime =>
+        runtime.evaluate(source)
+      }
+      .unsafeRunSync()
 }

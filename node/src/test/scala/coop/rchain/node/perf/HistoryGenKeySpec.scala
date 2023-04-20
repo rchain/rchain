@@ -73,9 +73,9 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
   val tempPath: file.Path = Files.createTempDirectory(s"lmdb-test-")
   val tempDir: Directory  = Directory(Path(tempPath.toFile))
 
-  override def beforeAll: Unit = tempDir.deleteRecursively
+  override def beforeAll(): Unit = tempDir.deleteRecursively()
 
-  override def afterAll: Unit = tempDir.deleteRecursively
+  override def afterAll(): Unit = tempDir.deleteRecursively()
 
   def storeLMDB[F[_]: Async: Parallel: Log: Metrics: Span](): F[KeyValueStore[F]] =
     for {
@@ -112,15 +112,15 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
       Settings.typeStore match {
         case InMemo =>
           for {
-            inMemoStore <- Sync[F].delay(InMemoryKeyValueStore[F])
+            inMemoStore <- Sync[F].delay(InMemoryKeyValueStore[F]())
             _           = inMemoStore.clear()
             radixStore  = RadixHistory.createStore(inMemoStore)
             history     <- RadixHistory[F](root, radixStore)
           } yield HistoryWithFunc(
             history,
             radixStore.get1,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
+            inMemoStore.sizeBytes _,
+            inMemoStore.numRecords _
           )
         case Lmdb =>
           for {
@@ -137,14 +137,14 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
       Settings.typeStore match {
         case InMemo =>
           for {
-            store   <- Sync[F].delay(InMemoryKeyValueStore[F])
+            store   <- Sync[F].delay(InMemoryKeyValueStore[F]())
             _       = store.clear()
             history <- History.create(root, store)
           } yield HistoryWithFunc(
             history,
             _ => none[ByteVector].pure,
-            store.sizeBytes,
-            store.numRecords
+            store.sizeBytes _,
+            store.numRecords _
           )
         case Lmdb =>
           for {
@@ -158,8 +158,8 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
 
     def getHistory(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeHistory match {
-        case Radix   => CreateRadixHistory[F].create(root)
-        case Default => CreateDefaultHistory[F].create(root)
+        case Radix   => CreateRadixHistory[F]().create(root)
+        case Default => CreateDefaultHistory[F]().create(root)
       }
 
     def fill32Bytes(s: String): Array[Byte] = {
@@ -207,7 +207,7 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
           case HistoryWithoutFunc(_, _)                     => (0L, 0).some
         } else none
 
-      def export(
+      def `export`(
           rootHash: Blake2b256Hash,
           skipSize: Int,
           getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]]
@@ -356,11 +356,14 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
                     timeValid + timeValidTemp,
                     numNode + numNodeTemp,
                     (
-                      sizeInit._1 + size0.getOrElse(0L, 0)._1,
-                      sizeInit._2 + size0.getOrElse(0L, 0)._2
+                      sizeInit._1 + size0.getOrElse(0L -> 0)._1,
+                      sizeInit._2 + size0.getOrElse(0L -> 0)._2
                     ),
-                    (sizeI._1 + size1.getOrElse(0L, 0)._1, sizeI._2 + size1.getOrElse(0L, 0)._2),
-                    (sizeD._1 + size2.getOrElse(0L, 0)._1, sizeD._2 + size2.getOrElse(0L, 0)._2)
+                    (
+                      sizeI._1 + size1.getOrElse(0L -> 0)._1,
+                      sizeI._2 + size1.getOrElse(0L -> 0)._2
+                    ),
+                    (sizeD._1 + size2.getOrElse(0L -> 0)._1, sizeD._2 + size2.getOrElse(0L -> 0)._2)
                   )
           }
 
@@ -408,7 +411,7 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
     implicit val spn: NoopSpan[IO]           = new NoopSpan[IO]()
 
     val t = new Experiment[IO]
-    t.test.unsafeRunSync
+    t.test.unsafeRunSync()
 
   }
 }

@@ -48,7 +48,10 @@ class ConnectSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with 
         Connect.connect[Effect](remote)
         // then
         transportLayerEff.requests.size should be(1)
-        val Protocol(_, Protocol.Message.ProtocolHandshake(_)) = transportLayerEff.requests(0).msg
+        transportLayerEff.requests.head.msg match {
+          case Protocol(_, Protocol.Message.ProtocolHandshake(_)) => true
+          case _                                                  => false
+        }
       }
     }
 
@@ -65,6 +68,6 @@ class ConnectSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with 
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(port))
 
 }

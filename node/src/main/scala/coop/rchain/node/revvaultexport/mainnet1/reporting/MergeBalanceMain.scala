@@ -95,7 +95,8 @@ object MergeBalanceMain {
 
       }
     val srcState = Source.fromFile(stateBalanceFile)
-    srcState.getLines
+    srcState
+      .getLines()
       .map(_.split(","))
       .foldLeft(accountMap) {
         case (m, a) => {
@@ -145,7 +146,7 @@ object MergeBalanceMain {
     } yield balance
 
   def main(args: Array[String]): Unit = {
-    val options                = MergeBalanceOptions(args)
+    val options                = MergeBalanceOptions(args.toIndexedSeq)
     val stateBalanceFile       = options.stateBalanceFile()
     val transactionBalanceFile = options.transactionBalanceFile()
     val dataDir                = options.dataDir()
@@ -202,7 +203,7 @@ object MergeBalanceMain {
     } yield adjustedAccounts
 
     import cats.effect.unsafe.implicits.global
-    val accountMap = task.unsafeRunSync
+    val accountMap = task.unsafeRunSync()
 
     val file = mergeFile.toFile
     val bw   = new PrintWriter(file)

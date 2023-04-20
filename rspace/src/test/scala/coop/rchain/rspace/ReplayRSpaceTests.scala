@@ -78,16 +78,16 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     (store, replayStore, space, replaySpace) =>
       for {
         root0 <- replaySpace.createCheckpoint().map(_.root)
-        _     = replayStore.get().isEmpty.map(_ shouldBe true)
+        _     = replayStore.get().isEmpty().map(_ shouldBe true)
 
         _     <- space.produce("ch1", "datum1", false)
         root1 <- space.createCheckpoint().map(_.root)
 
         _ <- replaySpace.reset(root1)
-        _ <- replayStore.get().isEmpty.map(_ shouldBe true)
+        _ <- replayStore.get().isEmpty().map(_ shouldBe true)
 
         _ <- space.reset(root0)
-        _ <- store.get().isEmpty.map(_ shouldBe true)
+        _ <- store.get().isEmpty().map(_ shouldBe true)
       } yield ()
   }
 
@@ -1023,9 +1023,9 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         (store, replayStore, space, replaySpace) =>
           IO.delay {
             for (i <- indices) {
-              replaySpace.produce("ch1", s"datum$i", false).unsafeRunSync
+              replaySpace.produce("ch1", s"datum$i", false).unsafeRunSync()
             }
-            space.createCheckpoint().unsafeRunSync
+            space.createCheckpoint().unsafeRunSync()
           }
       }
 
@@ -1118,7 +1118,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
 
-        _ <- replayStore.get().isEmpty.map(_ shouldBe false)
+        _ <- replayStore.get().isEmpty().map(_ shouldBe false)
         _ <- replayStore
               .get()
               .changes
@@ -1129,7 +1129,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _           = checkpoint0.log shouldBe empty // we don't record trace logs in ReplayRspace
 
         _ <- replaySpace.clear()
-        _ = replayStore.get().isEmpty.map(_ shouldBe true)
+        _ = replayStore.get().isEmpty().map(_ shouldBe true)
         _ = replaySpace.replayData shouldBe empty
 
         checkpoint1 <- replaySpace.createCheckpoint()
@@ -1207,12 +1207,12 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       val continuation = "continuation"
 
       for {
-        _        <- space.consume(channels, patterns, continuation, false)
-        _        <- space.produce(channel, datum, false)
-        c        <- space.createCheckpoint()
-        _        <- replaySpace.rigAndReset(c.root, c.log)
-        res      <- replaySpace.checkReplayData().attempt
-        Left(ex) = res
+        _   <- space.consume(channels, patterns, continuation, false)
+        _   <- space.produce(channel, datum, false)
+        c   <- space.createCheckpoint()
+        _   <- replaySpace.rigAndReset(c.root, c.log)
+        res <- replaySpace.checkReplayData().attempt
+        ex  = res.swap.toOption.get
       } yield ex shouldBe a[ReplayException]
   }
 
@@ -1270,7 +1270,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val log: Log[IO]          = Log.log[IO]
     implicit val metricsF: Metrics[IO] = new Metrics.MetricsNOP[IO]()
     implicit val spanF: Span[IO]       = NoopSpan[IO]()
-    implicit val kvm                   = InMemoryStoreManager[IO]
+    implicit val kvm                   = InMemoryStoreManager[IO]()
 
     (for {
       roots   <- kvm.store("roots")
@@ -1302,7 +1302,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
         replayStore
       )
       res <- f(store, replayStore, space, replaySpace)
-    } yield { res }).unsafeRunSync
+    } yield { res }).unsafeRunSync()
   }
 }
 

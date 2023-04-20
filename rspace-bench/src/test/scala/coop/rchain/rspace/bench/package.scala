@@ -9,7 +9,6 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.{Reduce, RhoRuntime}
 
-import scala.collection.immutable.Seq
 import coop.rchain.shared.PathOps.RichPath
 import org.scalacheck._
 import org.scalacheck.rng.Seed

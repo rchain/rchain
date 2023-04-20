@@ -89,7 +89,7 @@ object OperationOn0Ch {
   case class Rho(
       value: String
   ) {
-    val rstate: State = state.unsafeRunSync
+    val rstate: State = state.unsafeRunSync()
 
     def |(other: Rho): Rho = Rho(s"$value | ${other.value}")
 
@@ -170,7 +170,7 @@ trait BasicMergeabilityRules extends ComputeMerge {
       isConflict = false,
       mergedState,
       rejectRight = false // this parameter is not actually important in merge case
-    ).unsafeRunSync
+    ).unsafeRunSync()
 
   def ConflictingCase(left: Rho*)(
       right: Rho*
@@ -191,7 +191,7 @@ trait BasicMergeabilityRules extends ComputeMerge {
       isConflict = true,
       mergedLeftState,
       rejectRight = true
-    )).unsafeRunSync
+    )).unsafeRunSync()
 
   /**
     * This is a mark for cases which happen left consume and right produce doesn't match.But because we don't run

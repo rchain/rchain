@@ -32,6 +32,9 @@ object NumericOps {
 
       override def compare(x: B, y: B): Int =
         ev.compare(f(x), f(y))
+
+      override def parseString(str: String): Option[B] =
+        ev.parseString(str).map(g)
     }
 
 }

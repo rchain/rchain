@@ -9,6 +9,6 @@ trait TestImplicitHelpers {
   implicit def eitherDefinitionScalatest[E, A]: Definition[Id[Either[E, Option[A]]]] =
     new Definition[Id[Either[E, Option[A]]]] {
       override def isDefined(thing: Id[Either[E, Option[A]]]): Boolean =
-        thing.right.get.isDefined
+        thing.toOption.get.isDefined
     }
 }

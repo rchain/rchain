@@ -6,9 +6,11 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalacheck.Shrink._
 
-import scala.collection.JavaConverters
+import scala.jdk.CollectionConverters
 import scala.reflect.{classTag, ClassTag}
 import GenTools._
+
+import scala.collection.compat.immutable.ArraySeq
 
 object tools {
   def seqToJavaCollection[C <: java.util.Collection[T]: ClassTag, T](input: Seq[T]): C = {
@@ -17,12 +19,14 @@ object tools {
     r
   }
 
-  def javaCollectionToSeq[C <: java.util.Collection[T], T](col: C): Seq[T] =
-    JavaConverters.asScalaIterator(col.iterator()).toSeq
+  def javaCollectionToSeq[C <: java.util.Collection[T], T](col: C): Seq[T] = {
+    import scala.jdk.CollectionConverters._
+    (col.iterator().asScala).toSeq
+  }
 
-  def streamSingleton[T](v: T): Stream[T] = v #:: Stream.empty[T]
+  def streamSingleton[T](v: T): LazyList[T] = v #:: LazyList.empty[T]
 
-  def withQuotes(quote: Char)(s: String): String = quote + s + quote
+  def withQuotes(quote: Char)(s: String): String = s"$quote$s$quote"
   val stringQuotes: String => String             = withQuotes('"')
   val uriQuotes: String => String                = withQuotes('`')
 
@@ -161,7 +165,7 @@ object ProcGen {
 
   private val uriShrinker: Shrink[String] = Shrink { x: String =>
     {
-      val components = x.split(":")
+      val components = ArraySeq.unsafeWrapArray(x.split(":"))
 
       for {
         shrinkedComponentSeq <- shrinkContainer[Seq, String]
@@ -189,28 +193,30 @@ object ProcGen {
     s => new GroundUri(uriQuotes(s))
   )(gu => withoutQuotes(gu.uriliteral_))
 
-  implicit def procShrinker: Shrink[Proc] = Shrink {
+  def procShrinker: Shrink[Proc] = Shrink.withLazyList {
     case p: PGround =>
-      (p.ground_ match {
+      LazyList.from((p.ground_ match {
         case p: GroundInt    => groundIntShrinker.shrink(p)
         case p: GroundBool   => streamSingleton(p)
         case p: GroundString => groundStringShrinker.shrink(p)
         case p: GroundUri    => groundUriShrinker.shrink(p)
-      }).map(new PGround(_))
+      }).map(new PGround(_)))
 
     case p: PPar =>
-      for {
+      LazyList.from(for {
         sp1 <- shrink(p.proc_1)
         sp2 <- shrink(p.proc_2)
-      } yield new PPar(sp1, sp2)
+      } yield new PPar(sp1, sp2))
 
     case p: PSend =>
       val initialProcs = javaCollectionToSeq[ListProc, Proc](p.listproc_)
 
-      shrinkContainer[Seq, Proc]
-        .shrink(initialProcs)
-        .takeWhile(_.nonEmpty)
-        .map(procs => new PSend(p.name_, p.send_, seqToJavaCollection[ListProc, Proc](procs)))
+      LazyList.from(
+        shrinkContainer[Seq, Proc]
+          .shrink(initialProcs)
+          .takeWhile(_.nonEmpty)
+          .map(procs => new PSend(p.name_, p.send_, seqToJavaCollection[ListProc, Proc](procs)))
+      )
 
     case p: PNew =>
       val initialNames = javaCollectionToSeq[ListNameDecl, NameDecl](p.listnamedecl_).toList
@@ -224,26 +230,26 @@ object ProcGen {
         freeVars.isEmpty
       }
 
-      for {
+      LazyList.from(for {
         newNames     <- shrinkListNameDecl(initialNames)
         newLocalVars = extractNames(newNames)
         proc         <- shrink(p.proc_).filter(hasNoFreeVars(newLocalVars, _))
-      } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](newNames), proc)
+      } yield new PNew(seqToJavaCollection[ListNameDecl, NameDecl](newNames), proc))
 
     case p: PVar =>
-      (p.procvar_ match {
+      LazyList.from((p.procvar_ match {
         case v: ProcVarVar => shrinkString.shrink(v.var_).map(new ProcVarVar(_))
-      }).map(new PVar(_))
+      }).map(new PVar(_)))
 
     case p: PNeg =>
-      shrink(p.proc_).map(new PNeg(_))
+      LazyList.from(shrink(p.proc_).map(new PNeg(_)))
 
-    case p: PNil => streamSingleton(p)
+    case p: PNil => LazyList.from(streamSingleton(p))
 
     case p: PEval =>
-      (p.name_ match {
+      LazyList.from((p.name_ match {
         case nv: NameVar   => streamSingleton(nv)
         case nq: NameQuote => shrink(nq.proc_).map(new NameQuote(_))
-      }).map(new PEval(_))
+      }).map(new PEval(_)))
   }
 }

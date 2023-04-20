@@ -12,8 +12,8 @@ trait ByteStringSyntax {
   implicit final def modelsSyntaxByteString(bs: ByteString): ByteStringOps =
     new ByteStringOps(bs)
 
-  implicit def ordering: Ordering[ByteString] =
-    Ordering.by((b: ByteString) => b.toByteArray.toIterable)
+  import scala.Ordering.Implicits._
+  implicit def ordering: Ordering[ByteString] = Ordering.by((b: ByteString) => b.toByteArray.toSeq)
 
   implicit val show = new Show[ByteString] {
     def show(validator: ByteString): String = validator.toHexString

@@ -42,14 +42,14 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
       .copyStorage[IO](context.storageDirectory)
       .evalMap(create)
       .use(Function.uncurried(f).tupled)
-      .unsafeRunSync
+      .unsafeRunSync()
   }
 
   def withStorage[R](f: BlockStore[IO] => BlockDagStorage[IO] => IO[R]): R = {
     implicit val metrics = new MetricsNOP[IO]()
     implicit val log     = Log.log[IO]
 
-    BlockDagStorageTestFixture.withStorageF[IO].use(Function.uncurried(f).tupled).unsafeRunSync
+    BlockDagStorageTestFixture.withStorageF[IO].use(Function.uncurried(f).tupled).unsafeRunSync()
   }
 }
 

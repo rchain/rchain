@@ -44,13 +44,13 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
         s"""
             # @"${outcomeCh}"!(false && [1,2].nth(-1))
             # """.stripMargin('#')
-      execute(term).unsafeRunSync should equal(Right(false))
+      execute(term).unsafeRunSync() should equal(Right(false))
 
       val term2 =
         s"""
             # @"${outcomeCh}"!(1 < 0 && [1,2].nth(-1))
             # """.stripMargin('#')
-      execute(term2).unsafeRunSync should equal(Right(false))
+      execute(term2).unsafeRunSync() should equal(Right(false))
     }
     "execute both par1 and par2 if par1 == true" in {
       val term =
@@ -58,14 +58,14 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(true && [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
 
       val term2 =
         s"""
            # @"${outcomeCh}"!(1>0 && [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term2).unsafeRunSync should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term2).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
     }
   }
 
@@ -75,13 +75,13 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
         s"""
            # @"${outcomeCh}"!(true || [1,2].nth(-1))
            # """.stripMargin('#')
-      execute(term).unsafeRunSync should equal(Right(true))
+      execute(term).unsafeRunSync() should equal(Right(true))
 
       val term2 =
         s"""
            # @"${outcomeCh}"!(1 > 0 || [1,2].nth(-1))
            # """.stripMargin('#')
-      execute(term2).unsafeRunSync should equal(Right(true))
+      execute(term2).unsafeRunSync() should equal(Right(true))
     }
     "evaluate both par1 and par2 if par1 == false" in {
       val term =
@@ -89,14 +89,14 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false || [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
 
       val term2 =
         s"""
            # @"${outcomeCh}"!(1<0 || [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term2).unsafeRunSync should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term2).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
     }
   }
 
@@ -107,14 +107,14 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false && 1>0 and [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
 
       val term2 =
         s"""
            # @"${outcomeCh}"!(false and 1>0 && [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term2).unsafeRunSync should equal(Right(false))
+      execute(term2).unsafeRunSync() should equal(Right(false))
 
     }
 
@@ -124,14 +124,14 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false && 1>0 or [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
 
       val term2 =
         s"""
            # @"${outcomeCh}"!(false or 1<0 && [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term2).unsafeRunSync should equal(Right(false))
+      execute(term2).unsafeRunSync() should equal(Right(false))
 
     }
   }
@@ -143,14 +143,14 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false || 1>0 and [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
 
       val term2 =
         s"""
            # @"${outcomeCh}"!(true and 1>0 || [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term2).unsafeRunSync should equal(Right(true))
+      execute(term2).unsafeRunSync() should equal(Right(true))
     }
 
     "work with the same precedence with `or`" in {
@@ -159,14 +159,14 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false || 1>0 or [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
 
       val term2 =
         s"""
            # @"${outcomeCh}"!(true or 1>0 || [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term2).unsafeRunSync should equal(Right(true))
+      execute(term2).unsafeRunSync() should equal(Right(true))
     }
   }
 
@@ -183,7 +183,7 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
                     #    }
                     #}""".stripMargin('#')
 
-      execute(term).unsafeRunSync should equal(Right(false))
+      execute(term).unsafeRunSync() should equal(Right(false))
 
       val term2 = s""" new ret1, ret2 in {
                      #    ret1!(true) |
@@ -196,7 +196,7 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
                      #
                      #}""".stripMargin('#')
 
-      execute(term2).unsafeRunSync should equal(Right(true))
+      execute(term2).unsafeRunSync() should equal(Right(true))
     }
   }
 }

@@ -11,11 +11,11 @@ object ScalaTestCats {
         val con: C = container
         C.contains(con, element)
       }
-      def containsNoneOf(container: cats.Id[C], elements: Seq[Any]): Boolean = {
+      def containsNoneOf(container: cats.Id[C], elements: collection.Seq[Any]): Boolean = {
         val con: C = container
         C.containsNoneOf(con, elements)
       }
-      def containsOneOf(container: cats.Id[C], elements: Seq[Any]): Boolean = {
+      def containsOneOf(container: cats.Id[C], elements: collection.Seq[Any]): Boolean = {
         val con: C = container
         C.containsOneOf(con, elements)
       }

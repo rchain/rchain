@@ -72,7 +72,7 @@ class ListeningNameAPITest
       blockApi <- createBlockApi[IO]("root", 2, createValidator.some)
       res      <- blockApi.getListeningNameDataResponse(3, listeningName)
     } yield {
-      res shouldBe 'left
+      res shouldBe Symbol("left")
       res.left.value shouldBe "Your request on getListeningName depth 3 exceed the max limit 2"
 
       bds.getRepresentation wasCalled once
@@ -89,7 +89,7 @@ class ListeningNameAPITest
       blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.getListeningNameDataResponse(1, listeningName)
     } yield {
-      res shouldBe 'right
+      res shouldBe Symbol("right")
       res.value shouldBe (Seq(), 0)
 
       bs.get(*) wasCalled twice
@@ -107,7 +107,7 @@ class ListeningNameAPITest
       blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.getListeningNameDataResponse(2, listeningName)
     } yield {
-      res shouldBe 'right
+      res shouldBe Symbol("right")
       val (blocks, length) = res.value
       length shouldBe 1
       val (par, block) = (blocks.head.postBlockData.head, blocks.head.block)
@@ -131,7 +131,7 @@ class ListeningNameAPITest
       blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.getListeningNameDataResponse(10, listeningName)
     } yield {
-      res shouldBe 'right
+      res shouldBe Symbol("right")
       val (blocks, length) = res.value
       length shouldBe 1
       val (par, block) = (blocks.head.postBlockData.head, blocks.head.block)

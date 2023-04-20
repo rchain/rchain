@@ -12,7 +12,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 
 import java.nio.file.{Files, Path, Paths}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.util.Using
@@ -44,12 +44,14 @@ class CompilerTests extends AnyFunSuite with Matchers {
   }
 
   private def execute(file: Path): EvaluateResult =
-    mkRuntime[IO](tmpPrefix).use { runtime =>
-      Using.resource(Source.fromFile(file.toString))(
-        fileContents => {
-          runtime.evaluate(fileContents.mkString)
-        }
-      )
-    }.unsafeRunSync
+    mkRuntime[IO](tmpPrefix)
+      .use { runtime =>
+        Using.resource(Source.fromFile(file.toString))(
+          fileContents => {
+            runtime.evaluate(fileContents.mkString)
+          }
+        )
+      }
+      .unsafeRunSync()
 
 }

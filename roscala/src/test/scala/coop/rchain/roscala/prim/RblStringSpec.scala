@@ -56,7 +56,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringEq.fnSimple(newCtxt) should be('left)
+    stringEq.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string!= */
@@ -85,7 +85,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringNEq.fnSimple(newCtxt) should be('left)
+    stringNEq.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string< */
@@ -123,7 +123,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringLess.fnSimple(newCtxt) should be('left)
+    stringLess.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string<= */
@@ -161,7 +161,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringLEq.fnSimple(newCtxt) should be('left)
+    stringLEq.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string> */
@@ -199,7 +199,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringGtr.fnSimple(newCtxt) should be('left)
+    stringGtr.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string>= */
@@ -237,7 +237,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringGEq.fnSimple(newCtxt) should be('left)
+    stringGEq.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** Case Insensitive compares */
@@ -267,7 +267,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringCiEq.fnSimple(newCtxt) should be('left)
+    stringCiEq.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-ci!= */
@@ -296,7 +296,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringCiNEq.fnSimple(newCtxt) should be('left)
+    stringCiNEq.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-ci< */
@@ -334,7 +334,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringCiLess.fnSimple(newCtxt) should be('left)
+    stringCiLess.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-ci<= */
@@ -372,7 +372,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringCiLEq.fnSimple(newCtxt) should be('left)
+    stringCiLEq.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-ci> */
@@ -410,7 +410,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringCiGtr.fnSimple(newCtxt) should be('left)
+    stringCiGtr.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-ci>= */
@@ -448,7 +448,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringCiGEq.fnSimple(newCtxt) should be('left)
+    stringCiGEq.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-concat */
@@ -475,7 +475,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringConcat.fnSimple(newCtxt) should be('left)
+    stringConcat.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-join */
@@ -521,12 +521,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val ctxtBoth = reAssignCtxtArgs(ctxt, 2, parms)
 
-    stringJoin.fnSimple(ctxtBoth) should be('left)
+    stringJoin.fnSimple(ctxtBoth) should be(Symbol("left"))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringJoin.fnSimple(newCtxt) should be('left)
+    stringJoin.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-length */
@@ -550,7 +550,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringJoin.fnSimple(newCtxt) should be('left)
+    stringJoin.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-set-nth */
@@ -570,12 +570,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = reAssignCtxtArgs(ctxt, 2, parms)
 
-    stringSetNth.fnSimple(newCtxt) should be('left)
+    stringSetNth.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringSetNth.fnSimple(newCtxt) should be('left)
+    stringSetNth.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-new */
@@ -595,7 +595,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringNew.fnSimple(newCtxt) should be('left)
+    stringNew.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-mem? */
@@ -621,7 +621,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringMemQ.fnSimple(newCtxt) should be('left)
+    stringMemQ.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-get-token */
@@ -681,7 +681,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringMemQ.fnSimple(newCtxt) should be('left)
+    stringMemQ.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   /** string-split */
@@ -796,12 +796,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(RblString(str), RblString(sep), RblString("foo"))
     val newCtxt = reAssignCtxtArgs(ctxt, 2, parms)
-    stringSplit.fnSimple(newCtxt) should be('left)
+    stringSplit.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(5, Niv))
-    stringSplit.fnSimple(newCtxt) should be('left)
+    stringSplit.fnSimple(newCtxt) should be(Symbol("left"))
   }
 
 }

@@ -22,7 +22,7 @@ object RhoType {
   type RhoByteArray = RhoByteArray.type
   object RhoByteArray {
     def unapply(p: Par): Option[Array[Byte]] =
-      p.singleExpr().collect {
+      p.singleExpr.collect {
         case Expr(GByteArray(bs)) => bs.toByteArray
       }
 
@@ -33,7 +33,7 @@ object RhoType {
   type RhoString = RhoString.type
   object RhoString {
     def unapply(p: Par): Option[String] =
-      p.singleExpr().collect {
+      p.singleExpr.collect {
         case Expr(GString(bs)) => bs
       }
 
@@ -45,7 +45,7 @@ object RhoType {
     def apply(b: Boolean): Par = Expr(GBool(b))
 
     def unapply(p: Par): Option[Boolean] =
-      p.singleExpr().collect {
+      p.singleExpr.collect {
         case Expr(GBool(b)) => b
       }
   }
@@ -53,7 +53,7 @@ object RhoType {
   type RhoNumber = RhoNumber.type
   object RhoNumber {
     def unapply(p: Par): Option[Long] =
-      p.singleExpr().collect {
+      p.singleExpr.collect {
         case Expr(GInt(v)) => v
       }
 
@@ -65,7 +65,7 @@ object RhoType {
     def apply(tuple: Seq[Par]): Par = ETuple(tuple)
 
     def unapply(p: Par): Option[Seq[Par]] =
-      p.singleExpr().collect { case Expr(ETupleBody(ETuple(tuple, _, _))) => tuple }
+      p.singleExpr.collect { case Expr(ETupleBody(ETuple(tuple, _, _))) => tuple }
   }
 
   type RhoTuple2 = RhoTuple2.type
@@ -96,7 +96,7 @@ object RhoType {
   type RhoUri = RhoUri.type
   object RhoUri {
     def unapply(p: Par): Option[String] =
-      p.singleExpr().collect {
+      p.singleExpr.collect {
         case Expr(GUri(s)) => s
       }
 
@@ -106,7 +106,7 @@ object RhoType {
   type RhoList = RhoList.type
   object RhoList {
     def unapply(p: Par): Option[List[Par]] =
-      p.singleExpr().collect {
+      p.singleExpr.collect {
         case Expr(EListBody(EList(s, _, _, _))) => s.toList
       }
 
@@ -116,7 +116,7 @@ object RhoType {
   type RhoSet = RhoSet.type
   object RhoSet {
     def unapply(p: Par): Option[Set[Par]] =
-      p.singleExpr().collect {
+      p.singleExpr.collect {
         case Expr(ESetBody(ParSet(s, _, _, _))) => s.toSet
       }
 
@@ -126,7 +126,7 @@ object RhoType {
   type RhoMap = RhoMap.type
   object RhoMap {
     def unapply(p: Par): Option[Map[Par, Par]] =
-      p.singleExpr().collect {
+      p.singleExpr.collect {
         case Expr(EMapBody(ParMap(s, _, _, _))) => s.toMap
       }
 
@@ -174,7 +174,7 @@ object RhoType {
 
   type RhoExpression = RhoExpression.type
   object RhoExpression {
-    def unapply(p: Par): Option[Expr] = p.singleExpr()
+    def unapply(p: Par): Option[Expr] = p.singleExpr
 
     def apply(expr: Expr): Par = expr
   }

@@ -72,8 +72,8 @@ object EqualM extends EqualMDerivation {
   implicit def seqEqual[A: EqualM]: EqualM[Seq[A]] = new EqualM[Seq[A]] {
 
     override def equal[F[_]: Sync](self: Seq[A], other: Seq[A]): F[Boolean] = {
-      val pairs = self.toStream.zip(other)
-      Sync[F].delay(self.length == other.length) &&^
+      val pairs = self.to(LazyList).zip(other)
+      Sync[F].delay(self.lengthIs == other.length) &&^
         pairs.forallM(tupled(EqualM[A].equal[F]))
     }
 
@@ -82,7 +82,7 @@ object EqualM extends EqualMDerivation {
   implicit def arrayEqual[A: EqualM]: EqualM[Array[A]] = new EqualM[Array[A]] {
 
     override def equal[F[_]: Sync](self: Array[A], other: Array[A]): F[Boolean] = {
-      val pairs = self.toStream.zip(other)
+      val pairs = self.to(LazyList).zip(other)
       Sync[F].delay(self.length == other.length) &&^
         pairs.forallM(tupled(EqualM[A].equal[F]))
     }
@@ -92,9 +92,9 @@ object EqualM extends EqualMDerivation {
   implicit def mapEqual[A: EqualM, B: EqualM]: EqualM[Map[A, B]] = new EqualM[Map[A, B]] {
 
     override def equal[F[_]: Sync](self: Map[A, B], other: Map[A, B]): F[Boolean] = {
-      val pairsA = self.keys.toStream.zip(other.keys)
-      val pairsB = self.values.toStream.zip(other.values)
-      Sync[F].delay(self.size == other.size) &&^ pairsA
+      val pairsA = self.keys.to(LazyList).zip(other.keys)
+      val pairsB = self.values.to(LazyList).zip(other.values)
+      Sync[F].delay(self.sizeIs == other.size) &&^ pairsA
         .forallM(tupled(EqualM[A].equal[F])) &&^ pairsB.forallM(tupled(EqualM[B].equal[F]))
     }
 
@@ -161,7 +161,7 @@ trait EqualMDerivation {
   def combine[T](ctx: CaseClass[EqualM, T]): EqualM[T] = new EqualM[T] {
 
     def equal[F[_]: Sync](self: T, other: T): F[Boolean] = Sync[F].defer {
-      ctx.parameters.toStream.forallM { p =>
+      ctx.parameters.to(LazyList).forallM { p =>
         p.typeclass.equal(p.dereference(self), p.dereference(other))
       }
     }

@@ -41,7 +41,7 @@ object RSpaceExporter {
       else {
         // Max prefix length = 127 bytes.
         // Prefix coded 5 Blake256 elements (0 - size, 1..4 - value of prefix).
-        assert(prefixSeq.size >= 5, "Invalid path during export.")
+        assert(prefixSeq.sizeIs >= 5, "Invalid path during export.")
         val (sizePrefix: Int, seq) = (prefixSeq.head.bytes.head & 0xff, prefixSeq.tail)
         val prefix128: ByteVector  = seq.head.bytes ++ seq(1).bytes ++ seq(2).bytes ++ seq(3).bytes
         KeySegment(prefix128.take(sizePrefix.toLong)).some

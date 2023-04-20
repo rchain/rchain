@@ -102,7 +102,7 @@ abstract class KademliaRPCSpec[F[_]: Async, E <: Environment]
     "doing a lookup to a remote peer" when {
       val key = Array.ofDim[Byte](40)
       Random.nextBytes(key)
-      val otherPeer = PeerNode.from(NodeIdentifier(key), "1.2.3.4", 0, 0)
+      val otherPeer = PeerNode.from(NodeIdentifier(key.toIndexedSeq), "1.2.3.4", 0, 0)
 
       "everything is fine" should {
         "send and receive a list of peers" in
@@ -113,7 +113,7 @@ abstract class KademliaRPCSpec[F[_]: Async, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key.toIndexedSeq, remote)
 
             val result: TwoNodesResult = run()
 
@@ -135,7 +135,7 @@ abstract class KademliaRPCSpec[F[_]: Async, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key.toIndexedSeq, remote)
 
             val result: TwoNodesResult = run()
 
@@ -155,7 +155,7 @@ abstract class KademliaRPCSpec[F[_]: Async, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key.toIndexedSeq, remote)
 
             val result: TwoNodesResult = run()
 

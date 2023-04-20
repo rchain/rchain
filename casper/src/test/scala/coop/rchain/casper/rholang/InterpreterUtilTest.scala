@@ -297,8 +297,8 @@ class InterpreterUtilTest
       blockStore: BlockStore[IO]
   ): IO[Seq[PCost]] =
     for {
-      computeResult                         <- computeDeploysCheckpoint[IO](Seq(genesis.blockHash), deploy)
-      Right((_, _, processedDeploys, _, _)) = computeResult
+      computeResult                  <- computeDeploysCheckpoint[IO](Seq(genesis.blockHash), deploy)
+      (_, _, processedDeploys, _, _) = computeResult.toOption.get
     } yield processedDeploys.map(_.cost)
 
   "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in withGenesis(
@@ -378,7 +378,7 @@ class InterpreterUtilTest
                             deploys,
                             blockNumber = 1L
                           )
-      Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
+      (preStateHash, computedTsHash, processedDeploys, _, _) = deploysCheckpoint.toOption.get
       block <- createBlock[IO](
                 ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                 deploys = processedDeploys,
@@ -424,7 +424,7 @@ class InterpreterUtilTest
                               deploys,
                               1L
                             )
-        Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
+        (preStateHash, computedTsHash, processedDeploys, _, _) = deploysCheckpoint.toOption.get
         block <- createBlock[IO](
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
@@ -474,7 +474,7 @@ class InterpreterUtilTest
                               deploys,
                               1L
                             )
-        Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
+        (preStateHash, computedTsHash, processedDeploys, _, _) = deploysCheckpoint.toOption.get
         block <- createBlock[IO](
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
@@ -521,7 +521,7 @@ class InterpreterUtilTest
                               deploys,
                               1L
                             )
-        Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
+        (preStateHash, computedTsHash, processedDeploys, _, _) = deploysCheckpoint.toOption.get
         block <- createBlock[IO](
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
@@ -561,7 +561,7 @@ class InterpreterUtilTest
                                 1L,
                                 i + 1L
                               )
-          Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
+          (preStateHash, computedTsHash, processedDeploys, _, _) = deploysCheckpoint.toOption.get
           block <- createBlock[IO](
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
@@ -587,7 +587,7 @@ class InterpreterUtilTest
                               deploys,
                               1L
                             )
-        Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
+        (preStateHash, computedTsHash, processedDeploys, _, _) = deploysCheckpoint.toOption.get
         //create single deploy with log that includes excess comm events
         badProcessedDeploy = processedDeploys.head.copy(
           deployLog = processedDeploys.head.deployLog ++ processedDeploys.last.deployLog.take(5)
@@ -633,7 +633,7 @@ class InterpreterUtilTest
                                 1L,
                                 i + 1L
                               )
-          Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
+          (preStateHash, computedTsHash, processedDeploys, _, _) = deploysCheckpoint.toOption.get
           block <- createBlock[IO](
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,

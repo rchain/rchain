@@ -24,7 +24,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[IO, TcpTlsEnvironment] {
       val key     = CertificatePrinter.printPrivateKey(keyPair.getPrivate)
       val id      = CertificateHelper.publicAddress(keyPair.getPublic).map(Base16.encode).get
       val address = s"rnode://$id@$host?protocol=$port&discovery=0"
-      val peer    = PeerNode.fromAddress(address).right.get
+      val peer    = PeerNode.fromAddress(address).toOption.get
       TcpTlsEnvironment(host, port, cert, key, peer)
     }
 
@@ -46,7 +46,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[IO, TcpTlsEnvironment] {
       )
     )
 
-  def extract[A](fa: IO[A]): A = fa.unsafeRunSync
+  def extract[A](fa: IO[A]): A = fa.unsafeRunSync()
 
   def createDispatcherCallback: IO[DispatcherCallback[IO]] =
     PQueue.bounded[IO, Unit](1).map(new DispatcherCallback(_))

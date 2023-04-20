@@ -17,8 +17,8 @@ object CompilerSettings {
   private lazy val commonOptions =
     // format: off
     Seq(
-      "-Xfuture",
-      "-Ypartial-unification",
+//      "-Xfuture",
+//      "-Ypartial-unification",
       // To prevent "dead code following this construct" error when using `*` from mockito-scala library
       // https://github.com/mockito/mockito-scala/#dead-code-warning
       // This warning should be disabled only for Tests but in that case IntelliJ cannot compile project.
@@ -33,9 +33,18 @@ object CompilerSettings {
       "-Xfatal-warnings",
       //With > 16: [error] invalid setting for -Ybackend-parallelism must be between 1 and 16
       //https://github.com/scala/scala/blob/v2.12.6/src/compiler/scala/tools/nsc/settings/ScalaSettings.scala#L240
-      "-Ybackend-parallelism", getRuntime.availableProcessors().min(16).toString
+      "-Ybackend-parallelism", getRuntime.availableProcessors().min(16).toString,
+      // Added with migration to Scala 2.13
+      // needed for Cats-tagless
+      "-Ymacro-annotations",
+      // disable exhaustivity checking of unsealed types
+      "-Xlint:-strict-unsealed-patmat",
+      "-Xnon-strict-patmat-analysis",
+      // Error: Block result was adapted via implicit conversion (method apply) taking a by-name parameter
+      "-Xlint:-byname-implicit",
+      "-Xlint:adapted-args"
     )
-    // format: on
+  // format: on
 
   lazy val options = Seq(
     javacOptions ++= Seq("-encoding", "UTF-8"),
@@ -57,19 +66,18 @@ object CompilerSettings {
           Seq(
             "-Xlint:-missing-interpolator,-adapted-args,-inaccessible,_",
             "-Ywarn-unused",
-            "-Ywarn-unused-import"
+            "-Ywarn-unused:imports"
           )
       }
     },
-    scalacOptions in (Compile, console) ~= {
+    Compile / console / scalacOptions ~= {
       _.filterNot(
         Set(
           "-Xfatal-warnings",
-          "-Ywarn-unused-import",
           "-Ywarn-unused:imports"
         )
       )
     },
-    scalacOptions in (Test, console) := (scalacOptions in (Compile, console)).value
+    Test / console / scalacOptions := (Compile / console / scalacOptions).value
   )
 }

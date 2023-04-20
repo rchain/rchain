@@ -25,9 +25,9 @@ class LmdbKeyValueStoreSpec
   val tempPath = Files.createTempDirectory(s"lmdb-test-")
   val tempDir  = Directory(Path(tempPath.toFile))
 
-  override def beforeAll: Unit = tempDir.deleteRecursively
+  override def beforeAll(): Unit = tempDir.deleteRecursively()
 
-  override def afterAll: Unit = tempDir.deleteRecursively
+  override def afterAll(): Unit = tempDir.deleteRecursively()
 
   def withSut[F[_]: Async: Log](f: KeyValueStoreSut[F] => F[Unit]) =
     for {
@@ -55,7 +55,7 @@ class LmdbKeyValueStoreSpec
         } yield result shouldBe expected
       }
 
-      test.unsafeRunSync
+      test.unsafeRunSync()
     }
   }
 
@@ -67,7 +67,7 @@ class LmdbKeyValueStoreSpec
         } yield result shouldBe expected
       }
 
-      test.unsafeRunSync
+      test.unsafeRunSync()
     }
   }
 
@@ -86,7 +86,7 @@ class LmdbKeyValueStoreSpec
         } yield result shouldBe expected
       }
 
-      test.unsafeRunSync
+      test.unsafeRunSync()
     }
   }
 

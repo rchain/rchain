@@ -147,7 +147,7 @@ object TransactionBalances {
           val fromVault = m.getOrElse(
             fromAddr,
             RevAccount(
-              address = RevAddress.parse(fromAddr).right.get,
+              address = RevAddress.parse(fromAddr).toOption.get,
               amount = 0L,
               accountType = NormalVault
             )
@@ -156,7 +156,7 @@ object TransactionBalances {
           val toVault = newVaultMap.getOrElse(
             toAddr,
             RevAccount(
-              address = RevAddress.parse(toAddr).right.get,
+              address = RevAddress.parse(toAddr).toOption.get,
               amount = 0L,
               accountType = NormalVault
             )
@@ -178,7 +178,7 @@ object TransactionBalances {
       vaultMap <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
       coopVault = vaultMap.getOrElse(
         CoopVaultAddr,
-        RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
+        RevAccount(RevAddress.parse(CoopVaultAddr).toOption.get, 0, CoopPosMultiSigVault)
       )
       perValidatorVaults <- getPerValidatorVaults(runtime, block).map(
                              addrs =>
@@ -187,7 +187,7 @@ object TransactionBalances {
                                    vaultMap.getOrElse(
                                      addr,
                                      RevAccount(
-                                       RevAddress.parse(addr).right.get,
+                                       RevAddress.parse(addr).toOption.get,
                                        0,
                                        PerValidatorVault
                                      )

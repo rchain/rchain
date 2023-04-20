@@ -848,14 +848,14 @@ trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDriven
 
   private[this] val validIndices =
     for (n <- Gen.choose(1, 10)) yield n
-  private[this] val size: Int = 11
+  private[this] val dataSize: Int = 11
 
   "removeDatum" should s"remove datum at index" in
     forAll("channel", "datum", validIndices, minSuccessful(10)) {
       (channel: String, datumValue: String, index: Int) =>
         fixture { (_, _, store) =>
           val key = channel
-          val data = List.tabulate(size) { i =>
+          val data = List.tabulate(dataSize) { i =>
             Datum.create(channel, datumValue + i, persist = false)
           }
 
@@ -867,7 +867,7 @@ trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDriven
             res <- store.getData(key)
             _ <- S.delay {
                   res should contain theSameElementsAs data.filterNot(
-                    _.a == datumValue + (size - index)
+                    _.a == datumValue + (dataSize - index)
                   )
                 }
           } yield ()
@@ -877,7 +877,7 @@ trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDriven
   "putWaitingContinuation" should "put waiting continuation in a new channel" in
     forAll("channel", "continuation") { (channel: String, pattern: String) =>
       fixture { (_, _, store) =>
-        val key          = collection.immutable.Seq(channel)
+        val key          = Seq(channel)
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc: WaitingContinuation[Pattern, StringsCaptor] =

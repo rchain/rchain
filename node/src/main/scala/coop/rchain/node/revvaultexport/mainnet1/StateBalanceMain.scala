@@ -64,7 +64,7 @@ object StateBalanceMain {
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
-    val options   = StateOptions(args)
+    val options   = StateOptions(args.toIndexedSeq)
     val dataDir   = options.dataDir()
     val blockHash = options.blockHash()
     val shardId   = options.shardId()
@@ -95,6 +95,6 @@ object StateBalanceMain {
     } yield ()
 
     import cats.effect.unsafe.implicits.global
-    task.unsafeRunSync
+    task.unsafeRunSync()
   }
 }

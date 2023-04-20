@@ -110,7 +110,7 @@ class FindAndConnectSpec
   }
 
   private def peer(name: String): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), Endpoint("host", 80, 80))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), Endpoint("host", 80, 80))
 
   private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
     Ref.unsafe[Id, Connections](peers.reverse.foldLeft(Connections.empty) {

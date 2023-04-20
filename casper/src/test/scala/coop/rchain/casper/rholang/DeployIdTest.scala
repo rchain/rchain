@@ -57,7 +57,7 @@ class DeployIdTest extends AnyFlatSpec with Matchers {
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, d) }
             } yield res
         )
-        .unsafeRunSync
+        .unsafeRunSync()
 
     result.size should be(1)
     result.head should be(GDeployId(d.sig): Par)

@@ -133,7 +133,7 @@ class ExploratoryDeployAPITest
     for {
       result <- exploratoryDeploy[IO](term, b2.blockHash)
     } yield {
-      result shouldBe 'right
+      result shouldBe Symbol("right")
 
       val (par, b) = result.value
       par match {
@@ -166,7 +166,7 @@ class ExploratoryDeployAPITest
                  ValidatorIdentity(keys.head._1).some
                )
     } yield {
-      result shouldBe 'left
+      result shouldBe Symbol("left")
       result.left.value shouldBe "Exploratory deploy can only be executed on read-only RNode."
 
       verifyNoMoreInteractions(blockDagStorage)

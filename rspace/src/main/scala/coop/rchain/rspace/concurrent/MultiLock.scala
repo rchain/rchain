@@ -44,5 +44,5 @@ class MultiLock[F[_]: Async: Metrics, K](metricSource: Metrics.Source) {
   }
 
   // Release memory (stored semaphores)
-  def cleanUp: F[Unit] = Sync[F].delay(locks.clear)
+  def cleanUp: F[Unit] = Sync[F].delay(locks.clear())
 }

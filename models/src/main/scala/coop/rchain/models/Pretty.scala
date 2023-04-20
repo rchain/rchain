@@ -130,7 +130,7 @@ trait PrettyDerivation {
       val nonDefaultParameters =
         ctx.parameters.filter(p => !p.default.contains(p.dereference(value)))
 
-      val paramStrings = if (nonDefaultParameters.size == ctx.parameters.size) {
+      val paramStrings = if (nonDefaultParameters.sizeIs == ctx.parameters.size) {
         nonDefaultParameters.map(p => printParam(value, p, indentLevel))
       } else {
         nonDefaultParameters.map(p => s"${p.label} = ${printParam(value, p, indentLevel)}")
