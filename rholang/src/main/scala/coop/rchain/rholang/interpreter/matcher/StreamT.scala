@@ -157,6 +157,12 @@ trait StreamTInstances1 extends StreamTInstances2 {
   ): MonadError[StreamT[F, *], E] =
     new StreamTMonadError[F, E] { implicit val F = F0 }
 
+  implicit def catsDataMonadErrorMonadForStreamT[F[_]](
+      implicit F0: Monad[F]
+  ): MonadError[StreamT[F, *], Unit] =
+    new StreamTMonadErrorMonad[F] {
+      implicit val F = F0
+    }
 }
 
 private trait StreamTMonadError[F[_], E] extends MonadError[StreamT[F, *], E] with StreamTMonad[F] {
@@ -174,11 +180,6 @@ private trait StreamTMonadError[F[_], E] extends MonadError[StreamT[F, *], E] wi
 trait StreamTInstances2 {
   private[matcher] type of[F[_], G[_]] = { type l[A] = F[G[A]] }
   private[matcher] type StreamTC[M[_]] = { type l[A] = StreamT[M, A] }
-
-  implicit def catsDataMonadErrorMonadForStreamT[F[_]](
-      implicit F0: Monad[F]
-  ): MonadError[StreamT[F, *], Unit] =
-    new StreamTMonadErrorMonad[F] { implicit val F = F0 }
 
   implicit final def streamMonadLayerControl[M[_]](
       implicit M: Monad[M]
