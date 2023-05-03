@@ -44,7 +44,7 @@ package object effects {
       maxMessageSize: Int,
       packetChunkSize: Int,
       ioScheduler: Scheduler
-  )(implicit scheduler: Scheduler): F[TransportLayer[F]] =
+  ): F[TransportLayer[F]] =
     Ref.of[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]](Map()) map { channels =>
       val cert = Using.resource(Source.fromFile(certPath.toFile))(_.mkString)
       val key  = Using.resource(Source.fromFile(keyPath.toFile))(_.mkString)

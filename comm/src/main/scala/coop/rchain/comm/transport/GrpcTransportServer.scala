@@ -1,7 +1,7 @@
 package coop.rchain.comm.transport
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -39,7 +39,7 @@ object TransportLayerServer {
     }
 }
 
-class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
+class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics: Timer](
     networkId: String,
     port: Int,
     cert: String,
@@ -89,7 +89,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
 
     val cancelable = for {
       serverSslContext <- serverSslContextTask
-      messageBuffers   <- Ref.of[F, Map[PeerNode, Deferred[F, MessageBuffers]]](Map.empty)
+      messageBuffers   <- Ref.of[F, Map[PeerNode, Deferred[F, MessageBuffers[F]]]](Map.empty)
       receiver <- GrpcTransportReceiver.create(
                    networkId: String,
                    port,
@@ -109,7 +109,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
 
 object GrpcTransportServer {
 
-  def acquireServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
+  def acquireServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics: Timer](
       networkId: String,
       port: Int,
       certPath: Path,

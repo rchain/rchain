@@ -8,12 +8,14 @@ import cats.syntax.all._
 import coop.rchain.comm.CommError.{protocolException, CommErr}
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.transport.StreamObservable.StreamObservable
 import coop.rchain.grpc.implicits._
 import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
+import fs2.concurrent.{Signal, SignallingRef}
 import io.grpc.ManagedChannel
 import io.grpc.netty._
 import io.netty.handler.ssl.SslContext
@@ -34,7 +36,7 @@ import scala.util._
 final case class BufferedGrpcStreamChannel[F[_]](
     grpcTransport: ManagedChannel,
     buffer: StreamObservable[F],
-    buferSubscriber: Cancelable
+    buferSubscriber: Stream[F, Unit]
 )
 
 class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
@@ -46,8 +48,7 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
     clientQueueSize: Int,
     channelsMap: Ref[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]],
     ioScheduler: Scheduler
-)(implicit scheduler: Scheduler)
-    extends TransportLayer[F] {
+) extends TransportLayer[F] {
 
   val DefaultSendTimeout: FiniteDuration = 5.seconds
 
@@ -87,17 +88,16 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
         .intercept(new SslSessionClientInterceptor(networkId))
         .overrideAuthority(peer.id.toString)
         .build()
-      buffer = new StreamObservable[F](peer, clientQueueSize, cache)
+      buffer <- StreamObservable[F](peer, clientQueueSize, cache)
 
-      buferSubscriber = buffer.subscribe(
+      buferSubscriber = buffer._2.evalMap(
         sMsg =>
           streamBlobFile(sMsg.key, peer, sMsg.sender)
             .guarantee(Sync[F].delay(cache.remove(sMsg.key)).void)
-            .toTask
-            .runToFuture >> Continue.pure[CancelableFuture]
       )
 
-      channel = BufferedGrpcStreamChannel(grpcChannel, buffer, buferSubscriber)
+      sig     <- SignallingRef(grpcChannel.isTerminated)
+      channel = BufferedGrpcStreamChannel(grpcChannel, buffer, buferSubscriber.interruptWhen(sig))
     } yield channel
 
   private def getChannel(peer: PeerNode): F[BufferedGrpcStreamChannel[F]] =
@@ -117,12 +117,19 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
       // In case underlying gRPC transport is terminated - clean resources,
       // remove current record and try one more time
       r <- if (c.grpcTransport.isTerminated)
-            Sync[F].delay(c.buferSubscriber.cancel()) >>
-              Log[F].info(
-                s"Channel to peer ${peer.toAddress} is terminated, removing from connections map"
-              ) >>
+            Log[F].info(
+              s"Channel to peer ${peer.toAddress} is terminated, removing from connections map"
+            ) >>
               channelsMap.update(_ - peer) >> getChannel(peer)
           else c.pure[F]
+      _ <- Concurrent[F]
+            .start(r.buferSubscriber.compile.drain)
+            .onError {
+              case err =>
+                Log[F].error(s"Outbound gPRC channel to peer ${peer.toAddress} failed: $err") >>
+                  channelsMap.update(_ - peer)
+            }
+            .onCancel { channelsMap.update(_ - peer) }
     } yield r
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration)(
@@ -151,7 +158,7 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
     Stream
       .fromIterator(peers.iterator)
       .parEvalMapUnorderedProcBounded { peer =>
-        getChannel(peer).flatMap(_.buffer.enque(blob))
+        getChannel(peer).flatMap(_.buffer._1(blob))
       }
       .compile
       .drain

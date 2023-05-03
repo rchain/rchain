@@ -128,7 +128,7 @@ object NetworkServers {
       nodeConf.apiServer.maxConnectionAgeGrace
     )
 
-  def protocolServer[F[_]: Monixable: Concurrent: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
+  def protocolServer[F[_]: Monixable: Concurrent: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics: Timer](
       nodeConf: NodeConf,
       routingMessageQueue: Queue[F, RoutingMessage]
   )(implicit scheduler: Scheduler): Resource[F, Unit] = {
