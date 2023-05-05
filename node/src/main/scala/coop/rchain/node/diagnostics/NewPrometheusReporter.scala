@@ -1,12 +1,15 @@
 package coop.rchain.node.diagnostics
 
-import java.time.Duration
-
-import scala.collection.JavaConverters._
-
 import com.typesafe.config.{Config, ConfigUtil}
 import kamon._
 import kamon.metric._
+import kamon.module.MetricReporter
+import kamon.prometheus.PrometheusSettings.{GaugeSettings, SummarySettings}
+import kamon.tag.TagSet
+import kamon.util.Filter.Glob
+
+import java.time.Duration
+import scala.jdk.CollectionConverters._
 
 /**
   * Based on kamon-prometheus but without the embedded server
@@ -16,12 +19,11 @@ class NewPrometheusReporter extends MetricReporter {
   import NewPrometheusReporter.Configuration.{environmentTags, readConfiguration}
 
   private val snapshotAccumulator =
-    new PeriodSnapshotAccumulator(Duration.ofDays(365 * 5), Duration.ZERO)
+    new PeriodSnapshot.Accumulator(Duration.ofDays(365 * 5), Duration.ZERO, Duration.ZERO)
 
   @volatile private var preparedScrapeData: String =
     "# The kamon-prometheus module didn't receive any data just yet.\n"
 
-  override def start(): Unit                        = {}
   override def stop(): Unit                         = {}
   override def reconfigure(newConfig: Config): Unit = {}
 
@@ -32,10 +34,10 @@ class NewPrometheusReporter extends MetricReporter {
     val scrapeDataBuilder =
       new ScrapeDataBuilder(reporterConfiguration, environmentTags(reporterConfiguration))
 
-    scrapeDataBuilder.appendCounters(currentData.metrics.counters)
-    scrapeDataBuilder.appendGauges(currentData.metrics.gauges)
-    scrapeDataBuilder.appendHistograms(currentData.metrics.histograms)
-    scrapeDataBuilder.appendHistograms(currentData.metrics.rangeSamplers)
+    scrapeDataBuilder.appendCounters(currentData.counters)
+    scrapeDataBuilder.appendGauges(currentData.gauges)
+    scrapeDataBuilder.appendHistograms(currentData.histograms)
+    scrapeDataBuilder.appendHistograms(currentData.rangeSamplers)
     preparedScrapeData = scrapeDataBuilder.build()
   }
 
@@ -56,7 +58,9 @@ object NewPrometheusReporter {
       timeBuckets: Seq[java.lang.Double],
       informationBuckets: Seq[java.lang.Double],
       customBuckets: Map[String, Seq[java.lang.Double]],
-      includeEnvironmentTags: Boolean
+      includeEnvironmentTags: Boolean,
+      summarySettings: SummarySettings,
+      gaugeSettings: GaugeSettings
   )
 
   object Configuration {
@@ -68,23 +72,32 @@ object NewPrometheusReporter {
         startEmbeddedServer = prometheusConfig.getBoolean("start-embedded-http-server"),
         embeddedServerHostname = prometheusConfig.getString("embedded-server.hostname"),
         embeddedServerPort = prometheusConfig.getInt("embedded-server.port"),
-        defaultBuckets = prometheusConfig.getDoubleList("buckets.default-buckets").asScala,
-        timeBuckets = prometheusConfig.getDoubleList("buckets.time-buckets").asScala,
-        informationBuckets = prometheusConfig.getDoubleList("buckets.information-buckets").asScala,
+        defaultBuckets = prometheusConfig.getDoubleList("buckets.default-buckets").asScala.toSeq,
+        timeBuckets = prometheusConfig.getDoubleList("buckets.time-buckets").asScala.toSeq,
+        informationBuckets =
+          prometheusConfig.getDoubleList("buckets.information-buckets").asScala.toSeq,
         customBuckets = readCustomBuckets(prometheusConfig.getConfig("buckets.custom")),
-        includeEnvironmentTags = prometheusConfig.getBoolean("include-environment-tags")
+        includeEnvironmentTags = prometheusConfig.getBoolean("include-environment-tags"),
+        summarySettings = SummarySettings(
+          quantiles = prometheusConfig.getDoubleList("summaries.quantiles").asScala.toSeq,
+          metricMatchers =
+            prometheusConfig.getStringList("summaries.metrics").asScala.map(Glob).toSeq
+        ),
+        gaugeSettings = GaugeSettings(
+          metricMatchers = prometheusConfig.getStringList("gauges.metrics").asScala.map(Glob).toSeq
+        )
       )
     }
 
     def environmentTags(
         reporterConfiguration: NewPrometheusReporter.Configuration
-    ): Map[String, String] =
+    ): TagSet =
       if (reporterConfiguration.includeEnvironmentTags) Kamon.environment.tags
-      else Map.empty[String, String]
+      else TagSet.Empty
 
     private def readCustomBuckets(customBuckets: Config): Map[String, Seq[java.lang.Double]] =
       customBuckets.topLevelKeys
-        .map(k => (k, customBuckets.getDoubleList(ConfigUtil.quoteString(k)).asScala))
+        .map(k => (k, customBuckets.getDoubleList(ConfigUtil.quoteString(k)).asScala.toSeq))
         .toMap
   }
 

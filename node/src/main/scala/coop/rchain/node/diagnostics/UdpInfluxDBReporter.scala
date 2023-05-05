@@ -3,14 +3,19 @@ package coop.rchain.node.diagnostics
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.DatagramChannel
-
 import coop.rchain.node.diagnostics.UdpInfluxDBReporter.{MetricDataPacketBuffer, Settings}
-
 import com.typesafe.config.Config
-import kamon.{Kamon, MetricReporter}
+import kamon.Kamon
+import kamon.module.MetricReporter
 import kamon.metric._
-import kamon.util.EnvironmentTagBuilder
+import kamon.status.Environment
+import kamon.tag.{Tag, TagSet}
+import kamon.util.EnvironmentTags
 
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+
+// TODO use Dispatcher to execute inside F context?
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporter {
 
@@ -18,40 +23,54 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
   private var settings: Settings             = readConfiguration(config)
   private val clientChannel: DatagramChannel = DatagramChannel.open()
 
-  override def start(): Unit = {}
-
   override def stop(): Unit = {}
 
   override def reconfigure(config: Config): Unit =
     settings = readConfiguration(config)
 
+  protected def getTimestamp(instant: Instant): String =
+    settings.measurementPrecision match {
+      case "s" =>
+        instant.getEpochSecond.toString
+      case "ms" =>
+        instant.toEpochMilli.toString
+      case "u" | "µ" =>
+        ((BigInt(instant.getEpochSecond) * 1000000) + TimeUnit.NANOSECONDS.toMicros(
+          instant.getNano.toLong
+        )).toString
+      case "ns" =>
+        ((BigInt(instant.getEpochSecond) * 1000000000) + instant.getNano).toString
+    }
+
   private def readConfiguration(config: Config): Settings = {
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     val influxConfig = config.getConfig("kamon.influxdb")
     val address =
       new InetSocketAddress(influxConfig.getString("hostname"), influxConfig.getInt("port"))
-    val maxPacketSize  = influxConfig.getBytes("max-packet-size")
-    val percentiles    = influxConfig.getDoubleList("percentiles").asScala.map(_.toDouble)
-    val additionalTags = EnvironmentTagBuilder.create(influxConfig.getConfig("additional-tags"))
+    val maxPacketSize = influxConfig.getBytes("max-packet-size")
+    val percentiles   = influxConfig.getDoubleList("percentiles").asScala.map(_.toDouble).toSeq
+    val precision     = influxConfig.getString("precision")
+    val additionalTags =
+      EnvironmentTags.from(Environment.from(config), config.getConfig("additional-tags"))
 
-    Settings(address, maxPacketSize, percentiles, additionalTags)
+    Settings(address, maxPacketSize, percentiles, additionalTags, precision)
   }
 
   def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit = {
-    import snapshot.metrics._
+    import snapshot._
     val packetBuffer =
       new MetricDataPacketBuffer(settings.maxPacketSize, clientChannel, settings.address)
-    val builder   = StringBuilder.newBuilder
-    val timestamp = snapshot.to.toEpochMilli
+    val builder   = new StringBuilder
+    val timestamp = getTimestamp(snapshot.to)
 
     counters.foreach { c =>
-      writeMetricValue(builder, c, "count", timestamp)
+      writeLongMetricValue(builder, c, "count", timestamp)
       packetBuffer.appendMeasurement(builder.toString)
       builder.clear()
     }
 
     gauges.foreach { g =>
-      writeMetricValue(builder, g, "value", timestamp)
+      writeDoubleMetricValue(builder, g, "value", timestamp)
       packetBuffer.appendMeasurement(builder.toString)
       builder.clear()
     }
@@ -69,64 +88,80 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
     }
   }
 
-  private def writeMetricValue(
+  private def writeLongMetricValue(
       builder: StringBuilder,
-      metric: MetricValue,
+      metric: MetricSnapshot.Values[Long],
       fieldName: String,
-      timestamp: Long
-  ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, fieldName, metric.value, appendSeparator = false)
-    writeTimestamp(builder, timestamp)
-  }
+      timestamp: String
+  ): Unit =
+    metric.instruments.foreach { instrument =>
+      writeNameAndTags(builder, metric.name, instrument.tags)
+      writeIntField(builder, fieldName, instrument.value, appendSeparator = false)
+      writeTimestamp(builder, timestamp)
+    }
+
+  private def writeDoubleMetricValue(
+      builder: StringBuilder,
+      metric: MetricSnapshot.Values[Double],
+      fieldName: String,
+      timestamp: String
+  ): Unit =
+    metric.instruments.foreach { instrument =>
+      writeNameAndTags(builder, metric.name, instrument.tags)
+      writeDoubleField(builder, fieldName, instrument.value, appendSeparator = false)
+      writeTimestamp(builder, timestamp)
+    }
 
   private def writeMetricDistribution(
       builder: StringBuilder,
-      metric: MetricDistribution,
+      metric: MetricSnapshot.Distributions,
       percentiles: Seq[Double],
-      timestamp: Long
-  ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, "count", metric.distribution.count)
-    writeIntField(builder, "sum", metric.distribution.sum)
-    writeIntField(builder, "min", metric.distribution.min)
+      timestamp: String
+  ): Unit =
+    metric.instruments.foreach { instrument =>
+      if (instrument.value.count > 0) {
+        writeNameAndTags(builder, metric.name, instrument.tags)
+        writeIntField(builder, "count", instrument.value.count)
+        writeIntField(builder, "sum", instrument.value.sum)
+        writeIntField(builder, "mean", instrument.value.sum / instrument.value.count)
+        writeIntField(builder, "min", instrument.value.min)
 
-    percentiles.foreach(p => {
-      writeDoubleField(
-        builder,
-        "p" + String.valueOf(p),
-        metric.distribution.percentile(p).value.toDouble
-      )
-    })
+        percentiles.foreach { p =>
+          writeDoubleField(
+            builder,
+            "p" + String.valueOf(p),
+            instrument.value.percentile(p).value.toDouble
+          )
+        }
 
-    writeIntField(builder, "max", metric.distribution.max, appendSeparator = false)
-    writeTimestamp(builder, timestamp)
-  }
+        writeIntField(builder, "max", instrument.value.max, appendSeparator = false)
+        writeTimestamp(builder, timestamp)
+      }
+    }
 
-  private def writeNameAndTags(
-      builder: StringBuilder,
-      name: String,
-      metricTags: Map[String, String]
-  ): Unit = {
-    builder.append(name)
+  private def writeNameAndTags(builder: StringBuilder, name: String, metricTags: TagSet): Unit = {
+    builder
+      .append(escapeName(name))
 
-    val tags =
-      if (settings.additionalTags.nonEmpty) metricTags ++ settings.additionalTags
-      else metricTags
+    val tags = (if (settings.additionalTags.nonEmpty()) metricTags.withTags(settings.additionalTags)
+                else metricTags).all()
 
     if (tags.nonEmpty) {
-      tags.foreach {
-        case (key, value) =>
-          builder
-            .append(',')
-            .append(escapeString(key))
-            .append("=")
-            .append(escapeString(value))
+      tags.foreach { t =>
+        builder
+          .append(',')
+          .append(escapeString(t.key))
+          .append("=")
+          .append(escapeString(Tag.unwrapValue(t).toString))
       }
     }
 
     builder.append(' ')
   }
+
+  private def escapeName(in: String): String =
+    in.replace(" ", "\\ ")
+      .replace(",", "\\,")
 
   private def escapeString(in: String): String =
     in.replace(" ", "\\ ")
@@ -164,10 +199,11 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
       builder.append(',')
   }
 
-  def writeTimestamp(builder: StringBuilder, timestamp: Long): Unit =
+  def writeTimestamp(builder: StringBuilder, timestamp: String): Unit =
     builder
       .append(' ')
       .append(timestamp)
+      .append("\n")
 }
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -179,7 +215,7 @@ object UdpInfluxDBReporter {
       remote: InetSocketAddress
   ) {
     private val metricSeparator = "\n"
-    private val buffer          = StringBuilder.newBuilder
+    private val buffer          = new StringBuilder
 
     def appendMeasurement(measurementData: String): Unit =
       if (fitsOnBuffer(metricSeparator + measurementData)) {
@@ -206,6 +242,7 @@ object UdpInfluxDBReporter {
       address: InetSocketAddress,
       maxPacketSize: Long,
       percentiles: Seq[Double],
-      additionalTags: Map[String, String]
+      additionalTags: TagSet,
+      measurementPrecision: String
   )
 }

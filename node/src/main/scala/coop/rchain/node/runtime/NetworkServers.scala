@@ -28,11 +28,12 @@ import coop.rchain.shared.syntax._
 import fs2.concurrent.Channel
 import io.grpc.{Metadata, Server}
 import kamon.Kamon
-import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import org.http4s.server
+
 import scala.util.{Failure, Success}
 import cats.effect.Temporal
+import cats.effect.std.Dispatcher
 
 object NetworkServers {
 
@@ -189,24 +190,31 @@ object NetworkServers {
       kamonConf: Config,
       prometheusReporter: NewPrometheusReporter
   ): Resource[F, Unit] = {
-    def start(): Unit = {
-      Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
-      if (nodeConf.metrics.influxdb) Kamon.addReporter(new BatchInfluxDBReporter()).void()
-      if (nodeConf.metrics.influxdbUdp) Kamon.addReporter(new UdpInfluxDBReporter()).void()
-      if (nodeConf.metrics.prometheus) Kamon.addReporter(prometheusReporter).void()
-      if (nodeConf.metrics.zipkin) Kamon.addReporter(new ZipkinReporter()).void()
-      if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
+    def start: F[Unit] = Dispatcher.parallel[F].use { d =>
+      Sync[F].delay {
+        Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
+        if (nodeConf.metrics.influxdb)
+          Kamon.addReporter("BatchInfluxDB", new BatchInfluxDBReporter[F](d)).void()
+        if (nodeConf.metrics.influxdbUdp)
+          Kamon.addReporter("UdpInfluxDb", new UdpInfluxDBReporter()).void()
+        if (nodeConf.metrics.prometheus) Kamon.addReporter("Prometheus", prometheusReporter).void()
+        if (nodeConf.metrics.zipkin) Kamon.addReporter("Zipkin", new ZipkinReporter()).void()
+        // TODO API for processMetrics is changed in new version of Kamon. It has been never used so comment out.
+        //  reconsider use in future
+//        if (nodeConf.metrics.sigar)
+//          kamon.instrumentation.system.process.ProcessMetrics.startCollecting()
+      }
     }
 
     import scala.concurrent.ExecutionContext.Implicits.global
     // TODO: check new version of Kamon if supports custom effect
     def stop: F[Unit] = Async[F].async_ { cb =>
-      Kamon.stopAllReporters().onComplete {
+      Kamon.stop().onComplete {
         case Success(value) => cb(Right(value))
         case Failure(error) => cb(Left(error))
       }
     }
 
-    Resource.make(Sync[F].delay(start()))(_ => stop)
+    Resource.make(start)(_ => stop)
   }
 }
