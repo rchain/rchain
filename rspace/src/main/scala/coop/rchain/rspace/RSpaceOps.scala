@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Applicative
-import cats.effect.{Async, Sync}
+import cats.effect.{Async, Ref, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.implicits._
@@ -12,17 +12,15 @@ import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce, Log => EventLog}
 import coop.rchain.shared.{Log, Serialize}
-import monix.execution.atomic.AtomicAny
 
 import java.util.concurrent.LinkedBlockingQueue
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 import scala.util.Random
-import cats.effect.Ref
 
 abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    val storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+    val storeRef: Ref[F, HotStore[F, C, P, A, K]]
 )(
     implicit
     serializeC: Serialize[C],
@@ -78,9 +76,8 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   protected[this] val produceCommLabel     = "comm.produce"
   protected[this] val produceTimeCommLabel = "comm.produce-time"
 
-  protected val historyRepositoryAtom: AtomicAny[HistoryRepository[F, C, P, A, K]] = AtomicAny(
-    historyRepository
-  )
+  protected val historyRepositoryRef: F[Ref[F, HistoryRepository[F, C, P, A, K]]] =
+    Ref.of[F, HistoryRepository[F, C, P, A, K]](historyRepository)
 
   protected[this] val logger: Logger
 
@@ -88,18 +85,18 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   private[this] val installs: Ref[F, Installs[F, C, P, A, K]] =
     Ref.unsafe(Map.empty[Seq[C], Install[F, P, A, K]])
 
-  def historyRepo: HistoryRepository[F, C, P, A, K] = historyRepositoryAtom.get()
+  def historyRepo: F[HistoryRepository[F, C, P, A, K]] = historyRepositoryRef.flatMap(_.get)
 
-  def store: HotStore[F, C, P, A, K] = storeAtom.get()
+  def store: F[HotStore[F, C, P, A, K]] = storeRef.get
 
   def getData(channel: C): F[Seq[Datum[A]]] =
-    store.getData(channel)
+    store.flatMap(_.getData(channel))
 
   def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
-    store.getContinuations(channels)
+    store.flatMap(_.getContinuations(channels))
 
   def getJoins(channel: C): F[Seq[Seq[C]]] =
-    store.getJoins(channel)
+    store.flatMap(_.getJoins(channel))
 
   protected[this] def consumeLockF(
       channels: Seq[C]
@@ -116,7 +113,7 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
       thunk: => F[MaybeActionResult]
   ): F[MaybeActionResult] =
     lockF.acquire(Seq(StableHashProvider.hash(channel)))(
-      () => store.getJoins(channel).map(_.flatten.map(StableHashProvider.hash(_)))
+      () => store.flatMap(_.getJoins(channel)).map(_.flatten.map(StableHashProvider.hash(_)))
     )(thunk)
 
   protected[this] def installLockF(
@@ -133,11 +130,12 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
       wc: WaitingContinuation[P, K]
   ): F[MaybeActionResult] =
     for {
-      _ <- store.putContinuation(channels, wc)
-      _ <- channels.traverse(channel => store.putJoin(channel, channels))
-      _ <- Log[F].debug(s"""|consume: no data found,
-            |storing <(patterns, continuation): (${wc.patterns}, ${wc.continuation})>
-            |at <channels: ${channels}>""".stripMargin.replace('\n', ' '))
+      hotStore <- store
+      _        <- hotStore.putContinuation(channels, wc)
+      _        <- channels.traverse(channel => hotStore.putJoin(channel, channels))
+      _        <- Log[F].debug(s"""|consume: no data found,
+                          |storing <(patterns, continuation): (${wc.patterns}, ${wc.continuation})>
+                          |at <channels: ${channels}>""".stripMargin.replace('\n', ' '))
     } yield None
 
   protected[this] def storeData(
@@ -147,9 +145,10 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
       produceRef: Produce
   ): F[MaybeActionResult] =
     for {
-      _ <- Log[F].debug(s"produce: no matching continuation found")
-      _ <- store.putDatum(channel, Datum(data, persist, produceRef))
-      _ <- Log[F].debug(s"produce: persisted <data: $data> at <channel: $channel>")
+      _        <- Log[F].debug(s"produce: no matching continuation found")
+      hotStore <- store
+      _        <- hotStore.putDatum(channel, Datum(data, persist, produceRef))
+      _        <- Log[F].debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
   protected[this] def storePersistentData(
@@ -165,7 +164,7 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
             _,
             dataIndex
             ) =>
-          store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
+          store.flatMap(_.removeDatum(candidateChannel, dataIndex)).unlessA(persistData)
       }
 
   def restoreInstalls(): F[Unit] =
@@ -268,15 +267,16 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
         consumeRef = Consume(channels, patterns, continuation, true)
         channelToIndexedData <- channels
                                  .traverse { c =>
-                                   store.getData(c).shuffleWithIndex.map(c -> _)
+                                   store.flatMap(_.getData(c).shuffleWithIndex.map(c -> _))
                                  }
         options <- extractDataCandidates(channels.zip(patterns), channelToIndexedData.toMap, Nil)
                     .map(_.sequence)
         result <- options match {
                    case None =>
                      for {
-                       _ <- installs.update(_.updated(channels, Install(patterns, continuation)))
-                       _ <- store.installContinuation(
+                       _        <- installs.update(_.updated(channels, Install(patterns, continuation)))
+                       hotStore <- store
+                       _ <- hotStore.installContinuation(
                              channels,
                              WaitingContinuation(
                                patterns,
@@ -287,7 +287,7 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
                              )
                            )
                        _ <- channels.traverse { channel =>
-                             store.installJoin(channel, channels)
+                             hotStore.installJoin(channel, channels)
                            }
                        _ <- Log[F].debug(
                              s"storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>"
@@ -301,12 +301,14 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
       } yield result
     }
 
-  def toMap: F[Map[Seq[C], Row[P, A, K]]] = storeAtom.get().toMap
+  def toMap: F[Map[Seq[C], Row[P, A, K]]] = storeRef.get.flatMap(_.toMap)
 
   override def reset(root: Blake2b256Hash): F[Unit] = spanF.trace(resetSpanLabel) {
     for {
-      nextHistory   <- historyRepositoryAtom.get().reset(root)
-      _             = historyRepositoryAtom.set(nextHistory)
+      historyRef    <- historyRepositoryRef
+      history       <- historyRef.get
+      nextHistory   <- history.reset(root)
+      _             <- historyRef.set(nextHistory)
       _             <- eventLog.set(Seq.empty)
       _             <- produceCounter.set(Map.empty.withDefaultValue(0))
       historyReader <- nextHistory.getHistoryReader(root)
@@ -325,24 +327,26 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   ): F[Unit] =
     for {
       nextHotStore <- HotStore(historyReader.base)
-      _            = storeAtom.set(nextHotStore)
+      _            <- storeRef.set(nextHotStore)
     } yield ()
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
     /*spanF.trace(createSoftCheckpointSpanLabel) */
     for {
-      cache    <- storeAtom.get().snapshot
+      store    <- storeRef.get
+      cache    <- store.snapshot
       log      <- eventLog.getAndSet(Seq.empty)
       pCounter <- produceCounter.getAndSet(Map.empty.withDefaultValue(0))
     } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
 
   override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
     spanF.trace(revertSoftCheckpointSpanLabel) {
-      val history = historyRepositoryAtom.get()
       for {
+        historyRef    <- historyRepositoryRef
+        history       <- historyRef.get
         historyReader <- history.getHistoryReader(history.root)
         hotStore      <- HotStore(checkpoint.cacheSnapshot, historyReader.base)
-        _             = storeAtom.set(hotStore)
+        _             <- storeRef.set(hotStore)
         _             <- eventLog.set(checkpoint.log)
         _             <- produceCounter.set(checkpoint.produceCounter)
       } yield ()
@@ -377,9 +381,9 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
       .traverse {
         case ConsumeCandidate(candidateChannel, Datum(_, persistData, _), _, dataIndex) => {
           store
-            .removeDatum(candidateChannel, dataIndex)
+            .flatMap(_.removeDatum(candidateChannel, dataIndex))
             .whenA(dataIndex >= 0 && !persistData) >>
-            store.removeJoin(candidateChannel, channels)
+            store.flatMap(_.removeJoin(candidateChannel, channels))
         }
       }
 

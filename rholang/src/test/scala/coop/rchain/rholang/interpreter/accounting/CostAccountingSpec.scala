@@ -90,7 +90,8 @@ class CostAccountingSpec
                            additionalSystemProcesses,
                            initRegistry
                          )
-    } yield (rhoRuntime, replayRhoRuntime, space.historyRepo)
+      historyRepo <- space.historyRepo
+    } yield (rhoRuntime, replayRhoRuntime, historyRepo)
   }
 
   def evaluateAndReplay(

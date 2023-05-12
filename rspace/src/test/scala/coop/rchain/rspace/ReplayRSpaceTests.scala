@@ -14,8 +14,6 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
-import monix.execution.Scheduler
-import monix.execution.atomic.AtomicAny
 import org.scalacheck._
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -75,19 +73,22 @@ trait ReplayRSpaceTests
     }
 
   "reset to a checkpoint from a different branch" should "work" in fixture {
-    (store, replayStore, space, replaySpace) =>
+    (storeRef, replayStoreRef, space, replaySpace) =>
       for {
-        root0 <- replaySpace.createCheckpoint().map(_.root)
-        _     = replayStore.get().isEmpty().map(_ shouldBe true)
+        root0       <- replaySpace.createCheckpoint().map(_.root)
+        replayStore <- replayStoreRef.get
+        _           = replayStore.isEmpty.map(_ shouldBe true)
 
         _     <- space.produce("ch1", "datum1", false)
         root1 <- space.createCheckpoint().map(_.root)
 
-        _ <- replaySpace.reset(root1)
-        _ <- replayStore.get().isEmpty().map(_ shouldBe true)
+        _       <- replaySpace.reset(root1)
+        isEmpty <- replayStoreRef.get.flatMap(_.isEmpty)
+        _       = isEmpty shouldBe true
 
-        _ <- space.reset(root0)
-        _ <- store.get().isEmpty().map(_ shouldBe true)
+        _     <- space.reset(root0)
+        store <- storeRef.get
+        _     <- store.isEmpty.map(_ shouldBe true)
       } yield ()
   }
 
@@ -484,7 +485,7 @@ trait ReplayRSpaceTests
     minSuccessful(100)
   ) {
     case (amountOfChannles: Int, amountOfPeekedChannels: Int) =>
-      fixture { (store, replayStore, space, replaySpace) =>
+      fixture { (storeRef, _, space, replaySpace) =>
         val channelsRange = List.range(0, amountOfChannles)
         val channels      = channelsRange.map(i => s"channel$i")
         val patterns      = channels.map(kp(Wildcard))
@@ -502,7 +503,7 @@ trait ReplayRSpaceTests
           emptyPoint <- space.createCheckpoint()
           rs         <- consumeAndProduce(space)
           _          = rs.flatten should have size 1
-          hs         = store.get()
+          hs         <- storeRef.get
           _ <- channelsRange.traverse { i =>
                 val ch = s"channel$i"
                 hs.getData(ch).map { data =>
@@ -1061,7 +1062,7 @@ trait ReplayRSpaceTests
     """|empty the replay store,
        |reset the replay trie updates log,
        |and reset the replay data""".stripMargin in
-    fixture { (_, replayStore, space, replaySpace) =>
+    fixture { (_, replayStoreRef, space, replaySpace) =>
       val channels     = List("ch1")
       val patterns     = List(Wildcard)
       val continuation = "continuation"
@@ -1079,16 +1080,16 @@ trait ReplayRSpaceTests
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
 
-        _ <- replayStore.get().isEmpty().map(_ shouldBe false)
-        _ <- replayStore
-              .get()
-              .changes
+        replayStore <- replayStoreRef.get
+        _           <- replayStore.isEmpty.map(_ shouldBe false)
+        _ <- replayStore.changes
               .map(collectActions[InsertContinuations[String, Pattern, String]])
               .map(_.length shouldBe 1)
 
-        _ <- replaySpace.reset(emptyPoint.root)
-        _ <- replayStore.get().isEmpty().map(_ shouldBe true)
-        _ = replaySpace.replayData shouldBe empty
+        _       <- replaySpace.reset(emptyPoint.root)
+        isEmpty <- replayStoreRef.get.flatMap(_.isEmpty)
+        _       = isEmpty shouldBe true
+        _       = replaySpace.replayData shouldBe empty
 
         checkpoint1 <- replaySpace.createCheckpoint()
         _           = checkpoint1.log shouldBe empty
@@ -1100,7 +1101,7 @@ trait ReplayRSpaceTests
        |reset the replay event log,
        |reset the replay trie updates log,
        |and reset the replay data""".stripMargin in
-    fixture { (store, replayStore, space, replaySpace) =>
+    fixture { (_, replayStoreRef, space, replaySpace) =>
       val channels     = List("ch1")
       val patterns     = List(Wildcard)
       val continuation = "continuation"
@@ -1118,19 +1119,19 @@ trait ReplayRSpaceTests
         consume2 <- replaySpace.consume(channels, patterns, continuation, false)
         _        = consume2 shouldBe None
 
-        _ <- replayStore.get().isEmpty().map(_ shouldBe false)
-        _ <- replayStore
-              .get()
-              .changes
+        replayStore <- replayStoreRef.get
+        _           <- replayStore.isEmpty.map(_ shouldBe false)
+        _ <- replayStore.changes
               .map(collectActions[InsertContinuations[String, Pattern, String]])
               .map(_.length shouldBe 1)
 
         checkpoint0 <- replaySpace.createCheckpoint()
         _           = checkpoint0.log shouldBe empty // we don't record trace logs in ReplayRspace
 
-        _ <- replaySpace.clear()
-        _ = replayStore.get().isEmpty().map(_ shouldBe true)
-        _ = replaySpace.replayData shouldBe empty
+        _       <- replaySpace.clear()
+        isEmpty <- replayStoreRef.get.flatMap(_.isEmpty)
+        _       = isEmpty shouldBe true
+        _       = replaySpace.replayData shouldBe empty
 
         checkpoint1 <- replaySpace.createCheckpoint()
         _           = checkpoint1.log shouldBe empty
@@ -1235,8 +1236,8 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
 
   def fixture[S](
       f: (
-          AtomicAny[HotStore[IO, C, P, A, K]],
-          AtomicAny[HotStore[IO, C, P, A, K]],
+          Ref[IO, HotStore[IO, C, P, A, K]],
+          Ref[IO, HotStore[IO, C, P, A, K]],
           ISpace[IO, C, P, A, K],
           IReplaySpace[IO, C, P, A, K]
       ) => IO[S]
@@ -1253,8 +1254,8 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
 trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C, P, A, K] {
   override def fixture[S](
       f: (
-          AtomicAny[HotStore[IO, C, P, A, K]],
-          AtomicAny[HotStore[IO, C, P, A, K]],
+          Ref[IO, HotStore[IO, C, P, A, K]],
+          Ref[IO, HotStore[IO, C, P, A, K]],
           ISpace[IO, C, P, A, K],
           IReplaySpace[IO, C, P, A, K]
       ) => IO[S]
@@ -1285,7 +1286,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       historyReader <- historyRepository.getHistoryReader(historyRepository.root)
       store <- {
         val hr = historyReader.base
-        HotStore[IO, C, P, A, K](cache, hr).map(AtomicAny(_))
+        HotStore[IO, C, P, A, K](cache, hr).flatMap(Ref.of[IO, HotStore[IO, C, P, A, K]](_))
       }
 
       space = new RSpace[IO, C, P, A, K](
@@ -1295,7 +1296,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       historyCache <- Ref[IO].of(HotStoreState[C, P, A, K]())
       replayStore <- {
         val hr = historyReader.base
-        HotStore[IO, C, P, A, K](historyCache, hr).map(AtomicAny(_))
+        HotStore[IO, C, P, A, K](historyCache, hr).flatMap(Ref.of[IO, HotStore[IO, C, P, A, K]](_))
       }
       replaySpace = new ReplayRSpace[IO, C, P, A, K](
         historyRepository,

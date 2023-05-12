@@ -17,7 +17,6 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
-import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
 import cats.effect.Ref
@@ -63,9 +62,9 @@ object ReportingRspace {
       sk: Serialize[K],
       m: Match[F, P, A]
   ): F[ReportingRspace[F, C, P, A, K]] =
-    Sync[F].delay(
-      new ReportingRspace[F, C, P, A, K](historyRepository, AtomicAny(store))
-    )
+    Ref
+      .of[F, HotStore[F, C, P, A, K]](store)
+      .map(storeRef => new ReportingRspace[F, C, P, A, K](historyRepository, storeRef))
 
   /**
     * Creates [[RSpace]] from [[KeyValueStore]]'s,
@@ -88,7 +87,7 @@ object ReportingRspace {
 
 class ReportingRspace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+    storeRef: Ref[F, HotStore[F, C, P, A, K]]
 )(
     implicit
     serializeC: Serialize[C],
@@ -96,7 +95,7 @@ class ReportingRspace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     m: Match[F, P, A]
-) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeAtom) {
+) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeRef) {
 
   protected[this] override val logger: Logger = Logger[this.type]
 

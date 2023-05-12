@@ -153,8 +153,7 @@ lazy val shared = (project in file("shared"))
       catsLawsTest,
       catsLawsTestkitTest,
       enumeratum,
-      jaxb,
-      monix // remove when monix TestSheduler is replaced
+      jaxb
     )
   )
   .dependsOn(sdk)
@@ -311,7 +310,6 @@ lazy val node = (project in file("node"))
         scalapbRuntimegGrpc,
         circeParser,
         circeGenericExtras,
-        monix, // remove when BatchInfluxDBReporter is adjusted to work w/o monix
         pureconfig
       ),
     scalacOptions ++= Seq(
@@ -511,8 +509,7 @@ lazy val rspace = (project in file("rspace"))
       catsCore,
       fs2Core,
       scodecCore,
-      scodecBits,
-      monix // remove when AtomicAny migrated to Ref
+      scodecBits
     ),
     /* Tutorial */
     /* Publishing Settings */
