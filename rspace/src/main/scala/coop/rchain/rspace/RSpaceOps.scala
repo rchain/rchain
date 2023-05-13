@@ -76,8 +76,8 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   protected[this] val produceCommLabel     = "comm.produce"
   protected[this] val produceTimeCommLabel = "comm.produce-time"
 
-  protected val historyRepositoryRef: F[Ref[F, HistoryRepository[F, C, P, A, K]]] =
-    Ref.of[F, HistoryRepository[F, C, P, A, K]](historyRepository)
+  protected val historyRepositoryRef: Ref[F, HistoryRepository[F, C, P, A, K]] =
+    Ref.unsafe(historyRepository)
 
   protected[this] val logger: Logger
 
@@ -85,7 +85,7 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   private[this] val installs: Ref[F, Installs[F, C, P, A, K]] =
     Ref.unsafe(Map.empty[Seq[C], Install[F, P, A, K]])
 
-  def historyRepo: F[HistoryRepository[F, C, P, A, K]] = historyRepositoryRef.flatMap(_.get)
+  def historyRepo: F[HistoryRepository[F, C, P, A, K]] = historyRepositoryRef.get
 
   def store: F[HotStore[F, C, P, A, K]] = storeRef.get
 
@@ -305,10 +305,9 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
 
   override def reset(root: Blake2b256Hash): F[Unit] = spanF.trace(resetSpanLabel) {
     for {
-      historyRef    <- historyRepositoryRef
-      history       <- historyRef.get
+      history       <- historyRepositoryRef.get
       nextHistory   <- history.reset(root)
-      _             <- historyRef.set(nextHistory)
+      _             <- historyRepositoryRef.set(nextHistory)
       _             <- eventLog.set(Seq.empty)
       _             <- produceCounter.set(Map.empty.withDefaultValue(0))
       historyReader <- nextHistory.getHistoryReader(root)
@@ -342,8 +341,7 @@ abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
     spanF.trace(revertSoftCheckpointSpanLabel) {
       for {
-        historyRef    <- historyRepositoryRef
-        history       <- historyRef.get
+        history       <- historyRepositoryRef.get
         historyReader <- history.getHistoryReader(history.root)
         hotStore      <- HotStore(checkpoint.cacheSnapshot, historyReader.base)
         _             <- storeRef.set(hotStore)

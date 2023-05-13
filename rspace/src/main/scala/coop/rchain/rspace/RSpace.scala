@@ -194,12 +194,11 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     for {
       store       <- storeRef.get
       changes     <- spanF.withMarks("changes") { store.changes }
-      historyRef  <- historyRepositoryRef
-      historyRepo <- historyRef.get
+      historyRepo <- historyRepositoryRef.get
       nextHistory <- spanF.withMarks("history-checkpoint") {
                       historyRepo.checkpoint(changes.toList)
                     }
-      _             <- historyRef.set(nextHistory)
+      _             <- historyRepositoryRef.set(nextHistory)
       log           <- eventLog.getAndSet(Seq.empty)
       _             <- produceCounter.set(Map.empty.withDefaultValue(0))
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
@@ -210,8 +209,7 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
 
   def spawn: F[ISpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
     for {
-      historyRef    <- historyRepositoryRef
-      historyRepo   <- historyRef.get
+      historyRepo   <- historyRepositoryRef.get
       nextHistory   <- historyRepo.reset(historyRepo.history.root)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       hotStore      <- HotStore(historyReader.base)

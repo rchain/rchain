@@ -227,10 +227,9 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     for {
       store         <- storeRef.get
       changes       <- store.changes
-      historyRef    <- historyRepositoryRef
-      historyRepo   <- historyRef.get
+      historyRepo   <- historyRepositoryRef.get
       nextHistory   <- historyRepo.checkpoint(changes.toList)
-      _             <- historyRef.set(nextHistory)
+      _             <- historyRepositoryRef.set(nextHistory)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       _             <- createNewHotStore(historyReader)
       _             <- restoreInstalls()
@@ -294,8 +293,7 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
 
   def spawn: F[IReplaySpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
     for {
-      historyRef    <- historyRepositoryRef
-      historyRepo   <- historyRef.get
+      historyRepo   <- historyRepositoryRef.get
       nextHistory   <- historyRepo.reset(historyRepo.history.root)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       hotStore      <- HotStore(historyReader.base)
