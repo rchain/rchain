@@ -7,7 +7,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager

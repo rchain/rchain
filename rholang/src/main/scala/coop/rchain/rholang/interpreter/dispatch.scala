@@ -1,13 +1,12 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
-import cats.effect.Sync
+import cats.effect.{Ref, Sync}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
-import coop.rchain.rholang.interpreter.accounting._
-import cats.effect.Ref
 
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A]): M[Unit]
@@ -45,7 +44,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 object RholangAndScalaDispatcher {
   type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandom, TaggedContinuation]
 
-  def apply[M[_]: Sync: Parallel: _cost](
+  def apply[M[_]: Sync: Parallel: CostStateRef](
       tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
       urnMap: Map[String, Par],

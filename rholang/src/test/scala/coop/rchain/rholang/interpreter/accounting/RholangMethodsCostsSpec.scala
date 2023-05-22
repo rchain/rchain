@@ -8,6 +8,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
@@ -59,7 +60,7 @@ class RholangMethodsCostsSpec
             for {
               err  <- reducer.evalExprToPar(method).attempt
               _    = assert(err.isLeft)
-              cost <- methodCallCost(reducer)
+              cost <- methodCallCost()
             } yield assert(cost.value === 10)
           }
         }
@@ -93,7 +94,7 @@ class RholangMethodsCostsSpec
             for {
               err  <- reducer.evalExprToPar(method).attempt
               _    = assert(err.isLeft)
-              cost <- methodCallCost(reducer)
+              cost <- methodCallCost()
             } yield assert(cost.value === 10)
           }
         }
@@ -114,7 +115,7 @@ class RholangMethodsCostsSpec
     withReducer { reducer =>
       for {
         _    <- reducer.evalExprToPar(method)
-        cost <- methodCallCost(reducer)
+        cost <- methodCallCost()
       } yield costIsProportional(baseCost, factor, cost)
     }
   }
@@ -967,12 +968,12 @@ class RholangMethodsCostsSpec
   def methodCall(method: String, target: Par, arguments: List[Par]): Expr =
     EMethod(method, target, arguments)
 
-  def methodCallCost(reducer: Reduce[IO])(implicit cost: _cost[IO]): IO[Cost] =
-    cost.get
+  def methodCallCost()(implicit cost: CostStateRef[IO]): IO[Cost] =
+    cost.current
       .map(balance => Cost.UNSAFE_MAX - balance - METHOD_CALL_COST)
 
-  def exprCallCost(reducer: Reduce[IO])(implicit cost: _cost[IO]): IO[Cost] =
-    cost.get
+  def exprCallCost()(implicit cost: CostStateRef[IO]): IO[Cost] =
+    cost.current
       .map(balance => Cost.UNSAFE_MAX - balance)
 
   def map(pairs: Seq[(Par, Par)]): Map[Par, Par] = Map(pairs: _*)
@@ -1014,8 +1015,8 @@ class RholangMethodsCostsSpec
       for {
         _ <- reducer.evalExprToPar(expr)
         cost <- expr.exprInstance match {
-                 case EMethodBody(_) => methodCallCost(reducer)
-                 case _              => exprCallCost(reducer)
+                 case EMethodBody(_) => methodCallCost()
+                 case _              => exprCallCost()
                }
 
       } yield assert(cost.value === expectedCost.value)
@@ -1024,7 +1025,7 @@ class RholangMethodsCostsSpec
 
   def withReducer[R](
       f: DebruijnInterpreter[IO] => IO[R]
-  )(implicit cost: _cost[IO]): R = {
+  )(implicit cost: CostStateRef[IO]): R = {
 
     val test = for {
       _   <- cost.set(Cost.UNSAFE_MAX)

@@ -1,18 +1,17 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
-import cats.effect.Sync
+import cats.effect.{Ref, Sync}
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
-import coop.rchain.rholang.interpreter.accounting._
-import cats.effect.Ref
 
 object RholangOnlyDispatcher {
 
-  def apply[F[_]: Sync: Parallel: _cost](
+  def apply[F[_]: Sync: Parallel: CostStateRef](
       tuplespace: RhoTuplespace[F],
       urnMap: Map[String, Par],
       mergeChs: Ref[F, Set[Par]]
@@ -27,7 +26,7 @@ object RholangOnlyDispatcher {
     (dispatcher, reducer)
   }
 
-  def apply[F[_]: Sync: Parallel: _cost](
+  def apply[F[_]: Sync: Parallel: CostStateRef](
       tuplespace: RhoTuplespace[F],
       urnMap: Map[String, Par] = Map.empty
   ): (Dispatch[F, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[F]) = {

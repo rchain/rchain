@@ -4,18 +4,17 @@ import cats.Parallel
 import cats.data.Chain
 import cats.effect._
 import cats.effect.unsafe.implicits.global
-import cats.mtl.FunctorTell
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.Resources
+import coop.rchain.rholang.interpreter.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rholang.interpreter.SystemProcesses.Definition
-import coop.rchain.rholang.interpreter.accounting.utils._
+import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime, _}
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -24,14 +23,12 @@ import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
-import org.scalatest.{AppendedClues, Assertion}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.scalacheck.Checkers
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import org.scalatest.{AppendedClues, Assertion}
+import org.scalatestplus.scalacheck.{Checkers, ScalaCheckPropertyChecks}
 
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.duration._
 
 class CostAccountingSpec
     extends AnyFlatSpec
@@ -50,32 +47,30 @@ class CostAccountingSpec
     implicit val kvm                     = InMemoryStoreManager[IO]()
 
     val resources = for {
-      costLog         <- costLog[IO]()
       store           <- kvm.rSpaceStores
-      spaces          <- createRuntimesWithCostLog[IO](store, costLog)
+      spaces          <- createRuntimesWithCostLog[IO](store)
       (runtime, _, _) = spaces
-    } yield (runtime, costLog)
+    } yield (runtime)
 
     resources
-      .flatMap {
-        case (runtime, costL) =>
-          costL.listen {
-            runtime.evaluate(contract, Cost(initialPhlo))
-          }
+      .flatMap { runtime =>
+        implicit val cost: CostStateRef[IO] = runtime.cost
+        for {
+          evalResult <- runtime.evaluate(contract, Cost(initialPhlo))
+          costLog    <- cost.get.map(_.trace)
+        } yield (evalResult, costLog)
       }
       .unsafeRunSync()
   }
 
   private def createRuntimesWithCostLog[F[_]: Async: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
-      costLog: FunctorTell[F, Chain[Cost]],
       initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-    // TODO: Shadows global (dummy) implicit which should be removed.
-    implicit val noOpCostLog: FunctorTell[F, Chain[Cost]] = costLog
+
     for {
       hrstores <- RSpace
                    .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
@@ -102,12 +97,9 @@ class CostAccountingSpec
     implicit val logF: Log[IO]           = new Log.NOPLog[IO]
     implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
-    implicit val ms: Metrics.Source      = Metrics.BaseSource
     implicit val kvm                     = InMemoryStoreManager[IO]()
 
     val evaluaResult = for {
-      costLog                     <- costLog[IO]()
-      cost                        <- CostAccounting.emptyCost[IO](implicitly, metricsEff, costLog, ms)
       store                       <- kvm.rSpaceStores
       spaces                      <- Resources.createRuntimes[IO](store)
       (runtime, replayRuntime, _) = spaces

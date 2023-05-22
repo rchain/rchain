@@ -1,17 +1,17 @@
 package coop.rchain.rspace.bench
 
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Sync}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.{CostAccounting, RholangCLI}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.rspace.{Match, RSpace, _}
+import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import org.openjdk.jmh.annotations.{State => _, _}

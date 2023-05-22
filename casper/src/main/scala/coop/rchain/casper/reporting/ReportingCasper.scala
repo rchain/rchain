@@ -1,13 +1,11 @@
 package coop.rchain.casper.reporting
 
 import cats.Parallel
-import cats.effect.{Async, Sync}
+import cats.effect.{Async, Ref, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.models.syntax._
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{
   BlockMessage,
   ProcessedDeploy,
@@ -20,19 +18,17 @@ import coop.rchain.casper.syntax._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.RholangMetricsSource
+import coop.rchain.rholang.interpreter.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, createRhoEnv}
 import coop.rchain.rholang.interpreter.SystemProcesses.{BlockData, Definition}
-import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
-import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
+import coop.rchain.rholang.interpreter.{CostAccounting, Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.{ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
-
-import scala.concurrent.ExecutionContext
-import cats.effect.Ref
 
 /**
   * @param processedDeploy Deploy details
@@ -72,13 +68,9 @@ trait ReportingCasper[F[_]] {
 }
 
 object ReportingCasper {
-  def noop[F[_]: Sync]: ReportingCasper[F] = new ReportingCasper[F] {
-
-    override def trace(
-        block: BlockMessage
-    ): F[ReplayResult] =
+  def noop[F[_]: Sync]: ReportingCasper[F] =
+    (_: BlockMessage) =>
       Sync[F].delay(ReplayResult(List.empty, List.empty, ByteString.copyFromUtf8("empty")))
-  }
 
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
@@ -158,7 +150,7 @@ object ReportingCasper {
 class ReportingRuntime[F[_]: Sync: Span](
     override val reducer: Reduce[F],
     override val space: RhoReportingRspace[F],
-    override val cost: _cost[F],
+    override val cost: CostStateRef[F],
     override val blockDataRef: Ref[F, BlockData],
     override val mergeChs: Ref[F, Set[Par]]
 ) extends ReplayRhoRuntimeImpl[F](reducer, space, cost, blockDataRef, mergeChs) {
@@ -187,7 +179,7 @@ object ReportingRuntime {
       cost     <- CostAccounting.emptyCost[F]
       mergeChs <- Ref.of(Set[Par]())
       rhoEnv <- {
-        implicit val c = cost
+        implicit val c: CostStateRef[F] = cost
         createRhoEnv(
           reporting,
           mergeChs,

@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
-import cats.effect.{IO, Sync}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref, Sync}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
@@ -10,6 +11,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
+import coop.rchain.rholang.interpreter.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -23,8 +25,6 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
-import cats.effect.Ref
-import cats.effect.unsafe.implicits.global
 
 class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqualsSupport {
 
@@ -34,7 +34,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
 
   behavior of "Cost accounting in Reducer"
 
-  def createDispatcher[M[_]: Sync: Parallel: _cost](
+  def createDispatcher[M[_]: Sync: Parallel: CostStateRef](
       tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
       urnMap: Map[String, Par]
@@ -63,7 +63,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
         Substitute.charge(IO(substTerm), Cost(10000)).attempt
       }
       _         = assert(res === Right(substTerm))
-      finalCost <- cost.get
+      finalCost <- cost.current
       _         = assert(finalCost === (initCost - Cost(termCost)))
     } yield ())
       .timeout(5.seconds)
@@ -85,7 +85,7 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
           .attempt
       }
       _         = assert(res.isLeft)
-      finalCost <- cost.get
+      finalCost <- cost.current
       _         = assert(finalCost === (initCost - Cost(originalTermCost)))
     } yield ())
       .timeout(5.seconds)

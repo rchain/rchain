@@ -1,16 +1,10 @@
 package coop.rchain.rholang.interpreter
 
-import cats.arrow.FunctionK
+import cats.Monad
 import cats.data.StateT
-import cats.effect.{MonadCancel, Sync}
 import cats.mtl._
 import cats.syntax.all._
-import cats.{~>, Monad}
-import coop.rchain.catscontrib.MonadError_
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting._
-
-import scala.collection.immutable.Stream
 
 package object matcher {
 
@@ -18,12 +12,7 @@ package object matcher {
 
   type MatcherMonadT[F[_], A] = StateT[StreamT[F, *], FreeMap, A]
 
-  import coop.rchain.rholang.interpreter.matcher.StreamT
-
   import coop.rchain.catscontrib._
-
-  implicit def matcherMonadCostLog[F[_]: Monad: Sync: _cost](): _cost[MatcherMonadT[F, *]] =
-    λ[F ~> MatcherMonadT[F, *]](fa => StateT.liftF(StreamT.liftF(fa)))
 
   // The naming convention means: this is an effect-type alias.
   // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.
