@@ -45,12 +45,13 @@ package object implicits {
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     override def raiseError[A](e: Throwable): Eval[A] = Eval.later(throw e)
 
-    override def handleErrorWith[A](fa: Eval[A])(f: Throwable => Eval[A]): Eval[A] =
+    override def handleErrorWith[A](fa: Eval[A])(f: Throwable => Eval[A]): Eval[A] = Eval.defer {
       try {
-        Eval.always(fa.value)
+        Eval.now(fa.value)
       } catch {
         case NonFatal(e) => f(e)
       }
+    }
   }
 
   // Fo use only in tests
