@@ -20,7 +20,6 @@ import coop.rchain.shared.syntax._
 import scodec.codecs.utf8
 
 import scala.collection.concurrent.TrieMap
-import scala.language.higherKinds
 import cats.effect.Deferred
 
 final case class Transaction(

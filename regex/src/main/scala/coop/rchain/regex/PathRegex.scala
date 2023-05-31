@@ -38,7 +38,7 @@ object PathRegexOptions {
 }
 
 @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-private[regex] final case class PathToken(
+final case class PathToken(
     name: Option[String],
     key: Int,
     prefix: Option[Char],

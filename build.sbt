@@ -314,6 +314,9 @@ lazy val node = (project in file("node"))
         monix, // remove when BatchInfluxDBReporter is adjusted to work w/o monix
         pureconfig
       ),
+    scalacOptions ++= Seq(
+      "-language:reflectiveCalls" // used by org.rogach.scallop CLI args lib
+    ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
     Compile / mainClass := Some("coop.rchain.node.Main"),
@@ -439,10 +442,7 @@ lazy val rholang = (project in file("rholang"))
   .settings(
     name := "rholang",
     scalacOptions ++= Seq(
-      "-language:existentials",
-      "-language:higherKinds",
-      "-Xfatal-warnings",
-      "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
+      "-Xlint:-missing-interpolator" // Disable false positive strings containing ${...}
     ),
     Compile / packageDoc / publishArtifact := false,
     packageDoc / publishArtifact := false,
@@ -504,9 +504,6 @@ lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings"
-    ),
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
