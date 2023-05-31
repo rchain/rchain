@@ -286,10 +286,6 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
               (commRef, dataCandidates).asRight[COMM].asRight[Seq[COMM]]
             case None => rem.asLeft[COMMOrCandidate]
           }
-        case _ =>
-          val msg = "List comms must not be empty"
-          logger.error(msg)
-          Sync[F].raiseError(new IllegalArgumentException(msg))
       }
     comms.tailRecM(go).map(_.toOption)
   }

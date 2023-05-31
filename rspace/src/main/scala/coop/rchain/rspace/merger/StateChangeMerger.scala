@@ -70,11 +70,6 @@ object StateChangeMerger {
                       TrieInsertBinaryConsume(historyPointer, newVal),
                       None
                     ).pure
-                  case _ =>
-                    ConsumeAndJoinActions(
-                      TrieInsertBinaryConsume(historyPointer, Seq()),
-                      None
-                    ).pure
                 }
           } yield r
       }
