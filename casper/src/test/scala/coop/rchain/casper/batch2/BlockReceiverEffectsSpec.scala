@@ -40,7 +40,7 @@ class BlockReceiverEffectsSpec
       case (incomingQueue, _, outStream, bs, br, bds) =>
         for {
           block   <- IO.delay(makeBlock())
-          _       <- incomingQueue.send(block)
+          _       <- incomingQueue.trySend(block)
           outList <- outStream.take(1).compile.toList
         } yield {
           bs.put(Seq((block.blockHash, block))) wasCalled once
@@ -57,7 +57,7 @@ class BlockReceiverEffectsSpec
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
         block <- IO.delay(makeBlock())
-        _     <- incomingQueue.send(block)
+        _     <- incomingQueue.trySend(block)
       } yield {
         bs.put(*) wasNever called
         bs.contains(*) wasNever called
@@ -71,7 +71,7 @@ class BlockReceiverEffectsSpec
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
         block <- IO.delay(makeBlock().copy(blockHash = "abc".unsafeHexToByteString))
-        _     <- incomingQueue.send(block)
+        _     <- incomingQueue.trySend(block)
       } yield {
         bs.put(*) wasNever called
         bs.contains(*) wasNever called
@@ -85,7 +85,7 @@ class BlockReceiverEffectsSpec
     case (incomingQueue, _, outStream, bs, br, bds) =>
       for {
         block <- IO.delay(makeBlock().copy(sig = "abc".unsafeHexToByteString))
-        _     <- incomingQueue.send(block)
+        _     <- incomingQueue.trySend(block)
       } yield {
         bs.put(*) wasNever called
         bs.contains(*) wasNever called
@@ -103,15 +103,15 @@ class BlockReceiverEffectsSpec
         a2 = makeBlock(List(a1.blockHash))
 
         // Put the parent and child in the input queue
-        _ <- incomingQueue.send(a2)
-        _ <- incomingQueue.send(a1)
+        _ <- incomingQueue.trySend(a2)
+        _ <- incomingQueue.trySend(a1)
 
         // Dependencies of the child (its parent) have not yet been resolved,
         // so only the parent goes to the output queue, since it has no dependencies
         a1InOutQueue <- outStream.take(1).compile.lastOrError
 
         // A1 is now validated (e.g. in BlockProcessor)
-        _ <- validatedQueue.send(a1)
+        _ <- validatedQueue.trySend(a1)
 
         // All dependencies of child A2 are resolved, so it also goes to the output queue
         a2InOutQueue <- outStream.take(1).compile.lastOrError
@@ -194,7 +194,7 @@ class BlockReceiverEffectsSpec
           incomingBlockStream,
           validatedBlocksStream,
           shardId,
-          incomingBlockQueue.send(_).void
+          incomingBlockQueue.trySend(_).void
         )
       }
       res <- f(incomingBlockQueue, validatedBlocksQueue, blockReceiver, bs, br, bds)

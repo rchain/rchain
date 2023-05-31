@@ -158,7 +158,7 @@ object LfsTupleSpaceRequester {
 
         // Add chunk paths for requesting and trigger request queue (without resend of already requested)
         _ <- Stream
-              .eval(st.update(_.add(Set(lastPath))) >> requestQueue.send(false))
+              .eval(st.update(_.add(Set(lastPath))) >> requestQueue.trySend(false))
               .whenA(isReceived)
 
         // Import chunk to RSpace
@@ -207,7 +207,7 @@ object LfsTupleSpaceRequester {
                 _ <- st.update(_.done(startPath))
 
                 // Trigger request queue again to process finished chunks
-                _ <- requestQueue.send(false)
+                _ <- requestQueue.trySend(false)
               } yield ()
             }.whenA(isReceived)
       } yield ()
@@ -216,7 +216,7 @@ object LfsTupleSpaceRequester {
         * Timeout to resend block requests if response is not received
         */
       val timeoutMsg     = s"No tuple space state responses for $requestTimeout. Resending requests."
-      val resendRequests = requestQueue.send(true) <* Log[F].warn(timeoutMsg)
+      val resendRequests = requestQueue.trySend(true) <* Log[F].warn(timeoutMsg)
 
       /**
         * Final result! Concurrently pulling requests and handling responses
@@ -242,7 +242,7 @@ object LfsTupleSpaceRequester {
 
       // Light the fire! / Starts the first request for chunk of state
       // - `true` if requested chunks should be re-requested
-      _ <- requestQueue.send(false)
+      _ <- requestQueue.trySend(false)
 
       // Create tuple space state receiver stream
     } yield createStream(st, requestQueue)

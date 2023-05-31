@@ -109,11 +109,11 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
                            finalizedFringe,
                            responseQueue.stream,
                            blockHeightsBeforeFringe = 0,
-                           requestQueue.send(_).void,
+                           requestQueue.trySend(_).void,
                            requestTimeout,
                            hash => testState.get.map(_.blocks.contains(hash)),
                            hash => testState.get.map(_.blocks(hash)),
-                           (h, m) => savedBlocksQueue.send(h -> m).void,
+                           (h, m) => savedBlocksQueue.trySend(h -> m).void,
                            block => testState.get.map(!_.invalid.contains(block.blockHash))
                          )
 

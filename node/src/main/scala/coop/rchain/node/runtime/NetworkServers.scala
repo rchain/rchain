@@ -140,7 +140,7 @@ object NetworkServers {
 
     server.resource(
       HandleMessages.handle[F](_, routingMessageQueue),
-      blob => routingMessageQueue.send(RoutingMessage(blob.sender, blob.packet)).void
+      blob => routingMessageQueue.trySend(RoutingMessage(blob.sender, blob.packet)).void
     )
   }
 

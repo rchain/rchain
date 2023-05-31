@@ -155,7 +155,7 @@ object Setup {
           (isAsync: Boolean) =>
             for {
               d <- Deferred[F, ProposerResult]
-              _ <- proposerQueue.send((isAsync, d))
+              _ <- proposerQueue.trySend((isAsync, d))
               r <- d.get
             } yield r
         )
@@ -188,7 +188,7 @@ object Setup {
           incomingBlockStream,
           validatedBlocksStream,
           conf.casper.shardName,
-          incomingBlocksQueue.send(_).void
+          incomingBlocksQueue.trySend(_).void
         )
       }
       // Blocks from receiver with fork-choice tips request on idle

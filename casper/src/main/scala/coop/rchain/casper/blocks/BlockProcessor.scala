@@ -34,7 +34,7 @@ object BlockProcessor {
         result <- validateAndAddToDag(block, shardId, minPhloPrice)
 
         // Notify finished block validation
-        _ <- validatedQueue.send(block)
+        _ <- validatedQueue.trySend(block)
 
         // Broadcast block to the peers
         _ <- CommUtil[F].sendBlockHash(block.blockHash, block.sender)

@@ -187,7 +187,7 @@ object LfsBlockRequester {
           _ <- saveBlock(block).whenA(isValid)
 
           // Trigger request queue (without resend of already requested)
-          _ <- requestQueue.send(false)
+          _ <- requestQueue.trySend(false)
         } yield ()
 
       /**
@@ -297,7 +297,7 @@ object LfsBlockRequester {
         */
       val timeoutMsg = s"No block responses for $requestTimeout. Resending requests."
       // Triggers request queue (resend already requested)
-      val resendRequests = requestQueue.send(true) <* Log[F].warn(timeoutMsg)
+      val resendRequests = requestQueue.trySend(true) <* Log[F].warn(timeoutMsg)
 
       /**
         * Final result! Concurrently pulling requests and handling responses
@@ -326,7 +326,7 @@ object LfsBlockRequester {
 
       // Light the fire! / Starts the first request for block
       // - `true` if requested blocks should be re-requested
-      _ <- requestQueue.send(false)
+      _ <- requestQueue.trySend(false)
 
       // Create block receiver stream
     } yield createStream(st, requestQueue, responseHashQueue)

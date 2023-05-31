@@ -113,7 +113,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
             toBuffer: Value => ByteBuffer
         ): F[Unit] = {
           val items = data.map(_.map(toBuffer andThen ByteString.copyFrom))
-          savedHistoryQueue.send(items).void
+          savedHistoryQueue.trySend(items).void
         }
 
         override def setDataItems[Value](
@@ -121,7 +121,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
             toBuffer: Value => ByteBuffer
         ): F[Unit] = {
           val items = data.map(_.map(toBuffer andThen ByteString.copyFrom))
-          savedDataQueue.send(items).void
+          savedDataQueue.trySend(items).void
         }
 
         override def setRoot(key: KeyHash): F[Unit] = ().pure[F]
@@ -134,7 +134,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       processingStream <- LfsTupleSpaceRequester.stream[F](
                            finalizedFringe,
                            responseQueue,
-                           (s, n) => requestQueue.send((s, n)).void,
+                           (s, n) => requestQueue.trySend((s, n)).void,
                            requestTimeout,
                            importer,
                            mockValidateStateChunk

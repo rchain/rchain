@@ -266,7 +266,7 @@ object BlockReceiver {
               parentsToValidate <- block.justifications.filterA(notValidated[F])
 
               _ <- if (hasAllDeps) {
-                    receiverOutputQueue.send(block.blockHash)
+                    receiverOutputQueue.trySend(block.blockHash)
                   } else {
                     requestMissingDependencies(pendingRequests).whenA(pendingRequests.nonEmpty) *>
                       sendToValidate(parentsToValidate).whenA(parentsToValidate.nonEmpty)

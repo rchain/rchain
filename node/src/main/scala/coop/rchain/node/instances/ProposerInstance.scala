@@ -80,7 +80,7 @@ object ProposerInstance {
                           .tryOffer(1)
                           .ifM(
                             Deferred[F, ProposerResult] >>= { d =>
-                              proposeRequestsQueue.send(false -> d).void
+                              proposeRequestsQueue.trySend(false -> d).void
                             },
                             ().pure[F]
                           )

@@ -63,7 +63,7 @@ object HandleMessages {
       packet: Packet,
       routingMessageQueue: Channel[F, RoutingMessage]
   ): F[CommunicationResponse] =
-    routingMessageQueue.send(RoutingMessage(remote, packet)).as(handledWithoutMessage)
+    routingMessageQueue.trySend(RoutingMessage(remote, packet)).as(handledWithoutMessage)
 
   def handleProtocolHandshakeResponse[F[_]: Monad: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
       peer: PeerNode

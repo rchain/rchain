@@ -83,7 +83,7 @@ class NodeSyncing[F[_]
     case s: StoreItemsMessage =>
       Log[F].info(s"Received ${s.pretty} from $peer.") *>
         tupleSpaceQueue
-          .send(s)
+          .trySend(s)
           .map(
             _.leftTraverse(
               _ => new Exception("Channel received store item is closed").raiseError[F, Unit]
@@ -94,7 +94,7 @@ class NodeSyncing[F[_]
       Log[F]
         .info(s"BlockMessage received ${PrettyPrinter.buildString(b, short = true)} from $peer.") *>
         incomingBlocksQueue
-          .send(b)
+          .trySend(b)
           .map(
             _.leftTraverse(
               _ => new Exception("Channel received block message is closed").raiseError[F, Unit]
