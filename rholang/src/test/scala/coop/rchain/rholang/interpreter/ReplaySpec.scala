@@ -59,6 +59,7 @@ class ReplaySpec extends AnyFlatSpec with Matchers {
                 case _: Throwable =>
                   println(s"Test retry count: $i").pure[IO]
               }
+              .timeout(1.seconds)
               .unsafeRunSync()
 
           assert(playRes.errors.isEmpty)

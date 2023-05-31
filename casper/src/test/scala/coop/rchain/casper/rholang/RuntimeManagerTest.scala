@@ -27,10 +27,11 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, ReplayRhoRuntime}
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, ReplayRhoRuntime, accounting}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Base16, Log}
+import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -52,7 +53,7 @@ object SystemDeployReplayResult {
     ReplayFailed(systemDeployError)
 }
 
-class RuntimeManagerTest extends AnyFlatSpec with Matchers {
+class RuntimeManagerTest extends AnyFlatSpec with Matchers with EitherValues {
   implicit val log: Log[IO]            = Log.log[IO]
   implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
   implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
@@ -511,7 +512,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             } yield res
         )
 
-    task.attempt.unsafeRunTimed(1.seconds).get.swap.toOption.get shouldBe a[BugFoundError]
+    task.attempt.timeout(1.seconds).unsafeRunSync().left.value shouldBe a[BugFoundError]
   }
 
   "emptyStateHash" should "not remember previous hot store state" in effectTest {

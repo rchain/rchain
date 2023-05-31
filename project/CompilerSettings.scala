@@ -17,8 +17,6 @@ object CompilerSettings {
   private lazy val commonOptions =
     // format: off
     Seq(
-//      "-Xfuture",
-//      "-Ypartial-unification",
       // To prevent "dead code following this construct" error when using `*` from mockito-scala library
       // https://github.com/mockito/mockito-scala/#dead-code-warning
       // This warning should be disabled only for Tests but in that case IntelliJ cannot compile project.
