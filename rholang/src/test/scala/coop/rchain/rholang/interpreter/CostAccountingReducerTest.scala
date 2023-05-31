@@ -65,7 +65,9 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       _         = assert(res === Right(substTerm))
       finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(termCost)))
-    } yield ()).unsafeRunSync()
+    } yield ())
+      .timeout(5.seconds)
+      .unsafeRunSync()
   }
 
   it should "charge for failed substitution" in {
@@ -85,7 +87,9 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       _         = assert(res.isLeft)
       finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(originalTermCost)))
-    } yield ()).unsafeRunSync()
+    } yield ())
+      .timeout(5.seconds)
+      .unsafeRunSync()
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {
@@ -182,7 +186,9 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       (result, map) = res
       _             = assert(result === Left(OutOfPhlogistonsError))
       _             = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
-    } yield ()).unsafeRunTimed(5.seconds)
+    } yield ())
+      .timeout(5.seconds)
+      .unsafeRunSync()
 
   }
 }

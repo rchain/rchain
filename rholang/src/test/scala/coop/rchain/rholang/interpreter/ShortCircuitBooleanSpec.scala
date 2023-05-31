@@ -20,6 +20,7 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
   implicit val logF: Log[IO]            = Log.log[IO]
   implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
   implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
+  private val maxDuration               = 5.seconds
 
   val outcomeCh      = "ret"
   val reduceErrorMsg = "Error: index out of bound: -1"
@@ -44,7 +45,7 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
         s"""
             # @"${outcomeCh}"!(false && [1,2].nth(-1))
             # """.stripMargin('#')
-      execute(term).unsafeRunSync() should equal(Right(false))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(Right(false))
 
       val term2 =
         s"""
@@ -58,7 +59,9 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(true && [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(
+        Left(ReduceError(reduceErrorMsg))
+      )
 
       val term2 =
         s"""
@@ -75,7 +78,7 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
         s"""
            # @"${outcomeCh}"!(true || [1,2].nth(-1))
            # """.stripMargin('#')
-      execute(term).unsafeRunSync() should equal(Right(true))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(Right(true))
 
       val term2 =
         s"""
@@ -89,7 +92,9 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false || [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(
+        Left(ReduceError(reduceErrorMsg))
+      )
 
       val term2 =
         s"""
@@ -107,7 +112,9 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false && 1>0 and [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(
+        Left(ReduceError(reduceErrorMsg))
+      )
 
       val term2 =
         s"""
@@ -124,7 +131,9 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false && 1>0 or [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(
+        Left(ReduceError(reduceErrorMsg))
+      )
 
       val term2 =
         s"""
@@ -143,7 +152,9 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false || 1>0 and [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(
+        Left(ReduceError(reduceErrorMsg))
+      )
 
       val term2 =
         s"""
@@ -159,7 +170,9 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
            # @"${outcomeCh}"!(false || 1>0 or [1,2].nth(-1))
            # """.stripMargin('#')
 
-      execute(term).unsafeRunSync() should equal(Left(ReduceError(reduceErrorMsg)))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(
+        Left(ReduceError(reduceErrorMsg))
+      )
 
       val term2 =
         s"""
@@ -183,7 +196,7 @@ class ShortCircuitBooleanSpec extends AnyWordSpec with Matchers {
                     #    }
                     #}""".stripMargin('#')
 
-      execute(term).unsafeRunSync() should equal(Right(false))
+      execute(term).timeout(maxDuration).unsafeRunSync() should equal(Right(false))
 
       val term2 = s""" new ret1, ret2 in {
                      #    ret1!(true) |

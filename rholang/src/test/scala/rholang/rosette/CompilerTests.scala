@@ -19,6 +19,7 @@ import scala.util.Using
 
 class CompilerTests extends AnyFunSuite with Matchers {
   private val tmpPrefix                 = "rspace-store-"
+  private val maxDuration               = 5.seconds
   implicit val logF: Log[IO]            = new Log.NOPLog[IO]
   implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
   implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
@@ -52,6 +53,6 @@ class CompilerTests extends AnyFunSuite with Matchers {
           }
         )
       }
+      .timeout(maxDuration)
       .unsafeRunSync()
-
 }

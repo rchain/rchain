@@ -12,7 +12,6 @@ import pureconfig._
 import pureconfig.generic.auto._
 
 import java.nio.file.Paths
-import scala.collection.compat.immutable.ArraySeq
 import scala.concurrent.duration._
 
 class ConfigMapperSpec extends AnyFunSuite with Matchers {
@@ -92,7 +91,7 @@ class ConfigMapperSpec extends AnyFunSuite with Matchers {
         "--sigar"
       ).mkString(" ")
 
-    val options = Options(ArraySeq.unsafeWrapArray(args.split(' ')))
+    val options = Options(args.split(' ').toIndexedSeq)
 
     val defaultConfig = ConfigSource
       .resources("defaults.conf")

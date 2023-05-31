@@ -8,7 +8,6 @@ import coop.rchain.shared.Base16
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.collection.compat.immutable.ArraySeq
 import scala.util.Random
 
 class DistanceSpec extends AnyFlatSpec with Matchers {
@@ -49,8 +48,8 @@ class DistanceSpec extends AnyFlatSpec with Matchers {
       }
 
     def testKey(key: Array[Byte]): Boolean = {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(key))
-      oneOffs(key).map(ArraySeq.unsafeWrapArray).map(table.distance(_)) == (0 until 8 * width)
+      val table = PeerTable[PeerNode, Id](key.toIndexedSeq)
+      oneOffs(key).map(_.toIndexedSeq).map(table.distance(_)) == (0 until 8 * width)
         .map(Option[Int])
     }
 
@@ -73,56 +72,56 @@ class DistanceSpec extends AnyFlatSpec with Matchers {
     }
 
     s"An empty table of width $width" should "have no peers" in {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
+      val table = PeerTable[PeerNode, Id](kr.toIndexedSeq)
       assert(table.table.forall(_.isEmpty))
     }
 
     it should "return no peers" in {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
+      val table = PeerTable[PeerNode, Id](kr.toIndexedSeq)
       table.peers.size should be(0)
     }
 
     it should "return no values on lookup" in {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
-      table.lookup(ArraySeq.unsafeWrapArray(randBytes(width))).size should be(0)
+      val table = PeerTable[PeerNode, Id](kr.toIndexedSeq)
+      table.lookup(randBytes(width).toIndexedSeq).size should be(0)
     }
 
     s"A table of width $width" should "add a key at most once" in {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
+      val table = PeerTable[PeerNode, Id](kr.toIndexedSeq)
       val toAdd = oneOffs(kr).head
-      val dist  = table.distance(ArraySeq.unsafeWrapArray(toAdd)).get
+      val dist  = table.distance(toAdd.toIndexedSeq).get
       for (i <- 1 to 10) {
-        table.updateLastSeen(PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(toAdd)), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(toAdd.toIndexedSeq), endpoint))
         table.table(dist).size should be(1)
       }
     }
 
     s"A table of width $width with peers at all distances" should "have no empty buckets" in {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
+      val table = PeerTable[PeerNode, Id](kr.toIndexedSeq)
       for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(k)), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k.toIndexedSeq), endpoint))
       }
       assert(table.table.forall(_.nonEmpty))
     }
 
     it should s"return min(k, ${8 * width}) peers on lookup" in {
-      val table     = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
+      val table     = PeerTable[PeerNode, Id](kr.toIndexedSeq)
       val krOneOffs = oneOffs(kr)
       for (k <- krOneOffs) {
-        table.updateLastSeen(PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(k)), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k.toIndexedSeq), endpoint))
       }
       val randomKey = randBytes(width)
       val expected =
         if (krOneOffs.exists(util.Arrays.equals(_, randomKey))) 8 * width - 1 else 8 * width
-      table.lookup(ArraySeq.unsafeWrapArray(randomKey)).size should be(
+      table.lookup(randomKey.toIndexedSeq).size should be(
         scala.math.min(table.k, expected)
       )
     }
 
     it should "not return sought peer on lookup" in {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
+      val table = PeerTable[PeerNode, Id](kr.toIndexedSeq)
       for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(k)), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k.toIndexedSeq), endpoint))
       }
       val target = table.table(table.width * 4)(0)
       val resp   = table.lookup(target.key)
@@ -130,21 +129,21 @@ class DistanceSpec extends AnyFlatSpec with Matchers {
     }
 
     it should s"return ${8 * width} peers when sequenced" in {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
+      val table = PeerTable[PeerNode, Id](kr.toIndexedSeq)
       for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(k)), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k.toIndexedSeq), endpoint))
       }
       table.peers.size should be(8 * width)
     }
 
     it should "find each added peer" in {
-      val table = PeerTable[PeerNode, Id](ArraySeq.unsafeWrapArray(kr))
+      val table = PeerTable[PeerNode, Id](kr.toIndexedSeq)
       for (k <- oneOffs(kr)) {
-        table.updateLastSeen(PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(k)), endpoint))
+        table.updateLastSeen(PeerNode(NodeIdentifier(k.toIndexedSeq), endpoint))
       }
       for (k <- oneOffs(kr)) {
-        table.find(ArraySeq.unsafeWrapArray(k)) should be(
-          Some(PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(k)), endpoint))
+        table.find(k.toIndexedSeq) should be(
+          Some(PeerNode(NodeIdentifier(k.toIndexedSeq), endpoint))
         )
       }
     }

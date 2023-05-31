@@ -476,6 +476,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deploy) }
             } yield res
         )
+        .timeout(10.seconds)
         .unsafeRunSync()
     val noResults =
       runtimeManagerResource
@@ -486,6 +487,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, deployNoRes) }
             } yield res
         )
+        .timeout(10.seconds)
         .unsafeRunSync()
 
     noResults.isEmpty should be(true)
@@ -509,12 +511,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers {
             } yield res
         )
 
-    task.attempt
-      .map {
-        case Left(_: BugFoundError) => true
-        case _                      => false
-      }
-      .unsafeRunSync() shouldBe true
+    task.attempt.unsafeRunTimed(1.seconds).get.swap.toOption.get shouldBe a[BugFoundError]
   }
 
   "emptyStateHash" should "not remember previous hot store state" in effectTest {

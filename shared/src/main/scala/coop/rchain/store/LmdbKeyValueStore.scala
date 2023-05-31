@@ -43,7 +43,7 @@ final case class LmdbKeyValueStore[F[_]: Sync](
               txn.close()
             }
           }
-      result <- r.leftTraverse(_.raiseError[F, T]).map(_.merge)
+      result <- Sync[F].fromEither(r)
       // Ack done
       _ <- done
     } yield result

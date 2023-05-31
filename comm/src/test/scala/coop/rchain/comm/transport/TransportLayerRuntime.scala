@@ -205,10 +205,7 @@ abstract class TransportLayerRuntime[F[_]: Async, E <: Environment] {
       remote: PeerNode
   ): F[CommErr[Unit]] = {
     val msg = ProtocolHelper.heartbeat(local, networkId)
-    transport.send(remote, msg).map { x =>
-      println(x)
-      x
-    }
+    transport.send(remote, msg)
   }
 
   def broadcastHeartbeat(

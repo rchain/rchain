@@ -12,7 +12,6 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import cats.effect._
 
-import scala.collection.compat.immutable.ArraySeq
 import scala.reflect.ClassTag
 
 trait Keyed {
@@ -250,7 +249,7 @@ final class PeerTable[A <: PeerNode: ClassTag, F[_]: Sync: KademliaRPC](
     * Return a sequence of all the `A`s in the table.
     */
   def peers: F[Seq[A]] =
-    Sync[F].delay(ArraySeq.unsafeWrapArray(table.flatMap(l => l synchronized { l.map(_.entry) })))
+    Sync[F].delay(table.flatMap(l => l synchronized { l.map(_.entry) }).toIndexedSeq)
 
   /**
     * Return all distances in order from least to most filled.
@@ -265,6 +264,6 @@ final class PeerTable[A <: PeerNode: ClassTag, F[_]: Sync: KademliaRPC](
         .map { case (l, i) => (l.size, i) }
         .sortWith(_._1 < _._1)
         .map(_._2)
-      ArraySeq.unsafeWrapArray(x)
+      x.toIndexedSeq
     }
 }

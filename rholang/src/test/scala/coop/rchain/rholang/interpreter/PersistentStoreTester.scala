@@ -58,6 +58,7 @@ trait PersistentStoreTester {
             res <- f(rspace, reducer)
           } yield res
       }
+      .timeout(3.seconds)
       .unsafeRunSync()
   }
 }

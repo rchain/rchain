@@ -14,8 +14,11 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import cats.effect.unsafe.implicits.global
 
+import scala.concurrent.duration.DurationInt
+
 class StoragePrinterSpec extends AnyFlatSpec with Matchers {
-  private val tmpPrefix = "rspace-store-"
+  private val tmpPrefix   = "rspace-store-"
+  private val maxDuration = 5.seconds
   private val deployerSk = PrivateKey(
     Base16.unsafeDecode("17f242c34491ff8187ec94ec1508fed8b487b872f2bb97b437f4d4e44345cee6")
   )
@@ -40,6 +43,7 @@ class StoragePrinterSpec extends AnyFlatSpec with Matchers {
           _      = assert(pretty == "@{1}!(Nil)")
         } yield ()
       }
+      .timeout(maxDuration)
       .unsafeRunSync()
   }
 
@@ -76,6 +80,7 @@ class StoragePrinterSpec extends AnyFlatSpec with Matchers {
           _      = assert(unmatchedSends == result)
         } yield ()
       }
+      .timeout(maxDuration)
       .unsafeRunSync()
   }
 
@@ -92,6 +97,7 @@ class StoragePrinterSpec extends AnyFlatSpec with Matchers {
           _ = assert(unmatchedSends == "@{2}!(Nil)")
         } yield ()
       }
+      .timeout(maxDuration)
       .unsafeRunSync()
   }
 }

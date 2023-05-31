@@ -77,7 +77,7 @@ class CostAccountingPropertyTest extends AnyFlatSpec with ScalaCheckPropertyChec
 
 object CostAccountingPropertyTest {
 
-  def haveEqualResults[A](tasks: IO[A]*)(implicit duration: Duration): Boolean =
+  def haveEqualResults[A](tasks: IO[A]*)(implicit duration: FiniteDuration): Boolean =
     tasks.toList
       .sequence[IO, A]
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }

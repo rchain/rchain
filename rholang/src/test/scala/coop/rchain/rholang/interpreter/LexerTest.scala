@@ -14,10 +14,7 @@ import coop.rchain.catscontrib.effect.implicits.sEval
 class LexerTest extends AnyFlatSpec with Matchers {
 
   def attemptMkTerm(input: String): Either[Throwable, Par] =
-    try {
-      // TODO why this tests break when EVAL is used instead of IO
-      Right(Compiler[IO].sourceToADT(input).unsafeRunSync())
-    } catch { case x: Throwable => Left(x) }
+    Compiler[IO].sourceToADT(input).attempt.unsafeRunSync()
 
   "Lexer" should "return LexerError for unterminated string at EOF" in {
     val attempt = attemptMkTerm("""{{ @"ack!(0) }}""")

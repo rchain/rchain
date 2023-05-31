@@ -153,7 +153,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     createMock[IO](startBlock, requestTimeout) { mock =>
       if (!runProcessingStream) test(mock)
       else (Stream.eval(test(mock)) concurrently mock.stream).compile.drain
-    }.unsafeRunTimed(10.seconds)
+    }.timeout(10.seconds).unsafeRunSync()
 
   def asMap(bs: BlockMessage*): Map[BlockHash, BlockMessage] = bs.map(b => (b.blockHash, b)).toMap
 

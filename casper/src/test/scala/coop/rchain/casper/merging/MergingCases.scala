@@ -22,7 +22,6 @@ class MergingCases extends AnyFlatSpec with Matchers {
   val genesisContext  = GenesisBuilder.buildGenesis(validatorsNum = 5)
   val genesis         = genesisContext.genesisBlock
   implicit val logEff = Log.log[IO]
-  implicit val ioP    = IO.parallelForIO
 
   val runtimeManagerResource: Resource[IO, RuntimeManager[IO]] = for {
     dir <- Resources.copyStorage[IO](genesisContext.storageDirectory)

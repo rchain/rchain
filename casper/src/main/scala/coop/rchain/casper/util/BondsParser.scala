@@ -1,13 +1,13 @@
 package coop.rchain.casper.util
 
-import cats.effect.{Async, Resource, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.shared.{Base16, Log}
 import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Log}
 import fs2.io.file.{Files, Path}
-import fs2.{io, text, Pipe, Stream}
+import fs2.{text, Pipe, Stream}
 
 object BondsParser {
 
@@ -18,47 +18,44 @@ object BondsParser {
     *   Cats Effect 3 removed ContextShift and Blocker.
     *     - https://typelevel.org/cats-effect/docs/migration-guide#blocker
     */
-  def parse[F[_]: Async: Log](bondsPath: Path): F[Map[PublicKey, Long]] = {
-    def readLines =
-      Files[F]
-        .readAll(bondsPath)
-        .through(text.utf8.decode)
-        .through(text.lines)
-        .filter(_.trim.nonEmpty)
-        .evalMap { line =>
-          val lineFormat = "<public_key> <stake>"
-          val lineRegex  = raw"^([0-9a-fA-F]+) ([0-9]+)".r.unanchored
+  def parse[F[_]: Async: Log](bondsPath: Path): F[Map[PublicKey, Long]] =
+    Files[F]
+      .readAll(bondsPath)
+      .through(text.utf8.decode)
+      .through(text.lines)
+      .filter(_.trim.nonEmpty)
+      .evalMap { line =>
+        val lineFormat = "<public_key> <stake>"
+        val lineRegex  = raw"^([0-9a-fA-F]+) ([0-9]+)".r.unanchored
 
-          // Line parser
-          val pubKeyAndStake = tryWithMsg {
-            line match { case lineRegex(fst, snd, _*) => (fst, snd) }
-          }(failMsg = s"INVALID LINE FORMAT: `$lineFormat`, actual: `$line``")
+        // Line parser
+        val pubKeyAndStake = tryWithMsg {
+          line match { case lineRegex(fst, snd, _*) => (fst, snd) }
+        }(failMsg = s"INVALID LINE FORMAT: `$lineFormat`, actual: `$line``")
 
-          // Public key parser
-          def publicKey(publicKeyStr: String) =
-            publicKeyStr.decodeHex
-              .map(PublicKey(_))
-              .liftTo[F](new Exception(s"INVALID PUBLIC KEY: `$publicKeyStr`"))
+        // Public key parser
+        def publicKey(publicKeyStr: String) =
+          publicKeyStr.decodeHex
+            .map(PublicKey(_))
+            .liftTo[F](new Exception(s"INVALID PUBLIC KEY: `$publicKeyStr`"))
 
-          // Stake parser
-          def stake(stakeStr: String) = tryWithMsg(stakeStr.toLong)(
-            failMsg = s"INVALID STAKE `$stakeStr`. Please put positive number."
-          )
+        // Stake parser
+        def stake(stakeStr: String) = tryWithMsg(stakeStr.toLong)(
+          failMsg = s"INVALID STAKE `$stakeStr`. Please put positive number."
+        )
 
-          // Parse public key and stake
-          pubKeyAndStake.flatMap(_.bitraverse(publicKey, stake))
-        }
-        .evalTap {
-          case (pk, stake) => Log[F].info(s"Bond loaded ${Base16.encode(pk.bytes)} => $stake")
-        }
-        .compile
-        .to(Map)
-        .adaptErr {
-          case ex: Throwable =>
-            new Exception(s"FAILED PARSING BONDS FILE: $bondsPath\n$ex")
-        }
-    Resource.unit[F].use(_ => readLines)
-  }
+        // Parse public key and stake
+        pubKeyAndStake.flatMap(_.bitraverse(publicKey, stake))
+      }
+      .evalTap {
+        case (pk, stake) => Log[F].info(s"Bond loaded ${Base16.encode(pk.bytes)} => $stake")
+      }
+      .compile
+      .to(Map)
+      .adaptErr {
+        case ex: Throwable =>
+          new Exception(s"FAILED PARSING BONDS FILE: $bondsPath\n$ex")
+      }
 
   def parse[F[_]: Async: Log](
       bondsPathStr: String,
@@ -66,15 +63,13 @@ object BondsParser {
   ): F[Map[PublicKey, Long]] = {
     val bondsPath = Path(bondsPathStr)
 
-    def readLines =
-      Files[F]
-        .exists(bondsPath)
-        .ifM(
-          Log[F].info(s"Parsing bonds file $bondsPath.") >> parse(bondsPath),
-          Log[F].warn(s"BONDS FILE NOT FOUND: $bondsPath. Creating file with random bonds.") >>
-            newValidators[F](autogenShardSize, bondsPath.absolute)
-        )
-    Resource.unit[F].use(_ => readLines)
+    Files[F]
+      .exists(bondsPath)
+      .ifM(
+        Log[F].info(s"Parsing bonds file $bondsPath.") >> parse(bondsPath),
+        Log[F].warn(s"BONDS FILE NOT FOUND: $bondsPath. Creating file with random bonds.") >>
+          newValidators[F](autogenShardSize, bondsPath.absolute)
+      )
   }
 
   private def newValidators[F[_]: Async: Log](

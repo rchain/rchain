@@ -8,7 +8,6 @@ import coop.rchain.sdk.syntax.all._
 import io.grpc
 import io.grpc.netty.NettyServerBuilder
 
-import scala.collection.compat.immutable.ArraySeq
 import scala.concurrent.ExecutionContext
 
 package object discovery {
@@ -35,7 +34,7 @@ package object discovery {
 
   def toPeerNode(n: Node): PeerNode =
     PeerNode(
-      NodeIdentifier(ArraySeq.unsafeWrapArray(n.id.toByteArray)),
+      NodeIdentifier(n.id.toByteArray.toIndexedSeq),
       Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort)
     )
 

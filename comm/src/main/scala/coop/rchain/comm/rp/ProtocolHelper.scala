@@ -7,8 +7,6 @@ import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.transport.Blob
 
-import scala.collection.compat.immutable.ArraySeq
-
 object ProtocolHelper {
 
   def toProtocolBytes(x: String): ByteString      = ByteString.copyFromUtf8(x)
@@ -31,7 +29,7 @@ object ProtocolHelper {
 
   def toPeerNode(n: Node): PeerNode =
     PeerNode(
-      NodeIdentifier(ArraySeq.unsafeWrapArray(n.id.toByteArray)),
+      NodeIdentifier(n.id.toByteArray.toIndexedSeq),
       Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort)
     )
 

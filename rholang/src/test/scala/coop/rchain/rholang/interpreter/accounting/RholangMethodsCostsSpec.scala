@@ -52,7 +52,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
+          implicit val cost = CostAccounting.emptyCost[IO].timeout(1.seconds).unsafeRunSync()
           implicit val env  = Env[Par]()
           val method        = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -86,7 +86,7 @@ class RholangMethodsCostsSpec
           (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
-          implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
+          implicit val cost = CostAccounting.emptyCost[IO].timeout(1.seconds).unsafeRunSync()
           implicit val env  = Env[Par]()
           val method        = methodCall("nth", EList(pars), List(GInt(n)))
           withReducer[Assertion] { reducer =>
@@ -109,7 +109,7 @@ class RholangMethodsCostsSpec
       factor: Double,
       method: Expr
   ): Assertion = {
-    implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
+    implicit val cost = CostAccounting.emptyCost[IO].timeout(1.seconds).unsafeRunSync()
     implicit val env  = Env[Par]()
     withReducer { reducer =>
       for {
@@ -1008,7 +1008,7 @@ class RholangMethodsCostsSpec
   def emptyString: String = ""
 
   def test(expr: Expr, expectedCost: Cost): Assertion = {
-    implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
+    implicit val cost = CostAccounting.emptyCost[IO].timeout(1.seconds).unsafeRunSync()
     implicit val env  = Env[Par]()
     withReducer[Assertion] { reducer =>
       for {
@@ -1030,7 +1030,7 @@ class RholangMethodsCostsSpec
       _   <- cost.set(Cost.UNSAFE_MAX)
       res <- f(RholangOnlyDispatcher(space)._2)
     } yield res
-    test.unsafeRunSync()
+    test.timeout(5.seconds).unsafeRunSync()
   }
 
   private var dbDir: Path              = null

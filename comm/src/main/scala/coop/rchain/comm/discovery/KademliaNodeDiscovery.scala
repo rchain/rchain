@@ -6,8 +6,6 @@ import cats._
 import cats.syntax.all._
 import coop.rchain.comm._
 
-import scala.collection.immutable.ArraySeq
-
 object KademliaNodeDiscovery {
 
   /**
@@ -41,7 +39,7 @@ object KademliaNodeDiscovery {
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
 
         KademliaRPC[F]
-          .lookup(ArraySeq.unsafeWrapArray(target), peerSet.head) >>= (filter(_, potentials)) >>= (
+          .lookup(target.toIndexedSeq, peerSet.head) >>= (filter(_, potentials)) >>= (
             ps => find(limit, dists, peerSet.tail, potentials ++ ps, i + 1)
         )
       } else {

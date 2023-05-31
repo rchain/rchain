@@ -28,8 +28,6 @@ import org.scalatest.matchers.should.Matchers
 import cats.effect.Ref
 import cats.effect.unsafe.implicits.global
 
-import scala.collection.compat.immutable.ArraySeq
-
 class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   val local: PeerNode = peerNode("src", 40400)
@@ -54,7 +52,7 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(port))
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
   private def alwaysDoNotIgnoreF: BlockHash => IO[Boolean]         = _ => false.pure[IO]

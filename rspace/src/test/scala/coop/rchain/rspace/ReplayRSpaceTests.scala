@@ -31,8 +31,6 @@ import cats.effect.unsafe.implicits.global
 //noinspectTaskn ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
 
-  implicit val pIO = IO.parallelForIO
-
   implicit val log: Log[IO]        = new Log.NOPLog[IO]
   val arbitraryRangeSize: Gen[Int] = Gen.chooseNum[Int](1, 10)
   val arbitraryRangesSize: Gen[(Int, Int)] = for {

@@ -10,8 +10,6 @@ import scala.jdk.CollectionConverters
 import scala.reflect.{classTag, ClassTag}
 import GenTools._
 
-import scala.collection.compat.immutable.ArraySeq
-
 object tools {
   def seqToJavaCollection[C <: java.util.Collection[T]: ClassTag, T](input: Seq[T]): C = {
     val r = classTag[C].runtimeClass.getDeclaredConstructor().newInstance().asInstanceOf[C]
@@ -165,7 +163,7 @@ object ProcGen {
 
   private val uriShrinker: Shrink[String] = Shrink { x: String =>
     {
-      val components = ArraySeq.unsafeWrapArray(x.split(":"))
+      val components = x.split(":").toIndexedSeq
 
       for {
         shrinkedComponentSeq <- shrinkContainer[Seq, String]

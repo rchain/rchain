@@ -7,6 +7,7 @@ import cats.Eval
 import scalapb.GeneratedMessageCompanion
 import scodec.bits.ByteVector
 import coop.rchain.catscontrib.effect.implicits.sEval
+import cats.syntax.all._
 
 object implicits {
 
@@ -19,8 +20,7 @@ object implicits {
       override def decode(bytes: ByteVector): Either[Throwable, T] = {
         val companion = implicitly[GeneratedMessageCompanion[T]]
         val buffer    = CodedInputStream.newInstance(bytes.toArray)
-        try Right(companion.defaultInstance.mergeFromM[Eval](buffer).value)
-        catch { case e: Throwable => Left(e) }
+        companion.defaultInstance.mergeFromM[Eval](buffer).attempt.value
       }
     }
 

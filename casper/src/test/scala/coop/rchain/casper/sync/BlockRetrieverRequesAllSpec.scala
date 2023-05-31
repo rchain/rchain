@@ -23,8 +23,6 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.duration._
 import cats.effect.unsafe.implicits.global
 
-import scala.collection.compat.immutable.ArraySeq
-
 class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
@@ -56,7 +54,7 @@ class BlockRetrieverRequestAllSpec extends AnyFunSpec with BeforeAndAfterEach wi
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int = 40400): PeerNode =
-    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(port))
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 

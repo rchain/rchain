@@ -52,7 +52,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF Cost(0)
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(1.second).unsafeRunSync()
   }
 
   it should "refund if data doesn't stay in tuplespace" in { fixture =>
@@ -68,7 +68,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (consumeStorageCost + produceStorageCost)
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(1.second).unsafeRunSync()
   }
 
   it should "fail with OutOfPhloError when deploy runs out of it" in { fixture =>
@@ -122,7 +122,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
         _                   = phlosLeft.value shouldBe (firstProdCost + secondProdCost + joinCost).value
       } yield ()
 
-      test.unsafeRunSync()
+      test.timeout(1.second).unsafeRunSync()
   }
 
   it should "not charge for storage if linear terms create a COMM" in { fixture =>
@@ -143,7 +143,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (consumeStorageCost + produceStorageCost)
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(1.second).unsafeRunSync()
   }
 
   it should "charge for storing persistent produce that create a COMM" in { fixture =>
@@ -166,7 +166,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
           )
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(1.second).unsafeRunSync()
   }
 
   it should "charge for storing persistent consume that create a COMM" in { fixture =>
@@ -187,7 +187,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
           )
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(1.second).unsafeRunSync()
   }
 
   it should "refund for linear data in join" in { fixture =>
@@ -220,7 +220,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (initPhlos + produceYCost - consumeEventStorageCost - commEventStorageCost)
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(1.second).unsafeRunSync()
   }
 
   it should "refund for removing consume" in { fixture =>
@@ -241,7 +241,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (initPhlos + consumeStorageCost - produceEventStorageCost - commEventStorageCost)
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(1.second).unsafeRunSync()
   }
 
   it should "refund for removing produce" in { fixture =>
@@ -265,7 +265,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
       _ <- cost.get shouldBeF (initPhlos + produceCost - consumeEventStorageCost - commEventStorageCost)
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(1.second).unsafeRunSync()
   }
 
   it should "refund for clearing tuplespace" in { fixture =>
@@ -301,7 +301,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
           )
     } yield ()
 
-    test.unsafeRunSync()
+    test.timeout(5.second).unsafeRunSync()
   }
 
   override type FixtureParam = TestFixture
@@ -319,6 +319,7 @@ class ChargingRSpaceTest extends FixtureAnyFlatSpec with TripleEqualsSupport wit
     mkRhoISpace[IO]
       .flatMap(mkChargingRspace)
       .flatMap(chargingRSpace => IO.delay { test(TestFixture(chargingRSpace, cost)) })
+      .timeout(10.seconds)
       .unsafeRunSync()
   }
 

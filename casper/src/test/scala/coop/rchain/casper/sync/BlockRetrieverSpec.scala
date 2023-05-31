@@ -18,15 +18,13 @@ import org.scalatest.matchers.should.Matchers
 import cats.effect.Ref
 import cats.effect.unsafe.implicits.global
 
-import scala.collection.compat.immutable.ArraySeq
-
 class BlockRetrieverSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(port))
 
   val hash                 = ByteString.copyFrom("newHash", "utf-8")
   val local: PeerNode      = peerNode("src", 40400)

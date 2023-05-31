@@ -62,7 +62,6 @@ object RholangCLI {
     implicit val log: Log[IO]          = Log.log[IO]
     implicit val metricsF: Metrics[IO] = new Metrics.MetricsNOP[IO]()
     implicit val spanF: Span[IO]       = NoopSpan[IO]()
-    implicit val parF: Parallel[IO]    = IO.parallelForIO
 
     val kvm = mkRSpaceStoreManager[IO](conf.dataDir(), conf.mapSize()).unsafeRunSync()
 
@@ -205,14 +204,12 @@ object RholangCLI {
     val source = reader(fileName)
 
     import coop.rchain.catscontrib.effect.implicits.sEval
-    val x = try {
-      Success(
-        Compiler[Eval]
-          .sourceToADT(source, Map.empty[String, Par])
-          .value
-      )
-    } catch { case x: Throwable => Failure(x) }
-    x.flatMap(processTerm)
+    Compiler[Eval]
+      .sourceToADT(source, Map.empty[String, Par])
+      .attempt
+      .value
+      .toTry
+      .flatMap(processTerm)
   }
 
   def evaluate(runtime: RhoRuntime[IO], source: String): IO[Unit] =

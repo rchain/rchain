@@ -12,8 +12,6 @@ import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.metrics.Span
 import coop.rchain.shared.Log
 
-import scala.collection.compat.immutable.ArraySeq
-
 trait BlockApiFixture {
 
   def createBlockApi[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
@@ -69,5 +67,5 @@ trait BlockApiFixture {
   protected def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
   protected def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(port))
 }

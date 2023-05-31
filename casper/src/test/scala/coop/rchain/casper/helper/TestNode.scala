@@ -40,8 +40,6 @@ import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import cats.effect.{Deferred, Ref, Temporal}
 
-import scala.collection.compat.immutable.ArraySeq
-
 case class TestNode[F[_]: Async](
     name: String,
     local: PeerNode,
@@ -497,7 +495,7 @@ object TestNode {
   }
 
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(ArraySeq.unsafeWrapArray(name.getBytes)), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(port))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

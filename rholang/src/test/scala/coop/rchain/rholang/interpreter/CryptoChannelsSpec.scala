@@ -170,7 +170,9 @@ class CryptoChannelsSpec
         (runtime.inj(send) >>
           storeContainsTest(
             ListParWithRandom(Seq(Expr(GBool(true))), rand)
-          )).unsafeRunSync()
+          ))
+          .timeout(3.seconds)
+          .unsafeRunSync()
         clearStore(ackChannel)
       }
   }
@@ -209,7 +211,7 @@ class CryptoChannelsSpec
         )
         (runtime.inj(send) >> storeContainsTest(
           ListParWithRandom(List(Expr(GBool(true))), rand)
-        )).unsafeRunSync()
+        )).timeout(3.seconds).unsafeRunSync()
         clearStore(ackChannel)
       }
   }

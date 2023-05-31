@@ -65,7 +65,7 @@ class ReplaySpec extends AnyFlatSpec with Matchers {
           assert(replayRes.errors.isEmpty)
         }
         ().pure[IO]
-    }.unsafeRunSync()
+    }.timeout(timeout).unsafeRunSync()
 
   def evaluateWithRuntime(
       runtime: RhoRuntime[IO],

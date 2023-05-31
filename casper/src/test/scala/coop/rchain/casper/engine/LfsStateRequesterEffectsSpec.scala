@@ -173,7 +173,7 @@ class LfsStateRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     createMock[IO](requestTimeout) { mock =>
       if (!runProcessingStream) test(mock)
       else (Stream.eval(test(mock)) concurrently mock.stream).compile.drain
-    }.unsafeRunSync()
+    }.timeout(10.seconds).unsafeRunSync()
 
   val bootstrapTest = createBootstrapTest(runProcessingStream = true) _
 

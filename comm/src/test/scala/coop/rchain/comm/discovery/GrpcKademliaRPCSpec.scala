@@ -11,7 +11,6 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Log
 import io.grpc
 
-import scala.collection.compat.immutable.ArraySeq
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -26,7 +25,7 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[IO, GrpcEnvironment] {
       val host  = "127.0.0.1"
       val bytes = Array.ofDim[Byte](40)
       Random.nextBytes(bytes)
-      val peer = PeerNode.from(NodeIdentifier(ArraySeq.unsafeWrapArray(bytes)), host, 0, port)
+      val peer = PeerNode.from(NodeIdentifier(bytes.toIndexedSeq), host, 0, port)
       GrpcEnvironment(host, port, peer)
     }
 

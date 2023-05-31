@@ -38,7 +38,7 @@ object CostAccounting {
       c <- of(init)
     } yield (loggingCost(c, L, s))
 
-  private[this] def defaultMonadState[F[_]: Monad: Async] =
+  private[this] def defaultMonadState[F[_]: Async] =
     (state: Ref[F, Cost]) =>
       new DefaultMonadState[F, Cost] {
         val monad: cats.Monad[F]  = implicitly[Monad[F]]
