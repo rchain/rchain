@@ -28,7 +28,7 @@ import scala.util.Random.shuffle
 import cats.effect.Ref
 import cats.effect.unsafe.implicits.global
 
-//noinspectTaskn ZeroIndexToHead,NameBooleanParameters
+//noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
 
   implicit val log: Log[IO]        = new Log.NOPLog[IO]
