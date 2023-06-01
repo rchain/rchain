@@ -1,11 +1,13 @@
 package coop.rchain.casper.util.scalatest
 
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import fs2.Stream
-import monix.eval.Task
 import org.scalatest.matchers.{MatchResult, Matcher}
+import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import java.util.concurrent.TimeoutException
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.duration.FiniteDuration
 
 trait Fs2StreamMatchers {
 
@@ -14,15 +16,14 @@ trait Fs2StreamMatchers {
     *
     * @param timeout duration to wait for new elements
     */
-  class EmptyMatcher[A](timeout: FiniteDuration) extends Matcher[Stream[Task, A]] {
-    import monix.execution.Scheduler.Implicits.global
+  class EmptyMatcher[A](timeout: FiniteDuration) extends Matcher[Stream[IO, A]] {
 
-    def apply(left: Stream[Task, A]) = {
-      val res = left.take(1).timeout(timeout).compile.toList.attempt.runSyncUnsafe()
+    def apply(left: Stream[IO, A]) = {
+      val res = left.take(1).timeout(timeout).compile.toList.attempt.unsafeRunSync()
 
-      val isEmpty = res.isLeft && res.left.get.isInstanceOf[TimeoutException]
+      val isEmpty = res.isLeft && res.swap.toOption.get.isInstanceOf[TimeoutException]
 
-      val onFail    = if (!isEmpty) s"Stream is not empty, emitted: ${res.right.get}" else ""
+      val onFail    = if (!isEmpty) s"Stream is not empty, emitted: ${res.toOption.get}" else ""
       val onSuccess = s"Stream is empty"
 
       MatchResult(isEmpty, onFail, onSuccess)

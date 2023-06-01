@@ -1,8 +1,7 @@
 package coop.rchain.casper.blocks.proposer
 
 import cats.data.OptionT
-import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{Async, Deferred, Sync, Temporal}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -23,7 +22,7 @@ import coop.rchain.models.syntax._
 import coop.rchain.sdk.consensus.Stake
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.Log
 
 sealed abstract class ProposerResult
 object ProposerEmpty                                                         extends ProposerResult
@@ -40,7 +39,7 @@ object ProposerResult {
   def started(seqNumber: Long): ProposerResult = ProposerStarted(seqNumber)
 }
 
-class Proposer[F[_]: Concurrent: Log: Span](
+class Proposer[F[_]: Async: Log: Span](
     getLatestSeqNumber: Validator => F[Long],
     // propose constraint checkers
     checkActiveValidator: ValidatorIdentity => F[Boolean],
@@ -67,7 +66,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
                       proposeEffect(b) >>
                         (ProposeResult.success(v), b.some).pure[F]
                     case Left(v) =>
-                      Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
+                      Sync[F].raiseError[(ProposeResult, Option[BlockMessage])](
                         new Exception(
                           s"Validation of self created block failed with reason: $v, cancelling propose."
                         )
@@ -114,7 +113,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
 object Proposer {
   // format: off
   def apply[F[_]
-    /* Execution */   : Concurrent: Timer: Time
+    /* Execution */   : Async
     /* Storage */     : BlockStore: BlockDagStorage
     /* Rholang */     : RuntimeManager
     /* Comm */        : CommUtil
@@ -171,7 +170,7 @@ object Proposer {
           newlySeen.toList.traverse(BlockStore[F].getUnsafe).map { newBlocks =>
             val newStateTransition = newBlocks.exists(hasDeploys)
             val attestationStake =
-              preStateBonds.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
+              preStateBonds.view.filterKeys(newBlocks.map(_.sender).toSet).values.toList.sum
             val preStateBondsStake = preStateBonds.values.toList.sum
 
             !(newStateTransition || Stake.isSuperMajority(attestationStake, preStateBondsStake))

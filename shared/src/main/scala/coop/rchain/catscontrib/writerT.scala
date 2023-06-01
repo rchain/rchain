@@ -14,5 +14,5 @@ abstract class WriterTMonadTrans[L: Monoid]() extends MonadTrans[WriterT[*[_], L
   def liftM[M[_]: Monad, B](mb: M[B]): WriterT[M, L, B] =
     WriterT.liftF[M, L, B](mb)
 
-  implicit def apply[M[_]: Monad]: Monad[WriterT[M, L, *]] = Monad[WriterT[M, L, *]]
+  def apply[M[_]: Monad]: Monad[WriterT[M, L, *]] = Monad[WriterT[M, L, *]]
 }

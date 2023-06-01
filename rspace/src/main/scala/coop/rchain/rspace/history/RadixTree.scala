@@ -903,7 +903,7 @@ object RadixTree {
             for {
               itemIdx <- Sync[F].delay(byteToInt(groupIdx))
               item    = curNode(itemIdx)
-              r <- if (actionsInGroup.length == 1)
+              r <- if (actionsInGroup.lengthIs == 1)
                     processOneAction(actionsInGroup.head, item, itemIdx)
                   else processSeveralActions(actionsInGroup, item, itemIdx)
             } yield r
@@ -948,7 +948,7 @@ object RadixTree {
         newRootNodeOpt <- makeActions(rootNode, actions)
         r <- newRootNodeOpt.traverse { newRootNode =>
               val newRootHash = saveNode(newRootNode)
-              commit.as(newRootNode, newRootHash)
+              commit.as(newRootNode -> newRootHash)
             }
         _ = clearWriteCache()
       } yield r
@@ -1020,7 +1020,7 @@ object RadixTree {
 
       def constructFirstStr(treeName: String) = treeName.toUpperCase() + ": root =>"
 
-      def printStrings(strings: Vector[String]) = strings.map(println(_))
+      def printStrings(strings: Vector[String]) = strings.foreach(println(_))
 
       for {
         strings     <- print(rootNode, 1)

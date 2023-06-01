@@ -1,6 +1,7 @@
 package coop.rchain.casper.rholang
 
-import cats.effect.Resource
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Resource}
 import cats.syntax.all._
 import cats.implicits.catsSyntaxApplicativeId
 import coop.rchain.casper.genesis.Genesis
@@ -17,19 +18,15 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployId, Par}
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.duration._
-
 class DeployIdTest extends AnyFlatSpec with Matchers {
-  implicit val log: Log[Task]    = new Log.NOPLog[Task]()
+  implicit val log: Log[IO]      = new Log.NOPLog[IO]()
   private val dummyMergeableName = BlockRandomSeed.nonNegativeMergeableTagName("dummy")
 
-  private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deploy-id-runtime-manager-test", dummyMergeableName)
+  private val runtimeManager: Resource[IO, RuntimeManager[IO]] =
+    mkRuntimeManager[IO]("deploy-id-runtime-manager-test", dummyMergeableName)
 
   private val sk = ConstructDeploy.defaultSec
 
@@ -56,11 +53,11 @@ class DeployIdTest extends AnyFlatSpec with Matchers {
         .use(
           mgr =>
             for {
-              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
+              hash <- RuntimeManager.emptyStateHashFixed.pure[IO]
               res  <- mgr.spawnRuntime >>= { _.captureResults(hash, d) }
             } yield res
         )
-        .runSyncUnsafe(10.seconds)
+        .unsafeRunSync()
 
     result.size should be(1)
     result.head should be(GDeployId(d.sig): Par)

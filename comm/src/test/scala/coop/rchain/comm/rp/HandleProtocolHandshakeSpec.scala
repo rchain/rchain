@@ -1,7 +1,6 @@
 package coop.rchain.comm.rp
 
-import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect._
@@ -9,16 +8,16 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import coop.rchain.shared.scalatestcontrib.convertToAnyShouldWrapper
-import fs2.concurrent.Queue
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import fs2.concurrent.Channel
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
 
 class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChecks {
 
-  implicit private val logEffTest   = new Log.NOPLog[Task]
-  implicit private val metricEffEff = new Metrics.MetricsNOP[Task]
+  implicit private val logEffTest   = new Log.NOPLog[IO]
+  implicit private val metricEffEff = new Metrics.MetricsNOP[IO]
 
   val validConnections = Table(
     ("src", "remote"),
@@ -67,12 +66,12 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
         val src    = peerNode(srcHost)
         val remote = peerNode(remoteHost)
         val run = for {
-          conn <- tryToHandshake[Task](src, remote)
+          conn <- tryToHandshake[IO](src, remote)
 
           _ = conn.size shouldBe 1
         } yield ()
 
-        run.runSyncUnsafe()
+        run.unsafeRunSync()
     }
   }
 
@@ -98,16 +97,16 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
         val src    = peerNode(srcHost)
         val remote = peerNode(remoteHost)
         val run = for {
-          conn <- tryToHandshake[Task](src, remote)
+          conn <- tryToHandshake[IO](src, remote)
 
           _ = conn.size shouldBe 0
         } yield ()
 
-        run.runSyncUnsafe()
+        run.unsafeRunSync()
     }
   }
 
-  private def tryToHandshake[F[_]: Concurrent: Log: Metrics](
+  private def tryToHandshake[F[_]: Async: Log: Metrics](
       srcPeer: PeerNode,
       remotePeer: PeerNode
   ): F[Connections] = {
@@ -122,7 +121,7 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
     implicit val connectionRef = Ref.unsafe(Connect.Connections.empty)
 
     for {
-      routingMessageQueue <- Queue.unbounded[F, RoutingMessage]
+      routingMessageQueue <- Channel.unbounded[F, RoutingMessage]
 
       // Remote peer protocol handshake message
       protocol = ProtocolHelper.protocolHandshake(remotePeer, networkId = "test-network")
@@ -136,5 +135,8 @@ class HandleProtocolHandshakeSpec extends AnyFlatSpec with ScalaCheckPropertyChe
   }
 
   private def peerNode(host: String): PeerNode =
-    PeerNode(NodeIdentifier("node-name".getBytes), Endpoint(host, tcpPort = 0, udpPort = 0))
+    PeerNode(
+      NodeIdentifier("node-name".getBytes.toIndexedSeq),
+      Endpoint(host, tcpPort = 0, udpPort = 0)
+    )
 }

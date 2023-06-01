@@ -1,6 +1,5 @@
 package coop.rchain.comm.rp
 
-import cats.effect.concurrent.Ref
 import cats.{catsInstancesForId => _, _}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
@@ -16,6 +15,7 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import cats.effect.Ref
 
 class ConnectSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
@@ -48,7 +48,10 @@ class ConnectSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with 
         Connect.connect[Effect](remote)
         // then
         transportLayerEff.requests.size should be(1)
-        val Protocol(_, Protocol.Message.ProtocolHandshake(_)) = transportLayerEff.requests(0).msg
+        transportLayerEff.requests.head.msg match {
+          case Protocol(_, Protocol.Message.ProtocolHandshake(_)) => true
+          case _                                                  => false
+        }
       }
     }
 
@@ -65,6 +68,6 @@ class ConnectSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with 
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(port))
 
 }

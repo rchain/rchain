@@ -1,7 +1,7 @@
 package coop.rchain.rspace.state.instances
 
 import java.nio.ByteBuffer
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RootsStoreInstances
@@ -12,7 +12,7 @@ import scodec.bits.ByteVector
 
 object RSpaceImporterStore {
   // RSpace importer constructor / smart constructor "guards" private class
-  def apply[F[_]: Concurrent](
+  def apply[F[_]: Async](
       historyStore: KeyValueStore[F],
       valueStore: KeyValueStore[F],
       rootsStore: KeyValueStore[F]

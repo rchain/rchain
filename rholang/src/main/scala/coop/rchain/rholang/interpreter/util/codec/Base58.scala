@@ -65,7 +65,7 @@ object Base58 {
     * @return the decoded data
     */
   def decode(input: String): Option[Array[Byte]] = {
-    val (zeroChars, trim) = input.toStream.span(_ == alphabet(0))
+    val (zeroChars, trim) = input.to(LazyList).span(_ == alphabet(0))
     val zeroes            = zeroChars.map(_ => 0: Byte).toArray
 
     if (trim.isEmpty)

@@ -51,11 +51,11 @@ object EventLogMergingLogic {
     val racesForSameIOEvent = {
       val sharedConsumes    = a.consumesProduced intersect b.consumesProduced
       val mergeableConsumes = a.consumesMergeable intersect b.consumesMergeable
-      val consumeRaces      = (sharedConsumes diff mergeableConsumes).toIterator.filterNot(_.persistent)
+      val consumeRaces      = (sharedConsumes diff mergeableConsumes).iterator.filterNot(_.persistent)
 
       val sharedProduces    = a.producesConsumed intersect b.producesConsumed
       val mergeableProduces = a.producesMergeable intersect b.producesMergeable
-      val produceRaces      = (sharedProduces diff mergeableProduces).toIterator.filterNot(_.persistent)
+      val produceRaces      = (sharedProduces diff mergeableProduces).iterator.filterNot(_.persistent)
 
       consumeRaces.flatMap(_.channelsHashes) ++ produceRaces.map(_.channelsHash)
     }
@@ -74,8 +74,8 @@ object EventLogMergingLogic {
       def check(left: EventLogIndex, right: EventLogIndex): Iterator[Blake2b256Hash] = {
         val p = producesCreatedAndNotDestroyed(left)
         val c = consumesCreatedAndNotDestroyed(right)
-        p.toIterator
-          .flatMap(p => c.toIterator.map((_, p)))
+        p.iterator
+          .flatMap(p => c.iterator.map((_, p)))
           .filter(tupled(matchFound))
           .map(_._2.channelsHash)
       }
@@ -86,7 +86,7 @@ object EventLogMergingLogic {
     // now we don't analyze joins and declare conflicting cases when produce touch join because applying
     // produces from both event logs might trigger continuation of some join, so COMM event
     val produceTouchBaseJoin =
-      (a.producesTouchingBaseJoins.toIterator ++ b.producesTouchingBaseJoins.toIterator)
+      (a.producesTouchingBaseJoins.iterator ++ b.producesTouchingBaseJoins.iterator)
         .map(_.channelsHash)
 
     racesForSameIOEvent ++ potentialCOMMs ++ produceTouchBaseJoin

@@ -1,6 +1,6 @@
 package coop.rchain.rspace.concurrent
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.metrics.Metrics
 
@@ -10,7 +10,7 @@ trait TwoStepLock[F[_], K] {
   ): F[W]
 }
 
-class ConcurrentTwoStepLockF[F[_]: Concurrent: Metrics, K](ms: Metrics.Source)
+class ConcurrentTwoStepLockF[F[_]: Async: Metrics, K](ms: Metrics.Source)
     extends TwoStepLock[F, K] {
   private[this] val phaseA: MultiLock[F, K] =
     new MultiLock[F, K](Metrics.Source(ms, "two-step-lock.phase-a"))

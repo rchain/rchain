@@ -97,6 +97,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
         }
       case (t +: trem, p +: prem) =>
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
+
     }
 
   def listMatchSingle[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short, T](
@@ -367,7 +368,7 @@ trait SpatialMatcherInstances {
       val filteredPattern  = noFrees(pattern)
       val pc               = ParCount(filteredPattern)
       val minRem           = pc
-      val maxRem           = if (wildcard || !varLevel.isEmpty) ParCount.max else pc
+      val maxRem           = if (wildcard || varLevel.isDefined) ParCount.max else pc
       val individualBounds = filteredPattern.connectives.map(ParCount.minMax)
       val remainderBounds = individualBounds
         .scanRight((minRem, maxRem)) { (bounds, acc) =>
@@ -376,7 +377,7 @@ trait SpatialMatcherInstances {
         }
         .tail
       val connectivesWithBounds =
-        (filteredPattern.connectives, individualBounds, remainderBounds).zipped.toList
+        filteredPattern.connectives.lazyZip(individualBounds).lazyZip(remainderBounds).toList
 
       def matchConnectiveWithBounds(
           target: Par,

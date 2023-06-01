@@ -48,8 +48,7 @@ object PathOps {
     def deleteDirectory[F[_]: Sync: Log]()(implicit logSource: LogSource): F[Unit] = {
       import java.io.File
       import java.util.Comparator
-
-      import scala.collection.JavaConverters._
+      import scala.jdk.CollectionConverters._
 
       import cats.syntax.all._
 

@@ -78,13 +78,13 @@ object blockImplicits {
   val arbitraryProcessedDeploys: Arbitrary[Seq[ProcessedDeploy]] =
     Arbitrary.arbContainer[Seq, ProcessedDeploy](
       arbitraryProcessedDeploy,
-      Buildable.buildableCanBuildFrom,
+      Buildable.buildableFactory,
       identity
     )
   val arbitraryBlockHashes: Arbitrary[Seq[BlockHash]] =
     Arbitrary.arbContainer[Seq, BlockHash](
       arbitraryBlockHash,
-      Buildable.buildableCanBuildFrom,
+      Buildable.buildableFactory,
       identity
     )
 

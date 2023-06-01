@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.Monad
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.{BlockReceiver, BlockRetriever}
-import coop.rchain.casper.protocol.{CommUtil, _}
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -19,20 +19,20 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, Time}
-import fs2.concurrent.Queue
+import coop.rchain.shared.Log
+import fs2.concurrent.Channel
 
 object NodeRunning {
 
   // format: off
   def apply[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Async
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
   /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: Metrics] // format: on
   (
-      blockProcessingQueue: Queue[F, BlockMessage],
+      blockProcessingQueue: Channel[F, BlockMessage],
       validatorId: Option[ValidatorIdentity],
       disableStateExporter: Boolean
   ): F[NodeRunning[F]] = Sync[F].delay(
@@ -212,13 +212,13 @@ object NodeRunning {
 
 // format: off
 class NodeRunning[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Async
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
   /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: Metrics] // format: on
 (
-    incomingBlocksQueue: Queue[F, BlockMessage],
+    incomingBlocksQueue: Channel[F, BlockMessage],
     validatorId: Option[ValidatorIdentity],
     disableStateExporter: Boolean
 ) {
@@ -251,7 +251,7 @@ class NodeRunning[F[_]
                 s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
               ),
-              incomingBlocksQueue.enqueue1(b) <* Log[F].debug(
+              incomingBlocksQueue.trySend(b) *> Log[F].debug(
                 s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
               )
@@ -271,7 +271,7 @@ class NodeRunning[F[_]
       val processKnownBlock =
         for {
           blockNotValidated <- BlockReceiver.notValidated(blockHash)
-          _ <- (BlockStore[F].getUnsafe(blockHash) >>= incomingBlocksQueue.enqueue1)
+          _ <- (BlockStore[F].getUnsafe(blockHash) >>= incomingBlocksQueue.send)
                 .whenA(blockNotValidated)
         } yield ()
       val logProcess = Log[F].debug(

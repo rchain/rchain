@@ -1,6 +1,5 @@
 package coop.rchain.comm.rp
 
-import cats.effect.concurrent.Ref
 import cats.{catsInstancesForId => _, _}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.catscontrib.ski._
@@ -16,6 +15,7 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
+import cats.effect.Ref
 
 class ClearConnectionsSpec
     extends AnyFunSpec
@@ -127,7 +127,7 @@ class ClearConnectionsSpec
   }
 
   private def peer(name: String, host: String = "host"): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), Endpoint(host, 80, 80))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), Endpoint(host, 80, 80))
 
   private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
     Ref.unsafe[Id, Connections](peers.toList)

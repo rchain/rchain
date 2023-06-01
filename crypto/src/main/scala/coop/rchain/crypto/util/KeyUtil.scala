@@ -51,8 +51,8 @@ object KeyUtil {
                      val pubKeySpec     = new ECPublicKeySpec(ecPoint, params)
                      val keyFactory     = KeyFactory.getInstance("ECDSA", new BouncyCastleProvider())
                      Sync[F].delay(
-                       keyFactory.generatePrivate(privateKeySpec),
-                       keyFactory.generatePublic(pubKeySpec)
+                       keyFactory.generatePrivate(privateKeySpec) ->
+                         keyFactory.generatePublic(pubKeySpec)
                      )
                    case _ => Sync[F].raiseError(new Exception("Invalid algorithm"))
                  }

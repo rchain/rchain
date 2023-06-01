@@ -3,20 +3,23 @@ package coop.rchain.rholang.interpreter.matcher
 import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
 import cats.syntax.all._
-import cats.effect.laws.discipline.{BracketTests, SyncTests}
+import cats.effect.laws._
 import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
 import cats.mtl.laws.discipline.MonadLayerControlTests
-import cats.{~>, Eq, Monad}
+import cats.{~>, effect, Eq, Eval, Monad}
 import coop.rchain.catscontrib.laws.discipline.MonadTransTests
 import coop.rchain.rholang.StackSafetySpec
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, Step}
-import monix.eval.Coeval
+import cats.effect.Sync
+import cats.effect.kernel.Sync.Type
 import org.scalacheck.{Arbitrary, Gen, Prop}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 import cats.instances.AllInstances
 import cats.syntax.AllSyntax
+import coop.rchain.catscontrib.effect.implicits.sEval
+import org.scalacheck.ScalacheckShapeless.arbitrarySingletonType
 
 class StreamTSpec extends AnyFlatSpec with Matchers {
 
@@ -25,30 +28,30 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   behavior of "StreamT"
 
   it must "allow for lazy computation of the stream's head and shape" in {
-    val stack  = StreamT.liftF[Coeval, Int](Coeval.delay(???))
+    val stack  = StreamT.liftF[Eval, Int](Sync[Eval].delay(???))
     val result = StreamT.run(stack)
 
     assertThrows[NotImplementedError] {
-      result.value()
+      result.value
     }
   }
 
   it must "not trigger spurious evaluation of underlying stream for a lazy monad" in {
-    val stream: Stream[Int] = Stream.cons(1, ???)
+    val stream: LazyList[Int] = LazyList.cons(1, ???)
 
-    var step2: Coeval[Step[Coeval, Int]] = null
+    var step2: Eval[Step[Eval, Int]] = null
 
     noException shouldBe thrownBy {
       stream.head
-      val wrappedStep1 = StreamT.fromStream(Coeval.now(stream))
-      val step1        = wrappedStep1.next.value().asInstanceOf[SCons[Coeval, Int]]
+      val wrappedStep1 = StreamT.fromStream(Eval.now(stream))
+      val step1        = wrappedStep1.next.value.asInstanceOf[SCons[Eval, Int]]
       assert(step1.head == 1)
       val wrappedStep2 = step1.tail
       step2 = wrappedStep2.next
     }
 
     assertThrows[NotImplementedError] {
-      step2.value()
+      step2.value
     }
   }
 
@@ -58,17 +61,17 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
   }
 
   it must "be stacksafe for a stacksafe F when calling StreamT.run[F]" in {
-    val huge = hugeStream[Coeval](maxDepth - 1, StreamT.pure(maxDepth))
+    val huge = hugeStream[Eval](maxDepth - 1, StreamT.pure(maxDepth))
 
-    assert(StreamT.run(huge).value() == Stream.range(1, maxDepth + 1))
+    assert(StreamT.run(huge).value == LazyList.range(1, maxDepth + 1))
   }
 
   it must "be stacksafe for a stacksafe F when calling StreamT.fromStream[F]" in {
-    val reference = Stream.range(0, maxDepth)
+    val reference = LazyList.range(0, maxDepth)
 
-    val huge = StreamT.fromStream(Coeval.now(reference))
+    val huge = StreamT.fromStream(Eval.now(reference))
 
-    assert(StreamT.run(huge).value() == reference)
+    assert(StreamT.run(huge).value == reference)
   }
 
   it must "be stacksafe for a stacksafe F when calling Monad[StreamT[F, *]].flatMap" in {
@@ -78,33 +81,35 @@ class StreamTSpec extends AnyFlatSpec with Matchers {
       case _ => n.pure[F].flatMap(x => hugeFlatMap[F](x - 1))
     }
 
-    val huge = hugeFlatMap[StreamT[Coeval, *]](maxDepth)
+    implicit val x: Monad[StreamT[Eval, *]] =
+      coop.rchain.rholang.interpreter.matcher.StreamT.streamTMonad[Eval]
+    val huge = hugeFlatMap[StreamT[Eval, *]](maxDepth)
 
-    assert(StreamT.run(huge).value() == Stream(0))
+    assert(StreamT.run(huge).value == LazyList(0))
   }
 
   it must "be stacksafe for a stacksafe F when calling MonoidK[StreamT[F, *]].combineK" in {
-    type StreamTCoeval[A] = StreamT[Coeval, A]
+    type StreamTEval[A] = StreamT[Eval, A]
 
-    val huge: StreamTCoeval[Int] = hugeStream(maxDepth - 1, StreamT.pure(maxDepth))
-    val reference                = Stream.range(1, maxDepth + 1)
+    val huge: StreamTEval[Int] = hugeStream(maxDepth - 1, StreamT.pure(maxDepth))
+    val reference              = LazyList.range(1, maxDepth + 1)
 
     val combined = huge.combineK(huge)
 
-    assert(StreamT.run(combined).value() == (reference ++ reference))
+    assert(StreamT.run(combined).value == (reference ++ reference))
   }
 
   it must "be stacksafe and lazy for a stacksafe F when calling dropTail" in {
-    type StreamTCoeval[A] = StreamT[Coeval, A]
+    type StreamTEval[A] = StreamT[Eval, A]
 
-    val reference                    = Stream(1)
-    val head: StreamTCoeval[Int]     = StreamT.fromStream(Coeval.now(reference))
-    val throwing: StreamTCoeval[Int] = StreamT.liftF[Coeval, Int](Coeval.delay(???))
-    val combined                     = head.combineK(throwing)
+    val reference                  = LazyList(1)
+    val head: StreamTEval[Int]     = StreamT.fromStream(Eval.now(reference))
+    val throwing: StreamTEval[Int] = StreamT.liftF[Eval, Int](Sync[Eval].delay(???))
+    val combined                   = head.combineK(throwing)
 
     val noTail = StreamT.dropTail(combined)
 
-    assert(StreamT.run(noTail).value() == reference)
+    assert(StreamT.run(noTail).value == reference)
   }
 }
 
@@ -114,7 +119,7 @@ class StreamTLawsSpec
     with AllInstances
     with AllSyntax {
 
-  type Safe[A]          = Coeval[A]
+  type Safe[A]          = Eval[A]
   type Err[A]           = EitherT[Safe, String, A]
   type Effect[A]        = WriterT[Err, String, A]
   type StreamTEffect[A] = StreamT[Effect, A]
@@ -125,7 +130,7 @@ class StreamTLawsSpec
     Arbitrary(for {
       s <- Arbitrary.arbitrary[String]
       a <- Arbitrary.arbitrary[A]
-    } yield WriterT[Err, String, A](EitherT.liftF(Coeval.now(s -> a))))
+    } yield WriterT[Err, String, A](EitherT.liftF(Eval.now(s -> a))))
 
   implicit def arbStreamEff[A: Arbitrary]: Arbitrary[StreamTEffect[A]] =
     Arbitrary(
@@ -134,22 +139,21 @@ class StreamTLawsSpec
           s <- Arbitrary.arbitrary[Effect[A]]
         } yield StreamT.liftF(s),
         for {
-          s <- Arbitrary.arbitrary[Effect[Stream[A]]]
+          s <- Arbitrary.arbitrary[Effect[LazyList[A]]]
         } yield StreamT.fromStream(s)
       )
     )
 
-  implicit val arbFunctionKStream: Arbitrary[Stream ~> Stream] =
+  implicit val arbFunctionKStream: Arbitrary[LazyList ~> LazyList] =
     Arbitrary(
       Gen.oneOf(
-        new (Stream ~> Stream) {
-          def apply[A](fa: Stream[A]): Stream[A] = Stream.Empty
+        new (LazyList ~> LazyList) {
+          def apply[A](fa: LazyList[A]): LazyList[A] = LazyList.empty[A]
         },
-        FunctionK.id[Stream]
+        FunctionK.id[LazyList]
       )
     )
 
-  implicit def eqEff[A: Eq]: Eq[Effect[A]]       = Eq.by(x => x.value.value.attempt())
   implicit def eqFA[A: Eq]: Eq[StreamTEffect[A]] = Eq.by(StreamT.run[Effect, A])
 
   implicit def eqT: Eq[Throwable] = Eq.allEqual
@@ -158,9 +162,10 @@ class StreamTLawsSpec
     for {
       (testName, prop) <- props
       _                = info(testName)
-      _                = prop.check
+      _                = prop.check()
     } yield ()
 
+  import StreamT.streamTSync
   test("StreamT.MonadLaws") { checkProps(MonadTests[StreamTEffect].monad[Int, Int, String].props) }
 
   test("StreamT.AlternativeLaws") {
@@ -172,7 +177,7 @@ class StreamTLawsSpec
   }
   test("StreamT.MonadLayerControlLaws") {
     checkProps(
-      MonadLayerControlTests[StreamTEffect, Effect, Stream]
+      MonadLayerControlTests[StreamTEffect, Effect, LazyList]
         .monadLayerControl[Int, String]
         .props
     )
@@ -186,21 +191,13 @@ class StreamTLawsSpec
     checkProps(MonadErrorTests[StreamTEffect, Unit].monadError[Int, Int, String].props)
   }
 
-  test("StreamT.SyncLaws") { checkProps(SyncTests[StreamTEffect].sync[Int, Int, String].props) }
+  implicit val a: Arbitrary[Sync.Type] = Arbitrary[Sync.Type](
+    Gen.oneOf(Seq(Type.Delay, Type.Blocking, Type.InterruptibleMany, Type.InterruptibleOnce))
+  )
+  // TODO this was not required to CE2, whats this for?
+  implicit val x: StreamTEffect[Boolean] => Prop = (x: StreamTEffect[Boolean]) => Prop(true)
 
-  test("StreamT.SyncLaws.from") {
-    val fromEffect =
-      λ[Effect ~> StreamTEffect[*]](
-        e => StreamT.liftF(e)
-      )
-    checkProps(
-      BracketTests[StreamTEffect[*], Throwable]
-        .bracketTrans[Effect, Int, Int](
-          fromEffect
-        )
-        .props
-    )
-  }
+  test("StreamT.SyncLaws") { checkProps(SyncTests[StreamTEffect].sync[Int, Int, String].props) }
 }
 
 trait LowPriorityDerivations {

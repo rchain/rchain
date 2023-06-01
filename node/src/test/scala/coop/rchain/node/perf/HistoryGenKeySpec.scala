@@ -1,7 +1,8 @@
 package coop.rchain.node.perf
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -72,12 +73,11 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
   val tempPath: file.Path = Files.createTempDirectory(s"lmdb-test-")
   val tempDir: Directory  = Directory(Path(tempPath.toFile))
 
-  override def beforeAll: Unit = tempDir.deleteRecursively
+  override def beforeAll(): Unit = tempDir.deleteRecursively()
 
-  override def afterAll: Unit = tempDir.deleteRecursively
+  override def afterAll(): Unit = tempDir.deleteRecursively()
 
-  def storeLMDB[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
-      : F[KeyValueStore[F]] =
+  def storeLMDB[F[_]: Async: Parallel: Log: Metrics: Span](): F[KeyValueStore[F]] =
     for {
       lmdbHistoryManager <- LmdbStoreManager(
                              tempPath.resolve(Random.nextString(32)),
@@ -106,21 +106,21 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
     def create(root: Blake2b256Hash): F[HistoryType[F]]
   }
 
-  case class CreateRadixHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  case class CreateRadixHistory[F[_]: Sync: Async: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
         case InMemo =>
           for {
-            inMemoStore <- Sync[F].delay(InMemoryKeyValueStore[F])
+            inMemoStore <- Sync[F].delay(InMemoryKeyValueStore[F]())
             _           = inMemoStore.clear()
             radixStore  = RadixHistory.createStore(inMemoStore)
             history     <- RadixHistory[F](root, radixStore)
           } yield HistoryWithFunc(
             history,
             radixStore.get1,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
+            inMemoStore.sizeBytes _,
+            inMemoStore.numRecords _
           )
         case Lmdb =>
           for {
@@ -131,20 +131,20 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
       }
   }
 
-  case class CreateDefaultHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  case class CreateDefaultHistory[F[_]: Async: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
         case InMemo =>
           for {
-            store   <- Sync[F].delay(InMemoryKeyValueStore[F])
+            store   <- Sync[F].delay(InMemoryKeyValueStore[F]())
             _       = store.clear()
             history <- History.create(root, store)
           } yield HistoryWithFunc(
             history,
             _ => none[ByteVector].pure,
-            store.sizeBytes,
-            store.numRecords
+            store.sizeBytes _,
+            store.numRecords _
           )
         case Lmdb =>
           for {
@@ -154,12 +154,12 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
       }
   }
 
-  class Experiment[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span: Sync] {
+  class Experiment[F[_]: Async: Parallel: Log: Metrics: Span: Sync] {
 
     def getHistory(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeHistory match {
-        case Radix   => CreateRadixHistory[F].create(root)
-        case Default => CreateDefaultHistory[F].create(root)
+        case Radix   => CreateRadixHistory[F]().create(root)
+        case Default => CreateDefaultHistory[F]().create(root)
       }
 
     def fill32Bytes(s: String): Array[Byte] = {
@@ -207,7 +207,7 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
           case HistoryWithoutFunc(_, _)                     => (0L, 0).some
         } else none
 
-      def export(
+      def `export`(
           rootHash: Blake2b256Hash,
           skipSize: Int,
           getNodeDataFromStore: Blake2b256Hash => F[Option[ByteVector]]
@@ -356,11 +356,14 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
                     timeValid + timeValidTemp,
                     numNode + numNodeTemp,
                     (
-                      sizeInit._1 + size0.getOrElse(0L, 0)._1,
-                      sizeInit._2 + size0.getOrElse(0L, 0)._2
+                      sizeInit._1 + size0.getOrElse(0L -> 0)._1,
+                      sizeInit._2 + size0.getOrElse(0L -> 0)._2
                     ),
-                    (sizeI._1 + size1.getOrElse(0L, 0)._1, sizeI._2 + size1.getOrElse(0L, 0)._2),
-                    (sizeD._1 + size2.getOrElse(0L, 0)._1, sizeD._2 + size2.getOrElse(0L, 0)._2)
+                    (
+                      sizeI._1 + size1.getOrElse(0L -> 0)._1,
+                      sizeI._2 + size1.getOrElse(0L -> 0)._2
+                    ),
+                    (sizeD._1 + size2.getOrElse(0L -> 0)._1, sizeD._2 + size2.getOrElse(0L -> 0)._2)
                   )
           }
 
@@ -402,14 +405,13 @@ class HistoryGenKeySpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll
   }
 
   it should "execute with monix" in {
-    import monix.eval.Task
-    import monix.execution.Scheduler.Implicits.global
 
-    implicit val log: Log.NOPLog[Task]         = new Log.NOPLog[Task]()
-    implicit val met: Metrics.MetricsNOP[Task] = new Metrics.MetricsNOP[Task]()
-    implicit val spn: NoopSpan[Task]           = new NoopSpan[Task]()
+    implicit val log: Log.NOPLog[IO]         = new Log.NOPLog[IO]()
+    implicit val met: Metrics.MetricsNOP[IO] = new Metrics.MetricsNOP[IO]()
+    implicit val spn: NoopSpan[IO]           = new NoopSpan[IO]()
 
-    val t = new Experiment[Task]
-    t.test.runSyncUnsafe()
+    val t = new Experiment[IO]
+    t.test.unsafeRunSync()
+
   }
 }

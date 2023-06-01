@@ -1,20 +1,21 @@
 package coop.rchain.graphz
 
-import cats.effect.concurrent.Ref
+import cats.effect.IO
 import cats.syntax.all._
-import monix.eval.Task
 import org.scalatest._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
 
 class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   describe("Graphz") {
     it("simple graph") {
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("G", Graph, ser)
+        g   <- Graphz[IO]("G", Graph, ser)
         _   <- g.close
       } yield ref
       graph.show shouldBe
@@ -24,9 +25,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
 
     it("simple digraph") {
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("G", DiGraph, ser)
+        g   <- Graphz[IO]("G", DiGraph, ser)
         _   <- g.close
       } yield ref
       graph.show shouldBe
@@ -36,9 +37,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
 
     it("simple graph with comment") {
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("G", Graph, ser, comment = Some("this is comment"))
+        g   <- Graphz[IO]("G", Graph, ser, comment = Some("this is comment"))
         _   <- g.close
       } yield ref
       graph.show shouldBe
@@ -50,9 +51,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
     it("graph, two nodes one edge") {
       // given
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("G", Graph, ser)
+        g   <- Graphz[IO]("G", Graph, ser)
         _   <- g.edge("Hello", "World")
         _   <- g.close
       }
@@ -67,9 +68,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
     it("digraph, two nodes one edge") {
       // given
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("G", DiGraph, ser)
+        g   <- Graphz[IO]("G", DiGraph, ser)
         _   <- g.edge("Hello", "World")
         _   <- g.close
       }
@@ -84,9 +85,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
     it("digraph, nodes with style") {
       // given
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("G", DiGraph, ser)
+        g   <- Graphz[IO]("G", DiGraph, ser)
         _   <- g.node("Hello", shape = Box)
         _   <- g.node("World", shape = DoubleCircle)
         _   <- g.edge("Hello", "World")
@@ -103,9 +104,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
     }
 
     it("digraph with simple subgraphs") {
-      def process1(ser: StringSerializer[Task]): Task[Unit] =
+      def process1(ser: StringSerializer[IO]): IO[Unit] =
         for {
-          g <- Graphz.subgraph[Task]("", DiGraph, ser)
+          g <- Graphz.subgraph[IO]("", DiGraph, ser)
           _ <- g.node("A")
           _ <- g.node("B")
           _ <- g.node("C")
@@ -114,9 +115,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
           _ <- g.close
         } yield ()
 
-      def process2(ser: StringSerializer[Task]): Task[Unit] =
+      def process2(ser: StringSerializer[IO]): IO[Unit] =
         for {
-          g <- Graphz.subgraph[Task]("", DiGraph, ser)
+          g <- Graphz.subgraph[IO]("", DiGraph, ser)
           _ <- g.node("K")
           _ <- g.node("L")
           _ <- g.node("M")
@@ -126,9 +127,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
         } yield ()
 
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("Process", DiGraph, ser)
+        g   <- Graphz[IO]("Process", DiGraph, ser)
         _   <- g.node("0")
         _   <- process1(ser)
         _   <- g.edge("0", "A")
@@ -141,34 +142,34 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
       } yield ref
       graph.show shouldBe
         """digraph "Process" {
-            |  "0"
-            |  subgraph {
-            |    "A"
-            |    "B"
-            |    "C"
-            |    "A" -> "B"
-            |    "B" -> "C"
-            |  }
-            |  "0" -> "A"
-            |  subgraph {
-            |    "K"
-            |    "L"
-            |    "M"
-            |    "K" -> "L"
-            |    "L" -> "M"
-            |  }
-            |  "0" -> "K"
-            |  "1"
-            |  "M" -> "1"
-            |  "C" -> "1"
-            |}""".stripMargin
+          |  "0"
+          |  subgraph {
+          |    "A"
+          |    "B"
+          |    "C"
+          |    "A" -> "B"
+          |    "B" -> "C"
+          |  }
+          |  "0" -> "A"
+          |  subgraph {
+          |    "K"
+          |    "L"
+          |    "M"
+          |    "K" -> "L"
+          |    "L" -> "M"
+          |  }
+          |  "0" -> "K"
+          |  "1"
+          |  "M" -> "1"
+          |  "C" -> "1"
+          |}""".stripMargin
     }
 
     it("digraph with fancy subgraphs") {
-      def process1(ser: StringSerializer[Task]): Task[Unit] =
+      def process1(ser: StringSerializer[IO]): IO[Unit] =
         for {
           g <- Graphz
-                .subgraph[Task](
+                .subgraph[IO](
                   "cluster_p1",
                   DiGraph,
                   ser,
@@ -183,10 +184,10 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
           _ <- g.close
         } yield ()
 
-      def process2(ser: StringSerializer[Task]): Task[Unit] =
+      def process2(ser: StringSerializer[IO]): IO[Unit] =
         for {
           g <- Graphz
-                .subgraph[Task](
+                .subgraph[IO](
                   "cluster_p2",
                   DiGraph,
                   ser,
@@ -202,9 +203,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
         } yield ()
 
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("Process", DiGraph, ser)
+        g   <- Graphz[IO]("Process", DiGraph, ser)
         _   <- g.node("0")
         _   <- process1(ser)
         _   <- g.edge("0", "A")
@@ -246,26 +247,26 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
 
     it("blockchain, simple") {
       // given
-      def lvl1(ser: StringSerializer[Task]): Task[Unit] =
+      def lvl1(ser: StringSerializer[IO]): IO[Unit] =
         for {
-          g <- Graphz.subgraph[Task]("", DiGraph, ser, rank = Some(Same))
+          g <- Graphz.subgraph[IO]("", DiGraph, ser, rank = Some(Same))
           _ <- g.node("1")
           _ <- g.node("ddeecc", shape = Box)
           _ <- g.node("ffeeff", shape = Box)
           _ <- g.close
         } yield ()
 
-      def lvl0(ser: StringSerializer[Task]): Task[Unit] =
+      def lvl0(ser: StringSerializer[IO]): IO[Unit] =
         for {
-          g <- Graphz.subgraph[Task]("", DiGraph, ser, rank = Some(Same))
+          g <- Graphz.subgraph[IO]("", DiGraph, ser, rank = Some(Same))
           _ <- g.node("0")
           _ <- g.node("000000", shape = Box)
           _ <- g.close
         } yield ()
 
-      def timeline(ser: StringSerializer[Task]): Task[Unit] =
+      def timeline(ser: StringSerializer[IO]): IO[Unit] =
         for {
-          g <- Graphz.subgraph[Task]("timeline", DiGraph, ser)
+          g <- Graphz.subgraph[IO]("timeline", DiGraph, ser)
           _ <- g.node("3", shape = PlainText)
           _ <- g.node("2", shape = PlainText)
           _ <- g.node("1", shape = PlainText)
@@ -277,9 +278,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
         } yield ()
 
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("Blockchain", DiGraph, ser, rankdir = Some(BT))
+        g   <- Graphz[IO]("Blockchain", DiGraph, ser, rankdir = Some(BT))
         _   <- lvl1(ser)
         _   <- g.edge("000000" -> "ffeeff")
         _   <- g.edge("000000" -> "ddeecc")
@@ -291,38 +292,38 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
       yield ref
       graph.show shouldBe
         """digraph "Blockchain" {
-            |  rankdir=BT
-            |  subgraph {
-            |    rank=same
-            |    "1"
-            |    "ddeecc" [shape=box]
-            |    "ffeeff" [shape=box]
-            |  }
-            |  "000000" -> "ffeeff"
-            |  "000000" -> "ddeecc"
-            |  subgraph {
-            |    rank=same
-            |    "0"
-            |    "000000" [shape=box]
-            |  }
-            |  subgraph "timeline" {
-            |    "3" [shape=plaintext]
-            |    "2" [shape=plaintext]
-            |    "1" [shape=plaintext]
-            |    "0" [shape=plaintext]
-            |    "0" -> "1"
-            |    "1" -> "2"
-            |    "2" -> "3"
-            |  }
-            |}""".stripMargin
+          |  rankdir=BT
+          |  subgraph {
+          |    rank=same
+          |    "1"
+          |    "ddeecc" [shape=box]
+          |    "ffeeff" [shape=box]
+          |  }
+          |  "000000" -> "ffeeff"
+          |  "000000" -> "ddeecc"
+          |  subgraph {
+          |    rank=same
+          |    "0"
+          |    "000000" [shape=box]
+          |  }
+          |  subgraph "timeline" {
+          |    "3" [shape=plaintext]
+          |    "2" [shape=plaintext]
+          |    "1" [shape=plaintext]
+          |    "0" [shape=plaintext]
+          |    "0" -> "1"
+          |    "1" -> "2"
+          |    "2" -> "3"
+          |  }
+          |}""".stripMargin
     }
 
     // from https://github.com/xflr6/graphviz/blob/master/examples/process.py
     it("Process example") {
       val graph = for {
-        ref   <- Ref[Task].of(new StringBuffer(""))
+        ref   <- Ref[IO].of(new StringBuffer(""))
         ser   = new StringSerializer(ref)
-        graph <- Graphz[Task]("G", Graph, ser)
+        graph <- Graphz[IO]("G", Graph, ser)
         _     <- graph.edge("run", "intr")
         _     <- graph.edge("intr", "runbl")
         _     <- graph.edge("runbl", "run")
@@ -358,9 +359,9 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
 
     it("Huge graph") { // test for a stack overflow
       val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
+        ref <- Ref[IO].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("G", DiGraph, ser)
+        g   <- Graphz[IO]("G", DiGraph, ser)
         _   <- (1 to 1000).toList.traverse(i => g.edge(s"e$i" -> s"e${i + 1}"))
         _   <- g.close
       } yield ref
@@ -368,9 +369,7 @@ class GraphzSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach with A
     }
   }
 
-  implicit class RefOps(ref: Task[Ref[Task, StringBuffer]]) {
-    import monix.execution.Scheduler.Implicits.global
-
-    def show: String = ref.flatMap(_.get).map(_.toString).runSyncUnsafe()
+  implicit class RefOps(ref: IO[Ref[IO, StringBuffer]]) {
+    def show: String = ref.flatMap(_.get).map(_.toString).unsafeRunSync()
   }
 }

@@ -1,12 +1,11 @@
 package coop.rchain.rspace.history
 
 import cats.Parallel
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
@@ -16,7 +15,7 @@ import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Serialize}
 import fs2.Stream
 
-final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](
+final case class HistoryRepositoryImpl[F[_]: Async: Parallel: Log: Span, C, P, A, K](
     currentHistory: History[F],
     rootsRepository: RootRepository[F],
     leafStore: ColdKeyValueStore[F],
@@ -46,35 +45,42 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
     )
 
   private def computeMeasure(actions: List[HotStoreAction]): List[String] =
-    actions.par.map {
-      case i: InsertData[C, A] =>
+    actions.map {
+      case ii @ InsertData(_, _) =>
+        val i    = ii.asInstanceOf[InsertData[C, A]]
         val key  = StableHashProvider.hash(i.channel)(serializeC).bytes
         val data = encodeDatums(i.data)(serializeA)
         s"${key.toHex};insert-data;${data.length};${i.data.length}"
-      case i: InsertContinuations[C, P, K] =>
+      case ii @ InsertContinuations(_, _) =>
+        val i    = ii.asInstanceOf[InsertContinuations[C, P, K]]
         val key  = StableHashProvider.hash(i.channels)(serializeC).bytes
         val data = encodeContinuations(i.continuations)(serializeP, serializeK)
         s"${key.toHex};insert-continuation;${data.length};${i.continuations.length}"
-      case i: InsertJoins[C] =>
+      case ii @ InsertJoins(_, _) =>
+        val i    = ii.asInstanceOf[InsertJoins[C]]
         val key  = StableHashProvider.hash(i.channel)(serializeC).bytes
         val data = encodeJoins(i.joins)(serializeC)
         s"${key.toHex};insert-join;${data.length}"
-      case d: DeleteData[C] =>
+      case dd @ DeleteData(_) =>
+        val d   = dd.asInstanceOf[DeleteData[C]]
         val key = StableHashProvider.hash(d.channel)(serializeC).bytes
         s"${key.toHex};delete-data;0"
-      case d: DeleteContinuations[C] =>
+      case dd @ DeleteContinuations(_) =>
+        val d   = dd.asInstanceOf[DeleteContinuations[C]]
         val key = StableHashProvider.hash(d.channels)(serializeC).bytes
         s"${key.toHex};delete-continuation;0"
-      case d: DeleteJoins[C] =>
+      case dd @ DeleteJoins(_) =>
+        val d   = dd.asInstanceOf[DeleteJoins[C]]
         val key = StableHashProvider.hash(d.channel)(serializeC).bytes
         s"${key.toHex};delete-join;0"
-    }.toList
+    }
 
   private def calculateStorageActions(action: HotStoreTrieAction): Result = {
     import HistoryRepositoryInstances.{PREFIX_DATUM, PREFIX_JOINS, PREFIX_KONT}
 
     action match {
-      case i: TrieInsertProduce[A] =>
+      case ii @ TrieInsertProduce(_, _) =>
+        val i               = ii.asInstanceOf[TrieInsertProduce[A]]
         val data            = encodeDatums(i.data)(serializeA)
         val dataLeaf        = DataLeaf(data)
         val dataLeafEncoded = codecPersistedData.encode(dataLeaf).getUnsafe.toByteVector
@@ -83,7 +89,8 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
           (dataHash, Some(dataLeaf)),
           InsertAction(KeySegment(PREFIX_DATUM +: i.hash.bytes), dataHash)
         )
-      case i: TrieInsertConsume[P, K] =>
+      case ii @ TrieInsertConsume(_, _) =>
+        val i                 = ii.asInstanceOf[TrieInsertConsume[P, K]]
         val data              = encodeContinuations(i.continuations)(serializeP, serializeK)
         val continuationsLeaf = ContinuationsLeaf(data)
         val continuationsLeafEncoded =
@@ -93,7 +100,8 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
           (continuationsHash, Some(continuationsLeaf)),
           InsertAction(KeySegment(PREFIX_KONT +: i.hash.bytes), continuationsHash)
         )
-      case i: TrieInsertJoins[C] =>
+      case ii @ TrieInsertJoins(_, _) =>
+        val i                = ii.asInstanceOf[TrieInsertJoins[C]]
         val data             = encodeJoins(i.joins)(serializeC)
         val joinsLeaf        = JoinsLeaf(data)
         val joinsLeafEncoded = codecPersistedData.encode(joinsLeaf).getUnsafe.toByteVector
@@ -141,22 +149,28 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
   private def transform(hotStoreAction: HotStoreAction): HotStoreTrieAction =
     hotStoreAction match {
-      case i: InsertData[C, A] =>
+      case ii @ InsertData(_, _) =>
+        val i   = ii.asInstanceOf[InsertData[C, A]]
         val key = StableHashProvider.hash(i.channel)(serializeC)
         TrieInsertProduce(key, i.data)
-      case i: InsertContinuations[C, P, K] =>
+      case ii @ InsertContinuations(_, _) =>
+        val i   = ii.asInstanceOf[InsertContinuations[C, P, K]]
         val key = StableHashProvider.hash(i.channels)(serializeC)
         TrieInsertConsume(key, i.continuations)
-      case i: InsertJoins[C] =>
+      case ii @ InsertJoins(_, _) =>
+        val i   = ii.asInstanceOf[InsertJoins[C]]
         val key = StableHashProvider.hash(i.channel)(serializeC)
         TrieInsertJoins(key, i.joins)
-      case d: DeleteData[C] =>
+      case dd @ DeleteData(_) =>
+        val d   = dd.asInstanceOf[DeleteData[C]]
         val key = StableHashProvider.hash(d.channel)(serializeC)
         TrieDeleteProduce(key)
-      case d: DeleteContinuations[C] =>
+      case dd @ DeleteContinuations(_) =>
+        val d   = dd.asInstanceOf[DeleteContinuations[C]]
         val key = StableHashProvider.hash(d.channels)(serializeC)
         TrieDeleteConsume(key)
-      case d: DeleteJoins[C] =>
+      case dd @ DeleteJoins(_) =>
+        val d   = dd.asInstanceOf[DeleteJoins[C]]
         val key = StableHashProvider.hash(d.channel)(serializeC)
         TrieDeleteJoins(key)
     }
@@ -164,7 +178,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   // this method is what chackpoint is supposed to do, but checkoint operates on actions on channels, and this
   // address by hashes. TODO elaborate unified API
   def doCheckpoint(trieActions: Seq[HotStoreTrieAction]): F[HistoryRepository[F, C, P, A, K]] = {
-    val storageActions = trieActions.par.map(calculateStorageActions)
+    val storageActions = trieActions.map(calculateStorageActions)
     val coldActions    = storageActions.map(_._1).collect { case (key, Some(data)) => (key, data) }
     val historyActions = storageActions.map(_._2)
 
@@ -196,7 +210,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   }
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
-    val trieActions = actions.par.map(transform).toList
+    val trieActions = actions.map(transform)
     for {
       r <- doCheckpoint(trieActions)
       _ <- measure(actions)
@@ -226,7 +240,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
       .reset(root = stateHash)
       .map(
         new RSpaceHistoryReaderImpl(_, leafStore)(
-          Concurrent[F],
+          Async[F],
           serializeC,
           serializeP,
           serializeA,

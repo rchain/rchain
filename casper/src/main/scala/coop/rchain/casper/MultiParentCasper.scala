@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -19,6 +19,7 @@ import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.sdk.error.FatalError
 import coop.rchain.shared._
+import cats.effect.Temporal
 
 final case class ParsingError(details: String)
 
@@ -34,7 +35,7 @@ object MultiParentCasper {
   // Required to enable protection from re-submitting duplicate deploys
   val deployLifespan = 50
 
-  def getPreStateForNewBlock[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log]
+  def getPreStateForNewBlock[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log]
       : F[ParentsMergedState] =
     for {
       dag <- BlockDagStorage[F].getRepresentation
@@ -47,7 +48,7 @@ object MultiParentCasper {
       preState <- getPreStateForParents(parentHashes)
     } yield preState
 
-  def getPreStateForParents[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log](
+  def getPreStateForParents[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log](
       parentHashes: Set[BlockHash]
   ): F[ParentsMergedState] =
     for {
@@ -168,7 +169,7 @@ object MultiParentCasper {
       rejectedDeploys = csRejectedDeploys
     )
 
-  def validate[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def validate[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
       shardId: String,
       minPhloPrice: Long

@@ -8,11 +8,12 @@ import coop.rchain.models.{GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.SubstituteError
 import coop.rchain.models.rholang.implicits._
-import monix.eval.Coeval
+import cats.Eval
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
 
@@ -38,11 +39,12 @@ class SubSpec extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
       ConnOrBody(ConnectiveBody(Vector()))
     ).map(Connective(_))
 
-    val connectiveSeqs: Gen[Seq[Connective]] = Gen.someOf(sampleConnectives ++ sampleConnectives)
+    val connectiveSeqs: Gen[Seq[Connective]] =
+      Gen.someOf(sampleConnectives ++ sampleConnectives).map(_.toSeq)
 
     forAll(connectiveSeqs) { connectives: Seq[Connective] =>
       val par          = connectives.foldLeft(Par())(_.prepend(_, depth))
-      val substitution = Substitute[Coeval, Par].substitute(par).value
+      val substitution = Substitute[Eval, Par].substitute(par).value
       assertEqual(substitution.connectives.toSet, par.connectives.toSet)
     }
   }
@@ -53,26 +55,26 @@ class VarSubSpec extends AnyFlatSpec with Matchers {
   "FreeVar" should "throw an error" in {
     val source: Par            = GPrivateBuilder()
     implicit val env: Env[Par] = Env.makeEnv(source)
-    an[SubstituteError] should be thrownBy maybeSubstitute[Coeval](FreeVar(0)).value
+    an[SubstituteError] should be thrownBy maybeSubstitute[Eval](FreeVar(0)).value
   }
 
   "BoundVar" should "be substituted for process" in {
     val source: Par            = GPrivateBuilder()
     implicit val env: Env[Par] = Env.makeEnv(source)
-    val result                 = maybeSubstitute[Coeval](BoundVar(0)).value
+    val result                 = maybeSubstitute[Eval](BoundVar(0)).value
     result should be(Right(source))
   }
 
   "BoundVar" should "be substituted with expression" in {
     val source: Par            = Send(EVar(BoundVar(0)), List(Par()), false, BitSet(0))
     implicit val env: Env[Par] = Env.makeEnv(source)
-    val result                 = maybeSubstitute[Coeval](BoundVar(0)).value
+    val result                 = maybeSubstitute[Eval](BoundVar(0)).value
     result should be(Right(source))
   }
 
   "BoundVar" should "be left unchanged" in {
     implicit val env        = Env.makeEnv(GPrivateBuilder(): Par, GPrivateBuilder(): Par).shift(1)
-    val result              = maybeSubstitute[Coeval](BoundVar(0)).value
+    val result              = maybeSubstitute[Eval](BoundVar(0)).value
     val expectedResult: Var = BoundVar(0)
     result should be(Left(expectedResult))
   }
@@ -84,7 +86,7 @@ class SendSubSpec extends AnyFlatSpec with Matchers {
 
     implicit val env = Env.makeEnv(GPrivateBuilder(): Par, GPrivateBuilder(): Par).shift(1)
     val result =
-      substituteSend[Coeval]
+      substituteSend[Eval]
         .substitute(Send(EVar(BoundVar(0)), List(Par()), false, BitSet(0)))
         .value
     result should be(Send(EVar(BoundVar(0)), List(Par()), false, BitSet(0)))
@@ -94,7 +96,7 @@ class SendSubSpec extends AnyFlatSpec with Matchers {
     val source0: Par = GPrivateBuilder()
     val source1: Par = GPrivateBuilder()
     implicit val env = Env.makeEnv(source0, source1)
-    val result = substituteSend[Coeval]
+    val result = substituteSend[Eval]
       .substitute(
         Send(
           Send(EVar(BoundVar(1)), List(Par()), false, BitSet(1)),
@@ -125,7 +127,7 @@ class SendSubSpec extends AnyFlatSpec with Matchers {
     )
     val _target =
       Send(source, List(Send(source, List(Par()), false, BitSet())), false, BitSet())
-    val result = substituteSend[Coeval].substitute(target).value
+    val result = substituteSend[Eval].substitute(target).value
     result should be(_target)
   }
 
@@ -140,7 +142,7 @@ class SendSubSpec extends AnyFlatSpec with Matchers {
     implicit val env = Env.makeEnv(source)
     val target =
       Send(chan0, List(Send(chan0, List(Par()), false, BitSet(0))), false, BitSet(0))
-    val result = substituteSend[Coeval].substitute(target).value
+    val result = substituteSend[Eval].substitute(target).value
     result should be(
       Send(
         New(
@@ -177,7 +179,7 @@ class NewSubSpec extends AnyFlatSpec with Matchers {
         uri = Vector.empty,
         locallyFree = BitSet(0)
       )
-    val result = substituteNew[Coeval].substitute(target).value
+    val result = substituteNew[Eval].substitute(target).value
     result should be(
       New(
         bindCount = 1,
@@ -204,7 +206,7 @@ class NewSubSpec extends AnyFlatSpec with Matchers {
       locallyFree = BitSet(0, 1)
     )
 
-    val result = substituteNew[Coeval].substitute(target).value
+    val result = substituteNew[Eval].substitute(target).value
     result should be(
       New(
         bindCount = 2,
@@ -226,7 +228,7 @@ class EvalSubSpec extends AnyFlatSpec with Matchers {
   "Eval" should "remove Eval/Quote pairs." in {
     implicit val env: Env[Par] = Env.makeEnv(GPrivateBuilder("one"), GPrivateBuilder("zero"))
     val target: Par            = EVar(BoundVar(1))
-    val result                 = substitutePar[Coeval].substitute(target).value
+    val result                 = substitutePar[Eval].substitute(target).value
     val expected: Par          = GPrivateBuilder("one")
 
     result should be(expected)
@@ -239,7 +241,7 @@ class BundleSubSpec extends AnyFlatSpec with Matchers {
     val source: Par  = GPrivateBuilder()
     implicit val env = Env.makeEnv(source)
     val target       = Bundle(Send(EVar(BoundVar(0)), List(Par()), false, BitSet(0)))
-    val result       = substituteBundle[Coeval].substitute(target).value
+    val result       = substituteBundle[Eval].substitute(target).value
     result should be(
       Bundle(Send(source, List(Par()), false, BitSet()))
     )
@@ -257,7 +259,7 @@ class BundleSubSpec extends AnyFlatSpec with Matchers {
         BitSet(0, 1)
       )
     )
-    val result = substituteBundle[Coeval].substitute(target).value
+    val result = substituteBundle[Eval].substitute(target).value
     result should be(
       Bundle(
         Send(
@@ -274,7 +276,7 @@ class BundleSubSpec extends AnyFlatSpec with Matchers {
     val r: Par              = Bundle(body = Expr(GString("stdout")), writeFlag = true, readFlag = false) // bundle+ { "stdout" }
     implicit val env        = Env.makeEnv(r)
     val bundle: Par         = Bundle(Expr(EVarBody(EVar(BoundVar(0)))), writeFlag = false, readFlag = true)
-    val result              = substitutePar[Coeval].substitute(bundle).value
+    val result              = substitutePar[Eval].substitute(bundle).value
     val expectedResult: Par = Bundle(Expr(GString("stdout")), writeFlag = false, readFlag = false)
 
     result should be(expectedResult)
@@ -287,7 +289,7 @@ class VarRefSubSpec extends AnyFlatSpec with Matchers {
     val source: Par         = GPrivateBuilder()
     implicit val env        = Env.makeEnv(source)
     val target: Par         = Connective(VarRefBody(VarRef(index = 0, depth = 1)))
-    val result              = substitutePar[Coeval].substitute(target).value
+    val result              = substitutePar[Eval].substitute(target).value
     val expectedResult: Par = source
 
     result should be(expectedResult)
@@ -297,7 +299,7 @@ class VarRefSubSpec extends AnyFlatSpec with Matchers {
     val source: Par         = GPrivateBuilder()
     implicit val env        = Env.makeEnv(source)
     val target: Par         = Connective(VarRefBody(VarRef(index = 0, depth = 2)))
-    val result              = substitutePar[Coeval].substitute(target).value
+    val result              = substitutePar[Eval].substitute(target).value
     val expectedResult: Par = target
 
     result should be(expectedResult)
@@ -317,7 +319,7 @@ class VarRefSubSpec extends AnyFlatSpec with Matchers {
           )
         )
       )
-    val result = substitutePar[Coeval].substitute(target).value
+    val result = substitutePar[Eval].substitute(target).value
     val expectedResult: Par =
       Match(
         target = EVar(BoundVar(0)),
@@ -334,7 +336,7 @@ class OpSubSpec extends AnyFlatSpec with Matchers {
     val source: Par            = Send(EVar(BoundVar(0)), List(Par()), false, BitSet(0))
     implicit val env: Env[Par] = Env.makeEnv(source)
     val target                 = EPlusPlusBody(EPlusPlus(EVar(BoundVar(0)), EVar(BoundVar(1))))
-    val result                 = substitutePar[Coeval].substitute(target).value
+    val result                 = substitutePar[Eval].substitute(target).value
     val expectedResult         = EPlusPlusBody(EPlusPlus(source, EVar(BoundVar(1))))
     result should be(Par(exprs = List(expectedResult), locallyFree = BitSet(0, 1)))
   }
@@ -344,7 +346,7 @@ class OpSubSpec extends AnyFlatSpec with Matchers {
     implicit val env: Env[Par] = Env.makeEnv(source)
     val target =
       EPercentPercentBody(EPercentPercent(EVar(BoundVar(0)), EVar(BoundVar(1))))
-    val result         = substitutePar[Coeval].substitute(target).value
+    val result         = substitutePar[Eval].substitute(target).value
     val expectedResult = EPercentPercentBody(EPercentPercent(source, EVar(BoundVar(1))))
     result should be(Par(exprs = List(expectedResult), locallyFree = BitSet(0, 1)))
   }
@@ -354,7 +356,7 @@ class OpSubSpec extends AnyFlatSpec with Matchers {
     implicit val env: Env[Par] = Env.makeEnv(source)
     val target =
       EMinusMinusBody(EMinusMinus(EVar(BoundVar(0)), EVar(BoundVar(1))))
-    val result         = substitutePar[Coeval].substitute(target).value
+    val result         = substitutePar[Eval].substitute(target).value
     val expectedResult = EMinusMinusBody(EMinusMinus(source, EVar(BoundVar(1))))
     result should be(Par(exprs = List(expectedResult), locallyFree = BitSet(0, 1)))
   }

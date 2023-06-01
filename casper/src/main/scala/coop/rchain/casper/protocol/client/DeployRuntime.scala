@@ -1,7 +1,7 @@
 package coop.rchain.casper.protocol.client
 
 import cats.data.EitherT
-import cats.effect.Sync
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import cats.{Functor, Id, Monad}
 import com.google.protobuf.ByteString
@@ -13,7 +13,6 @@ import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.Par
 import coop.rchain.models.syntax._
 import coop.rchain.shared.ThrowableOps._
-import coop.rchain.shared.Time
 
 import scala.io.Source
 import scala.util.Try
@@ -40,7 +39,7 @@ object DeployRuntime {
   def machineVerifiableDag[F[_]: Monad: Sync: DeployService]: F[Unit] =
     gracefulExit(DeployService[F].machineVerifiableDag(MachineVerifyQuery()))
 
-  def listenForDataAtName[F[_]: Functor: Sync: DeployService: Time](
+  def listenForDataAtName[F[_]: Async: DeployService](
       name: Id[Name]
   ): F[Unit] =
     gracefulExit {
@@ -50,7 +49,7 @@ object DeployRuntime {
       }.map(kp("")).value
     }
 
-  def listenForContinuationAtName[F[_]: Functor: Sync: Time: DeployService](
+  def listenForContinuationAtName[F[_]: Async: DeployService](
       names: List[Name]
   ): F[Unit] =
     gracefulExit {
@@ -60,7 +59,7 @@ object DeployRuntime {
       }.map(kp("")).value
     }
 
-  def findDeploy[F[_]: Functor: Sync: Time: DeployService](
+  def findDeploy[F[_]: Async: DeployService](
       deployId: Array[Byte]
   ): F[Unit] =
     gracefulExit(

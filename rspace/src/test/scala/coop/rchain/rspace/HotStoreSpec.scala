@@ -1,8 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Parallel
-import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Ref
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples.{StringsCaptor, _}
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -10,8 +9,6 @@ import coop.rchain.rspace.history.HistoryReaderBase
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.shared.GeneratorUtils._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -22,6 +19,8 @@ import scodec.bits.ByteVector
 import scala.collection.SortedSet
 import scala.concurrent.duration._
 import scala.util.Random
+import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
 
 trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDrivenPropertyChecks {
 
@@ -849,14 +848,14 @@ trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDriven
 
   private[this] val validIndices =
     for (n <- Gen.choose(1, 10)) yield n
-  private[this] val size: Int = 11
+  private[this] val dataSize: Int = 11
 
   "removeDatum" should s"remove datum at index" in
     forAll("channel", "datum", validIndices, minSuccessful(10)) {
       (channel: String, datumValue: String, index: Int) =>
         fixture { (_, _, store) =>
           val key = channel
-          val data = List.tabulate(size) { i =>
+          val data = List.tabulate(dataSize) { i =>
             Datum.create(channel, datumValue + i, persist = false)
           }
 
@@ -868,7 +867,7 @@ trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDriven
             res <- store.getData(key)
             _ <- S.delay {
                   res should contain theSameElementsAs data.filterNot(
-                    _.a == datumValue + (size - index)
+                    _.a == datumValue + (dataSize - index)
                   )
                 }
           } yield ()
@@ -878,7 +877,7 @@ trait HotStoreSpec[F[_]] extends AnyFlatSpec with Matchers with ScalaCheckDriven
   "putWaitingContinuation" should "put waiting continuation in a new channel" in
     forAll("channel", "continuation") { (channel: String, pattern: String) =>
       fixture { (_, _, store) =>
-        val key          = collection.immutable.Seq(channel)
+        val key          = Seq(channel)
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc: WaitingContinuation[Pattern, StringsCaptor] =
@@ -1115,11 +1114,11 @@ class History[F[_]: Sync, C, P, A, K](R: Ref[F, HotStoreState[C, P, A, K]])
   override def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]] = ???
 }
 
-trait InMemHotStoreSpec extends HotStoreSpec[Task] {
+trait InMemHotStoreSpec extends HotStoreSpec[IO] {
 
-  protected type F[A] = Task[A]
-  implicit override val S: Sync[F]        = implicitly[Concurrent[Task]]
-  implicit override val P: Parallel[Task] = Task.catsParallel
+  protected type F[A] = IO[A]
+  implicit override val S: Sync[F]      = implicitly[Async[IO]]
+  implicit override val P: Parallel[IO] = IO.parallelForIO
   def C(
       c: HotStoreState[String, Pattern, String, StringsCaptor] = HotStoreState()
   ): F[Ref[F, HotStoreState[String, Pattern, String, StringsCaptor]]]
@@ -1137,7 +1136,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
       cache        <- C()
       hotStore     <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
       res          <- f(cache, history, hotStore)
-    } yield res).runSyncUnsafe(1.second)
+    } yield res).timeout(1.second).unsafeRunSync()
 
   override def fixture(cache: HotStoreState[String, Pattern, String, StringsCaptor])(
       f: HotStore[F, String, Pattern, String, StringsCaptor] => F[Unit]
@@ -1148,7 +1147,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
       cache        <- C(cache)
       hotStore     <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
       res          <- f(hotStore)
-    } yield res).runSyncUnsafe(1.second)
+    } yield res).timeout(1.second).unsafeRunSync()
 
 }
 

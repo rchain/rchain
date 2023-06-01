@@ -14,7 +14,7 @@ final case class NodeIdentifier(key: Seq[Byte]) {
 
 object NodeIdentifier {
   def apply(name: String): NodeIdentifier =
-    NodeIdentifier(name.sliding(2, 2).toArray.map(Integer.parseInt(_, 16).toByte))
+    NodeIdentifier(name.sliding(2, 2).toArray.map(Integer.parseInt(_, 16).toByte).toIndexedSeq)
 }
 
 // TODO: Add Show instance
@@ -42,7 +42,7 @@ object PeerNode {
 
   def from(node: Node): PeerNode =
     PeerNode(
-      NodeIdentifier(node.id.toByteArray),
+      NodeIdentifier(node.id.toByteArray.toIndexedSeq),
       Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort)
     )
 

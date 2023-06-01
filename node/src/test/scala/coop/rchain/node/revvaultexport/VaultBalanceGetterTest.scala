@@ -1,5 +1,6 @@
 package coop.rchain.node.revvaultexport
 
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.rholang.BlockRandomSeed
@@ -7,7 +8,6 @@ import coop.rchain.models.syntax._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.node.revvaultexport.mainnet1.StateBalanceMain
 import coop.rchain.rholang.interpreter.util.RevAddress
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 
 class VaultBalanceGetterTest extends AnyFlatSpec {
@@ -49,7 +49,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
         _ = assert(balance.get == genesisInitialBalance)
       } yield ()
     }
-    t.runSyncUnsafe()
+    t.unsafeRunSync()
   }
 
   "Get all vault" should "return all vault balance" in {
@@ -84,7 +84,7 @@ class VaultBalanceGetterTest extends AnyFlatSpec {
           )
       } yield ()
     }
-    t.runSyncUnsafe()
+    t.unsafeRunSync()
   }
 
 }

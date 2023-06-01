@@ -1,6 +1,5 @@
 package coop.rchain.rspace
 
-import cats.Id
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 

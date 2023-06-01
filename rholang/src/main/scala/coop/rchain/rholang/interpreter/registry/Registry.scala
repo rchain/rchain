@@ -8,7 +8,7 @@ object Registry {
   def buildURI(arr: Array[Byte]): String = {
     val fullKey = new Array[Byte](34)
     Array.copy(arr, 0, fullKey, 0, 32)
-    val crc = CRC14.compute(fullKey.view.slice(0, 32))
+    val crc = CRC14.compute(fullKey.view.slice(0, 32).toIndexedSeq)
     fullKey(32) = (crc & 0xff).toByte
     fullKey(33) = ((crc & 0xff00) >>> 6).toByte
     "rho:id:" + ZBase32.encodeToString(fullKey, 270)

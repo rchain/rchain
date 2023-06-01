@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
+import cats.effect.IO
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.blocks.BlockRetriever
@@ -21,27 +21,28 @@ import coop.rchain.p2p.EffectsTestInstances.{
   LogicalTime,
   TransportLayerStub
 }
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.shared.Log
 import org.scalatest._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
+import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
 
 class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with Matchers {
 
   val local: PeerNode = peerNode("src", 40400)
 
-  implicit val log     = new LogStub[Task]
-  implicit val metrics = new Metrics.MetricsNOP[Task]
-  implicit val currentRequests: RequestedBlocks[Task] =
-    Ref.unsafe[Task, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
-  implicit val connectionsCell: ConnectionsCell[Task] =
-    Ref.unsafe[Task, Connections](List(local))
-  implicit val transportLayer = new TransportLayerStub[Task]
-  implicit val rpConf         = createRPConfAsk[Task](local)
-  implicit val time           = new LogicalTime[Task]
-  implicit val commUtil       = CommUtil.of[Task]
-  implicit val blockRetriever = BlockRetriever.of[Task]
+  implicit val log: Log[IO] = new LogStub
+  implicit val metrics      = new Metrics.MetricsNOP[IO]
+  implicit val currentRequests: RequestedBlocks[IO] =
+    Ref.unsafe[IO, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
+  implicit val connectionsCell: ConnectionsCell[IO] =
+    Ref.unsafe[IO, Connections](List(local))
+  implicit val transportLayer = new TransportLayerStub[IO]
+  implicit val rpConf         = createRPConfAsk[IO](local)
+  implicit val time           = new LogicalTime[IO]
+  implicit val commUtil       = CommUtil.of[IO]
+  implicit val blockRetriever = BlockRetriever.of[IO]
 
   val hash = ByteString.copyFrom("hash", "UTF-8")
   val hb   = HasBlock(hash)
@@ -51,10 +52,10 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(port))
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
-  private def alwaysDoNotIgnoreF: BlockHash => Task[Boolean]       = _ => false.pure[Task]
+  private def alwaysDoNotIgnoreF: BlockHash => IO[Boolean]         = _ => false.pure[IO]
   override def beforeEach(): Unit = {
     transportLayer.reset()
     transportLayer.setResponses(alwaysSuccess)
@@ -70,13 +71,13 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
         Map(
           hash -> RequestState(timestamp = System.currentTimeMillis, waitingList = List(otherPeer))
         )
-      currentRequests.set(requestStateBefore).runSyncUnsafe()
+      currentRequests.set(requestStateBefore).unsafeRunSync()
       // when
-      NodeRunning.handleHasBlockMessage[Task](sender, hb.hash)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[IO](sender, hb.hash)(alwaysDoNotIgnoreF).unsafeRunSync()
       // then
       transportLayer.requests shouldBe empty
 
-      val requestStateAfter = currentRequests.get.runSyncUnsafe().get(hash).get
+      val requestStateAfter = currentRequests.get.unsafeRunSync().get(hash).get
       requestStateAfter.waitingList.size should be(2)
     }
 
@@ -91,20 +92,20 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
             waitingList = List.empty
           )
         )
-      currentRequests.set(requestStateBefore).runSyncUnsafe()
+      currentRequests.set(requestStateBefore).unsafeRunSync()
       // when
-      NodeRunning.handleHasBlockMessage[Task](sender, hb.hash)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[IO](sender, hb.hash)(alwaysDoNotIgnoreF).unsafeRunSync()
       // then
       val (recipient, msg) = transportLayer.getRequest(0)
       // assert RequestState
       val br = BlockRequest.from(
-        convert[PacketTypeTag.BlockRequest.type](toPacket(msg).right.get).get
+        convert[PacketTypeTag.BlockRequest.type](toPacket(msg).toOption.get).get
       )
       br.hash shouldBe hash
       recipient shouldBe sender
       transportLayer.requests.size shouldBe 1
       // assert RequestState information stored
-      val requestStateAfter = currentRequests.get.runSyncUnsafe().get(hash).get
+      val requestStateAfter = currentRequests.get.unsafeRunSync().get(hash).get
       requestStateAfter.waitingList should be(List(sender))
     }
   }
@@ -114,20 +115,20 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
       // given
       val sender             = peerNode("somePeer", 40400)
       val requestStateBefore = Map.empty[BlockHash, RequestState]
-      currentRequests.set(requestStateBefore).runSyncUnsafe()
+      currentRequests.set(requestStateBefore).unsafeRunSync()
       // when
-      NodeRunning.handleHasBlockMessage[Task](sender, hb.hash)(alwaysDoNotIgnoreF).runSyncUnsafe()
+      NodeRunning.handleHasBlockMessage[IO](sender, hb.hash)(alwaysDoNotIgnoreF).unsafeRunSync()
       // then
       val (recipient, msg) = transportLayer.getRequest(0)
       // assert RequestState
       val br = BlockRequest.from(
-        convert[PacketTypeTag.BlockRequest.type](toPacket(msg).right.get).get
+        convert[PacketTypeTag.BlockRequest.type](toPacket(msg).toOption.get).get
       )
       br.hash shouldBe hash
       recipient shouldBe sender
       transportLayer.requests.size shouldBe 1
       // assert RequestState informaton stored
-      val requestStateAfter = currentRequests.get.runSyncUnsafe().get(hash).get
+      val requestStateAfter = currentRequests.get.unsafeRunSync().get(hash).get
       requestStateAfter.waitingList should be(List(sender))
     }
 
@@ -135,10 +136,10 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
       describe("if there is already an entry in the RequestState blocks") {
         it("should ignore if peer on the RequestState peers list") {
           // given
-          val sender                                     = peerNode("somePeer", 40400)
-          val casperContains: BlockHash => Task[Boolean] = _ => true.pure[Task]
+          val sender                                   = peerNode("somePeer", 40400)
+          val casperContains: BlockHash => IO[Boolean] = _ => true.pure[IO]
           // when
-          NodeRunning.handleHasBlockMessage[Task](sender, hb.hash)(casperContains).runSyncUnsafe()
+          NodeRunning.handleHasBlockMessage[IO](sender, hb.hash)(casperContains).unsafeRunSync()
           // then
           transportLayer.requests shouldBe empty
         }
@@ -150,9 +151,9 @@ class RunningHandleHasBlockSpec extends AnyFunSpec with BeforeAndAfterEach with 
     describe("handleHasBlock") {
       it("should not call send hash to BlockReceiver if it is ignorable hash") {
         // given
-        val casperContains: BlockHash => Task[Boolean] = _ => true.pure[Task]
+        val casperContains: BlockHash => IO[Boolean] = _ => true.pure[IO]
         // when
-        NodeRunning.handleHasBlockMessage[Task](null, hb.hash)(casperContains).runSyncUnsafe()
+        NodeRunning.handleHasBlockMessage[IO](null, hb.hash)(casperContains).unsafeRunSync()
         // then
         transportLayer.requests shouldBe empty
       }

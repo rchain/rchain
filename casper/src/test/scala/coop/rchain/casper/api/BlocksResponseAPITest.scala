@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.testing.scalatest.AsyncIOSpec
+import cats.effect.{IO, Ref, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag._
@@ -15,8 +15,6 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockMetadata, FringeData}
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.testing.scalatest.MonixTaskTest
 import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito, Mockito}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AsyncFlatSpec
@@ -27,7 +25,7 @@ import scala.collection.immutable.SortedMap
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
     extends AsyncFlatSpec
-    with MonixTaskTest
+    with AsyncIOSpec
     with Matchers
     with EitherValues
     with BlockGenerator
@@ -36,8 +34,8 @@ class BlocksResponseAPITest
     with IdiomaticMockito
     with ArgumentMatchersSugar {
 
-  implicit val log: Log[Task]       = new Log.NOPLog[Task]()
-  implicit val noopSpan: Span[Task] = NoopSpan[Task]()
+  implicit val log: Log[IO]       = new Log.NOPLog[IO]()
+  implicit val noopSpan: Span[IO] = NoopSpan[IO]()
 
   val v1: Validator               = generateValidator("Validator One")
   val v2: Validator               = generateValidator("Validator Two")
@@ -89,16 +87,16 @@ class BlocksResponseAPITest
     } yield List(genesis, b2, b3, b4, b5, b6, b7, b8)
 
   "getBlocks" should "return all blocks" in {
-    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
+    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[IO]
 
     for {
-      blocks         <- createDagWith8Blocks[Task]
+      blocks         <- createDagWith8Blocks[IO]
       genesis        = blocks.head
-      blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+      blockApi       <- createBlockApi[IO](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocks(10)
     } yield {
-      blocksResponse shouldBe 'right
+      blocksResponse shouldBe Symbol("right")
       blocksResponse.value.length shouldBe 8
 
       blocks.map { b =>
@@ -112,16 +110,15 @@ class BlocksResponseAPITest
   }
 
   it should "return until depth" in {
-    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
-
+    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[IO]
     for {
-      blocks         <- createDagWith8Blocks[Task]
+      blocks         <- createDagWith8Blocks[IO]
       genesis        = blocks.head
-      blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+      blockApi       <- createBlockApi[IO](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocks(2)
     } yield {
-      blocksResponse shouldBe 'right
+      blocksResponse shouldBe Symbol("right")
       blocksResponse.value.length shouldBe 3
 
       blocks.takeRight(3).map { b =>
@@ -135,16 +132,16 @@ class BlocksResponseAPITest
   }
 
   "getBlocksByHeights" should "return blocks between startBlockNumber and endBlockNumber" in {
-    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[Task]
+    implicit val (blockStore, blockDagStorage, runtimeManager) = createMocks[IO]
 
     for {
-      blocks         <- createDagWith8Blocks[Task]
+      blocks         <- createDagWith8Blocks[IO]
       genesis        = blocks.head
-      blockApi       <- createBlockApi[Task](genesis.shardId, maxBlockLimit)
+      blockApi       <- createBlockApi[IO](genesis.shardId, maxBlockLimit)
       _              = Mockito.clearInvocations(blockStore, blockDagStorage)
       blocksResponse <- blockApi.getBlocksByHeights(2, 5)
     } yield {
-      blocksResponse shouldBe 'right
+      blocksResponse shouldBe Symbol("right")
       blocksResponse.value shouldBe blocks.takeRight(5).map(BlockApi.getLightBlockInfo)
 
       blocks.takeRight(5).map { b =>

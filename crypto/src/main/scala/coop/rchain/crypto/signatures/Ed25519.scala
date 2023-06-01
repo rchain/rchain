@@ -4,12 +4,14 @@ import coop.rchain.crypto
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import org.abstractj.kalium.keys._
 
+import java.util.Locale
+
 object Ed25519 extends SignaturesAlg {
 
   val keyLength          = 32
   override val sigLength = 64
 
-  val name: String = "Ed25519".toLowerCase
+  val name: String = "Ed25519".toLowerCase(Locale.getDefault)
 
   //TODO: Make use of strongly typed keys
   def newKeyPair: (PrivateKey, PublicKey) = {

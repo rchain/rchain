@@ -1,7 +1,6 @@
 package coop.rchain.casper.dag
 
-import cats.effect.Concurrent
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.Async
 import cats.syntax.all._
 import cats.{Monad, Show}
 import coop.rchain.blockstorage._
@@ -29,8 +28,10 @@ import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import fs2.Stream
 
 import scala.collection.concurrent.TrieMap
+import cats.effect.Ref
+import cats.effect.std.Semaphore
 
-final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
+final class BlockDagKeyValueStorage[F[_]: Async: Log] private (
     representationState: Ref[F, DagRepresentation],
     lock: Semaphore[F],
     blockMetadataIndex: BlockMetadataStore[F],
@@ -119,15 +120,15 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         _                       <- pruneDiff(dag.dagMessageState, dagState, childMap).whenA(shouldPrune)
 
         _ <- removeExpiredFromPool(deployStore, dag).map(
-              _.map((_, ())).map((expiredMap.update _).tupled)
+              _.map((_, ())).foreach((expiredMap.update _).tupled)
             )
       } yield ()
 
-    lock.withPermit(
+    lock.permit.use { _ =>
       blockMetadataIndex
         .contains(blockMetadata.blockHash)
         .ifM(logAlreadyStored, doInsert)
-    )
+    }
   }
 
   /**
@@ -189,7 +190,7 @@ object BlockDagKeyValueStorage {
       deployPool: KeyValueTypedStore[F, DeployId, Signed[DeployData]]
   )
 
-  private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
+  private def createStores[F[_]: Async: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
     implicit val kvm_ = kvm
     for {
       // Block metadata map
@@ -229,7 +230,7 @@ object BlockDagKeyValueStorage {
     )
   }
 
-  def create[F[_]: Concurrent: Log: Metrics](
+  def create[F[_]: Async: Log: Metrics](
       kvm: KeyValueStoreManager[F]
   ): F[BlockDagKeyValueStorage[F]] =
     for {
@@ -247,7 +248,8 @@ object BlockDagKeyValueStorage {
           // TODO: include only non-finalized block
           dmsSt <- Ref.of(DagMessageState[BlockHash, Validator]())
           fsSt  <- Ref.of(Map[Set[BlockHash], FringeData]())
-          initMsgMapJob = Stream.fromIterator(heightMap.values.flatten.iterator).evalMap { hash =>
+          i     = heightMap.values.flatten.iterator
+          initMsgMapJob = Stream.fromIterator(i, 1).evalMap { hash =>
             for {
               ds     <- dmsSt.get
               fs     <- fsSt.get

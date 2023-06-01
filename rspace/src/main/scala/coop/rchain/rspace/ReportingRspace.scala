@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import cats.Parallel
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -21,7 +20,7 @@ import coop.rchain.store.KeyValueStore
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
-import scala.concurrent.ExecutionContext
+import cats.effect.Ref
 
 /**
   * ReportingRspace works exactly like how ReplayRspace works. It can replay the deploy and try to find if the
@@ -53,7 +52,7 @@ object ReportingRspace {
   /**
     * Creates [[ReportingRspace]] from [[HistoryRepository]] and [[HotStore]].
     */
-  def apply[F[_]: Concurrent: ContextShift: Span: Metrics: Log, C, P, A, K](
+  def apply[F[_]: Async: Span: Metrics: Log, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K]
   )(
@@ -62,23 +61,23 @@ object ReportingRspace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
+      m: Match[F, P, A]
   ): F[ReportingRspace[F, C, P, A, K]] =
-    Sync[F].delay(new ReportingRspace[F, C, P, A, K](historyRepository, AtomicAny(store)))
+    Sync[F].delay(
+      new ReportingRspace[F, C, P, A, K](historyRepository, AtomicAny(store))
+    )
 
   /**
     * Creates [[RSpace]] from [[KeyValueStore]]'s,
     */
-  def create[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span, C, P, A, K](
+  def create[F[_]: Async: Parallel: Log: Metrics: Span, C, P, A, K](
       store: RSpaceStore[F]
   )(
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
+      m: Match[F, P, A]
   ): F[ReportingRspace[F, C, P, A, K]] =
     for {
       history                          <- RSpace.createHistoryRepo[F, C, P, A, K](store)
@@ -87,7 +86,7 @@ object ReportingRspace {
     } yield reportingRSpace
 }
 
-class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
+class ReportingRspace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
@@ -96,8 +95,7 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    m: Match[F, P, A],
-    scheduler: ExecutionContext
+    m: Match[F, P, A]
 ) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeAtom) {
 
   protected[this] override val logger: Logger = Logger[this.type]

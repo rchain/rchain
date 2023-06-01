@@ -2,7 +2,8 @@ package coop.rchain.rholang.interpreter.matcher
 
 import cats.effect._
 import cats.mtl.implicits._
-import cats.{Eval => _}
+import cats.Eval
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.MonadError_._
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -12,8 +13,6 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter._
-import monix.eval.{Coeval, Task}
-import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -29,7 +28,7 @@ class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with Trip
 
   private val printer = PrettyPrinter()
 
-  type F[A] = MatcherMonadT[Task, A]
+  type F[A] = MatcherMonadT[IO, A]
 
   def assertSpatialMatch(
       target: Par,
@@ -49,7 +48,7 @@ class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with Trip
       maybeResultWithCost <- runFirst(spatialMatch[F, Par, Par](target, pattern))
       result              = maybeResultWithCost.map(_._1)
       _                   = assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
-    } yield (assert(result === expectedCaptures))).runSyncUnsafe(5.seconds)
+    } yield (assert(result === expectedCaptures))).timeout(5.seconds).unsafeRunSync()
   }
 
   private def explainMatch(
@@ -77,7 +76,8 @@ class VarMatcherSpec extends AnyFlatSpec with Matchers with TimeLimits with Trip
     expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
 
   private def assertSorted(term: Par, termName: String): Assertion = {
-    val sortedTerm = Sortable[Par].sortMatch[Coeval](term).value.term
+    import coop.rchain.catscontrib.effect.implicits.sEval
+    val sortedTerm = Sortable[Par].sortMatch[Eval](term).value.term
     val clue       = s"Invalid test case - ${termName} is not sorted"
     assert(printer.buildString(term) == printer.buildString(sortedTerm), clue)
     assert(term == sortedTerm, clue)

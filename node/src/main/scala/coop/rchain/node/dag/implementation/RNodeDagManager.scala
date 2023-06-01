@@ -1,12 +1,12 @@
 package coop.rchain.node.dag.implementation
 
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import coop.rchain.sdk.dag.data.{DagManager, DagView}
 import fs2.Stream
+import cats.effect.Ref
 
 object RNodeDagManager {
-  def apply[F[_]: Concurrent, M, MId, S, SId](
+  def apply[F[_]: Async, M, MId, S, SId](
       st: Ref[F, Map[MId, M]],
       requestMsg: MId => F[Unit],
       msgInput: Stream[F, M]
@@ -14,7 +14,7 @@ object RNodeDagManager {
     Sync[F].delay(new RNodeDagManager(st, requestMsg, msgInput))
 }
 
-final case class RNodeDagManager[F[_]: Concurrent, M, MId, S, SId] private (
+final case class RNodeDagManager[F[_]: Async, M, MId, S, SId] private (
     /**
       * DagManager internal in-memory state.
       */

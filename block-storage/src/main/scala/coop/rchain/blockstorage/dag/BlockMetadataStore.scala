@@ -2,7 +2,6 @@ package coop.rchain.blockstorage.dag
 
 import cats.Monad
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
@@ -12,6 +11,7 @@ import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueTypedStore
 
 import scala.collection.immutable.SortedMap
+import cats.effect.Ref
 
 object BlockMetadataStore {
   def apply[F[_]: Sync: Log](

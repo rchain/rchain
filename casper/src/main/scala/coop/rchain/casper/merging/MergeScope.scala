@@ -1,6 +1,6 @@
 package coop.rchain.casper.merging
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{DagRepresentation, Message}
@@ -78,7 +78,7 @@ object MergeScope {
     (MergeScope(fScopeIds, cScopeIds -- baseMsg.toSet), baseMsg)
   }
 
-  def merge[F[_]: Concurrent: Log](
+  def merge[F[_]: Async: Log](
       mergeScope: MergeScope,
       baseState: Blake2b256Hash,
       fringeStates: Map[Set[BlockHash], FringeData],
@@ -142,7 +142,7 @@ object MergeScope {
   }
 
   /** Merge set of indices into base state and produce new state. */
-  def computeMergedState[F[_]: Concurrent: Log](
+  def computeMergedState[F[_]: Async: Log](
       toMerge: Set[DeployChainIndex],
       baseState: Blake2b256Hash,
       historyRepository: RhoHistoryRepository[F]

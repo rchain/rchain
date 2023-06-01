@@ -1,49 +1,43 @@
 package coop.rchain.node.diagnostics
 
-import java.io.IOException
-import java.util.concurrent.atomic.AtomicReference
-
-import scala.concurrent.duration._
-import scala.util.Try
-
-import coop.rchain.node.diagnostics.BatchInfluxDBReporter.Settings
-
+import cats.effect.IO
+import cats.effect.kernel.Async
+import cats.effect.std.Supervisor
+import cats.effect.unsafe.implicits.global
+import cats.implicits.catsSyntaxOptionId
 import com.typesafe.config.Config
-import kamon.{Kamon, MetricReporter}
+import coop.rchain.node.diagnostics.BatchInfluxDBReporter.Settings
+import fs2.concurrent.Channel
 import kamon.metric._
-import kamon.util.EnvironmentTagBuilder
-import monix.eval.Task
-import monix.execution.Cancelable
-import monix.execution.Scheduler.Implicits.global
-import monix.reactive.subjects._
+import kamon.Kamon
+import kamon.influxdb.InfluxDBReporter
+import kamon.module.{MetricReporter, ModuleFactory}
+import kamon.status.Environment
+import kamon.tag.{Tag, TagSet}
+import kamon.util.EnvironmentTags
 import okhttp3._
 import org.slf4j.LoggerFactory
 
+import java.io.IOException
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration._
+import scala.util.Try
+
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporter {
-  private val logger = LoggerFactory.getLogger(classOf[BatchInfluxDBReporter])
+class BatchInfluxDBReporter[F[_]: Async](
+    dispatcher: cats.effect.std.Dispatcher[F],
+    config: Config = Kamon.config()
+) extends MetricReporter {
+  private val logger = LoggerFactory.getLogger(classOf[BatchInfluxDBReporter[F]])
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
-  private var settings     = readSettings(config)
-  private val client       = buildClient(settings)
-  private val subject      = PublishSubject[String]
-  private val subscription = new AtomicReference(Option.empty[Cancelable])
+  private var settings = readSettings(config)
+  private val client   = buildClient(settings)
+  private val subject  = dispatcher.unsafeRunSync(Channel.unbounded[F, Option[Seq[String]]])
 
-  override def start(): Unit = {
-    subscription.getAndSet(None).foreach(_.cancel())
-    val s =
-      Some(
-        subject
-          .bufferTimed(settings.batchInterval)
-          .mapEval(postMetrics)
-          .subscribe()
-      )
+  start()
 
-    if (!subscription.compareAndSet(None, s))
-      s.get.cancel()
-  }
-
-  override def stop(): Unit =
-    subscription.getAndSet(None).foreach(_.cancel())
+  override def stop(): Unit = subject.send(None) // finish stream
 
   override def reconfigure(config: Config): Unit = {
     stop()
@@ -51,8 +45,17 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
     start()
   }
 
+  override def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit =
+    dispatcher.unsafeRunSync(subject.send(Seq(translateToLineProtocol(snapshot)).some))
+
+  private def start(): Unit = {
+    // TODO implement accumulation over time interval settings.batchInterval
+    val batching = subject.stream.unNoneTerminate.evalMap(postMetrics).compile
+    dispatcher.unsafeRunAndForget(batching.drain)
+  }
+
   private def readSettings(config: Config): Settings = {
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     val root       = config.getConfig("kamon.influxdb")
     val host       = root.getString("hostname")
     val authConfig = Try(root.getConfig("authentication")).toOption
@@ -66,63 +69,62 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       if (root.hasPath("batch-interval"))
         Duration.fromNanos(root.getDuration("batch-interval").toNanos)
       else 10.seconds
+    val precision = root.getString("precision")
 
-    val additionalTags = EnvironmentTagBuilder.create(root.getConfig("additional-tags"))
+    val additionalTags =
+      EnvironmentTags.from(Environment.from(config), root.getConfig("additional-tags"))
 
     Settings(
       url,
       interval,
-      root.getDoubleList("percentiles").asScala.map(_.toDouble),
+      root.getDoubleList("percentiles").asScala.map(_.toDouble).toSeq,
       credentials,
-      additionalTags
+      additionalTags,
+      precision
     )
   }
 
-  override def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit =
-    subject.onNext(translateToLineProtocol(snapshot))
+  private def postMetrics(metrics: Seq[String]): F[Unit] =
+    Async[F].async_ {
+      case cb =>
+        val body = RequestBody.create(MediaType.parse("text/plain"), metrics.mkString)
+        val request = new Request.Builder()
+          .url(settings.url)
+          .post(body)
+          .build()
 
-  private def postMetrics(metrics: Seq[String]): Task[Unit] =
-    Task.create { (_, cb) =>
-      val body = RequestBody.create(MediaType.parse("text/plain"), metrics.mkString)
-      val request = new Request.Builder()
-        .url(settings.url)
-        .post(body)
-        .build()
-
-      client
-        .newCall(request)
-        .enqueue(
-          new Callback {
-            def onFailure(call: Call, e: IOException): Unit = {
-              logger.error("Failed to POST metrics to InfluxDB", e)
-              cb.onSuccess(())
-            }
-
-            def onResponse(call: Call, response: Response): Unit = {
-              if (response.isSuccessful)
-                logger.trace("Successfully sent metrics to InfluxDB")
-              else {
-                logger.error(
-                  "Metrics POST to InfluxDB failed with status code [{}], response body: {}",
-                  response.code(),
-                  response.body().string()
-                )
+        client
+          .newCall(request)
+          .enqueue(
+            new Callback {
+              def onFailure(call: Call, e: IOException): Unit = {
+                logger.error("Failed to POST metrics to InfluxDB", e)
+                cb(Right(()))
               }
-              cb.onSuccess(())
-            }
-          }
-        )
 
-      Cancelable.empty
+              def onResponse(call: Call, response: Response): Unit = {
+                if (response.isSuccessful)
+                  logger.trace("Successfully sent metrics to InfluxDB")
+                else {
+                  logger.error(
+                    "Metrics POST to InfluxDB failed with status code [{}], response body: {}",
+                    response.code(),
+                    response.body().string()
+                  )
+                }
+                cb(Right(()))
+              }
+            }
+          )
     }
 
   private def translateToLineProtocol(periodSnapshot: PeriodSnapshot): String = {
-    import periodSnapshot.metrics._
-    val builder   = StringBuilder.newBuilder
-    val timestamp = periodSnapshot.to.toEpochMilli
+    import periodSnapshot._
+    val builder   = new StringBuilder
+    val timestamp = getTimestamp(periodSnapshot.to)
 
-    counters.foreach(c => writeMetricValue(builder, c, "count", timestamp))
-    gauges.foreach(g => writeMetricValue(builder, g, "value", timestamp))
+    counters.foreach(c => writeLongMetricValue(builder, c, "count", timestamp))
+    gauges.foreach(g => writeDoubleMetricValue(builder, g, "value", timestamp))
     histograms.foreach(h => writeMetricDistribution(builder, h, settings.percentiles, timestamp))
     rangeSamplers.foreach(
       rs => writeMetricDistribution(builder, rs, settings.percentiles, timestamp)
@@ -131,64 +133,94 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
     builder.result()
   }
 
-  private def writeMetricValue(
+  protected def getTimestamp(instant: Instant): String =
+    settings.measurementPrecision match {
+      case "s" =>
+        instant.getEpochSecond.toString
+      case "ms" =>
+        instant.toEpochMilli.toString
+      case "u" | "µ" =>
+        ((BigInt(instant.getEpochSecond) * 1000000) + TimeUnit.NANOSECONDS.toMicros(
+          instant.getNano.toLong
+        )).toString
+      case "ns" =>
+        ((BigInt(instant.getEpochSecond) * 1000000000) + instant.getNano).toString
+    }
+
+  private def writeLongMetricValue(
       builder: StringBuilder,
-      metric: MetricValue,
+      metric: MetricSnapshot.Values[Long],
       fieldName: String,
-      timestamp: Long
-  ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, fieldName, metric.value, appendSeparator = false)
-    writeTimestamp(builder, timestamp)
-  }
+      timestamp: String
+  ): Unit =
+    metric.instruments.foreach { instrument =>
+      writeNameAndTags(builder, metric.name, instrument.tags)
+      writeIntField(builder, fieldName, instrument.value, appendSeparator = false)
+      writeTimestamp(builder, timestamp)
+    }
+
+  private def writeDoubleMetricValue(
+      builder: StringBuilder,
+      metric: MetricSnapshot.Values[Double],
+      fieldName: String,
+      timestamp: String
+  ): Unit =
+    metric.instruments.foreach { instrument =>
+      writeNameAndTags(builder, metric.name, instrument.tags)
+      writeDoubleField(builder, fieldName, instrument.value, appendSeparator = false)
+      writeTimestamp(builder, timestamp)
+    }
 
   private def writeMetricDistribution(
       builder: StringBuilder,
-      metric: MetricDistribution,
+      metric: MetricSnapshot.Distributions,
       percentiles: Seq[Double],
-      timestamp: Long
-  ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, "count", metric.distribution.count)
-    writeIntField(builder, "sum", metric.distribution.sum)
-    writeIntField(builder, "min", metric.distribution.min)
+      timestamp: String
+  ): Unit =
+    metric.instruments.foreach { instrument =>
+      if (instrument.value.count > 0) {
+        writeNameAndTags(builder, metric.name, instrument.tags)
+        writeIntField(builder, "count", instrument.value.count)
+        writeIntField(builder, "sum", instrument.value.sum)
+        writeIntField(builder, "mean", instrument.value.sum / instrument.value.count)
+        writeIntField(builder, "min", instrument.value.min)
 
-    percentiles.foreach(p => {
-      writeDoubleField(
-        builder,
-        "p" + String.valueOf(p),
-        metric.distribution.percentile(p).value.toDouble
-      )
-    })
+        percentiles.foreach { p =>
+          writeDoubleField(
+            builder,
+            "p" + String.valueOf(p),
+            instrument.value.percentile(p).value.toDouble
+          )
+        }
 
-    writeIntField(builder, "max", metric.distribution.max, appendSeparator = false)
-    writeTimestamp(builder, timestamp)
-  }
+        writeIntField(builder, "max", instrument.value.max, appendSeparator = false)
+        writeTimestamp(builder, timestamp)
+      }
+    }
 
-  private def writeNameAndTags(
-      builder: StringBuilder,
-      name: String,
-      metricTags: Map[String, String]
-  ): Unit = {
+  private def writeNameAndTags(builder: StringBuilder, name: String, metricTags: TagSet): Unit = {
     builder
-      .append(name)
+      .append(escapeName(name))
 
-    val tags =
-      if (settings.additionalTags.nonEmpty) metricTags ++ settings.additionalTags else metricTags
+    val tags = (if (settings.additionalTags.nonEmpty()) metricTags.withTags(settings.additionalTags)
+                else metricTags).all()
 
     if (tags.nonEmpty) {
-      tags.foreach {
-        case (key, value) =>
-          builder
-            .append(',')
-            .append(escapeString(key))
-            .append("=")
-            .append(escapeString(value))
+      tags.foreach { t =>
+        builder
+          .append(',')
+          .append(escapeString(t.key))
+          .append("=")
+          .append(escapeString(Tag.unwrapValue(t).toString))
       }
     }
 
     builder.append(' ')
   }
+
+  private def escapeName(in: String): String =
+    in.replace(" ", "\\ ")
+      .replace(",", "\\,")
 
   private def escapeString(in: String): String =
     in.replace(" ", "\\ ")
@@ -226,7 +258,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       builder.append(',')
   }
 
-  def writeTimestamp(builder: StringBuilder, timestamp: Long): Unit =
+  def writeTimestamp(builder: StringBuilder, timestamp: String): Unit =
     builder
       .append(' ')
       .append(timestamp)
@@ -253,6 +285,7 @@ object BatchInfluxDBReporter {
       batchInterval: FiniteDuration,
       percentiles: Seq[Double],
       credentials: Option[String],
-      additionalTags: Map[String, String]
+      additionalTags: TagSet,
+      measurementPrecision: String
   )
 }

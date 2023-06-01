@@ -11,7 +11,6 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.models.syntax._
 import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
 import org.scalatest.matchers.should.Matchers
@@ -81,13 +80,16 @@ class MultiParentCasperRholangSpec extends AnyFlatSpec with Matchers with Inspec
 
       for {
         registerDeploy <- ConstructDeploy
-                           .sourceDeployNowF(registerSource, shardId = genesis.genesisBlock.shardId)
+                           .sourceDeployNowF[Effect](
+                             registerSource,
+                             shardId = genesis.genesisBlock.shardId
+                           )
         block0 <- node.addBlock(registerDeploy)
         registryId <- getDataAtPrivateChannel[Effect](
                        block0,
                        calculateDeployUnforgeableName(block0)
                      )
-        callDeploy <- ConstructDeploy.sourceDeployNowF(
+        callDeploy <- ConstructDeploy.sourceDeployNowF[Effect](
                        callSource(registryId.head),
                        shardId = genesis.genesisBlock.shardId
                      )

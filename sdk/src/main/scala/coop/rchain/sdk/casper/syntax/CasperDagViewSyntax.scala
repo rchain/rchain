@@ -27,7 +27,7 @@ final class CasperDagViewOps[F[_], M, MId, S, SId](private val dagView: DagView[
   def checkBlockNumber(msg: M)(implicit s: Applicative[F]): F[Boolean] =
     msg.justifications.toList
       .traverse(dagView.loadMessage)
-      .map(_.map(_.blockNum).max + 1)
+      .map(_.map(_.blockNum).maximumOption.getOrElse(0L) + 1L)
       .map(_ != msg.blockNum)
 
   /**
@@ -41,7 +41,7 @@ final class CasperDagViewOps[F[_], M, MId, S, SId](private val dagView: DagView[
       selfJOpt = js.find(_.sender == msg.sender)
       selfJ    <- selfJOpt.liftTo(new Exception("Message does not have self justification."))
       selfJjs  <- selfJ.justifications.toList.traverse(dagView.loadMessage)
-      res = js.toIterator.map { j =>
+      res = js.iterator.map { j =>
         selfJjs.exists { selfJj =>
           // Previous justification from the same sender has seq num higher then the current one.
           selfJj.sender == j.sender && selfJj.seqNum > j.seqNum

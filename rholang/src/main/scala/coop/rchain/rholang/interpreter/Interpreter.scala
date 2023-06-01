@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.implicits._
@@ -15,6 +14,7 @@ import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   OutOfPhlogistonsError
 }
+import cats.effect.Ref
 
 final case class EvaluateResult(
     cost: Cost,

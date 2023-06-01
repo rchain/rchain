@@ -1,8 +1,7 @@
 package coop.rchain.casper.blocks
 
 import cats.Show
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -14,7 +13,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
+import cats.effect.Ref
 
 sealed trait RecvStatus
 // Begin checking and storing block
@@ -176,7 +176,7 @@ final case class BlockReceiverState[MId: Show] private (
 }
 
 object BlockReceiver {
-  def apply[F[_]: Concurrent: BlockStore: BlockDagStorage: BlockRetriever: Log](
+  def apply[F[_]: Async: BlockStore: BlockDagStorage: BlockRetriever: Log](
       state: Ref[F, BlockReceiverState[BlockHash]],
       incomingBlocksStream: Stream[F, BlockMessage],
       finishedProcessingStream: Stream[F, BlockMessage],
@@ -232,7 +232,7 @@ object BlockReceiver {
     }
 
     // Process incoming blocks
-    def incomingBlocks(receiverOutputQueue: Queue[F, BlockHash]) =
+    def incomingBlocks(receiverOutputQueue: Channel[F, BlockHash]) =
       incomingBlocksStream
         .evalFilterAsyncUnorderedProcBounded { block =>
           // Filter (ignore) blocks that are not of interest (pass integrity check, incorrect shard or version, ...)
@@ -266,7 +266,7 @@ object BlockReceiver {
               parentsToValidate <- block.justifications.filterA(notValidated[F])
 
               _ <- if (hasAllDeps) {
-                    receiverOutputQueue.enqueue1(block.blockHash)
+                    receiverOutputQueue.trySend(block.blockHash)
                   } else {
                     requestMissingDependencies(pendingRequests).whenA(pendingRequests.nonEmpty) *>
                       sendToValidate(parentsToValidate).whenA(parentsToValidate.nonEmpty)
@@ -282,7 +282,7 @@ object BlockReceiver {
         }
 
     // Process validated blocks
-    def validatedBlocks(receiverOutputQueue: Queue[F, BlockHash]) =
+    def validatedBlocks(receiverOutputQueue: Channel[F, BlockHash]) =
       finishedProcessingStream.parEvalMapUnorderedProcBounded { block =>
         val parents = block.justifications.toSet
         for {
@@ -290,16 +290,16 @@ object BlockReceiver {
           next <- state.modify(_.finished(block.blockHash, parents))
 
           // Send dependency free blocks to validation
-          _ <- next.toList.traverse_(receiverOutputQueue.enqueue1)
+          _ <- next.toList.traverse_(receiverOutputQueue.send)
         } yield ()
       }
 
     // Return output stream, in parallel process incoming and validated blocks
-    Queue.unbounded[F, BlockHash].map { outQueue =>
-      outQueue.dequeue concurrently incomingBlocks(outQueue) concurrently validatedBlocks(outQueue)
+    Channel.unbounded[F, BlockHash].map { outQueue =>
+      outQueue.stream concurrently incomingBlocks(outQueue) concurrently validatedBlocks(outQueue)
     }
   }
 
-  def notValidated[F[_]: Concurrent: BlockStore: BlockDagStorage](hash: BlockHash): F[Boolean] =
+  def notValidated[F[_]: Async: BlockStore: BlockDagStorage](hash: BlockHash): F[Boolean] =
     BlockStore[F].contains(hash) &&^ BlockDagStorage[F].getRepresentation.map(!_.contains(hash))
 }

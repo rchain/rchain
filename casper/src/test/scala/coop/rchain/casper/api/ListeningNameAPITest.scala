@@ -1,6 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.Applicative
+import cats.effect.IO
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation, Message}
@@ -20,19 +21,18 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.testing.scalatest.MonixTaskTest
 import org.mockito.cats.IdiomaticMockitoCats
 import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.scalatest._
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
+import cats.effect.testing.scalatest.AsyncIOSpec
 
 import scala.collection.immutable.SortedMap
 
 class ListeningNameAPITest
     extends AsyncFlatSpec
-    with MonixTaskTest
+    with AsyncIOSpec
     with Matchers
     with Inside
     with BlockApiFixture
@@ -67,12 +67,12 @@ class ListeningNameAPITest
   private val b3 = getRandomBlock()
 
   "getListeningNameDataResponse" should "return error if depth more than max depth limit" in {
-    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    implicit val (log, sp, rm, bs, bds) = createMocks[IO]
     for {
-      blockApi <- createBlockApi[Task]("root", 2, createValidator.some)
+      blockApi <- createBlockApi[IO]("root", 2, createValidator.some)
       res      <- blockApi.getListeningNameDataResponse(3, listeningName)
     } yield {
-      res shouldBe 'left
+      res shouldBe Symbol("left")
       res.left.value shouldBe "Your request on getListeningName depth 3 exceed the max limit 2"
 
       bds.getRepresentation wasCalled once
@@ -84,12 +84,12 @@ class ListeningNameAPITest
   }
 
   it should "return empty result if listening name deeper than expected" in {
-    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    implicit val (log, sp, rm, bs, bds) = createMocks[IO]
     for {
-      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.getListeningNameDataResponse(1, listeningName)
     } yield {
-      res shouldBe 'right
+      res shouldBe Symbol("right")
       res.value shouldBe (Seq(), 0)
 
       bs.get(*) wasCalled twice
@@ -102,12 +102,12 @@ class ListeningNameAPITest
   }
 
   it should "return expected result if block falls within the specified depth" in {
-    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    implicit val (log, sp, rm, bs, bds) = createMocks[IO]
     for {
-      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.getListeningNameDataResponse(2, listeningName)
     } yield {
-      res shouldBe 'right
+      res shouldBe Symbol("right")
       val (blocks, length) = res.value
       length shouldBe 1
       val (par, block) = (blocks.head.postBlockData.head, blocks.head.block)
@@ -126,12 +126,12 @@ class ListeningNameAPITest
   }
 
   it should "return expected result even if depth is greater than possible" in {
-    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    implicit val (log, sp, rm, bs, bds) = createMocks[IO]
     for {
-      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.getListeningNameDataResponse(10, listeningName)
     } yield {
-      res shouldBe 'right
+      res shouldBe Symbol("right")
       val (blocks, length) = res.value
       length shouldBe 1
       val (par, block) = (blocks.head.postBlockData.head, blocks.head.block)

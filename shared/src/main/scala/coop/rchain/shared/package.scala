@@ -1,7 +1,6 @@
 package coop.rchain
 
 import coop.rchain.fs2.Fs2StreamSyntax
-import coop.rchain.monix.MonixableSyntax
 import coop.rchain.sdk.primitive.MapSyntax
 import coop.rchain.store.{KeyValueStoreManagerSyntax, KeyValueStoreSyntax, KeyValueTypedStoreSyntax}
 
@@ -17,7 +16,6 @@ trait AllSyntaxShared
     extends KeyValueStoreSyntax
     with KeyValueTypedStoreSyntax
     with KeyValueStoreManagerSyntax
-    with MonixableSyntax
     with Fs2StreamSyntax
     with catscontrib.ToBooleanF
     with MapSyntax

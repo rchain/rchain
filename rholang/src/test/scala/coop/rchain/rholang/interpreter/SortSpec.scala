@@ -6,7 +6,8 @@ import coop.rchain.models.rholang.sorter.Sortable
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import coop.rchain.models.rholang.sorter.ScoredTerm
-import monix.eval.Coeval
+import cats.Eval
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
 
@@ -45,7 +46,7 @@ class SortSpec extends AnyFlatSpec with Matchers {
   }
 
   def checkSortingAndScore[T: Sortable](term: T): ScoredTerm[T] = {
-    val scored: ScoredTerm[T] = Sortable[T].sortMatch[Coeval](term).value
+    val scored: ScoredTerm[T] = Sortable[T].sortMatch[Eval](term).value
     assert(scored.term == term, "Either input term not sorted or sorting returned wrong results")
     scored
   }

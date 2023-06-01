@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Parallel
 import cats.effect._
 import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples._
@@ -10,7 +11,7 @@ import coop.rchain.rspace.test._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util.{getK, runK, unpackOption}
 import coop.rchain.shared.Serialize
-import monix.eval.Task
+import org.scalatest.EitherValues
 import org.scalatestplus.scalacheck._
 
 import scala.collection.SortedSet
@@ -18,7 +19,8 @@ import scala.collection.SortedSet
 trait StorageActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with ScalaCheckDrivenPropertyChecks
-    with Checkers {
+    with Checkers
+    with EitherValues {
 
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSuccessful = 5, sizeRange = 30)
@@ -246,19 +248,31 @@ trait StorageActionsTests[F[_]]
         _  = r3 shouldBe None
         r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
         _  = runK(unpackOption(r4))
-        _ = getK(r4).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
+        _ = getK(r4).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
         r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
         _  = runK(unpackOption(r5))
-        _ = getK(r5).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
+        _ = getK(r5).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
         r6 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
         _  = runK(unpackOption(r6))
-        _ = getK(r6).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
+        _ = getK(r6).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
         insertActions <- store.changes.map(collectActions[InsertAction])
         _             = insertActions shouldBe empty
       } yield ()
@@ -410,15 +424,27 @@ trait StorageActionsTests[F[_]]
           .map(unpackOption)
           .foreach(runK)
 
-        _ = getK(r1).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
-        _ = getK(r2).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
-        _ = getK(r3).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
+        _ = getK(r1).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
+        _ = getK(r2).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
+        _ = getK(r3).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
         _             = getK(r1).continuation.results shouldNot contain theSameElementsAs getK(r2).continuation.results
         _             = getK(r1).continuation.results shouldNot contain theSameElementsAs getK(r3).continuation.results
         _             = getK(r2).continuation.results shouldNot contain theSameElementsAs getK(r3).continuation.results
@@ -844,7 +870,7 @@ trait StorageActionsTests[F[_]]
 
         // Matching data exists so the write will not "stick"
         r4 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
-        _ <- store.getData("ch1") map (_ should contain atLeastOneOf (
+        _ <- store.getData("ch1") map (_ should contain.atLeastOneOf(
               Datum.create("ch1", "datum1", false),
               Datum.create("ch1", "datum2", false),
               Datum.create("ch1", "datum3", false)
@@ -853,13 +879,17 @@ trait StorageActionsTests[F[_]]
         _ = r4 shouldBe defined
 
         _ = runK(unpackOption(r4))
-        _ = getK(r4).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
+        _ = getK(r4).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
 
         // Matching data exists so the write will not "stick"
         r5 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
-        _ <- store.getData("ch1") map (_ should contain oneOf (
+        _ <- store.getData("ch1") map (_ should contain.oneOf(
               Datum.create("ch1", "datum1", false),
               Datum.create("ch1", "datum2", false),
               Datum.create("ch1", "datum3", false)
@@ -868,9 +898,13 @@ trait StorageActionsTests[F[_]]
         _ = r5 shouldBe defined
 
         _ = runK(unpackOption(r5))
-        _ = getK(r5).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
+        _ = getK(r5).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
 
         // Matching data exists so the write will not "stick"
         r6            <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
@@ -879,9 +913,13 @@ trait StorageActionsTests[F[_]]
         _             = r6 shouldBe defined
 
         _ = runK(unpackOption(r6))
-        _ = getK(r6).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
-          "datum3"
-        ))
+        _ = getK(r6).continuation.results should contain.oneOf(
+          List("datum1"),
+          List("datum2"),
+          List(
+            "datum3"
+          )
+        )
 
         // All matching data has been consumed, so the write will "stick"
         r7 <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
@@ -1023,7 +1061,7 @@ trait StorageActionsTests[F[_]]
     for {
       _   <- space.produce(channel, datum, persist = false)
       res <- Sync[F].attempt(space.install(key, patterns, new StringsCaptor))
-      ex  = res.left.get
+      ex  = res.left.value
     } yield ex.getMessage shouldBe "Installing can be done only on startup"
   }
 
@@ -1033,7 +1071,7 @@ trait StorageActionsTests[F[_]]
       res <- Sync[F].attempt(
               space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
             )
-      err           = res.left.get
+      err           = res.left.value
       _             = err shouldBe an[IllegalArgumentException]
       _             = err.getMessage shouldBe "channels.length must equal patterns.length"
       insertActions <- store.changes.map(collectActions[InsertAction])
@@ -1184,9 +1222,9 @@ trait StorageActionsTests[F[_]]
 }
 
 class InMemoryHotStoreStorageActionsTests
-    extends InMemoryHotStoreTestsBase[Task]
-    with TaskTests[String, Pattern, Nothing, String, StringsCaptor]
-    with StorageActionsTests[Task]
-    with StorageTestsBase[Task, String, Pattern, String, StringsCaptor] {
-  implicit val parF = Task.catsParallel
+    extends InMemoryHotStoreTestsBase[IO]
+    with IOTests[String, Pattern, Nothing, String, StringsCaptor]
+    with StorageActionsTests[IO]
+    with StorageTestsBase[IO, String, Pattern, String, StringsCaptor] {
+  implicit val parF: Parallel[IO] = IO.parallelForIO
 }

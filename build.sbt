@@ -3,6 +3,7 @@ import BNFC._
 import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
+import protocbridge.Target
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
 
@@ -13,12 +14,12 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.15",
+  scalaVersion := "2.13.10",
   version := "0.1.0-SNAPSHOT",
   resolvers ++=
     Resolver.sonatypeOssRepos("releases") ++
-    Resolver.sonatypeOssRepos("snapshots") ++
-    Seq("jitpack" at "https://jitpack.io"),
+      Resolver.sonatypeOssRepos("snapshots") ++
+      Seq("jitpack" at "https://jitpack.io"),
   wartremoverExcluded += sourceManaged.value,
   Compile / compile / wartremoverErrors ++= Warts.allBut(
     // those we want
@@ -32,27 +33,39 @@ lazy val projectSettings = Seq(
     Wart.Nothing,
     Wart.Equals,
     Wart.PublicInference,
-    Wart.TraversableOps,
     Wart.ArrayEquals,
     Wart.While,
     Wart.Any,
     Wart.Product,
     Wart.Serializable,
     Wart.OptionPartial,
-    Wart.EitherProjectionPartial,
     Wart.Option2Iterable,
     Wart.ToString,
-    Wart.JavaConversions,
     Wart.MutableDataStructures,
     Wart.FinalVal,
     Wart.Null,
     Wart.AsInstanceOf,
     Wart.ExplicitImplicitTypes,
     Wart.StringPlusAny,
-    Wart.AnyVal
+    Wart.AnyVal,
+    // Added after migration to Scala 2.13
+    Wart.TripleQuestionMark,
+    Wart.IterableOps,
+    Wart.JavaSerializable,
+    Wart.ListUnapply,
+    Wart.GlobalExecutionContext,
+    Wart.NoNeedImport,
+    Wart.PlatformDefault,
+    Wart.JavaNetURLConstructors,
+    Wart.SizeIs,
+    Wart.SizeToLength,
+    Wart.ListAppend,
+    Wart.AutoUnboxing,
+    Wart.RedundantConversions
   ),
   scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
-  ThisBuild / scapegoatVersion := "1.4.11",
+  ThisBuild / scapegoatVersion := "2.1.1",
+  ThisBuild / scalacOptions += "semanticdb:synthetics:on",
   Test / testOptions += Tests.Argument("-oD"), //output test durations
   javacOptions ++= Seq("-source", "11", "-target", "11"),
   Test / fork := true,
@@ -76,7 +89,7 @@ lazy val projectSettings = Seq(
     Seq(
       Compile / packageDoc / publishArtifact := false,
       packageDoc / publishArtifact := false,
-      Compile / doc / sources := Seq.empty,
+      Compile / doc / sources := Seq.empty
     )
   }
 
@@ -131,7 +144,6 @@ lazy val shared = (project in file("shared"))
       catsTagless,
       fs2Core,
       lz4,
-      monix,
       scodecCore,
       scodecCats,
       scodecBits,
@@ -141,7 +153,8 @@ lazy val shared = (project in file("shared"))
       catsLawsTest,
       catsLawsTestkitTest,
       enumeratum,
-      jaxb
+      jaxb,
+      monix // remove when monix TestSheduler is replaced
     )
   )
   .dependsOn(sdk)
@@ -170,7 +183,6 @@ lazy val casper = (project in file("casper"))
       catsCore,
       catsRetry,
       catsMtl,
-      monix,
       fs2Core,
       fs2Io,
       scalacheck % "slowcooker"
@@ -188,8 +200,19 @@ lazy val casper = (project in file("casper"))
   )
 
 lazy val comm = (project in file("comm"))
+  .enablePlugins(Fs2Grpc)
   .settings(commonSettings: _*)
   .settings(
+    scalapbCodeGeneratorOptions += CodeGeneratorOption.FlatPackage,
+    // it turns out that Fs2GrpcPlugin.autoImport.scalapbCodeGenerators.value.head is generator that is overridden by
+    // StacksafeScalapbGenerator, so to resolve conflicts it is just dropped. This is found empirically, so
+    // might break when upgrading the version of Fs2Grpc plugin.
+    scalapbCodeGenerators := Fs2GrpcPlugin.autoImport.scalapbCodeGenerators.value.tail :+
+      new Target(
+        coop.rchain.scalapb.gen(flatPackage = true)._1,
+        (Compile / sourceManaged).value,
+        coop.rchain.scalapb.gen(flatPackage = true)._2
+      ),
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
@@ -197,16 +220,10 @@ lazy val comm = (project in file("comm"))
       scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
-      hasher,
       catsCore,
       catsMtl,
       catsTagless,
-      monix,
       guava
-    ),
-    Compile / PB.targets := Seq(
-      scalapb.gen(grpc = false)  -> (Compile / sourceManaged).value,
-      grpcmonix.generators.gen() -> (Compile / sourceManaged).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", crypto, models)
@@ -230,7 +247,18 @@ lazy val crypto = (project in file("crypto"))
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)
+  .enablePlugins(Fs2Grpc)
   .settings(
+    scalapbCodeGeneratorOptions += CodeGeneratorOption.FlatPackage,
+    // it turns out that Fs2GrpcPlugin.autoImport.scalapbCodeGenerators.value.head is generator that is overridden by
+    // StacksafeScalapbGenerator, so to resolve conflicts it is just dropped. This is found empirically, so
+    // might break when upgrading the version of Fs2Grpc plugin.
+    scalapbCodeGenerators := Fs2GrpcPlugin.autoImport.scalapbCodeGenerators.value.tail :+
+      new Target(
+        coop.rchain.scalapb.gen(flatPackage = true)._1,
+        (Compile / sourceManaged).value,
+        coop.rchain.scalapb.gen(flatPackage = true)._2
+      ),
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       magnolia,
@@ -238,18 +266,28 @@ lazy val models = (project in file("models"))
       scalacheck % "test",
       scalacheckShapeless,
       scalapbRuntimegGrpc
-    ),
-    Compile / PB.targets := Seq(
-      coop.rchain.scalapb.gen(flatPackage = true, grpc = false) -> (Compile / sourceManaged).value,
-      grpcmonix.generators.gen()                                -> (Compile / sourceManaged).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
-  .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
+  .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin, Fs2Grpc)
   .settings(
+    scalapbCodeGeneratorOptions += CodeGeneratorOption.FlatPackage,
+    // it turns out that Fs2GrpcPlugin.autoImport.scalapbCodeGenerators.value.head is exactly the
+    // generator that is overridden by StacksafeScalapbGenerator. To resolve conflicts it is just dropped.
+    // This is found empirically, so might break when upgrading the version of Fs2Grpc plugin.
+    // If both versions are generated, multiple copies of the same traits are produced leading to compilation error.
+    scalapbCodeGenerators := Fs2GrpcPlugin.autoImport.scalapbCodeGenerators.value.tail :+
+      new Target(
+        coop.rchain.scalapb.gen(flatPackage = true)._1,
+        (Compile / sourceManaged).value,
+        coop.rchain.scalapb.gen(flatPackage = true)._2
+      ),
+    // if this is not specified similar error happens https://github.com/sbt/sbt-buildinfo/issues/149
+    // looks like fs2 grpc plugin pipeline removes BuildInfo.scala
+    PB.deleteTargetDirectory := false,
     version := git.gitDescribedVersion.value.getOrElse({
       val v = "0.0.0-unknown"
       System.err.println("Could not get version from `git describe`.")
@@ -273,11 +311,11 @@ lazy val node = (project in file("node"))
         scalapbRuntimegGrpc,
         circeParser,
         circeGenericExtras,
+        monix, // remove when BatchInfluxDBReporter is adjusted to work w/o monix
         pureconfig
       ),
-    Compile / PB.targets := Seq(
-      scalapb.gen(grpc = false)  -> (Compile / sourceManaged).value / "protobuf",
-      grpcmonix.generators.gen() -> (Compile / sourceManaged).value / "protobuf"
+    scalacOptions ++= Seq(
+      "-language:reflectiveCalls" // used by org.rogach.scallop CLI args lib
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
@@ -379,7 +417,7 @@ lazy val node = (project in file("node"))
     rpmUrl := Some("https://rchain.coop"),
     rpmLicense := Some("Apache 2.0"),
     Rpm / packageArchitecture := "noarch",
-    Rpm / maintainerScripts := maintainerScriptsAppendFromFile((Rpm/maintainerScripts).value)(
+    Rpm / maintainerScripts := maintainerScriptsAppendFromFile((Rpm / maintainerScripts).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
     rpmPrerequisites := Seq(
@@ -404,19 +442,14 @@ lazy val rholang = (project in file("rholang"))
   .settings(
     name := "rholang",
     scalacOptions ++= Seq(
-      "-language:existentials",
-      "-language:higherKinds",
-      "-Yno-adapted-args",
-      "-Xfatal-warnings",
-      "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
+      "-Xlint:-missing-interpolator" // Disable false positive strings containing ${...}
     ),
-    Compile / packageDoc/ publishArtifact := false,
+    Compile / packageDoc / publishArtifact := false,
     packageDoc / publishArtifact := false,
     Compile / doc / sources := Seq.empty,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsMtl,
       catsEffect,
-      monix,
       scallop,
       lightningj,
       catsLawsTest,
@@ -471,9 +504,6 @@ lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
-    scalacOptions ++= Seq(
-      "-Xfatal-warnings"
-    ),
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
@@ -481,7 +511,8 @@ lazy val rspace = (project in file("rspace"))
       catsCore,
       fs2Core,
       scodecCore,
-      scodecBits
+      scodecBits,
+      monix // remove when AtomicAny migrated to Ref
     ),
     /* Tutorial */
     /* Publishing Settings */

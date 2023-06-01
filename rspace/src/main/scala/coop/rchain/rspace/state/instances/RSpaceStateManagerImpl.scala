@@ -1,7 +1,6 @@
 package coop.rchain.rspace.state.instances
 
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.ski._

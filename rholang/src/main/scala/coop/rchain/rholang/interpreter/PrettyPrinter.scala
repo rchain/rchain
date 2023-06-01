@@ -17,7 +17,7 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{
   GSysAuthTokenBody
 }
 import coop.rchain.shared.{Base16, Printer}
-import monix.eval.Coeval
+import cats.Eval
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0)
@@ -45,7 +45,6 @@ final case class PrettyPrinter(
   def boundId: String     = rotate(baseId)
   def setBaseId(): String = increment(baseId)
 
-  import Coeval.pure
   import PrettyPrinter._
 
   def buildString(e: Expr): String             = buildStringM(e).value.cap()
@@ -54,114 +53,117 @@ final case class PrettyPrinter(
   def buildChannelString(p: Par): String       = buildChannelStringM(p).value.cap()
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  private def buildStringM(u: GUnforgeable): Coeval[String] = Coeval.defer {
+  private def buildStringM(u: GUnforgeable): Eval[String] = Eval.defer {
     u.unfInstance match {
-      case GPrivateBody(p) => pure("Unforgeable(0x" + Base16.encode(p.id.toByteArray) + ")")
+      case GPrivateBody(p) => Eval.now("Unforgeable(0x" + Base16.encode(p.id.toByteArray) + ")")
       case GDeployIdBody(id) =>
-        pure("DeployId(0x" + Base16.encode(id.sig.toByteArray) + ")")
+        Eval.now("DeployId(0x" + Base16.encode(id.sig.toByteArray) + ")")
       case GDeployerIdBody(id) =>
-        pure("DeployerId(0x" + Base16.encode(id.publicKey.toByteArray) + ")")
+        Eval.now("DeployerId(0x" + Base16.encode(id.publicKey.toByteArray) + ")")
       case GSysAuthTokenBody(value) =>
-        pure(s"GSysAuthTokenBody(${value})")
+        Eval.now(s"GSysAuthTokenBody(${value})")
       case _ => throw new Error(s"Attempted to print unknown GUnforgeable type: $u")
     }
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  private def buildStringM(e: Expr): Coeval[String] = Coeval.defer {
+  private def buildStringM(e: Expr): Eval[String] = Eval.defer {
     e.exprInstance match {
 
-      case ENegBody(ENeg(p)) => pure("-") |+| buildStringM(p).map(_.wrapWithBraces)
-      case ENotBody(ENot(p)) => pure("~") |+| buildStringM(p).map(_.wrapWithBraces)
+      case ENegBody(ENeg(p)) => Eval.now("-") |+| buildStringM(p).map(_.wrapWithBraces)
+      case ENotBody(ENot(p)) => Eval.now("~") |+| buildStringM(p).map(_.wrapWithBraces)
       case EMultBody(EMult(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" * ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" * ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EDivBody(EDiv(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" / ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" / ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EModBody(EMod(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" % ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" % ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EPercentPercentBody(EPercentPercent(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" %% ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" %% ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EPlusBody(EPlus(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" + ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" + ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EPlusPlusBody(EPlusPlus(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" ++ ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" ++ ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EMinusBody(EMinus(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" - ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" - ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EMinusMinusBody(EMinusMinus(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" -- ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" -- ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EAndBody(EAnd(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" and ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" and ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EOrBody(EOr(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" or ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" or ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EShortAndBody(EShortAnd(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" && ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" && ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EShortOrBody(EShortOr(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" || ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" || ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EEqBody(EEq(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" == ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" == ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case ENeqBody(ENeq(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" != ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" != ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EGtBody(EGt(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" > ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" > ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EGteBody(EGte(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" >= ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" >= ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case ELtBody(ELt(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" < ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" < ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case ELteBody(ELte(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" <= ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| Eval.now(" <= ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EMatchesBody(EMatches(target, pattern)) =>
-        (buildStringM(target) |+| pure(" matches ") |+| buildStringM(pattern))
+        (buildStringM(target) |+| Eval.now(" matches ") |+| buildStringM(pattern))
           .map(_.wrapWithBraces)
       case EListBody(EList(s, _, _, remainder)) =>
-        pure("[") |+| buildSeq(s) |+| buildRemainderString(remainder) |+| pure("]")
+        Eval.now("[") |+| buildSeq(s) |+| buildRemainderString(remainder) |+| Eval.now("]")
       case ETupleBody(ETuple(s, _, _)) =>
-        pure("(") |+| buildSeq(s) |+| pure(")")
+        Eval.now("(") |+| buildSeq(s) |+| Eval.now(")")
       case ESetBody(ParSet(pars, _, _, remainder)) =>
-        pure("Set(") |+| buildSeq(pars.sortedPars) |+| buildRemainderString(remainder) |+| pure(")")
+        Eval.now("Set(") |+| buildSeq(pars.sortedPars) |+| buildRemainderString(remainder) |+| Eval
+          .now(")")
       case EMapBody(ParMap(ps, _, _, remainder)) =>
-        pure("{") |+| ps.sortedList.zipWithIndex.foldLeft(pure("")) {
+        Eval.now("{") |+| ps.sortedList.zipWithIndex.foldLeft(Eval.now("")) {
           case (string, (kv, i)) =>
-            string |+| buildStringM(kv._1) |+| pure(" : ") |+| buildStringM(kv._2) |+| pure {
-              if (i != ps.sortedList.size - 1) ", "
-              else ""
-            }
-        } |+| buildRemainderString(remainder) |+| pure("}")
+            string |+| buildStringM(kv._1) |+| Eval.now(" : ") |+| buildStringM(kv._2) |+| Eval
+              .now {
+                if (i != ps.sortedList.size - 1) ", "
+                else ""
+              }
+        } |+| buildRemainderString(remainder) |+| Eval.now("}")
 
       case EVarBody(EVar(v)) => buildStringM(v)
-      case GBool(b)          => pure(b.toString)
-      case GInt(i)           => pure(i.toString)
-      case GBigInt(bi)       => pure(s"BigInt($bi)")
-      case GString(s)        => pure("\"" + s + "\"")
-      case GUri(u)           => pure(s"`$u`")
+      case GBool(b)          => Eval.now(b.toString)
+      case GInt(i)           => Eval.now(i.toString)
+      case GBigInt(bi)       => Eval.now(s"BigInt($bi)")
+      case GString(s)        => Eval.now("\"" + s + "\"")
+      case GUri(u)           => Eval.now(s"`$u`")
       // TODO: Figure out if we can prevent ScalaPB from generating
-      case ExprInstance.Empty => pure("Nil")
+      case ExprInstance.Empty => Eval.now("Nil")
       case EMethodBody(method) =>
-        val args = method.arguments.map(buildStringM).toList.intercalate(pure(","))
-        pure("(") |+| buildStringM(method.target) |+| pure(")." + method.methodName + "(") |+| args |+| pure(
+        val args = method.arguments.map(buildStringM).toList.intercalate(Eval.now(","))
+        Eval.now("(") |+| buildStringM(method.target) |+| Eval
+          .now(")." + method.methodName + "(") |+| args |+| Eval.now(
           ")"
         )
-      case ExprInstance.GByteArray(bs) => pure(Base16.encode(bs.toByteArray))
+      case ExprInstance.GByteArray(bs) => Eval.now(Base16.encode(bs.toByteArray))
       case _                           => throw new Error(s"Attempted to print unknown Expr type: $e")
     }
   }
 
-  private def buildRemainderString(remainder: Option[Var]): Coeval[String] =
-    remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
+  private def buildRemainderString(remainder: Option[Var]): Eval[String] =
+    remainder.fold(Eval.now(""))(v => Eval.now("...") |+| buildStringM(v))
 
-  private def buildStringM(v: Var): Coeval[String] =
+  private def buildStringM(v: Var): Eval[String] =
     v.varInstance match {
-      case FreeVar(level) => pure(s"$freeId${freeShift + level}")
+      case FreeVar(level) => Eval.now(s"$freeId${freeShift + level}")
       case BoundVar(level) =>
-        (if (isNewVar(level) && !isBuildingChannel) pure("*") else pure("")) |+| pure(
+        (if (isNewVar(level) && !isBuildingChannel) Eval.now("*") else Eval.now("")) |+| Eval.now(
           s"$boundId${boundShift - level - 1}"
         )
-      case Wildcard(_)       => pure("_")
-      case VarInstance.Empty => pure("@Nil")
+      case Wildcard(_)       => Eval.now("_")
+      case VarInstance.Empty => Eval.now("@Nil")
     }
 
-  private def buildChannelStringM(p: Par): Coeval[String] = buildChannelStringM(p, 0)
+  private def buildChannelStringM(p: Par): Eval[String] = buildChannelStringM(p, 0)
 
-  private def buildChannelStringM(p: Par, indent: Int): Coeval[String] = {
+  private def buildChannelStringM(p: Par, indent: Int): Eval[String] = {
     def quoteIfNotNew(s: String): String = {
       val isBoundNew = p match {
         case Par(_, _, _, Seq(Expr(EVarBody(EVar(Var(BoundVar(level)))))), _, _, _, _, _, _) =>
@@ -181,20 +183,20 @@ final case class PrettyPrinter(
     }
   }
 
-  private def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
+  private def buildStringM(t: GeneratedMessage): Eval[String] = buildStringM(t, 0)
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  private def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = Coeval.defer {
+  private def buildStringM(t: GeneratedMessage, indent: Int): Eval[String] = Eval.defer {
     val content = t match {
       case v: Var => buildStringM(v)
       case s: Send =>
-        buildChannelStringM(s.chan) |+| pure {
+        buildChannelStringM(s.chan) |+| Eval.now {
           if (s.persistent) "!!("
           else "!("
-        } |+| buildSeq(s.data) |+| pure(")")
+        } |+| buildSeq(s.data) |+| Eval.now(")")
 
       case r: Receive =>
-        val (totalFree, bindsString) = r.binds.zipWithIndex.foldLeft((0, pure(""))) {
+        val (totalFree, bindsString) = r.binds.zipWithIndex.foldLeft((0, Eval.now(""))) {
           case ((previousFree, string), (bind, i)) =>
             val bindString =
               this
@@ -205,9 +207,9 @@ final case class PrettyPrinter(
                   baseId = setBaseId()
                 )
                 .buildPattern(bind.patterns)
-            (bind.freeCount + previousFree, string |+| bindString |+| pure {
+            (bind.freeCount + previousFree, string |+| bindString |+| Eval.now {
               if (r.persistent) " <= " else if (r.peek) " <<- " else " <- "
-            } |+| buildChannelStringM(bind.source, indent) |+| pure {
+            } |+| buildChannelStringM(bind.source, indent) |+| Eval.now {
               if (i != r.binds.length - 1) "  & "
               else ""
             })
@@ -218,61 +220,71 @@ final case class PrettyPrinter(
           .buildStringM(r.body, indent + 1)
           .flatMap { bodyStr =>
             if (bodyStr.nonEmpty) {
-              pure("for( ") |+| bindsString |+| pure(
+              Eval.now("for( ") |+| bindsString |+| Eval.now(
                 " ) {\n" + (indentStr * (indent + 1)) + bodyStr + "\n" + (indentStr * indent) + "}"
               )
             } else {
-              pure("for( ") |+| bindsString |+| pure(" ) {" + bodyStr + "}")
+              Eval.now("for( ") |+| bindsString |+| Eval.now(" ) {" + bodyStr + "}")
             }
           }
 
       case b: Bundle =>
-        pure(BundleOps.showInstance.show(b) + "{ " + (indentStr * (indent + 1))) |+|
-          buildStringM(b.body, indent + 1) |+| pure(" }")
+        Eval.now(BundleOps.showInstance.show(b) + "{ " + (indentStr * (indent + 1))) |+|
+          buildStringM(b.body, indent + 1) |+| Eval.now(" }")
 
       case n: New =>
         val introducedNewsShiftIdx = (0 until n.bindCount).map(i => i + boundShift)
-        pure("new " + buildVariables(n.bindCount) + " in {\n" + indentStr * (indent + 1)) |+| this
+        Eval
+          .now("new " + buildVariables(n.bindCount) + " in {\n" + indentStr * (indent + 1)) |+| this
           .copy(
             boundShift = boundShift + n.bindCount,
             newsShiftIndices = newsShiftIndices ++ introducedNewsShiftIdx
           )
           .buildStringM(n.p, indent + 1) |+|
-          pure("\n" + (indentStr * indent) + "}")
+          Eval.now("\n" + (indentStr * indent) + "}")
 
       case e: Expr =>
         buildStringM(e)
 
       case m: Match =>
-        pure("match ") |+| buildStringM(m.target) |+| pure(" {\n") |+|
-          m.cases.zipWithIndex.foldLeft(pure("")) {
+        Eval.now("match ") |+| buildStringM(m.target) |+| Eval.now(" {\n") |+|
+          m.cases.zipWithIndex.foldLeft(Eval.now("")) {
             case (string, (matchCase, i)) =>
-              string |+| pure(indentStr * (indent + 1)) |+| buildMatchCase(matchCase, indent + 1) |+| pure {
+              string |+| Eval.now(indentStr * (indent + 1)) |+| buildMatchCase(
+                matchCase,
+                indent + 1
+              ) |+| Eval.now {
                 if (i != m.cases.length - 1) "\n"
                 else ""
               }
-          } |+| pure("\n" + (indentStr * indent) + "}")
+          } |+| Eval.now("\n" + (indentStr * indent) + "}")
 
       case u: GUnforgeable => buildStringM(u)
       case c: Connective =>
         c.connectiveInstance match {
-          case ConnectiveInstance.Empty => pure("")
+          case ConnectiveInstance.Empty => Eval.now("")
           case ConnAndBody(value) =>
-            pure("{") |+| value.ps.map(buildStringM).toList.intercalate(pure(" /\\ ")) |+| pure("}")
+            Eval.now("{") |+| value.ps
+              .map(buildStringM)
+              .toList
+              .intercalate(Eval.now(" /\\ ")) |+| Eval.now("}")
           case ConnOrBody(value) =>
-            pure("{") |+| value.ps.map(buildStringM).toList.intercalate(pure(" \\/ ")) |+| pure("}")
-          case ConnNotBody(value) => pure("~{") |+| buildStringM(value) |+| pure("}")
-          case VarRefBody(value)  => pure(s"=$freeId${freeShift - value.index - 1}")
-          case _: ConnBool        => pure("Bool")
-          case _: ConnInt         => pure("Int")
-          case _: ConnBigInt      => pure("BigInt")
-          case _: ConnString      => pure("String")
-          case _: ConnUri         => pure("Uri")
-          case _: ConnByteArray   => pure("ByteArray")
+            Eval.now("{") |+| value.ps
+              .map(buildStringM)
+              .toList
+              .intercalate(Eval.now(" \\/ ")) |+| Eval.now("}")
+          case ConnNotBody(value) => Eval.now("~{") |+| buildStringM(value) |+| Eval.now("}")
+          case VarRefBody(value)  => Eval.now(s"=$freeId${freeShift - value.index - 1}")
+          case _: ConnBool        => Eval.now("Bool")
+          case _: ConnInt         => Eval.now("Int")
+          case _: ConnBigInt      => Eval.now("BigInt")
+          case _: ConnString      => Eval.now("String")
+          case _: ConnUri         => Eval.now("Uri")
+          case _: ConnByteArray   => Eval.now("ByteArray")
         }
 
       case par: Par =>
-        if (isEmpty(par)) pure("Nil")
+        if (isEmpty(par)) Eval.now("Nil")
         else {
           val list =
             List(
@@ -285,15 +297,15 @@ final case class PrettyPrinter(
               par.unforgeables,
               par.connectives
             )
-          list.foldLeft((false, pure(""))) {
+          list.foldLeft((false, Eval.now(""))) {
             // format: off
             case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {
                 (true,
-                 string |+| pure { if (prevNonEmpty) " |\n" + (indentStr * indent) else "" } |+|
-                    items.zipWithIndex.foldLeft(pure("")) {
+                 string |+| Eval.now { if (prevNonEmpty) " |\n" + (indentStr * indent) else "" } |+|
+                    items.zipWithIndex.foldLeft(Eval.now("")) {
                      case (_string, (_par, index)) =>
-                       _string |+| buildStringM(_par, indent) |+| pure {
+                       _string |+| buildStringM(_par, indent) |+| Eval.now {
                          if (index != items.length - 1) " |\n" + (indentStr * indent) else ""
                        }
                    })
@@ -326,29 +338,29 @@ final case class PrettyPrinter(
       .map(i => s"$boundId${boundShift + i}")
       .mkString(", ")
 
-  private def buildSeq[T <: GeneratedMessage](s: Seq[T]): Coeval[String] =
-    s.zipWithIndex.foldLeft(pure("")) {
+  private def buildSeq[T <: GeneratedMessage](s: Seq[T]): Eval[String] =
+    s.zipWithIndex.foldLeft(Eval.now("")) {
       case (string, (p, i)) =>
-        string |+| buildStringM(p) |+| pure {
+        string |+| buildStringM(p) |+| Eval.now {
           if (i != s.length - 1) ", "
           else ""
         }
     }
 
-  private def buildPattern(patterns: Seq[Par]): Coeval[String] =
-    patterns.zipWithIndex.foldLeft(pure("")) {
+  private def buildPattern(patterns: Seq[Par]): Eval[String] =
+    patterns.zipWithIndex.foldLeft(Eval.now("")) {
 
       case (string, (pattern, i)) =>
-        string |+| buildChannelStringM(pattern) |+| pure {
+        string |+| buildChannelStringM(pattern) |+| Eval.now {
           if (i != patterns.length - 1) ", "
           else ""
         }
     }
 
-  private def buildMatchCase(matchCase: MatchCase, indent: Int): Coeval[String] = {
+  private def buildMatchCase(matchCase: MatchCase, indent: Int): Eval[String] = {
     val patternFree: Int = matchCase.freeCount
-    val openBrace        = pure(s"{\n${indentStr * (indent + 1)}")
-    val closeBrace       = pure(s"\n${indentStr * indent}}")
+    val openBrace        = Eval.now(s"{\n${indentStr * (indent + 1)}")
+    val closeBrace       = Eval.now(s"\n${indentStr * indent}}")
     this
       .copy(
         freeShift = boundShift,
@@ -356,7 +368,7 @@ final case class PrettyPrinter(
         freeId = boundId,
         baseId = setBaseId()
       )
-      .buildStringM(matchCase.pattern, indent) |+| pure(" => ") |+| openBrace |+|
+      .buildStringM(matchCase.pattern, indent) |+| Eval.now(" => ") |+| openBrace |+|
       this
         .copy(boundShift = boundShift + patternFree)
         .buildStringM(matchCase.source, indent + 1) |+|

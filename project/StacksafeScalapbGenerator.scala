@@ -6,7 +6,7 @@ import com.google.protobuf.ExtensionRegistry
 import protocbridge.{Artifact, JvmGenerator}
 import protocgen.{CodeGenApp, CodeGenRequest, CodeGenResponse}
 import scalapb.compiler._
-import scalapb.options.compiler.Scalapb
+import scalapb.options.Scalapb.registerAllExtensions
 
 object gen {
   def apply(
@@ -32,7 +32,7 @@ object gen {
 
 object StacksafeScalapbGenerator extends CodeGenApp {
   override def registerExtensions(registry: ExtensionRegistry): Unit =
-    Scalapb.registerAllExtensions(registry)
+    registerAllExtensions(registry)
 
   override def suggestedDependencies: Seq[Artifact] = Seq(
     Artifact(
@@ -44,17 +44,17 @@ object StacksafeScalapbGenerator extends CodeGenApp {
   )
 
   // Adapted from scalapb ProtobufGenerator
-  // https://github.com/scalapb/ScalaPB/blob/v0.10.8/compiler-plugin/src/main/scala/scalapb/compiler/ProtobufGenerator.scala#L1732
+  // https://github.com/scalapb/ScalaPB/blob/v0.11.3/compiler-plugin/src/main/scala/scalapb/compiler/ProtobufGenerator.scala#L1732
   def process(request: CodeGenRequest): CodeGenResponse =
     ProtobufGenerator.parseParameters(request.parameter) match {
       case Right(params) =>
         try {
-          val implicits = new DescriptorImplicits(params, request.allProtos)
+          val implicits = DescriptorImplicits.fromCodeGenRequest(params, request)
           // Inserted custom printer
           val generator = new StacksafeMessagePrinter(params, implicits)
           val validator = new ProtoValidation(implicits)
           validator.validateFiles(request.allProtos)
-          import implicits.FileDescriptorPimp
+          import implicits.ExtendedFileDescriptor
           val files = request.filesToGenerate.flatMap { file =>
             if (file.scalaOptions.getSingleFile)
               generator.generateSingleScalaFileForFileDescriptor(file)
@@ -75,7 +75,7 @@ class StacksafeMessagePrinter(
     implicits: DescriptorImplicits
 ) extends ProtobufGenerator(params, implicits) {
 
-  import DescriptorImplicits.AsSymbolPimp
+  import DescriptorImplicits.AsSymbolExtension
   import implicits._
 
   // Override printing of the whole message
@@ -119,9 +119,13 @@ class StacksafeMessagePrinter(
       fp: FunctionalPrinter
   ): FunctionalPrinter = {
     val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
-    fp.add(
-        s"override def equals(x: Any): Boolean = coop.rchain.models.EqualM[$myFullScalaName].equals[monix.eval.Coeval](this, x).value"
-      )
+    fp.add(s"override def equals(x: Any): Boolean = {")
+      .newline
+      .add("  import coop.rchain.catscontrib.effect.implicits.sEval")
+      .newline
+      .add(s" coop.rchain.models.EqualM[$myFullScalaName].equals[cats.Eval](this, x).value")
+      .newline
+      .add("}")
       .newline
   }
 
@@ -131,10 +135,15 @@ class StacksafeMessagePrinter(
   ): FunctionalPrinter = {
     val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
 
-    val printer = fp
-      .add(
-        s"override def hashCode(): Int = coop.rchain.models.HashM[$myFullScalaName].hash[monix.eval.Coeval](this).value"
-      )
+    val printer =
+      fp.add(s"override def hashCode(): Int = {")
+        .newline
+        .add("  import coop.rchain.catscontrib.effect.implicits.sEval")
+        .newline
+        .add(s" coop.rchain.models.HashM[$myFullScalaName].hash[cats.Eval](this).value")
+        .newline
+        .add("}")
+        .newline
 
     // In new version of scalapb (0.10.8) `merge` method is moved to companion object
     //  so it's added here to be a member method.
@@ -143,7 +152,7 @@ class StacksafeMessagePrinter(
 
   // Generated as member method
   private def generateMergeM(message: Descriptor)(printer: FunctionalPrinter): FunctionalPrinter = {
-    import scala.collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
     val requiredFieldMap: Map[FieldDescriptor, Int] =
       message.fields.filter(_.isRequired).zipWithIndex.toMap
@@ -168,7 +177,7 @@ class StacksafeMessagePrinter(
             )
           else
             printer.add(
-              s"val __${field.scalaName} = (${field.collectionBuilder} ++= this.${field.scalaName.asSymbol})"
+              s"val __${field.scalaName} = (${field.collection.newBuilder} ++= this.${field.scalaName.asSymbol})"
             )
       )
       .when(message.preservesUnknownFields) { _ =>

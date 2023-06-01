@@ -1,13 +1,13 @@
 package coop.rchain.rspace.history
 
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.shared.Base16
 import coop.rchain.store.InMemoryKeyValueStore
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
-import org.scalatest.Assertion
+import org.scalatest.{Assertion, EitherValues}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
@@ -17,7 +17,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
 
-class HistoryActionTests extends AnyFlatSpec with Matchers {
+class HistoryActionTests extends AnyFlatSpec with Matchers with EitherValues {
 
   "creating and read one record" should "works" in withEmptyHistory { emptyHistoryF =>
     val data = insert(_zeros) :: Nil
@@ -82,8 +82,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         emptyHistory <- emptyHistoryF
         err          <- emptyHistory.process(data).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.left.value
         ex shouldBe a[AssertionError]
         ex.getMessage shouldBe s"assertion failed: The length of all prefixes in the subtree must be the same."
       }
@@ -96,8 +95,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         emptyHistory <- emptyHistoryF
         err          <- emptyHistory.process(data1).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.left.value
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe s"Cannot process duplicate actions on one key."
       }
@@ -106,8 +104,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         emptyHistory <- emptyHistoryF
         err          <- emptyHistory.process(data2).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.left.value
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe s"Cannot process duplicate actions on one key."
       }
@@ -211,8 +208,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         _            <- inMemoStore.put[ByteVector](Seq(collisionKVPair), copyBVToBuf)
         err          <- newHistory.process(deleteRecord).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.left.get
+        val ex = err.left.value
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe
           s"1 collisions in KVDB (first collision with key = " +
@@ -230,13 +226,13 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
       for {
         emptyHistory <- emptyHistoryF
         _ <- (1 to 10).toList.foldLeftM[
-              Task,
+              IO,
               (
-                  History[Task],
+                  History[IO],
                   List[InsertAction],
                   TrieMap[KeySegment, Blake2b256Hash]
               )
-            ](emptyHistory, inserts, state) {
+            ]((emptyHistory, inserts, state)) {
               case ((history, inserts, state), _) =>
                 val newInserts  = generateRandomInsert(sizeInserts)
                 val newUpdates  = generateRandomInsertFromInsert(sizeUpdates, inserts)
@@ -276,17 +272,17 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
       } yield ()
   }
 
-  protected def withEmptyHistory(f: Task[History[Task]] => Task[Unit]): Unit = {
-    val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
-    f(emptyHistory).runSyncUnsafe(1.minute)
+  protected def withEmptyHistory(f: IO[History[IO]] => IO[Unit]): Unit = {
+    val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[IO]())
+    f(emptyHistory).timeout(1.minute).unsafeRunSync()
   }
 
   protected def withEmptyHistoryAndStore(
-      f: (Task[History[Task]], InMemoryKeyValueStore[Task]) => Task[Unit]
+      f: (IO[History[IO]], InMemoryKeyValueStore[IO]) => IO[Unit]
   ): Unit = {
-    val store        = InMemoryKeyValueStore[Task]
+    val store        = InMemoryKeyValueStore[IO]()
     val emptyHistory = History.create(History.emptyRootHash, store)
-    f(emptyHistory, store).runSyncUnsafe(20.seconds)
+    f(emptyHistory, store).timeout(20.seconds).unsafeRunSync()
   }
 
   def randomKey(size: Int): KeySegment =

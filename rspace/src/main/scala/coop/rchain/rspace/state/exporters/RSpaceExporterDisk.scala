@@ -1,7 +1,7 @@
 package coop.rchain.rspace.state.exporters
 
 import cats.Monad
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
@@ -16,7 +16,7 @@ import java.nio.file.Path
 
 object RSpaceExporterDisk {
 
-  def writeToDisk[F[_]: Concurrent: Log](
+  def writeToDisk[F[_]: Async: Log](
       exporter: RSpaceExporter[F],
       root: Blake2b256Hash,
       dirPath: Path,

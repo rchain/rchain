@@ -87,11 +87,11 @@ class KeyValueTypedStoreCodec[F[_]: Sync, K, V](
                      // Inside LMDB iterator can only be synchronous operation / unsafe decode
                      val k = kCodec.decodeValue(kBytes).require
                      // Lazy evaluate/decode value
-                     def fv = {
+                     val fv = () => {
                        val vBytes = BitVector(vBuff)
                        vCodec.decodeValue(vBytes).require
                      }
-                     (k, fv _)
+                     (k, fv)
                  }.collect(pf).toVector
                )
     } yield values

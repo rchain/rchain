@@ -2,7 +2,6 @@ package coop.rchain.casper.rholang.syntax
 
 import cats.data.EitherT
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol.{
@@ -43,6 +42,7 @@ import RuntimeReplaySyntax._
 import coop.rchain.casper.rholang.BlockRandomSeed
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.hash.Blake2b512Random
+import cats.effect.Ref
 
 trait RuntimeReplaySyntax {
   implicit final def casperSyntaxRholangRuntimeReplay[F[_]](
@@ -134,7 +134,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
           }
         }
     }
-    val refT = Ref.of(Vector[NumberChannelsEndVal]()).liftEitherT[ReplayFailure]
+    val refT = Ref[F].of(Vector[NumberChannelsEndVal]()).liftEitherT[ReplayFailure]
 
     refT.flatMap { mergeable =>
       EitherT
@@ -158,7 +158,7 @@ final class RuntimeReplayOps[F[_]](private val runtime: ReplayRhoRuntime[F]) ext
       span: Span[F],
       log: Log[F]
   ): EitherT[F, ReplayFailure, NumberChannelsEndVal] = {
-    val refT = Ref.of(Set[Par]()).liftEitherT[ReplayFailure]
+    val refT = Ref[F].of(Set[Par]()).liftEitherT[ReplayFailure]
     refT flatMap { mergeable =>
       val expectedFailure = processedDeploy.systemDeployError
       val preChargeF =

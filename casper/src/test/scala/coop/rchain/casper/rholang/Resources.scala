@@ -1,7 +1,7 @@
 package coop.rchain.casper.rholang
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.metrics
@@ -12,14 +12,13 @@ import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.mb
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
-import monix.execution.Scheduler
 
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
 
 object Resources {
 
-  def mkTestRNodeStoreManager[F[_]: Concurrent: Log](
+  def mkTestRNodeStoreManager[F[_]: Async: Log](
       dirPath: Path
   ): F[KeyValueStoreManager[F]] = {
     // Limit maximum environment (file) size for LMDB in tests
@@ -36,21 +35,19 @@ object Resources {
     dbMappings >>= (xs => LmdbDirStoreManager[F](dirPath, xs.toMap))
   }
 
-  def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
+  def mkRuntimeManager[F[_]: Async: Parallel: Log](
       prefix: String,
       mergeableTagName: Par
-  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
+  ): Resource[F, RuntimeManager[F]] =
     mkTempDir[F](prefix)
       .evalMap(mkTestRNodeStoreManager[F])
       .evalMap(mkRuntimeManagerAt[F](_, mergeableTagName))
 
   // TODO: This is confusing to create another instances for Log, Metrics and Span.
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
-  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
+  def mkRuntimeManagerAt[F[_]: Async: Parallel](
       kvm: KeyValueStoreManager[F],
       mergeableTagName: Par
-  )(
-      implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
     implicit val log               = Log.log[F]
     implicit val metricsEff        = new metrics.Metrics.MetricsNOP[F]

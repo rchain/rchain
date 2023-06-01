@@ -85,7 +85,7 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
       val (payload, checksum) = bytes.splitAt(checksumStart)
       val computedChecksum    = computeChecksum(payload)
 
-      if (computedChecksum.deep == checksum.deep)
+      if (computedChecksum.toIndexedSeq == checksum.toIndexedSeq)
         Right((payload, checksum))
       else
         Left("Invalid checksum")
@@ -94,7 +94,7 @@ class AddressTools(prefix: Array[Byte], keyLength: Int, checksumLength: Int) {
     def parseKeyHash(payload: Array[Byte]) = {
       val (actualPrefix, keyHash) = payload.splitAt(prefix.length)
 
-      if (actualPrefix.deep == prefix.deep)
+      if (actualPrefix.toIndexedSeq == prefix.toIndexedSeq)
         Right(keyHash)
       else Left("Invalid prefix")
     }

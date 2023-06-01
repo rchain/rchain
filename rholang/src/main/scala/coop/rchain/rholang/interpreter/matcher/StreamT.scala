@@ -1,15 +1,28 @@
 package coop.rchain.rholang.interpreter.matcher
 import cats.mtl.lifting.MonadLayerControl
-import cats.{~>, Alternative, Applicative, Functor, FunctorFilter, Monad, MonadError, MonoidK}
+import cats.{
+  ~>,
+  Alternative,
+  Applicative,
+  FlatMap,
+  Functor,
+  FunctorFilter,
+  Monad,
+  MonadError,
+  MonoidK
+}
 import cats.data.OptionT
+import cats.syntax.all._
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.rholang.interpreter.matcher.StreamT.{SCons, SNil, Step}
 
-import scala.collection.immutable.Stream
-import scala.collection.immutable.Stream.Cons
+import scala.collection.immutable.LazyList
 import scala.util.{Left, Right}
+import cats.effect.Ref
+import cats.effect.kernel.{CancelScope, MonadCancel, Poll}
+
+import scala.concurrent.duration.FiniteDuration
 
 /**
   * Shamelessly transcribed minimal version of Gabriel Gonzalez's beginner-friendly ListT
@@ -42,12 +55,12 @@ object StreamT extends StreamTInstances0 {
   def liftF[F[_]: Applicative, A](fa: F[A]): StreamT[F, A] =
     StreamT(Functor[F].map(fa)(value => SCons(value, empty)))
 
-  def fromStream[F[_]: Applicative, A](fs: F[Stream[A]]): StreamT[F, A] = {
+  def fromStream[F[_]: Applicative, A](fs: F[LazyList[A]]): StreamT[F, A] = {
 
-    def next(curr: Stream[A]): Step[F, A] =
+    def next(curr: LazyList[A]): Step[F, A] =
       curr match {
-        case Stream.Empty  => SNil()
-        case cons: Cons[A] => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
+        case LazyList() => SNil()
+        case cons       => SCons(cons.head, StreamT(delay[F, Step[F, A]](next(cons.tail))))
       }
 
     StreamT[F, A](Functor[F].map(fs)(next))
@@ -58,10 +71,10 @@ object StreamT extends StreamTInstances0 {
   private def delay[F[_]: Applicative, A](a: => A): F[A] =
     Functor[F].map(Applicative[F].unit)(_ => a)
 
-  def run[F[_]: Monad, A](s: StreamT[F, A]): F[Stream[A]] = {
+  def run[F[_]: Monad, A](s: StreamT[F, A]): F[LazyList[A]] = {
     val F = Monad[F]
     F.flatMap(s.next) {
-      case SNil()            => F.pure(Stream.Empty)
+      case SNil()            => F.pure(LazyList())
       case SCons(head, tail) => F.map(run(tail))(t => head +: t)
     }
   }
@@ -144,6 +157,12 @@ trait StreamTInstances1 extends StreamTInstances2 {
   ): MonadError[StreamT[F, *], E] =
     new StreamTMonadError[F, E] { implicit val F = F0 }
 
+  implicit def catsDataMonadErrorMonadForStreamT[F[_]](
+      implicit F0: Monad[F]
+  ): MonadError[StreamT[F, *], Unit] =
+    new StreamTMonadErrorMonad[F] {
+      implicit val F = F0
+    }
 }
 
 private trait StreamTMonadError[F[_], E] extends MonadError[StreamT[F, *], E] with StreamTMonad[F] {
@@ -162,16 +181,11 @@ trait StreamTInstances2 {
   private[matcher] type of[F[_], G[_]] = { type l[A] = F[G[A]] }
   private[matcher] type StreamTC[M[_]] = { type l[A] = StreamT[M, A] }
 
-  implicit def catsDataMonadErrorMonadForStreamT[F[_]](
-      implicit F0: Monad[F]
-  ): MonadError[StreamT[F, *], Unit] =
-    new StreamTMonadErrorMonad[F] { implicit val F = F0 }
-
   implicit final def streamMonadLayerControl[M[_]](
       implicit M: Monad[M]
-  ): MonadLayerControl.Aux[StreamTC[M]#l, M, Stream] =
+  ): MonadLayerControl.Aux[StreamTC[M]#l, M, LazyList] =
     new MonadLayerControl[StreamTC[M]#l, M] {
-      type State[A] = Stream[A]
+      type State[A] = LazyList[A]
 
       val outerInstance: Monad[StreamTC[M]#l] =
         StreamT.streamTMonad
@@ -182,66 +196,61 @@ trait StreamTInstances2 {
 
       def layer[A](inner: M[A]): StreamT[M, A] = StreamT.liftF(inner)
 
-      def restore[A](state: Stream[A]): StreamT[M, A] =
+      def restore[A](state: LazyList[A]): StreamT[M, A] =
         StreamT.fromStream[M, A](innerInstance.pure(state))
 
-      def layerControl[A](cps: (StreamTC[M]#l ~> (M of Stream)#l) => M[A]): StreamT[M, A] =
-        StreamT.liftF(cps(new (StreamTC[M]#l ~> (M of Stream)#l) {
-          def apply[X](fa: StreamT[M, X]): M[Stream[X]] = StreamT.run(fa)
+      def layerControl[A](cps: (StreamTC[M]#l ~> (M of LazyList)#l) => M[A]): StreamT[M, A] =
+        StreamT.liftF(cps(new (StreamTC[M]#l ~> (M of LazyList)#l) {
+          def apply[X](fa: StreamT[M, X]): M[LazyList[X]] = StreamT.run(fa)
         }))
 
-      def zero[A](state: Stream[A]): Boolean = state.isEmpty
+      def zero[A](state: LazyList[A]): Boolean = state.isEmpty
     }
 
   implicit def streamTSync[F[_]](
       implicit F0: Sync[F],
-      M0: Monad[StreamT[F, *]],
-      AL0: Alternative[StreamT[F, *]]
+      M0: FlatMap[StreamT[F, *]]
   ): Sync[StreamT[F, *]] =
     new StreamTSync[F]() {
-      implicit val F  = F0
-      implicit val M  = M0
-      implicit val AL = AL0
-    }
-}
 
-private trait StreamTSync[F[_]] extends Sync[StreamT[F, *]] with StreamTMonadError[F, Throwable] {
-  implicit def F: Sync[F]
-  implicit def M: Monad[StreamT[F, *]]
-  implicit def AL: Alternative[StreamT[F, *]]
+      override def suspend[A](hint: Sync.Type)(thunk: => A): StreamT[F, A] =
+        StreamT.liftF(F0.delay(thunk))
 
-  import cats.effect.ExitCase
+      override def monotonic: StreamT[F, FiniteDuration] = StreamT.liftF(F0.monotonic)
 
-  def bracketCase[A, B](acquire: StreamT[F, A])(use: A => StreamT[F, B])(
-      release: (A, ExitCase[Throwable]) => StreamT[F, Unit]
-  ): StreamT[F, B] =
-    flatMap(StreamT.liftF(Ref.of[F, Boolean](false))) { ref =>
-      StreamT(F.flatMap(F.bracketCase[Step[F, A], Step[F, B]](acquire.next) {
-        case SNil() => F.pure(SNil())
-        case SCons(head, tail) => {
-          AL.combineK(use(head), M.flatMap(tail)(use)).next
-        }
-      } {
-        case (SNil(), _) => F.pure(())
-        case (SCons(head, _), ExitCase.Completed) => {
-          F.flatMap(release(head, ExitCase.Completed).next) {
-            case SNil()      => ref.set(true)
-            case SCons(_, _) => F.unit
+      override def realTime: StreamT[F, FiniteDuration] = StreamT.liftF(F0.realTime)
+
+      override def rootCancelScope: CancelScope = F0.rootCancelScope
+
+      override def forceR[A, B](fa: StreamT[F, A])(fb: StreamT[F, B]): StreamT[F, B] =
+        M0.flatMap(fa)(_ => fb)
+
+      override def uncancelable[A](body: Poll[StreamT[F, *]] => StreamT[F, A]): StreamT[F, A] = {
+        val natT: Poll[StreamT[F, *]] = new Poll[StreamT[F, *]] {
+          override def apply[B](fa: StreamT[F, B]): StreamT[F, B] = {
+            val step: F[Step[F, B]] = fa.next.flatMap {
+              case SCons(h, t) =>
+                F0.uncancelable { nat: Poll[F] =>
+                  nat(h.pure[F]).map(SCons[F, B](_, t))
+                }
+              case x @ SNil() => x.asInstanceOf[Step[F, B]].pure[F]
+            }
+            StreamT[F, B](step)
           }
         }
-        case (SCons(head, _), ec) => {
-          F.map(release(head, ec).next)(_ => ())
-        }
-      }) {
-        case s @ SCons(_, _) => F.map(ref.get)(b => if (b) SNil() else s)
-        case SNil()          => F.pure(SNil())
-      })
+        body(natT)
+      }
+
+      override def canceled: StreamT[F, Unit] = StreamT.liftF(F0.canceled)
+
+      override def onCancel[A](fa: StreamT[F, A], fin: StreamT[F, Unit]): StreamT[F, A] =
+        StreamT[F, A](F0.onCancel(fa.next, fin.next.void))
+
+      override def F: MonadError[F, Throwable] = F0
     }
-
-  def suspend[A](thunk: => StreamT[F, A]): StreamT[F, A] =
-    StreamT(F.defer(thunk.next))
-
 }
+
+private trait StreamTSync[F[_]] extends Sync[StreamT[F, *]] with StreamTMonadError[F, Throwable]
 
 private trait StreamTMonadErrorMonad[F[_]]
     extends MonadError[StreamT[F, *], Unit]

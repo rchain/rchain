@@ -6,8 +6,6 @@ import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.syntax._
 import coop.rchain.node.revvaultexport.StateBalances
 import coop.rchain.shared.Base16
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
 
 import java.io.PrintWriter
@@ -66,7 +64,7 @@ object StateBalanceMain {
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
-    val options   = StateOptions(args)
+    val options   = StateOptions(args.toIndexedSeq)
     val dataDir   = options.dataDir()
     val blockHash = options.blockHash()
     val shardId   = options.shardId()
@@ -76,9 +74,10 @@ object StateBalanceMain {
     }
 
     val stateBalancesFile = outputDir.resolve("stateBalances.csv")
-    implicit val tc       = Concurrent[Task]
 
-    val task: Task[Unit] = for {
+    implicit val tc = Async[IO]
+
+    val task: IO[Unit] = for {
       stateBalances <- StateBalances.read(
                         shardId,
                         blockHash,
@@ -95,6 +94,7 @@ object StateBalanceMain {
       }
     } yield ()
 
-    task.runSyncUnsafe()
+    import cats.effect.unsafe.implicits.global
+    task.unsafeRunSync()
   }
 }

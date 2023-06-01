@@ -1,6 +1,6 @@
 package coop.rchain.catscontrib
 
-import cats._
+import cats.{Id, Monad}
 import cats.syntax.all._
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers

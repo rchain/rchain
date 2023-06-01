@@ -12,7 +12,6 @@ import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.syntax._
 import coop.rchain.rholang.build.CompiledRholangTemplate
 import coop.rchain.rholang.interpreter.util.RevAddress
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
 import org.scalatest.matchers.should.Matchers

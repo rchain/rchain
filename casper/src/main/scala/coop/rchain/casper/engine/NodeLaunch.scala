@@ -1,8 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.Parallel
-import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, ContextShift, Timer}
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -25,9 +24,10 @@ import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 
 import scala.concurrent.duration.DurationInt
+import cats.effect.{Deferred, Temporal}
 
 final case class PeerMessage(peer: PeerNode, message: CasperMessage)
 
@@ -35,7 +35,7 @@ object NodeLaunch {
 
   // format: off
   def apply[F[_]
-    /* Execution */   : Concurrent: Parallel: ContextShift: Time: Timer
+    /* Execution */   : Async: Parallel
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever
     /* State */       : RPConfAsk: ConnectionsCell
     /* Rholang */     : RuntimeManager
@@ -43,7 +43,7 @@ object NodeLaunch {
     /* Diagnostics */ : Log: Metrics: Span] // format: on
   (
       packets: Stream[F, PeerMessage],
-      incomingBlocksQueue: Queue[F, BlockMessage],
+      incomingBlocksQueue: Channel[F, BlockMessage],
       conf: CasperConf,
       trimState: Boolean,
       disableStateExporter: Boolean,
@@ -118,7 +118,7 @@ object NodeLaunch {
     def waitForFirstConnection: F[Unit] =
       for {
         isEmpty <- ConnectionsCell[F].get.map(_.isEmpty)
-        _       <- (Timer[F].sleep(250.millis) *> waitForFirstConnection).whenA(isEmpty)
+        _       <- (Temporal[F].sleep(250.millis) *> waitForFirstConnection).whenA(isEmpty)
       } yield ()
 
     for {
@@ -140,7 +140,7 @@ object NodeLaunch {
     } yield ()
   }
 
-  def createGenesisBlockFromConfig[F[_]: Concurrent: ContextShift: RuntimeManager: Log](
+  def createGenesisBlockFromConfig[F[_]: Async: RuntimeManager: Log](
       validator: ValidatorIdentity,
       conf: CasperConf
   ): F[BlockMessage] =
@@ -162,7 +162,7 @@ object NodeLaunch {
       conf.genesisBlockData.systemContractPubKey
     )
 
-  def createGenesisBlock[F[_]: Concurrent: ContextShift: RuntimeManager: Log](
+  def createGenesisBlock[F[_]: Async: RuntimeManager: Log](
       validator: ValidatorIdentity,
       shardId: String,
       blockNumber: Long,

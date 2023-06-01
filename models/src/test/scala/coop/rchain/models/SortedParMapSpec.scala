@@ -12,11 +12,12 @@ import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.models.rholang.sorter.ordering._
 import coop.rchain.models.testImplicits._
 import coop.rchain.models.testUtils.TestUtils.sort
-import monix.eval.Coeval
+import cats.Eval
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class SortedParMapSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
@@ -177,5 +178,5 @@ class SortedParMapSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Ma
     assert(f(sorted) == f(unsorted))
 
   def isSorted[A: Sortable](a: A): Boolean =
-    a == Sortable[A].sortMatch[Coeval](a).value().term
+    a == Sortable[A].sortMatch[Eval](a).value.term
 }

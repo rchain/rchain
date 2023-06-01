@@ -41,12 +41,12 @@ class AddressToolsSpec extends AnyPropSpec with ScalaCheckDrivenPropertyChecks w
 
         val address = tools.fromPublicKey(pk).get.toBase58
 
-        val parsedAddress = tools.parse(address).right.get
+        val parsedAddress = tools.parse(address).toOption.get
 
         val ethAddress = Base16.encode(Keccak256.hash(pk.bytes.drop(1))).takeRight(40)
         val keyHash    = Keccak256.hash(Base16.unsafeDecode(ethAddress))
 
-        parsedAddress.prefix should be(prefix.deep)
+        parsedAddress.prefix should be(prefix)
         parsedAddress.keyHash should be(keyHash)
     }
   }

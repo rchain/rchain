@@ -1,6 +1,6 @@
 package coop.rchain.casper.merging
 
-import cats.effect.Resource
+import cats.effect.{IO, Resource}
 import cats.syntax.all._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.rholang.sysdeploys.CloseBlockDeploy
@@ -13,26 +13,23 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.merger.{EventLogIndex, EventLogMergingLogic}
 import coop.rchain.sdk.dag.merging.ConflictResolutionLogic
 import coop.rchain.shared.scalatestcontrib.effectTest
-import coop.rchain.shared.{Log, Time}
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.shared.Log
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class MergingCases extends AnyFlatSpec with Matchers {
 
-  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 5)
-  val genesis                    = genesisContext.genesisBlock
-  implicit val logEff            = Log.log[Task]
-  implicit val timeF: Time[Task] = new LogicalTime[Task]
+  val genesisContext  = GenesisBuilder.buildGenesis(validatorsNum = 5)
+  val genesis         = genesisContext.genesisBlock
+  implicit val logEff = Log.log[IO]
 
-  val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
-    dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
+  val runtimeManagerResource: Resource[IO, RuntimeManager[IO]] = for {
+    dir <- Resources.copyStorage[IO](genesisContext.storageDirectory)
+    kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[IO](dir))
     mergeableTag = BlockRandomSeed.nonNegativeMergeableTagName(
       genesis.shardId
     )
-    rm <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm, mergeableTag))
+    rm <- Resource.eval(Resources.mkRuntimeManagerAt[IO](kvm, mergeableTag))
   } yield rm
 
   /**
@@ -51,8 +48,8 @@ class MergingCases extends AnyFlatSpec with Matchers {
         val blockNum               = 1L
 
         for {
-          d1          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer1Key)
-          d2          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer2Key)
+          d1          <- ConstructDeploy.sourceDeployNowF[IO]("Nil", sec = payer1Key)
+          d2          <- ConstructDeploy.sourceDeployNowF[IO]("Nil", sec = payer2Key)
           userDeploys = Seq(d1, d2)
           blockData = BlockData(
             blockNum,

@@ -1,21 +1,20 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.models.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceImporter
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Stopwatch}
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 import fs2.{Pure, Stream}
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
+import cats.effect.{Ref, Temporal}
 
 /**
   * Last Finalized State processor for receiving Rholang state.
@@ -54,6 +53,7 @@ object LfsTupleSpaceRequester {
     def getNext(resend: Boolean): (ST[Key], Seq[Key]) = {
       val requested = d
         .filter { case (_, v) => v == Init || (resend && v == Requested) }
+        .view
         .mapValues(_ => Requested)
       ST(d ++ requested) -> requested.keysIterator.toSeq
     }
@@ -94,9 +94,9 @@ object LfsTupleSpaceRequester {
     * @param validateTupleSpaceItems Check if received statet chunk is valid
     * @return fs2.Stream processing all tuple space state
     */
-  def stream[F[_]: Concurrent: Timer: Log](
+  def stream[F[_]: Async: Log](
       fringe: FinalizedFringe,
-      tupleSpaceMessageQueue: Queue[F, StoreItemsMessage],
+      tupleSpaceMessageQueue: Channel[F, StoreItemsMessage],
       requestForStoreItem: (StatePartPath, Int) => F[Unit],
       requestTimeout: FiniteDuration,
       stateImporter: RSpaceImporter[F],
@@ -112,7 +112,7 @@ object LfsTupleSpaceRequester {
 
     def createStream(
         st: Ref[F, ST[StatePartPath]],
-        requestQueue: Queue[F, Boolean]
+        requestQueue: Channel[F, Boolean]
     ): Stream[F, ST[StatePartPath]] = {
 
       def broadcastStreams(ids: Seq[StatePartPath]): Stream[Pure, Stream[F, Unit]] = {
@@ -132,7 +132,7 @@ object LfsTupleSpaceRequester {
         */
       val requestStream = for {
         // Request queue is a trigger when to check the state
-        resend <- requestQueue.dequeueChunk(maxSize = 1)
+        resend <- requestQueue.stream
 
         // Check if stream is finished (no more requests)
         isEnd <- Stream.eval(st.get.map(_.isFinished))
@@ -149,7 +149,7 @@ object LfsTupleSpaceRequester {
         */
       val responseStream = for {
         // Response queue is incoming message source / async callback handler
-        msg <- tupleSpaceMessageQueue.dequeue
+        msg <- tupleSpaceMessageQueue.stream
 
         StoreItemsMessage(startPath, lastPath, historyItems, dataItems) = msg
 
@@ -158,7 +158,7 @@ object LfsTupleSpaceRequester {
 
         // Add chunk paths for requesting and trigger request queue (without resend of already requested)
         _ <- Stream
-              .eval(st.update(_.add(Set(lastPath))) >> requestQueue.enqueue1(false))
+              .eval(st.update(_.add(Set(lastPath))) >> requestQueue.trySend(false))
               .whenA(isReceived)
 
         // Import chunk to RSpace
@@ -207,7 +207,7 @@ object LfsTupleSpaceRequester {
                 _ <- st.update(_.done(startPath))
 
                 // Trigger request queue again to process finished chunks
-                _ <- requestQueue.enqueue1(false)
+                _ <- requestQueue.trySend(false)
               } yield ()
             }.whenA(isReceived)
       } yield ()
@@ -216,7 +216,7 @@ object LfsTupleSpaceRequester {
         * Timeout to resend block requests if response is not received
         */
       val timeoutMsg     = s"No tuple space state responses for $requestTimeout. Resending requests."
-      val resendRequests = requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
+      val resendRequests = requestQueue.trySend(true) <* Log[F].warn(timeoutMsg)
 
       /**
         * Final result! Concurrently pulling requests and handling responses
@@ -238,11 +238,11 @@ object LfsTupleSpaceRequester {
       st <- Ref.of[F, ST[StatePartPath]](ST(Seq(startRequest)))
 
       // Queue to trigger processing of requests. `True` to resend requests.
-      requestQueue <- Queue.bounded[F, Boolean](maxSize = 2)
+      requestQueue <- Channel.bounded[F, Boolean](capacity = 2)
 
       // Light the fire! / Starts the first request for chunk of state
       // - `true` if requested chunks should be re-requested
-      _ <- requestQueue.enqueue1(false)
+      _ <- requestQueue.trySend(false)
 
       // Create tuple space state receiver stream
     } yield createStream(st, requestQueue)

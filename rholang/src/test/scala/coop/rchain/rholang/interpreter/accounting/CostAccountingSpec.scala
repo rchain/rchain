@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter.accounting
 import cats.Parallel
 import cats.data.Chain
 import cats.effect._
+import cats.effect.unsafe.implicits.global
 import cats.mtl.FunctorTell
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -21,8 +22,6 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Checkpoint, Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
 import org.scalatest.{AppendedClues, Assertion}
@@ -45,15 +44,15 @@ class CostAccountingSpec
       initialPhlo: Long,
       contract: String
   ): (EvaluateResult, Chain[Cost]) = {
-    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val kvm                       = InMemoryStoreManager[Task]
+    implicit val logF: Log[IO]           = new Log.NOPLog[IO]
+    implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+    implicit val kvm                     = InMemoryStoreManager[IO]()
 
     val resources = for {
-      costLog         <- costLog[Task]()
+      costLog         <- costLog[IO]()
       store           <- kvm.rSpaceStores
-      spaces          <- createRuntimesWithCostLog[Task](store, costLog)
+      spaces          <- createRuntimesWithCostLog[IO](store, costLog)
       (runtime, _, _) = spaces
     } yield (runtime, costLog)
 
@@ -64,10 +63,10 @@ class CostAccountingSpec
             runtime.evaluate(contract, Cost(initialPhlo))
           }
       }
-      .runSyncUnsafe(75.seconds)
+      .unsafeRunSync()
   }
 
-  private def createRuntimesWithCostLog[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  private def createRuntimesWithCostLog[F[_]: Async: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       costLog: FunctorTell[F, Chain[Cost]],
       initRegistry: Boolean = false,
@@ -99,17 +98,17 @@ class CostAccountingSpec
       term: String
   ): (EvaluateResult, EvaluateResult) = {
 
-    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val ms: Metrics.Source        = Metrics.BaseSource
-    implicit val kvm                       = InMemoryStoreManager[Task]
+    implicit val logF: Log[IO]           = new Log.NOPLog[IO]
+    implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+    implicit val ms: Metrics.Source      = Metrics.BaseSource
+    implicit val kvm                     = InMemoryStoreManager[IO]()
 
     val evaluaResult = for {
-      costLog                     <- costLog[Task]()
-      cost                        <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      costLog                     <- costLog[IO]()
+      cost                        <- CostAccounting.emptyCost[IO](implicitly, metricsEff, costLog, ms)
       store                       <- kvm.rSpaceStores
-      spaces                      <- Resources.createRuntimes[Task](store)
+      spaces                      <- Resources.createRuntimes[IO](store)
       (runtime, replayRuntime, _) = spaces
       result <- {
         implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
@@ -125,7 +124,7 @@ class CostAccountingSpec
       }
     } yield result
 
-    evaluaResult.runSyncUnsafe(75.seconds)
+    evaluaResult.unsafeRunSync()
   }
 
   // Uses Godel numbering and a https://en.wikipedia.org/wiki/Mixed_radix
@@ -267,7 +266,7 @@ class CostAccountingSpec
     assert(result2._1.cost == result2._2.cost)
 
     for (i <- 1 to 10000) {
-      val long     = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
+      val long     = ((r.nextLong() % 0X144000000L) + 0X144000000L) % 0X144000000L
       val contract = fromLong(long)
       if (contract != "") {
         val result = evaluateAndReplay(Cost(Integer.MAX_VALUE), contract)
@@ -282,14 +281,15 @@ class CostAccountingSpec
     val repetitions = 20
     val first       = block
     // execute in parallel to trigger different interleaves
-    val subsequents = (1 to repetitions).par.map(_ => block).toList
+    val subsequents = (1 to repetitions).map(_ => block).toList
     // check assertions sequentially to avoid "suppressed exceptions" output on assertion failure
     subsequents.foreach { subsequent =>
       val expected = first._1.cost.value
       val actual   = subsequent._1.cost.value
       if (expected != actual) {
-        assert(subsequent._2.map(_ + "\n") == first._2.map(_ + "\n"))
-          .withClue(s"Cost was not repeatable, expected $expected, got $actual.\n")
+        assert(
+          subsequent._2.map(_.toString).map(_ + "\n") == first._2.map(_.toString).map(_ + "\n")
+        ).withClue(s"Cost was not repeatable, expected $expected, got $actual.\n")
       }
     }
   }
@@ -336,7 +336,7 @@ class CostAccountingSpec
   }
 
   private def elementCounts[A](list: Iterable[A]): Set[(A, Int)] =
-    list.groupBy(identity).mapValues(_.size).toSet
+    list.groupBy(identity).view.mapValues(_.size).toSet
 
   it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in {
     forAll(contracts) { (contract: String, expectedTotalCost: Long) =>

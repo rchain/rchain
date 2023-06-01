@@ -1,5 +1,6 @@
 package coop.rchain.rholang
 
+import cats.effect.IO
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
@@ -9,12 +10,11 @@ import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax._
 import coop.rchain.shared.{Base16, Log}
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import cats.effect.unsafe.implicits.global
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.DurationInt
 
 class StoragePrinterSpec extends AnyFlatSpec with Matchers {
   private val tmpPrefix   = "rspace-store-"
@@ -24,14 +24,14 @@ class StoragePrinterSpec extends AnyFlatSpec with Matchers {
   )
   private val SHARD_ID = "root-shard"
 
-  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
-  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  implicit val logF: Log[IO]            = new Log.NOPLog[IO]
+  implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+  implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
 
   behavior of "StoragePrinter.prettyPrintUnmatchedSends"
 
   it should "print unmatched sends" in {
-    mkRuntime[Task](tmpPrefix)
+    mkRuntime[IO](tmpPrefix)
       .use { runtime =>
         for {
           _ <- {
@@ -43,7 +43,8 @@ class StoragePrinterSpec extends AnyFlatSpec with Matchers {
           _      = assert(pretty == "@{1}!(Nil)")
         } yield ()
       }
-      .runSyncUnsafe(maxDuration)
+      .timeout(maxDuration)
+      .unsafeRunSync()
   }
 
   private def mkDeploy(term: String) =
@@ -61,7 +62,7 @@ class StoragePrinterSpec extends AnyFlatSpec with Matchers {
     )
 
   it should "print unmatched sends of multiple deploys" in {
-    mkRuntime[Task](tmpPrefix)
+    mkRuntime[IO](tmpPrefix)
       .use { runtime =>
         val deploy1 = "@1!(Nil)"
         val deploy2 = "@2!(Nil)"
@@ -79,11 +80,12 @@ class StoragePrinterSpec extends AnyFlatSpec with Matchers {
           _      = assert(unmatchedSends == result)
         } yield ()
       }
-      .runSyncUnsafe(maxDuration)
+      .timeout(maxDuration)
+      .unsafeRunSync()
   }
 
   it should "not print unmatched sends from previous deploys" in {
-    mkRuntime[Task](tmpPrefix)
+    mkRuntime[IO](tmpPrefix)
       .use { runtime =>
         for {
           _      <- runtime.evaluate("@0!(Nil) | for(_ <- @1) { Nil }")
@@ -95,6 +97,7 @@ class StoragePrinterSpec extends AnyFlatSpec with Matchers {
           _ = assert(unmatchedSends == "@{2}!(Nil)")
         } yield ()
       }
-      .runSyncUnsafe(maxDuration)
+      .timeout(maxDuration)
+      .unsafeRunSync()
   }
 }

@@ -1,8 +1,7 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
-import cats.effect.concurrent.Ref
+import cats.effect.{Async, Ref, Resource, Sync, Temporal}
 import cats.mtl._
 import cats.syntax.all._
 import com.typesafe.config.Config
@@ -14,7 +13,6 @@ import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfState}
 import coop.rchain.comm.rp._
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.monix.Monixable
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.runtime.NodeCallCtx.NodeCallCtxReader
 import coop.rchain.node.runtime.NodeRuntime._
@@ -22,17 +20,15 @@ import coop.rchain.node.{diagnostics, effects}
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import monix.execution.Scheduler
-
 import scala.concurrent.duration._
 
 object NodeRuntime {
   type LocalEnvironment[F[_]] = ApplicativeLocal[F, NodeCallCtx]
 
-  def start[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: Log](
+  def start[F[_]: Async: Parallel: Log](
       nodeConf: NodeConf,
       kamonConf: Config
-  )(implicit scheduler: Scheduler): F[Unit] = {
+  ): F[Unit] = {
 
     val nodeCallCtxReader: NodeCallCtxReader[F] = NodeCallCtxReader[F]()
     import nodeCallCtxReader._
@@ -42,15 +38,13 @@ object NodeRuntime {
       * although they can be generated with cats.tagless @autoFunctorK macros but support is missing for IntelliJ.
       * https://github.com/typelevel/cats-tagless/issues/60 (Cheers, Marcin!!)
       */
-    implicit val lg: Log[ReaderNodeCallCtx]       = Log[F].mapK(effToEnv)
-    implicit val tm: Timer[ReaderNodeCallCtx]     = Timer[F].mapK(effToEnv)
-    implicit val mn: Monixable[ReaderNodeCallCtx] = Monixable[F].mapK(effToEnv, NodeCallCtx.init)
+    implicit val lg: Log[ReaderNodeCallCtx] = Log[F].mapK(effToEnv)
 
     for {
       id <- NodeEnvironment.create[F](nodeConf)
 
       // Create NodeRuntime instance
-      runtime = new NodeRuntime[ReaderNodeCallCtx](nodeConf, kamonConf, id, scheduler)
+      runtime = new NodeRuntime[ReaderNodeCallCtx](nodeConf, kamonConf, id)
 
       // Run reader layer with initial state
       _ <- runtime.main.run(NodeCallCtx.init)
@@ -74,18 +68,12 @@ object NodeRuntime {
     } yield ()
 }
 
-class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShift: LocalEnvironment: Log] private[node] (
+class NodeRuntime[F[_]: Parallel: Async: LocalEnvironment: Log] private[node] (
     nodeConf: NodeConf,
     kamonConf: Config,
-    id: NodeIdentifier,
-    scheduler: Scheduler
+    id: NodeIdentifier
 ) {
-  // Main scheduler for all CPU bounded tasks
-  implicit val mainSheduler = scheduler
 
-  // TODO: revise use of schedulers for gRPC
-  private[this] val grpcScheduler =
-    Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
   /**
@@ -118,8 +106,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
             nodeConf.tls.certificatePath,
             nodeConf.tls.keyPath,
             nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
-            nodeConf.protocolClient.grpcStreamChunkSize.toInt,
-            grpcScheduler
+            nodeConf.protocolClient.grpcStreamChunkSize.toInt
           )
       }
 
@@ -142,7 +129,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
 
       // Node discovery service (Kademlia)
       kademliaRPC = {
-        implicit val (p, g, m) = (rpConfAsk, grpcScheduler, metrics)
+        implicit val (p, m) = (rpConfAsk, metrics)
         effects.kademliaRPC(
           nodeConf.protocolServer.networkId,
           nodeConf.protocolClient.networkTimeout
@@ -166,7 +153,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         for {
           _ <- NodeDiscovery[F].discover
           _ <- Connect.findAndConnect[F](Connect.connect[F])
-          _ <- Timer[F].sleep(20.seconds)
+          _ <- Temporal[F].sleep(20.seconds)
         } yield ()
       }
 
@@ -178,7 +165,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         for {
           _ <- dynamicIpCheck(nodeConf).whenA(nodeConf.protocolServer.dynamicIp)
           _ <- Connect.clearConnections[F]
-          _ <- Timer[F].sleep(10.minutes)
+          _ <- Temporal[F].sleep(10.minutes)
         } yield ()
       }
 
@@ -213,8 +200,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                 adminWebApi,
                 reportRoutes,
                 nodeConf,
-                kamonConf,
-                grpcScheduler
+                kamonConf
               )
           // Return node launch stream
         } yield nodeLaunch

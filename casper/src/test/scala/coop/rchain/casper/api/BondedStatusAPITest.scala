@@ -1,6 +1,7 @@
 package coop.rchain.casper.api
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.testing.scalatest.AsyncIOSpec
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -21,19 +22,18 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
-import monix.eval.Task
-import monix.testing.scalatest.MonixTaskTest
 import org.mockito.cats.IdiomaticMockitoCats
 import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.collection.immutable.Seq
 
 import scala.collection.immutable.SortedMap
 
 class BondedStatusAPITest
     extends AsyncFlatSpec
-    with MonixTaskTest
+    with AsyncIOSpec
     with Matchers
     with EitherValues
     with BlockGenerator
@@ -54,16 +54,16 @@ class BondedStatusAPITest
   )
 
   "bondStatus" should "return true for bonded validator" in {
-    implicit val (c, log, bds, bs, rm, sp) = createMocks[Task]
+    implicit val (log, bds, bs, rm, sp) = createMocks[IO]
 
     for {
-      v1 <- Sync[Task].delay(ValidatorIdentity(keys.head._1))
+      v1 <- IO.delay(ValidatorIdentity(keys.head._1))
       v2 = ValidatorIdentity(keys(1)._1)
       v3 = ValidatorIdentity(keys(2)._1)
 
-      _ <- bondedStatus(v1, v1.publicKey, gB) shouldBeF true
-      _ <- bondedStatus(v2, v2.publicKey, gB) shouldBeF true
-      _ <- bondedStatus(v3, v3.publicKey, gB) shouldBeF true
+      _ <- bondedStatus[IO](v1, v1.publicKey, gB) shouldBeF true
+      _ <- bondedStatus[IO](v2, v2.publicKey, gB) shouldBeF true
+      _ <- bondedStatus[IO](v3, v3.publicKey, gB) shouldBeF true
     } yield {
       bs.get(Seq(gB.blockHash)) wasCalled 3.times
       verifyNoMoreInteractions(bs)
@@ -73,10 +73,10 @@ class BondedStatusAPITest
   }
 
   "bondStatus" should "return false for not bonded validators" in {
-    implicit val (c, log, bds, bs, rm, sp) = createMocks[Task]
-    val genesisValidator                   = ValidatorIdentity(keys.head._1)
+    implicit val (log, bds, bs, rm, sp) = createMocks[IO]
+    val genesisValidator                = ValidatorIdentity(keys.head._1)
     for {
-      _ <- bondedStatus(genesisValidator, createValidator.publicKey, gB) shouldBeF false
+      _ <- bondedStatus[IO](genesisValidator, createValidator.publicKey, gB) shouldBeF false
     } yield {
       bs.get(Seq(gB.blockHash)) wasCalled once
       verifyNoMoreInteractions(bs)
@@ -86,20 +86,21 @@ class BondedStatusAPITest
   }
 
   "bondStatus" should "return true for newly bonded validator" in {
-    implicit val (c, log, bds, bs, _, sp) = createMocks[Task]
+    implicit val (log, bds, bs, _, sp) = createMocks[IO]
 
     val genesisValidator = ValidatorIdentity(keys.head._1)
     val newValidator     = createValidator
 
     // Overriding mock for RuntimeManager, as it differ from the standard one
-    val stake                             = 1000L
-    val newComputeBondsResult             = initialComputeBondsResult + (newValidator.publicKey.bytes.toByteString -> stake)
-    implicit val rm: RuntimeManager[Task] = mock[RuntimeManager[Task]]
-    rm.computeBonds(*) returns initialComputeBondsResult.pure andThen newComputeBondsResult.pure
+    val stake                           = 1000L
+    val newComputeBondsResult           = initialComputeBondsResult + (newValidator.publicKey.bytes.toByteString -> stake)
+    implicit val rm: RuntimeManager[IO] = mock[RuntimeManager[IO]]
+    rm.computeBonds(*) returns initialComputeBondsResult.pure[IO] andThen newComputeBondsResult
+      .pure[IO]
 
-    for {
-      _ <- BondingUtil.bondingDeploy[Task](stake, newValidator.privateKey, shardId = gB.shardId)
-      _ <- bondedStatus(genesisValidator, newValidator.publicKey, gB) shouldBeF false
+    val a: IO[Unit] = for {
+      _ <- BondingUtil.bondingDeploy[IO](stake, newValidator.privateKey, shardId = gB.shardId)
+      _ <- bondedStatus[IO](genesisValidator, newValidator.publicKey, gB) shouldBeF false
       b1 = getRandomBlock(
         setJustifications = Seq(gB.blockHash).some,
         setBonds = newComputeBondsResult.some,
@@ -107,7 +108,7 @@ class BondedStatusAPITest
       )
 
       // b1 is now finalized, hence n4 is now bonded
-      _ <- bondedStatus(genesisValidator, newValidator.publicKey, b1) shouldBeF true
+      _ <- bondedStatus[IO](genesisValidator, newValidator.publicKey, b1) shouldBeF true
     } yield {
       bs.get(Seq(gB.blockHash)) wasCalled twice
       verifyNoMoreInteractions(bs)
@@ -115,11 +116,11 @@ class BondedStatusAPITest
       rm.computeBonds(gB.postStateHash) wasCalled once
       rm.computeBonds(b1.postStateHash) wasCalled once
     }
+    a
   }
 
-  private def createMocks[F[_]: Concurrent: Sync]
-      : (Concurrent[F], Log[F], BlockDagStorage[F], BlockStore[F], RuntimeManager[F], Span[F]) = {
-    val c  = Concurrent[F]
+  private def createMocks[F[_]: Async]
+      : (Log[F], BlockDagStorage[F], BlockStore[F], RuntimeManager[F], Span[F]) = {
     val sp = mock[Span[F]]
 
     val log = mock[Log[F]]
@@ -151,7 +152,7 @@ class BondedStatusAPITest
     val rm = mock[RuntimeManager[F]]
     rm.computeBonds(*) returnsF initialComputeBondsResult
 
-    (c, log, bds, bs, rm, sp)
+    (log, bds, bs, rm, sp)
   }
 
   private def toValidatorOpt(pk: PrivateKey): Option[Validator] = pk.bytes.toByteString.some
@@ -168,7 +169,7 @@ class BondedStatusAPITest
       Set(m.blockHash)
     )
 
-  private def bondedStatus[F[_]: Concurrent: BlockDagStorage: BlockStore: Log: RuntimeManager: Span](
+  private def bondedStatus[F[_]: Async: BlockDagStorage: BlockStore: Log: RuntimeManager: Span](
       validatorIdOpt: ValidatorIdentity,
       publicKey: PublicKey,
       block: BlockMessage

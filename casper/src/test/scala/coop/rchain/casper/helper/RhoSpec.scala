@@ -1,6 +1,7 @@
 package coop.rchain.casper.helper
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, IO, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.TestUtil
@@ -20,8 +21,7 @@ import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime, SystemProcesses}
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import coop.rchain.store.{InMemoryStoreManager, KeyValueStoreManager}
 import org.scalatest.AppendedClues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,9 +37,9 @@ class RhoSpec(
     with AppendedClues
     with Matchers {
 
-  implicit val logger: Log[Task]         = Log.log[Task]
-  implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
-  implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+  implicit val logger: Log[IO]         = Log.log[IO]
+  implicit val metricsEff: Metrics[IO] = new Metrics.MetricsNOP[IO]
+  implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
 
   private val printer  = PrettyPrinter()
   private val SHARD_ID = "root-shard"
@@ -75,7 +75,7 @@ class RhoSpec(
 
   def hasFailures(assertions: List[RhoTestAssertion]) = assertions.find(_.isSuccess).isDefined
 
-  private def testFrameworkContracts[F[_]: Log: Concurrent: Span](
+  private def testFrameworkContracts[F[_]: Log: Async: Span](
       testResultCollector: TestResultCollector[F]
   ): Seq[SystemProcesses.Definition[F]] = {
     val testResultCollectorService =
@@ -134,12 +134,12 @@ class RhoSpec(
       otherLibs: Seq[Signed[DeployData]],
       timeout: FiniteDuration,
       shardId: String
-  ): Task[TestResult] =
-    TestResultCollector[Task].flatMap { testResultCollector =>
+  ): IO[TestResult] =
+    TestResultCollector[IO].flatMap { testResultCollector =>
       val genesis = GenesisBuilder.buildGenesis(genesisParameters)
 
-      val runtimeResource = copyStorage[Task](genesis.storageDirectory)
-        .evalMap(mkTestRNodeStoreManager[Task])
+      val runtimeResource = copyStorage[IO](genesis.storageDirectory)
+        .evalMap(mkTestRNodeStoreManager[IO])
         .evalMap(_.rSpaceStores)
         .evalMap(
           RhoRuntime.createRuntime(
@@ -152,7 +152,7 @@ class RhoSpec(
       runtimeResource.use { runtime =>
         for {
           _ <- logger.info("Starting tests from " + testObject.path)
-          _ <- setupRuntime[Task](
+          _ <- setupRuntime[IO](
                 runtime,
                 otherLibs
               )
@@ -208,7 +208,7 @@ class RhoSpec(
 
   val result =
     getResults(testObject, extraNonGenesisDeploys, executionTimeout, genesisParameters._3.shardId)
-      .runSyncUnsafe(Duration.Inf)
+      .unsafeRunSync()
 
   it should "finish execution within timeout" in {
     if (!result.hasFinished) fail(s"Timeout of $executionTimeout expired")

@@ -1,8 +1,8 @@
 package coop.rchain.rholang
 
 import cats.Parallel
-import cats.effect.ExitCase.Error
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.effect.kernel.Resource.ExitCase
+import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -29,7 +29,7 @@ object Resources {
     Resource.makeCase(Sync[F].delay(Files.createTempDirectory(prefix)))(
       (path, exitCase) =>
         Sync[F].delay(exitCase match {
-          case Error(ex) =>
+          case ExitCase.Errored(ex) =>
             logger
               .error(
                 s"Exception thrown while using the tempDir '$path'. Temporary dir NOT deleted.",
@@ -39,44 +39,41 @@ object Resources {
         })
     )
 
-  def mkRhoISpace[F[_]: Concurrent: Parallel: ContextShift: KeyValueStoreManager: Metrics: Span: Log](
-      implicit scheduler: Scheduler
-  ): F[RhoISpace[F]] = {
+  def mkRhoISpace[F[_]: Async: Parallel: KeyValueStoreManager: Metrics: Span: Log]
+      : F[RhoISpace[F]] = {
     import coop.rchain.rholang.interpreter.storage._
 
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
     for {
       store <- KeyValueStoreManager[F].rSpaceStores
-      space <- RSpace.create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
+      space <- RSpace.create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                store
+              )
     } yield space
   }
 
-  def mkRuntime[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
+  def mkRuntime[F[_]: Async: Parallel: Metrics: Span: Log](
       prefix: String
-  )(implicit scheduler: Scheduler): Resource[F, RhoRuntime[F]] =
+  ): Resource[F, RhoRuntime[F]] =
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
       .evalMap(_.rSpaceStores)
       .evalMap(RhoRuntime.createRuntime(_, Par()))
 
-  def mkRuntimes[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
+  def mkRuntimes[F[_]: Async: Parallel: Metrics: Span: Log](
       prefix: String,
       initRegistry: Boolean = false
-  )(
-      implicit scheduler: Scheduler
   ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
       .evalMap(_.rSpaceStores)
       .evalMap(createRuntimes(_, initRegistry = initRegistry))
 
-  def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  def createRuntimes[F[_]: Async: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
-  )(
-      implicit scheduler: Scheduler
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]

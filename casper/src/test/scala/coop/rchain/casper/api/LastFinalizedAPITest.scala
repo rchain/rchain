@@ -1,6 +1,8 @@
 package coop.rchain.casper.api
 
 import cats.Applicative
+import cats.effect.IO
+import cats.effect.testing.scalatest.AsyncIOSpec
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, DagMessageState, DagRepresentation, Message}
@@ -13,8 +15,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.testing.scalatest.MonixTaskTest
 import org.mockito.IdiomaticMockito
 import org.mockito.cats.IdiomaticMockitoCats
 import org.scalatest.EitherValues
@@ -25,8 +25,8 @@ import scala.collection.immutable.SortedMap
 
 class LastFinalizedAPITest
     extends AsyncFlatSpec
-    with MonixTaskTest
     with Matchers
+    with AsyncIOSpec
     with EitherValues
     with BlockGenerator
     with BlockDagStorageFixture
@@ -42,9 +42,9 @@ class LastFinalizedAPITest
   private val createSender    = createValidator.publicKey.bytes.toByteString
 
   "isFinalized" should "return true for a block placed in the DAG" in {
-    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    implicit val (log, sp, rm, bs, bds) = createMocks[IO]
     for {
-      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(knownHash)
     } yield {
       res.value shouldBe true
@@ -56,9 +56,9 @@ class LastFinalizedAPITest
   }
 
   "isFinalized" should "return false for a block not placed in the DAG" in {
-    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    implicit val (log, sp, rm, bs, bds) = createMocks[IO]
     for {
-      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(unknownHash)
     } yield {
       res.value shouldBe false
@@ -70,9 +70,9 @@ class LastFinalizedAPITest
   }
 
   "isFinalized" should "not throw exception and return false for wrong hash" in {
-    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    implicit val (log, sp, rm, bs, bds) = createMocks[IO]
     for {
-      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
 
       // No exception is thrown here, because the decoding implementation simply discards non-hex characters
       res <- blockApi.isFinalized(wrongHash)
@@ -86,9 +86,9 @@ class LastFinalizedAPITest
   }
 
   "isFinalized" should "return true for hash which becomes known after removing wrong characters" in {
-    implicit val (log, sp, rm, bs, bds) = createMocks[Task]
+    implicit val (log, sp, rm, bs, bds) = createMocks[IO]
     for {
-      blockApi <- createBlockApi[Task]("root", 50, createValidator.some)
+      blockApi <- createBlockApi[IO]("root", 50, createValidator.some)
       res      <- blockApi.isFinalized(wrongHash + knownHash)
     } yield {
       res.value shouldBe true

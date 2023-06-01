@@ -2,7 +2,6 @@ package coop.rchain.comm.discovery
 
 import cats.syntax.all._
 import cats.Monad
-
 import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.Metrics
 
@@ -21,5 +20,5 @@ object KademliaHandleRPC {
     Metrics[F]
       .incrementCounter("handle.lookup") >> KademliaStore[F]
       .updateLastSeen(peer) >> KademliaStore[F]
-      .lookup(id)
+      .lookup(id.toIndexedSeq)
 }

@@ -1,9 +1,9 @@
 package coop.rchain.store
 
 import cats.Applicative
-import cats.effect.Concurrent
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.Async
 import cats.syntax.all._
+import cats.effect.{Deferred, Ref}
 
 trait KeyValueCache[F[_], K, V] {
   def get(key: K, fallback: F[V]): F[V]
@@ -17,7 +17,7 @@ final case class NoOpKeyValueCache[F[_]: Applicative, K, V]() extends KeyValueCa
   override def toMap: F[Map[K, V]]               = Map.empty[K, V].pure[F]
 }
 
-class LazyAdHocKeyValueCache[F[_]: Concurrent, K, V] private[LazyAdHocKeyValueCache] (
+class LazyAdHocKeyValueCache[F[_]: Async, K, V] private[LazyAdHocKeyValueCache] (
     cache: Ref[F, Map[K, Deferred[F, V]]]
 ) extends KeyValueCache[F, K, V] {
 
@@ -53,7 +53,7 @@ class LazyAdHocKeyValueCache[F[_]: Concurrent, K, V] private[LazyAdHocKeyValueCa
   * Similar to [[LazyKeyValueCache]] but allows to delay initialization of populate function till get call
   */
 object LazyAdHocKeyValueCache {
-  def apply[F[_]: Concurrent, K, V]: F[LazyAdHocKeyValueCache[F, K, V]] =
+  def apply[F[_]: Async, K, V]: F[LazyAdHocKeyValueCache[F, K, V]] =
     for {
       cache <- Ref.of[F, Map[K, Deferred[F, V]]](Map.empty[K, Deferred[F, V]])
     } yield new LazyAdHocKeyValueCache(cache)

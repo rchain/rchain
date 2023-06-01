@@ -1,7 +1,5 @@
 package coop.rchain.rspace
 
-import cats.effect._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Parallel, _}
 import com.typesafe.scalalogging.Logger
@@ -18,8 +16,8 @@ import monix.execution.atomic.AtomicAny
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import scala.concurrent.ExecutionContext.Implicits.global
+import cats.effect.{Async, IO, Ref}
+import cats.effect.unsafe.implicits.global
 
 trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with OptionValues {
   type T    = ISpace[F, C, P, A, K]
@@ -27,13 +25,12 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
   type HR   = HistoryRepository[F, C, P, A, K]
   type AtST = AtomicAny[ST]
 
-  implicit def concurrentF: Concurrent[F]
+  implicit def concurrentF: Async[F]
   implicit def parF: Parallel[F]
   implicit def logF: Log[F]
   implicit def metricsF: Metrics[F]
   implicit def spanF: Span[F]
   implicit def monadF: Monad[F]
-  implicit def contextShiftF: ContextShift[F]
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
@@ -62,7 +59,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
       sk: Serialize[K]
   ): S = {
 
-    val kvm = InMemoryStoreManager[F]
+    val kvm = InMemoryStoreManager[F]()
 
     run(for {
       stores                            <- kvm.rSpaceStores
@@ -88,28 +85,13 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
   }
 }
 
-trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
-  import scala.concurrent.ExecutionContext
-
-  implicit override val concurrentF: Concurrent[Task] =
-    new monix.eval.instances.CatsConcurrentEffectForTask()(
-      monix.execution.Scheduler.Implicits.global,
-      Task.defaultOptions
-    )
-  implicit val logF: Log[Task]         = Log.log[Task]
-  implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
-  implicit val spanF: Span[Task]       = NoopSpan[Task]()
-
-  implicit override val monadF: Monad[Task] = concurrentF
-  implicit override val contextShiftF: ContextShift[Task] = new ContextShift[Task] {
-    override def shift: Task[Unit] =
-      Task.shift
-    override def evalOn[B](ec: ExecutionContext)(fa: Task[B]): Task[B] =
-      Task.shift(ec).bracket(_ => fa)(_ => Task.shift)
-  }
-
-  import monix.execution.Scheduler.Implicits.global
-  override def run[RES](f: Task[RES]): RES = f.runSyncUnsafe()
+trait IOTests[C, P, A, R, K] extends StorageTestsBase[IO, C, P, R, K] {
+  implicit val concurrentF: Async[IO]    = IO.asyncForIO
+  implicit val monadF: Monad[IO]         = Monad[IO]
+  implicit val logF: Log[IO]             = Log.log[IO]
+  implicit val metricsF: Metrics[IO]     = new Metrics.MetricsNOP[IO]()
+  implicit val spanF: Span[IO]           = NoopSpan[IO]()
+  override def run[RES](f: IO[RES]): RES = f.unsafeRunSync()
 }
 
 abstract class InMemoryHotStoreTestsBase[F[_]]
@@ -121,7 +103,10 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
       (hr, ts) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, String, Pattern, String, StringsCaptor](hr, atomicStore)
+          new RSpace[F, String, Pattern, String, StringsCaptor](
+            hr,
+            atomicStore
+          )
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

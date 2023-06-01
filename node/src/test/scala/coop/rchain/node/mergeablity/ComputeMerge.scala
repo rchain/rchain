@@ -1,8 +1,7 @@
 package coop.rchain.node.mergeablity
 
 import cats.Parallel
-import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
@@ -47,7 +46,7 @@ trait ComputeMerge {
     *        B1  "contract @0(0) = { 0 } | for (@1 <- @0) { 0 }"
     *
     */
-  def computeMergeCase[F[_]: Concurrent: Span: Log: Metrics: Parallel: ContextShift](
+  def computeMergeCase[F[_]: Async: Span: Log: Metrics: Parallel](
       baseDeployRand: Blake2b512Random,
       baseDeploySources: Seq[Signed[DeployData]],
       leftDeploySources: Seq[Signed[DeployData]],

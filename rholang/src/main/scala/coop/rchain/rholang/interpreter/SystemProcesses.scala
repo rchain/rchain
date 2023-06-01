@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.Async
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.Logger
@@ -21,6 +20,7 @@ import coop.rchain.rspace.{ContResult, Result}
 import coop.rchain.shared.Base16
 
 import scala.util.Try
+import cats.effect.Ref
 
 //TODO: Make each of the system processes into a case class,
 //      so that implementation is not repetitive.
@@ -97,7 +97,7 @@ object SystemProcesses {
     val REG_OPS: Long            = 15L
     val SYS_AUTHTOKEN_OPS: Long  = 16L
   }
-  final case class ProcessContext[F[_]: Concurrent: Span](
+  final case class ProcessContext[F[_]: Async: Span](
       space: RhoTuplespace[F],
       dispatcher: RhoDispatch[F],
       blockData: Ref[F, BlockData]
@@ -139,7 +139,7 @@ object SystemProcesses {
   def apply[F[_]](
       dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation],
       space: RhoTuplespace[F]
-  )(implicit F: Concurrent[F], spanF: Span[F]): SystemProcesses[F] =
+  )(implicit F: Async[F], spanF: Span[F]): SystemProcesses[F] =
     new SystemProcesses[F] {
 
       type ContWithMetaData = ContResult[Par, BindPattern, TaggedContinuation]

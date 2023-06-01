@@ -1,6 +1,6 @@
 package coop.rchain.casper.merging
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.Event
@@ -27,7 +27,7 @@ object DeployIndex {
   val SYS_CLOSE_BLOCK_DEPLOY_ID = ByteString.copyFrom(Array(2.toByte))
   val SYS_EMPTY_DEPLOY_ID       = ByteString.copyFrom(Array(3.toByte))
 
-  def apply[F[_]: Concurrent](
+  def apply[F[_]: Async](
       sig: ByteString,
       cost: Long,
       events: List[Event],

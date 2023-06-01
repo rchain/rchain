@@ -1,7 +1,6 @@
 package coop.rchain.store
 
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Deferred, Ref, Sync}
 import cats.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.{Db, LmdbEnvConfig}
@@ -12,7 +11,7 @@ object LmdbDirStoreManager {
   // TODO: Return instance as Resource with the call to _shutdown_.
   //  Shutdown can also be removed from the interface and be only
   //  implemented as instance method if applicable.
-  def apply[F[_]: Concurrent: Log](
+  def apply[F[_]: Async: Log](
       dirPath: Path,
       dbInstanceMapping: Map[Db, LmdbEnvConfig]
   ): F[KeyValueStoreManager[F]] =
@@ -40,7 +39,7 @@ object LmdbDirStoreManager {
 
 // The idea for this class is to manage multiple of key-value lmdb databases.
 // For LMDB this allows control which databases are part of the same environment (file).
-private final case class LmdbDirStoreManager[F[_]: Concurrent: Log](
+private final case class LmdbDirStoreManager[F[_]: Async: Log](
     dirPath: Path,
     dbMapping: Map[Db, LmdbEnvConfig]
 ) extends KeyValueStoreManager[F] {

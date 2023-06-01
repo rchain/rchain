@@ -8,7 +8,7 @@ object errors {
   sealed abstract class InterpreterError(message: String) extends Throwable(message) {
 
     @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-    def this(message: String, cause: Throwable) {
+    def this(message: String, cause: Throwable) = {
       this(message)
       initCause(cause)
     }

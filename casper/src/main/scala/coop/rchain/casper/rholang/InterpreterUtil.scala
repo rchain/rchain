@@ -1,6 +1,6 @@
 package coop.rchain.casper.rholang
 
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -29,7 +29,10 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.shared.{Log, LogSource}
-import retry.{retryingOnFailures, RetryPolicies}
+import retry.{retryingOnFailures, RetryPolicies, Sleep}
+import cats.effect.Temporal
+
+import scala.concurrent.duration.FiniteDuration
 
 object InterpreterUtil {
 
@@ -47,7 +50,7 @@ object InterpreterUtil {
 
   // TODO: most of this function is legacy code, it should be refactored with separation of errors that are
   //  handled (with included data e.g. hash not equal) and fatal errors which should NOT be handled
-  def validateBlockCheckpoint[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def validateBlockCheckpoint[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[(BlockMetadata, BlockProcessing[Boolean])] =
     for {
@@ -122,22 +125,27 @@ object InterpreterUtil {
         .fromBlock(block)
         .copy(
           validated = true,
-          validationFailed = result.isLeft || !result.right.get,
+          validationFailed = result.isLeft || !result.toOption.get,
           fringe = preState.fringe,
           fringeStateHash = preState.fringeState.bytes.toArray.toByteString
         )
       (bmd, result)
     }
 
-  def validateBlockCheckpointLegacy[F[_]: Concurrent: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def validateBlockCheckpointLegacy[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[BlockProcessing[Boolean]] = validateBlockCheckpoint(block).map(_._2)
 
-  private def replayBlock[F[_]: Sync: Timer: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
+  private def replayBlock[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Span](
       initialStateHash: StateHash,
       block: BlockMessage,
       rand: Blake2b512Random
-  ): F[Either[ReplayFailure, StateHash]] =
+  ): F[Either[ReplayFailure, StateHash]] = {
+    // this is only for Retry lib, TODO use fs2 and remove
+    implicit val sleep = new Sleep[F] {
+      override def sleep(delay: FiniteDuration): F[Unit] = Temporal[F].sleep(delay)
+    }
+
     Span[F].trace(ReplayBlockMetricsSource) {
       val internalDeploys       = block.state.deploys
       val internalSystemDeploys = block.state.systemDeploys
@@ -176,6 +184,7 @@ object InterpreterUtil {
                        )(replayResultF)
       } yield replayResult
     }
+  }
 
   private def handleErrors[F[_]: Sync: Log](
       tsHash: ByteString,
@@ -243,7 +252,7 @@ object InterpreterUtil {
     Log[F].info(s"Deploy ($deployInfo) errors: ${errors.mkString(", ")}")
   }
 
-  def computeDeploysCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def computeDeploysCheckpoint[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
       rand: Blake2b512Random,

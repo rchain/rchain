@@ -1,6 +1,6 @@
 package coop.rchain.casper.storage
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.{gb, tb, Db, LmdbEnvConfig}
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
@@ -8,7 +8,7 @@ import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
 import java.nio.file.Path
 
 object RNodeKeyValueStoreManager {
-  def apply[F[_]: Concurrent: Log](dirPath: Path): F[KeyValueStoreManager[F]] =
+  def apply[F[_]: Async: Log](dirPath: Path): F[KeyValueStoreManager[F]] =
     LmdbDirStoreManager[F](dirPath, rnodeDbMapping.toMap)
 
   // Config name is used as a sub-folder for LMDB files

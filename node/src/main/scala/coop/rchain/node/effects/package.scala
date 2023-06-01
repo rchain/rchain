@@ -1,7 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, IO, Sync}
 import cats.mtl._
 import cats.syntax.all._
 import cats.{Applicative, Monad, Parallel}
@@ -11,20 +10,18 @@ import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
-import coop.rchain.monix.Monixable
 import coop.rchain.shared._
-import monix.eval._
-import monix.execution._
 
 import java.nio.file.Path
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.tools.jline.console._
 import scala.util.Using
+import cats.effect.{Deferred, Ref}
 
 package object effects {
 
-  def log: Log[Task] = Log.log
+  def log: Log[IO] = Log.log
 
   def kademliaStore[F[_]: Sync: KademliaRPC: Metrics](id: NodeIdentifier): KademliaStore[F] =
     KademliaStore.table[F](id)
@@ -32,19 +29,19 @@ package object effects {
   def nodeDiscovery[F[_]: Monad: KademliaStore: KademliaRPC](id: NodeIdentifier): NodeDiscovery[F] =
     NodeDiscovery.kademlia(id)
 
-  def kademliaRPC[F[_]: Monixable: Sync: RPConfAsk: Metrics](
+  def kademliaRPC[F[_]: Async: RPConfAsk: Metrics](
       networkId: String,
       timeout: FiniteDuration
-  )(implicit scheduler: Scheduler): KademliaRPC[F] = new GrpcKademliaRPC(networkId, timeout)
+  ): KademliaRPC[F] =
+    new GrpcKademliaRPC(networkId, timeout)
 
-  def transportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
+  def transportClient[F[_]: Async: Parallel: Log: Metrics](
       networkId: String,
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
-      packetChunkSize: Int,
-      ioScheduler: Scheduler
-  )(implicit scheduler: Scheduler): F[TransportLayer[F]] =
+      packetChunkSize: Int
+  ): F[TransportLayer[F]] =
     Ref.of[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]](Map()) map { channels =>
       val cert = Using.resource(Source.fromFile(certPath.toFile))(_.mkString)
       val key  = Using.resource(Source.fromFile(keyPath.toFile))(_.mkString)
@@ -55,15 +52,14 @@ package object effects {
         maxMessageSize,
         packetChunkSize,
         clientQueueSize = 100,
-        channels,
-        ioScheduler
+        channels
       ): TransportLayer[F]
     }
 
   def consoleIO[F[_]: Sync](consoleReader: ConsoleReader): ConsoleIO[F] =
     new JLineConsoleIO(consoleReader)
 
-  def rpConnections[F[_]: Concurrent]: F[ConnectionsCell[F]] =
+  def rpConnections[F[_]: Async]: F[ConnectionsCell[F]] =
     Ref[F].of(Connections.empty)
 
   def rpConfState[F[_]: Sync](conf: RPConf): F[Ref[F, RPConf]] = Ref.of(conf)

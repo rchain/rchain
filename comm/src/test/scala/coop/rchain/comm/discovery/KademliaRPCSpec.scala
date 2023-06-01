@@ -1,6 +1,6 @@
 package coop.rchain.comm.discovery
 
-import cats.effect.{Sync, Timer}
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.comm.{NodeIdentifier, PeerNode}
 import org.scalatest.matchers.should.Matchers
@@ -8,8 +8,9 @@ import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.concurrent.duration._
 import scala.util.Random
+import cats.effect.kernel.Async
 
-abstract class KademliaRPCSpec[F[_]: Sync: Timer, E <: Environment]
+abstract class KademliaRPCSpec[F[_]: Async, E <: Environment]
     extends KademliaRPCRuntime[F, E]
     with AnyWordSpecLike
     with Matchers {
@@ -101,7 +102,7 @@ abstract class KademliaRPCSpec[F[_]: Sync: Timer, E <: Environment]
     "doing a lookup to a remote peer" when {
       val key = Array.ofDim[Byte](40)
       Random.nextBytes(key)
-      val otherPeer = PeerNode.from(NodeIdentifier(key), "1.2.3.4", 0, 0)
+      val otherPeer = PeerNode.from(NodeIdentifier(key.toIndexedSeq), "1.2.3.4", 0, 0)
 
       "everything is fine" should {
         "send and receive a list of peers" in
@@ -112,7 +113,7 @@ abstract class KademliaRPCSpec[F[_]: Sync: Timer, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key.toIndexedSeq, remote)
 
             val result: TwoNodesResult = run()
 
@@ -134,7 +135,7 @@ abstract class KademliaRPCSpec[F[_]: Sync: Timer, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key.toIndexedSeq, remote)
 
             val result: TwoNodesResult = run()
 
@@ -154,7 +155,7 @@ abstract class KademliaRPCSpec[F[_]: Sync: Timer, E <: Environment]
                 kademliaRPC: KademliaRPC[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key, remote)
+            ): F[Seq[PeerNode]] = kademliaRPC.lookup(key.toIndexedSeq, remote)
 
             val result: TwoNodesResult = run()
 

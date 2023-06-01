@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Timer}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsBlockRequester.ST
@@ -11,12 +11,12 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits
 import coop.rchain.shared.Log
 import fs2.Stream
-import fs2.concurrent.Queue
-import monix.eval.Task
+import fs2.concurrent.Channel
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
+import cats.effect.{Ref, Temporal}
 
 class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2StreamMatchers {
 
@@ -54,7 +54,8 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
   val b2 = getBlock(hash2, number = 2, Seq())
   val b1 = getBlock(hash1, number = 1, Seq())
 
-  implicit val ordBytes = Ordering.by((_: ByteString).toByteArray.toIterable).reverse
+  import scala.math.Ordering.Implicits.seqOrdering
+  implicit val ordBytes = Ordering.by((_: ByteString).toByteArray.toSeq).reverse
 
   case class TestST(blocks: Map[BlockHash, BlockMessage], invalid: Set[BlockHash])
 
@@ -80,7 +81,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * @param test test definition
     */
-  def createMock[F[_]: Concurrent: Timer: Log](
+  def createMock[F[_]: Async: Log](
       startBlock: BlockMessage,
       requestTimeout: FiniteDuration
   )(test: Mock[F] => F[Unit]): F[Unit] = {
@@ -95,35 +96,33 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       testState <- Ref.of[F, TestST](TestST(blocks = savedBlocks, invalid = Set()))
 
       // Queue for received blocks
-      responseQueue <- Queue.unbounded[F, BlockMessage]
+      responseQueue <- Channel.unbounded[F, BlockMessage]
 
       // Queue for requested block hashes
-      requestQueue <- Queue.unbounded[F, BlockHash]
+      requestQueue <- Channel.unbounded[F, BlockHash]
 
       // Queue for saved blocks
-      savedBlocksQueue <- Queue.unbounded[F, (BlockHash, BlockMessage)]
+      savedBlocksQueue <- Channel.unbounded[F, (BlockHash, BlockMessage)]
 
       // Queue for processing the internal state (ST)
-      processingStream <- LfsBlockRequester.stream(
+      processingStream <- LfsBlockRequester.stream[F](
                            finalizedFringe,
-                           responseQueue.dequeue,
+                           responseQueue.stream,
                            blockHeightsBeforeFringe = 0,
-                           requestQueue.enqueue1,
+                           requestQueue.trySend(_).void,
                            requestTimeout,
                            hash => testState.get.map(_.blocks.contains(hash)),
                            hash => testState.get.map(_.blocks(hash)),
-                           savedBlocksQueue.enqueue1(_, _),
+                           (h, m) => savedBlocksQueue.trySend(h -> m).void,
                            block => testState.get.map(!_.invalid.contains(block.blockHash))
                          )
 
       mock = new Mock[F] {
         override def receiveBlock(blocks: BlockMessage*): F[Unit] =
-          responseQueue.enqueue(Stream.emits(blocks)).compile.drain
+          Stream.emits(blocks).evalMap(responseQueue.send).compile.drain
 
-        override val sentRequests: Stream[F, BlockHash] =
-          Stream.eval(requestQueue.dequeue1).repeat
-        override val savedBlocks: Stream[F, (BlockHash, BlockMessage)] =
-          Stream.eval(savedBlocksQueue.dequeue1).repeat
+        override val sentRequests: Stream[F, BlockHash]                = requestQueue.stream
+        override val savedBlocks: Stream[F, (BlockHash, BlockMessage)] = savedBlocksQueue.stream
 
         override val setup: Ref[F, TestST] = testState
 
@@ -135,9 +134,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     } yield ()
   }
 
-  implicit val logEff: Log[Task] = Log.log[Task]
-
-  import monix.execution.Scheduler.Implicits.global
+  implicit val logEff: Log[IO] = Log.log[IO]
 
   /**
     * Test runner
@@ -152,11 +149,11 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
       startBlock: BlockMessage,
       runProcessingStream: Boolean = true,
       requestTimeout: FiniteDuration = 10.days
-  )(test: Mock[Task] => Task[Unit]): Unit =
-    createMock[Task](startBlock, requestTimeout) { mock =>
+  )(test: Mock[IO] => IO[Unit]): Unit =
+    createMock[IO](startBlock, requestTimeout) { mock =>
       if (!runProcessingStream) test(mock)
       else (Stream.eval(test(mock)) concurrently mock.stream).compile.drain
-    }.runSyncUnsafe(timeout = 10.seconds)
+    }.timeout(10.seconds).unsafeRunSync()
 
   def asMap(bs: BlockMessage*): Map[BlockHash, BlockMessage] = bs.map(b => (b.blockHash, b)).toMap
 
@@ -373,8 +370,8 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     *
     * NOTE: We don't have any abstraction to test time in execution (with monix Task or cats IO).
     *  We have LogicalTime and DiscreteTime which are just wrappers to get different "milliseconds" but are totally
-    *  disconnected from Task/IO execution notion of time (e.g. Task.sleep).
-    *  Other testing instances of Time are the same as in normal node execution (using Task.timer).
+    *  disconnected from Task/IO execution notion of time (e.g. IO.sleep).
+    *  Other testing instances of Time are the same as in normal node execution (using IO.timer).
     *  https://github.com/rchain/rchain/issues/3001
     */
   it should "re-send request after timeout" in dagFromBlock(
@@ -385,7 +382,7 @@ class LfsBlockRequesterEffectsSpec extends AnyFlatSpec with Matchers with Fs2Str
     import mock._
     for {
       // Wait for timeout to expire
-      _ <- stream.compile.drain.timeout(300.millis).onErrorHandle(_ => ())
+      _ <- stream.compile.drain.timeout(300.millis).attempt
 
       // Wait for two requests
       reqs <- sentRequests.take(2).compile.toList

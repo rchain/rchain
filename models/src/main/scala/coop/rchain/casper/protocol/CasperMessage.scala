@@ -243,7 +243,7 @@ object ProcessedDeploy {
       pd.cost,
       deployLog,
       pd.errored,
-      if (pd.systemDeployError.isEmpty()) None else Some(pd.systemDeployError)
+      if (pd.systemDeployError.isEmpty) None else Some(pd.systemDeployError)
     )
 
   def toProto(pd: ProcessedDeploy): ProcessedDeployProto = {

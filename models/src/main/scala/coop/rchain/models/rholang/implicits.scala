@@ -289,7 +289,7 @@ object implicits {
         locallyFree = ConnectiveLocallyFree.locallyFree(c, depth)
       )
 
-    def singleExpr(): Option[Expr] =
+    def singleExpr: Option[Expr] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
         p.exprs match {
           case Seq(single) => Some(single)
@@ -343,7 +343,7 @@ object implicits {
       }
 
     def singleConnective(): Option[Connective] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.size == 1) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.sizeIs == 1) {
         Some(p.connectives.head)
       } else {
         None

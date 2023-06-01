@@ -1,7 +1,7 @@
 package coop.rchain.node.mergeablity
 
-import cats.effect.Sync
-import cats.implicits.catsSyntaxApplicative
+import cats.effect.{IO, Sync}
+import cats.effect.unsafe.implicits.global
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
@@ -17,8 +17,6 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -479,9 +477,9 @@ class TreeHashMapMergeabilitySpec
   private def runTest(left: String)(right: String)(base: String)(
       rejectRight: Boolean
   )(isConflict: Boolean)(expectedKeyValue: List[KeyValue])(treeHashMapDepth: Int): Unit = {
-    implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val logger: Log[Task]         = Log.log[Task]
+    implicit val metricsEff: Metrics[IO] = new Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+    implicit val logger: Log[IO]         = Log.log[IO]
     val baseDeploy =
       ConstructDeploy.sourceDeploy(base, 1L, phloLimit = Cost.UNSAFE_MAX.value)
     val leftDeploy =
@@ -502,7 +500,7 @@ class TreeHashMapMergeabilitySpec
       )
 
     }
-    computeMergeCase[Task](
+    computeMergeCase[IO](
       baseDeployRand,
       Seq(StandardDeploys.registryGenerator(registry, SHARD_ID), baseDeploy),
       Seq(leftDeploy),
@@ -515,13 +513,13 @@ class TreeHashMapMergeabilitySpec
                             depth = treeHashMapDepth,
                             mergedState._1
                           )
-          _ <- Sync[Task]
+          _ <- Sync[IO]
                 .raiseError(new Exception(s"Mergeable case failed with :${mergedState}"))
                 .whenA(mergedState._2.nonEmpty && !isConflict)
-          _ <- Sync[Task]
+          _ <- Sync[IO]
                 .raiseError(new Exception(s"Conflict case failed with :${mergedState}"))
                 .whenA(mergedState._2.isEmpty && isConflict)
-          _ <- Sync[Task]
+          _ <- Sync[IO]
                 .raiseError(
                   new Exception(s"""The mergedTreeHashMap length is not equal to expectedKeyValue.
                  # MergedTreeHashMap: ${mergedTreeMap}
@@ -530,7 +528,7 @@ class TreeHashMapMergeabilitySpec
                 .whenA(mergedTreeMap.toList.length != expectedKeyValue.length)
           _ <- expectedKeyValue.traverse(
                 kv =>
-                  Sync[Task]
+                  Sync[IO]
                     .raiseError(
                       new Exception(
                         s"""The mergedTreeHashMap content is not equal to expectedKeyValue.
@@ -551,7 +549,7 @@ class TreeHashMapMergeabilitySpec
               )
         } yield (),
       rejectRight = rejectRight
-    ).runSyncUnsafe()
+    ).unsafeRunSync()
 
   }
 

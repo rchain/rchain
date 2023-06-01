@@ -1,5 +1,5 @@
 package coop.rchain.casper.helper
-import cats.effect.Concurrent
+import cats.effect.Async
 import coop.rchain.metrics.Span
 import coop.rchain.models.ListParWithRandom
 import coop.rchain.models.rholang.RhoType
@@ -11,7 +11,7 @@ object RhoLoggerContract {
   val prettyPrinter = PrettyPrinter()
 
   //TODO extract a `RhoPatterns[F]` algebra that will move passing the Span, the Dispatcher, and the Space parameters closer to the edge of the world
-  def handleMessage[F[_]: Log: Concurrent: Span](
+  def handleMessage[F[_]: Log: Async: Span](
       ctx: ProcessContext[F]
   )(message: Seq[ListParWithRandom]): F[Unit] = {
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)

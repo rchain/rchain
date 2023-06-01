@@ -1,42 +1,42 @@
 package coop.rchain.comm
 
-import cats.effect.{Resource, Sync}
+import cats.effect.std.Dispatcher
+import cats.effect.{Async, Resource, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.metrics.Metrics
-import coop.rchain.monix.Monixable
 import coop.rchain.sdk.syntax.all._
 import io.grpc
 import io.grpc.netty.NettyServerBuilder
-import monix.execution.Scheduler
+
+import scala.concurrent.ExecutionContext
 
 package object discovery {
   val DiscoveryMetricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
-  def acquireKademliaRPCServer[F[_]: Monixable: Sync](
+  def acquireKademliaRPCServer[F[_]: Async](
       networkId: String,
       port: Int,
       pingHandler: PeerNode => F[Unit],
-      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]],
-      grpcScheduler: Scheduler
-  ): Resource[F, grpc.Server] = {
-    val server = NettyServerBuilder
-      .forPort(port)
-      .executor(grpcScheduler)
-      .addService(
-        KademliaGrpcMonix
-          .bindService(
-            new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler),
-            grpcScheduler
-          )
-      )
-      .build
+      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
+  ): Resource[F, grpc.Server] =
+    Dispatcher.parallel[F].flatMap { d =>
+      val server = NettyServerBuilder
+        .forPort(port)
+        .addService(
+          KademliaRPCServiceFs2Grpc
+            .bindService(d, new GrpcKademliaRPCServer(networkId, pingHandler, lookupHandler))
+        )
+        .build
 
-    Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.void()))
-  }
+      Resource.make(Sync[F].delay(server.start))(s => Sync[F].delay(s.shutdown.void()))
+    }
 
   def toPeerNode(n: Node): PeerNode =
-    PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
+    PeerNode(
+      NodeIdentifier(n.id.toByteArray.toIndexedSeq),
+      Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort)
+    )
 
   def toNode(n: PeerNode): Node =
     Node()

@@ -1,6 +1,6 @@
 package coop.rchain.rspace.history.instances
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
@@ -11,7 +11,7 @@ import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector
 
-class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
+class RSpaceHistoryReaderImpl[F[_]: Async, C, P, A, K](
     targetHistory: History[F],
     leafStore: ColdKeyValueStore[F]
 )(

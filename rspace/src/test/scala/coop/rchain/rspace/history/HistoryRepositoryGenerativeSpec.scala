@@ -1,6 +1,6 @@
 package coop.rchain.rspace.history
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.rspace._
@@ -13,13 +13,12 @@ import coop.rchain.rspace.test.ArbitraryInstances.{arbitraryDatumString, _}
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.{InMemoryKeyValueStore, InMemoryStoreManager}
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
+import cats.effect.unsafe.implicits.global
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
@@ -30,23 +29,23 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-  val kvm = InMemoryStoreManager[Task]
+  val kvm = InMemoryStoreManager[IO]()
 
-  override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
-    implicit val log: Log[Task]   = new Log.NOPLog[Task]
-    implicit val span: Span[Task] = new NoopSpan[Task]
+  override def repo: IO[HistoryRepository[IO, String, Pattern, String, StringsCaptor]] = {
+    implicit val log: Log[IO]   = new Log.NOPLog[IO]
+    implicit val span: Span[IO] = new NoopSpan[IO]
     for {
       historyLmdbKVStore <- kvm.store("history")
       coldLmdbKVStore    <- kvm.store("cold")
       coldStore          = ColdStoreInstances.coldStore(coldLmdbKVStore)
       rootsLmdbKVStore   <- kvm.store("roots")
       rootsStore         = RootsStoreInstances.rootsStore(rootsLmdbKVStore)
-      rootRepository     = new RootRepository[Task](rootsStore)
+      rootRepository     = new RootRepository[IO](rootsStore)
       emptyHistory       <- History.create(History.emptyRootHash, historyLmdbKVStore)
-      exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
-      importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
-      repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
-        .apply[Task, String, Pattern, String, StringsCaptor](
+      exporter           = RSpaceExporterStore[IO](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      importer           = RSpaceImporterStore[IO](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      repository: HistoryRepository[IO, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
+        .apply[IO, String, Pattern, String, StringsCaptor](
           emptyHistory,
           rootRepository,
           coldStore,
@@ -68,13 +67,13 @@ class InMemHistoryRepositoryGenerativeSpec
     extends HistoryRepositoryGenerativeDefinition
     with InMemoryHistoryRepositoryTestBase {
 
-  override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
+  override def repo: IO[HistoryRepository[IO, String, Pattern, String, StringsCaptor]] = {
 
-    implicit val log: Log[Task]   = new Log.NOPLog[Task]
-    implicit val span: Span[Task] = new NoopSpan[Task]
+    implicit val log: Log[IO]   = new Log.NOPLog[IO]
+    implicit val span: Span[IO] = new NoopSpan[IO]
     for {
-      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
-      r = HistoryRepositoryImpl[Task, String, Pattern, String, StringsCaptor](
+      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[IO]())
+      r = HistoryRepositoryImpl[IO, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
         inMemColdStore,
@@ -102,7 +101,7 @@ abstract class HistoryRepositoryGenerativeDefinition
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
-  def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]]
+  def repo: IO[HistoryRepository[IO, String, Pattern, String, StringsCaptor]]
 
   "HistoryRepository" should "accept all HotStoreActions" in forAll(
     minSize(1),
@@ -120,7 +119,8 @@ abstract class HistoryRepositoryGenerativeDefinition
             } yield next
           }
       }
-      .runSyncUnsafe(20.seconds)
+      .timeout(20.seconds)
+      .unsafeRunSync()
   }
 
   def checkData(seq: Seq[Datum[String]], data: Seq[Datum[Any]]): Assertion =
@@ -139,8 +139,8 @@ abstract class HistoryRepositoryGenerativeDefinition
 
   def checkActionResult(
       action: HotStoreAction,
-      historyReader: HistoryReader[Task, Blake2b256Hash, String, Pattern, String, StringsCaptor]
-  ): Task[Unit] = {
+      historyReader: HistoryReader[IO, Blake2b256Hash, String, Pattern, String, StringsCaptor]
+  ): IO[Unit] = {
     val reader = historyReader.base
     action match {
       case InsertData(channel: String, data) =>
@@ -157,7 +157,7 @@ abstract class HistoryRepositoryGenerativeDefinition
         reader.getJoins(channel).map(_ shouldBe empty)
       case DeleteContinuations(channels) =>
         reader.getContinuations(channels.asInstanceOf[Seq[String]]).map(_ shouldBe empty)
-      case _ => Sync[Task].raiseError(new RuntimeException("unknown action"))
+      case _ => Sync[IO].raiseError(new RuntimeException("unknown action"))
     }
   }
 

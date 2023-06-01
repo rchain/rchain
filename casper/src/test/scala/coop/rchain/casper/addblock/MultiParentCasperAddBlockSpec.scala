@@ -1,6 +1,6 @@
 package coop.rchain.casper.addblock
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
@@ -18,8 +18,6 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.syntax._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.Inspectors
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -34,7 +32,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
   import coop.rchain.casper.util.GenesisBuilder._
 
   implicit val timeEff = new LogicalTime[Effect]
-  implicit val s       = Sync[Task]
+  implicit val s       = Sync[IO]
   val genesis          = buildGenesis()
   private val SHARD_ID = genesis.genesisBlock.shardId
 
@@ -67,7 +65,7 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
 //        } yield result
 //      }
 //    val threadStatuses: (ValidBlockProcessing, ValidBlockProcessing) =
-//      testProgram.runSyncUnsafe()
+//      testProgram.unsafeRunSync()
 //
 //    threadStatuses should matchPattern {
 //      case (Left(CasperIsBusy), Right(Valid)) | (Right(Valid), Left(CasperIsBusy)) =>
@@ -495,6 +493,6 @@ class MultiParentCasperAddBlockSpec extends AnyFlatSpec with Matchers with Inspe
       .signBlock(
         blockThatPointsToInvalidBlock
       )
-      .pure[Task]
+      .pure[IO]
   }
 }

@@ -1,8 +1,7 @@
 package coop.rchain.casper.reporting
 
 import cats.Parallel
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.models.syntax._
@@ -33,6 +32,7 @@ import coop.rchain.rspace.{ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
 
 import scala.concurrent.ExecutionContext
+import cats.effect.Ref
 
 /**
   * @param processedDeploy Deploy details
@@ -83,10 +83,10 @@ object ReportingCasper {
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def rhoReporter[F[_]: Concurrent: ContextShift: Parallel: BlockDagStorage: Log: Metrics: Span](
+  def rhoReporter[F[_]: Async: Parallel: BlockDagStorage: Log: Metrics: Span](
       rspaceStore: RSpaceStore[F],
       shardId: String
-  )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
+  ): ReportingCasper[F] =
     new ReportingCasper[F] {
       override def trace(block: BlockMessage): F[ReplayResult] =
         for {
@@ -169,10 +169,8 @@ object ReportingRuntime {
   implicit val RuntimeMetricsSource: Source =
     Metrics.Source(RholangMetricsSource, "reportingRuntime")
 
-  def createReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  def createReportingRSpace[F[_]: Async: Parallel: Log: Metrics: Span](
       store: RSpaceStore[F]
-  )(
-      implicit scheduler: ExecutionContext
   ): F[RhoReportingRspace[F]] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
@@ -180,7 +178,7 @@ object ReportingRuntime {
     ReportingRspace.create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
   }
 
-  def createReportingRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
+  def createReportingRuntime[F[_]: Async: Log: Metrics: Span: Parallel](
       reporting: RhoReportingRspace[F],
       shardId: String,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty

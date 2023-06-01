@@ -1,8 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.{IO, Sync}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
@@ -19,19 +18,19 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
+import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
 
 class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqualsSupport {
 
-  implicit val noopSpan: Span[Task]   = Span.noop
-  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]
-  implicit val ms: Metrics.Source     = Metrics.BaseSource
+  implicit val noopSpan: Span[IO]   = Span.noop
+  implicit val metrics: Metrics[IO] = new Metrics.MetricsNOP[IO]
+  implicit val ms: Metrics.Source   = Metrics.BaseSource
 
   behavior of "Cost accounting in Reducer"
 
@@ -56,16 +55,19 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
     val substTerm         = term(Expr(GString("1")))
     val termCost          = Chargeable[Par].cost(substTerm)
     val initCost          = Cost(1000)
+
     (for {
-      cost <- CostAccounting.initialCost[Task](initCost)
+      cost <- CostAccounting.initialCost[IO](initCost)
       res <- {
         implicit val c = cost
-        Substitute.charge(Task.now(substTerm), Cost(10000)).attempt
+        Substitute.charge(IO(substTerm), Cost(10000)).attempt
       }
       _         = assert(res === Right(substTerm))
       finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(termCost)))
-    } yield ()).runSyncUnsafe(5.seconds)
+    } yield ())
+      .timeout(5.seconds)
+      .unsafeRunSync()
   }
 
   it should "charge for failed substitution" in {
@@ -75,23 +77,25 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
     val initCost          = Cost(1000)
 
     (for {
-      cost <- CostAccounting.initialCost[Task](initCost)
+      cost <- CostAccounting.initialCost[IO](initCost)
       res <- {
         implicit val c = cost
         Substitute
-          .charge(Task.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
+          .charge(IO.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
           .attempt
       }
       _         = assert(res.isLeft)
       finalCost <- cost.get
       _         = assert(finalCost === (initCost - Cost(originalTermCost)))
-    } yield ()).runSyncUnsafe(5.seconds)
+    } yield ())
+      .timeout(5.seconds)
+      .unsafeRunSync()
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {
 
     val iSpace = new ISpaceStub[
-      Task,
+      IO,
       Par,
       BindPattern,
       ListParWithRandom,
@@ -101,20 +105,21 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
           channel: Par,
           data: ListParWithRandom,
           persist: Boolean
-      ): Task[
+      ): IO[
         Option[
           (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
         ]
       ] =
-        Task.raiseError[Option[
+        IO.raiseError[Option[
           (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
         ]](OutOfPhlogistonsError)
     }
+
     implicit val rand        = Blake2b512Random.defaultRandom
-    implicit val cost        = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
+    implicit val cost        = CostAccounting.initialCost[IO](Cost(1000)).unsafeRunSync()
     val (_, chargingReducer) = createDispatcher(iSpace, Map.empty, Map.empty)
     val send                 = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
-    val test                 = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
+    val test                 = chargingReducer.inj(send).attempt.unsafeRunSync()
     assert(test === Left(OutOfPhlogistonsError))
   }
 
@@ -131,18 +136,18 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
     val program =
       Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
-    implicit val rand            = Blake2b512Random(Array.empty[Byte])
-    implicit val logF: Log[Task] = Log.log[Task]
-    implicit val kvm             = InMemoryStoreManager[Task]
+    implicit val rand          = Blake2b512Random(Array.empty[Byte])
+    implicit val logF: Log[IO] = Log.log[IO]
+    implicit val kvm           = InMemoryStoreManager[IO]()
 
-    def testImplementation(pureRSpace: RhoISpace[Task]): Task[
+    def testImplementation(pureRSpace: RhoISpace[IO]): IO[
       (
           Either[Throwable, Unit],
           Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
       )
     ] = {
 
-      implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
+      implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
 
       lazy val (_, reducer) =
         createDispatcher(pureRSpace, Map.empty, Map.empty)
@@ -177,11 +182,13 @@ class CostAccountingReducerTest extends AnyFlatSpec with Matchers with TripleEqu
       map.get(List(channel)) === Some(data(p, rand))
 
     (for {
-      res           <- mkRhoISpace[Task].flatMap(testImplementation)
+      res           <- mkRhoISpace[IO].flatMap(testImplementation)
       (result, map) = res
       _             = assert(result === Left(OutOfPhlogistonsError))
       _             = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))
-    } yield ()).runSyncUnsafe(5.seconds)
+    } yield ())
+      .timeout(5.seconds)
+      .unsafeRunSync()
 
   }
 }

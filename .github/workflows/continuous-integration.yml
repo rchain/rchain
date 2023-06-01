@@ -104,6 +104,7 @@ jobs:
     name: Unit Tests
     needs: build_base
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     container: rchain/buildenv
     strategy:
       fail-fast: false

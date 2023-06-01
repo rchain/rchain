@@ -1,27 +1,27 @@
 package coop.rchain.rholang.interpreter.accounting
 
 import cats.data._
-import cats.effect.Concurrent
-import cats.effect.concurrent._
+import cats.effect.Async
 import cats.syntax.all._
 import cats.mtl._
 import cats.Monad
 
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import cats.effect.Ref
 
 object CostAccounting {
 
-  private[this] def of[F[_]: Concurrent](init: Cost): F[MonadState[F, Cost]] =
+  private[this] def of[F[_]: Async](init: Cost): F[MonadState[F, Cost]] =
     Ref[F]
       .of(init)
       .map(defaultMonadState)
 
-  private[this] def empty[F[_]: Concurrent]: F[MonadState[F, Cost]] =
+  private[this] def empty[F[_]: Async]: F[MonadState[F, Cost]] =
     Ref[F]
       .of(Cost(0, "init"))
       .map(defaultMonadState)
 
-  def emptyCost[F[_]: Concurrent: Metrics](
+  def emptyCost[F[_]: Async: Metrics](
       implicit L: FunctorTell[F, Chain[Cost]],
       ms: Metrics.Source
   ): F[_cost[F]] =
@@ -30,7 +30,7 @@ object CostAccounting {
       c <- empty
     } yield (loggingCost(c, L, s))
 
-  def initialCost[F[_]: Concurrent: Metrics](
+  def initialCost[F[_]: Async: Metrics](
       init: Cost
   )(implicit L: FunctorTell[F, Chain[Cost]], ms: Metrics.Source): F[_cost[F]] =
     for {
@@ -38,7 +38,7 @@ object CostAccounting {
       c <- of(init)
     } yield (loggingCost(c, L, s))
 
-  private[this] def defaultMonadState[F[_]: Monad: Concurrent] =
+  private[this] def defaultMonadState[F[_]: Async] =
     (state: Ref[F, Cost]) =>
       new DefaultMonadState[F, Cost] {
         val monad: cats.Monad[F]  = implicitly[Monad[F]]

@@ -1,7 +1,8 @@
 package coop.rchain.casper.genesis
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, IO, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.syntax._
@@ -20,8 +21,6 @@ import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.syntax._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -32,8 +31,8 @@ import java.nio.file.{Files, Path}
 class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
   import GenesisTest._
 
-  implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val span: Span[Task]          = NoopSpan[Task]()
+  implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+  implicit val span: Span[IO]          = NoopSpan[IO]()
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -70,17 +69,16 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
   }
 
   "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in taskTest(
-    withGenResources[Task] {
+    withGenResources[IO] {
       (
-          runtimeManager: RuntimeManager[Task],
+          runtimeManager: RuntimeManager[IO],
           genesisPath: Path,
-          log: LogStub[Task]
+          log: LogStub[IO]
       ) =>
         for {
           _ <- fromInputFiles()(
                 genesisPath,
                 runtimeManager,
-                implicitly[Concurrent[Task]],
                 log
               )
           _ = log.warns.count(
@@ -93,18 +91,17 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
   )
 
   it should "tell when bonds file does not exist" in taskTest(
-    withGenResources[Task] {
+    withGenResources[IO] {
       (
-          runtimeManager: RuntimeManager[Task],
+          runtimeManager: RuntimeManager[IO],
           genesisPath: Path,
-          log: LogStub[Task]
+          log: LogStub[IO]
       ) =>
         val nonExistingPath = storageLocation.resolve("not/a/real/file").toString
         for {
           genesisAttempt <- fromInputFiles(maybeBondsPath = Some(nonExistingPath))(
                              genesisPath,
                              runtimeManager,
-                             implicitly[Concurrent[Task]],
                              log
                            ).attempt
         } yield log.warns.exists(_.contains("BONDS FILE NOT FOUND"))
@@ -112,11 +109,11 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
   )
 
   it should "fail with error when bonds file cannot be parsed" in taskTest(
-    withGenResources[Task] {
+    withGenResources[IO] {
       (
-          runtimeManager: RuntimeManager[Task],
+          runtimeManager: RuntimeManager[IO],
           genesisPath: Path,
-          log: LogStub[Task]
+          log: LogStub[IO]
       ) =>
         val badBondsFile = genesisPath.resolve("misformatted.txt").toString
 
@@ -128,7 +125,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
           genesisAttempt <- fromInputFiles(maybeBondsPath = Some(badBondsFile))(
                              genesisPath,
                              runtimeManager,
-                             implicitly[Concurrent[Task]],
                              log
                            ).attempt
         } yield genesisAttempt.left.value.getMessage should include(
@@ -138,11 +134,11 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
   )
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in taskTest(
-    withGenResources[Task] {
+    withGenResources[IO] {
       (
-          runtimeManager: RuntimeManager[Task],
+          runtimeManager: RuntimeManager[IO],
           genesisPath: Path,
-          log: LogStub[Task]
+          log: LogStub[IO]
       ) =>
         val bondsFile = genesisPath.resolve("givenBonds.txt").toString
         printBonds(bondsFile)
@@ -151,7 +147,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
           genesis <- fromInputFiles(maybeBondsPath = Some(bondsFile))(
                       genesisPath,
                       runtimeManager,
-                      implicitly[Concurrent[Task]],
                       log
                     )
           bonds = genesis.bonds.toList
@@ -166,11 +161,11 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
 
   it should "create a valid genesis block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      withGenResources[Task] {
+      withGenResources[IO] {
         (
-            runtimeManager: RuntimeManager[Task],
+            runtimeManager: RuntimeManager[IO],
             genesisPath: Path,
-            log: LogStub[Task]
+            log: LogStub[IO]
         ) =>
           implicit val rm     = runtimeManager
           implicit val logEff = log
@@ -178,22 +173,21 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
             genesis <- fromInputFiles()(
                         genesisPath,
                         runtimeManager,
-                        implicitly[Concurrent[Task]],
                         log
                       )
-            _         <- BlockStore[Task].put(genesis.blockHash, genesis)
+            _         <- BlockStore[IO].put(genesis.blockHash, genesis)
             _         <- blockDagStorage.insertGenesis(genesis)
-            postState <- InterpreterUtil.validateBlockCheckpointLegacy[Task](genesis)
+            postState <- InterpreterUtil.validateBlockCheckpointLegacy[IO](genesis)
           } yield postState.value shouldBe true
       }
   }
 
   it should "detect an existing bonds file in the default location" in taskTest(
-    withGenResources[Task] {
+    withGenResources[IO] {
       (
-          runtimeManager: RuntimeManager[Task],
+          runtimeManager: RuntimeManager[IO],
           genesisPath: Path,
-          log: LogStub[Task]
+          log: LogStub[IO]
       ) =>
         val bondsFile = genesisPath.resolve("bonds.txt").toString
         printBonds(bondsFile)
@@ -202,7 +196,6 @@ class GenesisTest extends AnyFlatSpec with Matchers with EitherValues with Block
           genesis <- fromInputFiles()(
                       genesisPath,
                       runtimeManager,
-                      implicitly[Concurrent[Task]],
                       log
                     )
           bonds = genesis.bonds.toList
@@ -238,22 +231,21 @@ object GenesisTest {
       blockNumber: Long = 0
   )(
       implicit genesisPath: Path,
-      runtimeManager: RuntimeManager[Task],
-      c: Concurrent[Task],
-      log: LogStub[Task]
-  ): Task[BlockMessage] =
+      runtimeManager: RuntimeManager[IO],
+      log: LogStub[IO]
+  ): IO[BlockMessage] =
     for {
-      vaults <- VaultParser.parse[Task](
-                 maybeVaultsPath.getOrElse(genesisPath + "/wallets.txt")
+      vaults <- VaultParser.parse[IO](
+                 maybeVaultsPath.getOrElse(genesisPath.toString + "/wallets.txt")
                )
-      bonds <- BondsParser.parse[Task](
-                maybeBondsPath.getOrElse(genesisPath + "/bonds.txt"),
+      bonds <- BondsParser.parse[IO](
+                maybeBondsPath.getOrElse(genesisPath.toString + "/bonds.txt"),
                 autogenShardSize
               )
       // Initial set of validators
       validators = bonds.toSeq.map(Validator.tupled)
       validator  = ValidatorIdentity(Secp256k1.newKeyPair._1)
-      genesisBlock <- createGenesisBlock(
+      genesisBlock <- createGenesisBlock[IO](
                        validator,
                        Genesis(
                          sender = validator.publicKey,
@@ -276,7 +268,7 @@ object GenesisTest {
                      )
     } yield genesisBlock
 
-  def withGenResources[F[_]: Concurrent: ContextShift: Parallel](
+  def withGenResources[F[_]: Async: Parallel](
       body: (RuntimeManager[F], Path, LogStub[F]) => F[Unit]
   ): F[Unit] = {
     val storePath                        = storageLocation
@@ -302,6 +294,6 @@ object GenesisTest {
     } yield result
   }
 
-  def taskTest[R](f: Task[R]): R =
-    f.runSyncUnsafe()
+  def taskTest[R](f: IO[R]): R =
+    f.unsafeRunSync()
 }

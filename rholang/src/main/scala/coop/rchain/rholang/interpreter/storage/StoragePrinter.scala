@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.storage
 
 import cats.FlatMap
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.signatures.Signed
@@ -62,7 +62,7 @@ object StoragePrinter {
         PrettyPrinter().buildString(unmatchedSends.reduce(_ ++ _))
     }
 
-  def prettyPrintUnmatchedSends[F[_]: Concurrent](
+  def prettyPrintUnmatchedSends[F[_]: Async](
       deploy: Signed[DeployData],
       runtime: RhoRuntime[F]
   ): F[String] = {
@@ -84,11 +84,12 @@ object StoragePrinter {
     }
   }
 
-  def prettyPrintUnmatchedSends[F[_]: Concurrent](
+  def prettyPrintUnmatchedSends[F[_]: Async](
       deploys: Seq[Signed[DeployData]],
       runtime: RhoRuntime[F]
   ): F[String] =
-    deploys.toStream
+    deploys
+      .to(LazyList)
       .traverse(
         deploy =>
           prettyPrintUnmatchedSends(deploy, runtime)

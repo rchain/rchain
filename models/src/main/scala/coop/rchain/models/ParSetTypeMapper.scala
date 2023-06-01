@@ -1,7 +1,7 @@
 package coop.rchain.models
 
 import scalapb.TypeMapper
-import monix.eval.Coeval
+import cats.Eval
 
 object ParSetTypeMapper {
   implicit val parSetESetTypeMapper: TypeMapper[ESet, ParSet] =
@@ -10,7 +10,7 @@ object ParSetTypeMapper {
   private[models] def esetToParSet(eset: ESet): ParSet =
     ParSet(
       ps = eset.ps,
-      locallyFree = Coeval.delay(eset.locallyFree.get),
+      locallyFree = Eval.later(eset.locallyFree.get),
       connectiveUsed = eset.connectiveUsed,
       remainder = eset.remainder
     )

@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
@@ -19,8 +21,7 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Base16, Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import cats.syntax.all._
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.flatspec.FixtureAnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -55,17 +56,17 @@ class CryptoChannelsSpec
   def clearStore(
       ackChannel: Par,
       timeout: Duration = 3.seconds
-  )(implicit env: Env[Par], runtime: RhoRuntime[Task]): Unit = {
+  )(implicit env: Env[Par], runtime: RhoRuntime[IO]): Unit = {
     val consume: Par = Receive(
       Seq(ReceiveBind(Seq(EVar(Var(Wildcard(WildcardMsg())))), ackChannel)),
       Par()
     )
-    Await.ready(runtime.inj(consume, env).runToFuture, 3.seconds)
+    Await.ready(runtime.inj(consume, env).unsafeToFuture(), 3.seconds)
   }
 
   def assertStoreContains(
-      runtime: RhoRuntime[Task]
-  )(ackChannel: GString)(data: ListParWithRandom): Task[Assertion] = {
+      runtime: RhoRuntime[IO]
+  )(ackChannel: GString)(data: ListParWithRandom): IO[Assertion] = {
     val channel: Par = ackChannel
     for {
       spaceMap <- runtime.getHotChanges
@@ -93,7 +94,7 @@ class CryptoChannelsSpec
     val ackChannel                  = GString("x")
     implicit val emptyEnv: Env[Par] = Env[Par]()
 
-    val storeContainsTest: ListParWithRandom => Task[Assertion] =
+    val storeContainsTest: ListParWithRandom => IO[Assertion] =
       assertStoreContains(runtime)(ackChannel)(_)
 
     forAll { par: Par =>
@@ -108,7 +109,7 @@ class CryptoChannelsSpec
       // 2. hash input array
       // 3. send result on supplied ack channel
       (runtime.inj(send) >>
-        storeContainsTest(ListParWithRandom(Seq(expected), rand))).runSyncUnsafe(3.seconds)
+        storeContainsTest(ListParWithRandom(Seq(expected), rand))).unsafeRunSync()
       clearStore(ackChannel)
     }
   }
@@ -145,7 +146,7 @@ class CryptoChannelsSpec
 
       val ackChannel                  = GString("x")
       implicit val emptyEnv: Env[Par] = Env[Par]()
-      val storeContainsTest: ListParWithRandom => Task[Assertion] =
+      val storeContainsTest: ListParWithRandom => IO[Assertion] =
         assertStoreContains(runtime)(ackChannel)
 
       forAll { par: Par =>
@@ -169,7 +170,9 @@ class CryptoChannelsSpec
         (runtime.inj(send) >>
           storeContainsTest(
             ListParWithRandom(Seq(Expr(GBool(true))), rand)
-          )).runSyncUnsafe(3.seconds)
+          ))
+          .timeout(3.seconds)
+          .unsafeRunSync()
         clearStore(ackChannel)
       }
   }
@@ -185,7 +188,7 @@ class CryptoChannelsSpec
 
       val ackChannel                  = GString("x")
       implicit val emptyEnv: Env[Par] = Env[Par]()
-      val storeContainsTest: ListParWithRandom => Task[Assertion] =
+      val storeContainsTest: ListParWithRandom => IO[Assertion] =
         assertStoreContains(runtime)(ackChannel)
 
       forAll { par: Par =>
@@ -208,37 +211,37 @@ class CryptoChannelsSpec
         )
         (runtime.inj(send) >> storeContainsTest(
           ListParWithRandom(List(Expr(GBool(true))), rand)
-        )).runSyncUnsafe(3.seconds)
+        )).timeout(3.seconds).unsafeRunSync()
         clearStore(ackChannel)
       }
   }
 
   protected override def withFixture(test: OneArgTest): Outcome = {
-    val randomInt                           = scala.util.Random.nextInt
-    val dbDir                               = Files.createTempDirectory(s"rchain-storage-test-$randomInt-")
-    implicit val logF: Log[Task]            = new Log.NOPLog[Task]
-    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
-    implicit val kvm                        = InMemoryStoreManager[Task]
+    val randomInt                         = scala.util.Random.nextInt()
+    val dbDir                             = Files.createTempDirectory(s"rchain-storage-test-$randomInt-")
+    implicit val logF: Log[IO]            = new Log.NOPLog[IO]
+    implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
+    implicit val kvm                      = InMemoryStoreManager[IO]()
 
     val runtime = (for {
       store                       <- kvm.rSpaceStores
-      spaces                      <- Resources.createRuntimes[Task](store)
+      spaces                      <- Resources.createRuntimes[IO](store)
       (runtime, replayRuntime, _) = spaces
       _                           <- runtime.cost.set(Cost.UNSAFE_MAX)
-    } yield runtime).runSyncUnsafe()
+    } yield runtime).unsafeRunSync()
 
     try {
       test(runtime)
     } finally {
-      kvm.shutdown.runSyncUnsafe()
+      kvm.shutdown.unsafeRunSync()
       dbDir.recursivelyDelete()
     }
   }
 
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
-    *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
+    *  to push effect choice up until declaration site refactor to `Reduce[Eval]`
     */
-  override type FixtureParam = RhoRuntime[Task]
+  override type FixtureParam = RhoRuntime[IO]
 
 }

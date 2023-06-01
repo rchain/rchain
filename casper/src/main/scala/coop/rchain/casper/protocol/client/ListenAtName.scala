@@ -1,12 +1,12 @@
 package coop.rchain.casper.protocol.client
 
 import cats.Id
-import cats.effect.Sync
+import cats.effect.kernel.Async
+import cats.effect.{Sync, Temporal}
 import cats.syntax.all._
 import coop.rchain.casper.rholang.InterpreterUtil
 import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.{NormalizerEnv, Par}
-import coop.rchain.shared.Time
 
 object ListenAtName {
   sealed trait Name
@@ -43,12 +43,12 @@ object ListenAtName {
         }
     }
 
-  private def applyUntil[A, F[_]: Sync: Time](retrieve: F[A])(breakCond: A => Boolean): F[A] = {
+  private def applyUntil[A, F[_]: Temporal](retrieve: F[A])(breakCond: A => Boolean): F[A] = {
     import scala.concurrent.duration._
 
     def loop: F[A] =
       for {
-        _    <- Time[F].sleep(1.second)
+        _    <- Temporal[F].sleep(1.second)
         data <- retrieve
         res <- if (breakCond(data)) data.pure[F]
               else loop
@@ -57,7 +57,7 @@ object ListenAtName {
     loop
   }
 
-  def listenAtNameUntilChanges[A1, G[_], F[_]: Sync: Time](
+  def listenAtNameUntilChanges[A1, G[_], F[_]: Async](
       name: G[Name]
   )(request: G[Par] => F[Seq[A1]])(implicit par: BuildPar[λ[A => F[G[A]]]]): F[Unit] = {
     val nameF = name.pure[F]

@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
@@ -359,7 +359,7 @@ object Validate {
       }
     } yield result
 
-  def bondsCache[F[_]: Concurrent: RuntimeManager: Log](
+  def bondsCache[F[_]: Async: RuntimeManager: Log](
       b: BlockMessage
   ): F[ValidBlockProcessing] = {
     val bonds          = b.bonds
@@ -379,7 +379,7 @@ object Validate {
   /**
     * All of deploys must have greater or equal phloPrice then minPhloPrice
     */
-  def phloPrice[F[_]: Log: Concurrent](
+  def phloPrice[F[_]: Log: Async](
       b: BlockMessage,
       minPhloPrice: Long
   ): F[ValidBlockProcessing] =

@@ -58,6 +58,6 @@ object PrettyPrinter {
   def buildString(d: DeployData): String =
     s"DeployData #${d.timestamp} -- ${d.term}"
 
-  def buildString(hashes: Traversable[BlockHash]): String =
+  def buildString(hashes: Iterable[BlockHash]): String =
     hashes.map(PrettyPrinter.buildString).mkString("[", " ", "]")
 }

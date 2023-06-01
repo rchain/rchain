@@ -1,5 +1,6 @@
 package coop.rchain.casper.util
 
+import cats.effect.IO
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.syntax._
@@ -19,11 +20,11 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import monix.eval.Task
 
 import java.nio.file.{Files, Path}
 import scala.collection.compat.immutable.LazyList
 import scala.collection.mutable
+import cats.effect.unsafe.implicits.global
 
 object GenesisBuilder {
 
@@ -163,17 +164,15 @@ object GenesisBuilder {
 
     val (validavalidatorKeyPairs, genesisVaults, genesisParameters) = parameters
     val storageDirectory                                            = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
-    implicit val log: Log.NOPLog[Task]                              = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task]                          = new metrics.Metrics.MetricsNOP[Task]
-    implicit val spanEff                                            = NoopSpan[Task]()
-
-    implicit val scheduler = monix.execution.Scheduler.Implicits.global
+    implicit val log: Log.NOPLog[IO]                                = new Log.NOPLog[IO]
+    implicit val metricsEff: Metrics[IO]                            = new metrics.Metrics.MetricsNOP[IO]
+    implicit val spanEff                                            = NoopSpan[IO]()
 
     (for {
-      kvsManager <- mkTestRNodeStoreManager[Task](storageDirectory)
+      kvsManager <- mkTestRNodeStoreManager[IO](storageDirectory)
       rStore     <- kvsManager.rSpaceStores
       mStore     <- RuntimeManager.mergeableStore(kvsManager)
-      t          = RuntimeManager.noOpExecutionTracker[Task]
+      t          = RuntimeManager.noOpExecutionTracker[IO]
       runtimeManager <- RuntimeManager(
                          rStore,
                          mStore,
@@ -184,15 +183,15 @@ object GenesisBuilder {
       creator = ValidatorIdentity(parameters._1.head._1)
       genesis <- {
         implicit val rm = runtimeManager
-        Genesis.createGenesisBlock[Task](creator, genesisParameters)
+        Genesis.createGenesisBlock[IO](creator, genesisParameters)
       }
-      blockStore      <- BlockStore[Task](kvsManager)
+      blockStore      <- BlockStore[IO](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
-      blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
+      blockDagStorage <- BlockDagKeyValueStorage.create[IO](kvsManager)
       // Add genesis block to DAG
       _ <- blockDagStorage.insertGenesis(genesis)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory))
-      .runSyncUnsafe()
+      .unsafeRunSync()
   }
 
   case class GenesisContext(

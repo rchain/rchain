@@ -1,6 +1,6 @@
 package coop.rchain.casper.blocks.proposer
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -23,7 +23,7 @@ import coop.rchain.shared.Log
 final case class BlockCreator(id: ValidatorIdentity, shardId: String) {
   type StateTransitionResult = (StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
 
-  def create[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def create[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       preState: ParentsMergedState,
       deploys: Seq[DeployId],
       toSlash: Set[Validator] = Set.empty,
@@ -55,7 +55,7 @@ final case class BlockCreator(id: ValidatorIdentity, shardId: String) {
       val closeDeploy  = CloseBlockDeploy(closeSeed)
 
       BlockDagStorage[F].pooledDeploys
-        .map(_.filterKeys(deploys.toSet).values.toSeq)
+        .map(_.view.filterKeys(deploys.toSet).values.toSeq)
         .flatMap(
           InterpreterUtil.computeDeploysCheckpoint[F](
             _,

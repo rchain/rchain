@@ -27,7 +27,7 @@ import coop.rchain.rholang.interpreter.compiler.normalizer.{
   RemainderNormalizeMatcher
 }
 
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
 import scala.collection.immutable.{BitSet, Vector}
 import java.util.UUID
 
@@ -37,24 +37,28 @@ object PInputNormalizer {
       implicit env: Map[String, Par]
   ): F[ProcVisitOutputs] = {
     if (p.listreceipt_.size() > 1) {
-      normalizeMatch[F](p.listreceipt_.reverse.foldLeft(p.proc_) { (proc, receipt) =>
-        val listReceipt = new ListReceipt()
-        listReceipt.add(receipt)
-        new PInput(listReceipt, proc)
-      }, input)
+      normalizeMatch[F](
+        p.listreceipt_.asScala.reverse.foldLeft(p.proc_) { (proc, receipt) =>
+          val listReceipt = new ListReceipt()
+          listReceipt.add(receipt)
+          new PInput(listReceipt, proc)
+        },
+        input
+      )
     } else {
 
       val receiptContainsComplexSource: Boolean = {
-        p.listreceipt_.head match {
+        p.listreceipt_.asScala.head match {
           case rl: ReceiptLinear =>
             rl.receiptlinearimpl_ match {
               case ls: LinearSimple =>
-                ls.listlinearbind_.exists {
+                ls.listlinearbind_.asScala.exists {
                   case lbi: LinearBindImpl =>
                     lbi.namesource_ match {
                       case _: SimpleSource => false
                       case _               => true
                     }
+
                 }
               case _ => false
             }
@@ -63,7 +67,7 @@ object PInputNormalizer {
       }
 
       if (receiptContainsComplexSource) {
-        p.listreceipt_.head match {
+        p.listreceipt_.asScala.head match {
           case rl: ReceiptLinear =>
             rl.receiptlinearimpl_ match {
               case ls: LinearSimple =>
@@ -72,7 +76,7 @@ object PInputNormalizer {
                 val listNameDecl   = new ListNameDecl()
                 listReceipt.add(new ReceiptLinear(new LinearSimple(listLinearBind)))
                 val (sends, continuation) =
-                  ls.listlinearbind_.foldLeft((new PNil: Proc, p.proc_)) {
+                  ls.listlinearbind_.asScala.foldLeft((new PNil: Proc, p.proc_)) {
                     case ((sends, continuation), lb) =>
                       lb match {
                         case lbi: LinearBindImpl =>
@@ -85,7 +89,7 @@ object PInputNormalizer {
                               val r          = new NameVar(identifier)
                               lbi.namesource_ match {
                                 case rss: ReceiveSendSource =>
-                                  lbi.listname_.prepend(r)
+                                  lbi.listname_.asScala.prepend(r)
                                   listLinearBind.add(
                                     new LinearBindImpl(
                                       lbi.listname_,
@@ -109,7 +113,7 @@ object PInputNormalizer {
                                       new SimpleSource(r)
                                     )
                                   )
-                                  srs.listproc_.prepend(new PEval(r))
+                                  srs.listproc_.asScala.prepend(new PEval(r))
                                   (
                                     new PPar(
                                       new PSend(srs.name_, new SendSingle, srs.listproc_),
@@ -128,6 +132,7 @@ object PInputNormalizer {
                   input
                 )
             }
+
         }
       } else {
 
@@ -190,34 +195,39 @@ object PInputNormalizer {
 
         // If we get to this point, we know p.listreceipt.size() == 1
         val (consumes, persistent, peek) =
-          p.listreceipt_.head match {
+          p.listreceipt_.asScala.head match {
             case rl: ReceiptLinear =>
               rl.receiptlinearimpl_ match {
                 case ls: LinearSimple =>
-                  (ls.listlinearbind_.toVector.map {
+                  (ls.listlinearbind_.asScala.toVector.map {
                     case lbi: LinearBindImpl =>
-                      ((lbi.listname_.toVector, lbi.nameremainder_), lbi.namesource_ match {
+                      ((lbi.listname_.asScala.toVector, lbi.nameremainder_), lbi.namesource_ match {
                         // all sources should be simple sources by this point
                         case ss: SimpleSource => ss.name_
                       })
+
                   }, false, false)
+
               }
             case rr: ReceiptRepeated =>
               rr.receiptrepeatedimpl_ match {
                 case rs: RepeatedSimple =>
-                  (rs.listrepeatedbind_.toVector.map {
+                  (rs.listrepeatedbind_.asScala.toVector.map {
                     case rbi: RepeatedBindImpl =>
-                      ((rbi.listname_.toVector, rbi.nameremainder_), rbi.name_)
+                      ((rbi.listname_.asScala.toVector, rbi.nameremainder_), rbi.name_)
                   }, true, false)
+
               }
             case rp: ReceiptPeek =>
               rp.receiptpeekimpl_ match {
                 case ps: PeekSimple =>
-                  (ps.listpeekbind_.toVector.map {
+                  (ps.listpeekbind_.asScala.toVector.map {
                     case pbi: PeekBindImpl =>
-                      ((pbi.listname_.toVector, pbi.nameremainder_), pbi.name_)
+                      ((pbi.listname_.asScala.toVector, pbi.nameremainder_), pbi.name_)
                   }, false, true)
+
               }
+
           }
 
         val (patterns, names) = consumes.unzip
@@ -270,7 +280,7 @@ object PInputNormalizer {
                 sourcesLocallyFree | processedPatterns
                   .map(_._4)
                   .fold(BitSet.empty)(_ | _) | procVisitOutputs.par.locallyFree
-                  .from(bindCount)
+                  .rangeFrom(bindCount)
                   .map(_ - bindCount),
                 sourcesConnectiveUsed || procVisitOutputs.par.connectiveUsed
               )

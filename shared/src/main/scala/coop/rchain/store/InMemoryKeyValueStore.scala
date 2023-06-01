@@ -29,7 +29,7 @@ final case class InMemoryKeyValueStore[F[_]: Sync]() extends KeyValueStore[F] {
 
   override def iterate[T](f: Iterator[(ByteBuffer, ByteBuffer)] => T): F[T] =
     Sync[F].delay {
-      val iter = state.toIterator.map { case (k, v) => (k, v.toByteBuffer) }
+      val iter = state.iterator.map { case (k, v) => (k, v.toByteBuffer) }
       f(iter)
     }
 

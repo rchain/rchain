@@ -43,7 +43,7 @@ object codecs {
   )
 
   val codecSignedDeployData = bytes.xmap[Signed[DeployData]](
-    byteVector => DeployData.from(DeployDataProto.parseFrom(byteVector.toArray)).right.get,
+    byteVector => DeployData.from(DeployDataProto.parseFrom(byteVector.toArray)).toOption.get,
     signedDeployData => ByteVector(DeployData.toProto(signedDeployData).toByteArray)
   )
 }

@@ -1,27 +1,25 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect.{ConcurrentEffect, ContextShift, Resource, Sync, Timer}
+import cats.effect.{Async, Resource, Sync, Temporal}
 import cats.syntax.all._
 import coop.rchain.casper.protocol.client.{DeployRuntime, GrpcDeployService, GrpcProposeService}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.models.syntax._
-import coop.rchain.monix.Monixable
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects
 import coop.rchain.node.effects.{ConsoleIO, GrpcReplClient}
 import coop.rchain.node.web.VersionInfo
 import coop.rchain.shared.StringOps.StringColors
-import coop.rchain.shared.{Log, TerminalMode, Time}
-import monix.execution.Scheduler
+import coop.rchain.shared.{Log, TerminalMode}
 import org.slf4j.bridge.SLF4JBridgeHandler
 
 import java.io.File
 import java.nio.file.Path
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.tools.jline.console.ConsoleReader
 import scala.tools.jline.console.completer.StringsCompleter
 
@@ -32,9 +30,9 @@ object NodeMain {
     *
     * @param options command line options
     */
-  def startNode[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log](
+  def startNode[F[_]: Parallel: Async: ConsoleIO: Log](
       options: commandline.Options
-  )(implicit s: Scheduler): F[Unit] = Sync[F].defer {
+  ): F[Unit] = Sync[F].defer {
     // Create merged configuration from CLI options and config file
     val (nodeConf, profile, configFile, kamonConf) = Configuration.build(options)
     // This system variable is used in Logger config file `node/src/main/resources/logback.xml`
@@ -85,7 +83,7 @@ object NodeMain {
     * @param options command line options
     * @param console console
     */
-  def runCLI[F[_]: Sync: Monixable: ConsoleIO: Timer](
+  def runCLI[F[_]: Async: ConsoleIO](
       options: commandline.Options
   ): F[Unit] = {
     val grpcPort =
@@ -110,8 +108,6 @@ object NodeMain {
         grpcPort,
         options.grpcMaxRecvMessageSize()
       )
-
-    implicit val time: Time[F] = Time.fromTimer
 
     val program = subcommand(options) match {
       case Eval(files, printUnmatchedSendsOnly) =>

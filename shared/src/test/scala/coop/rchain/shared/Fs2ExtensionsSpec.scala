@@ -1,77 +1,80 @@
 package coop.rchain.shared
 
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Timer}
+import cats.Id
+import cats.effect.kernel.Outcome.Succeeded
+import cats.effect.testing.scalatest.AsyncIOSpec
+import cats.effect.testkit.TestControl
+import cats.effect.{Async, IO, Ref}
 import cats.syntax.all._
 import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import fs2.Stream
-import monix.eval.Task
-import monix.execution.schedulers.TestScheduler
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
-import scala.util.Success
 
-class Fs2ExtensionsSpec extends AnyFlatSpec with Matchers {
+class Fs2ExtensionsSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
 
   /**
     * Creates a Stream of 2 elements creating String "11", if timeout occurs it will insert zeroes e.g. "101"
     */
-  def test[F[_]: Concurrent: Timer](timeout: FiniteDuration): F[String] = Ref.of("") flatMap { st =>
+  def test[F[_]: Async](timeout: FiniteDuration): F[String] = Ref.of("") flatMap { st =>
     val addOne  = Stream.eval(st.updateAndGet(_ + "1"))
-    val pause   = Stream.sleep(1.second).drain
+    val pause   = Stream.sleep[F](1.second).drain
     val addZero = st.update(_ + "0")
 
     (addOne ++ pause ++ addOne).evalOnIdle(addZero, timeout).compile.lastOrError
   }
 
   // Helper to construct success result
-  def success[A](a: A): Option[Success[A]] = Success(a).some
-
-  // Instance of testing ExecutionContext (Scheduler)
-  implicit val ec = TestScheduler()
+  def success[A](a: A): Option[Succeeded[Id, Throwable, A]] = Succeeded[Id, Throwable, A](a).some
 
   "evalOnIdle" should "NOT trigger timeout if element IS produced within timeout period" in {
-    val t = test[Task](1001.millis).runToFuture
+    for {
+      t <- TestControl.execute(test[IO](1001.millis))
 
-    // Sanity check, value should be empty before start
-    t.value shouldBe none
+      // Sanity check, value should be empty before start
+      _ <- t.results.map(_ shouldBe none)
 
-    // Just before the next element produced, still no value
-    ec.tick(999.millis)
-    t.value shouldBe none
+      // Just before the next element produced, still no value
+      _ <- t.tickFor(999.millis)
+      _ <- t.results.map(_ shouldBe none)
 
-    ec.tick(1.millis)
-    t.value shouldBe success("11")
+      _ <- t.tickFor(1.millis)
+      _ <- t.results.map(_ shouldBe success("11"))
+    } yield ()
   }
 
   it should "trigger timeout if element is NOT produced within timeout" in {
-    val t = test[Task](750.millis).runToFuture
+    for {
+      t <- TestControl.execute(test[IO](750.millis))
 
-    // Sanity check, value should be empty before start
-    t.value shouldBe none
+      // Sanity check, value should be empty before start
+      _ <- t.results.map(_ shouldBe none)
 
-    // Just before the next element produced, still no value
-    ec.tick(999.millis)
-    t.value shouldBe none
+      // Just before the next element produced, still no value
+      _ <- t.tickFor(999.millis)
+      _ <- t.results.map(_ shouldBe none)
 
-    ec.tick(1.millis)
-    t.value shouldBe success("101")
+      _ <- t.tickFor(1.millis)
+      _ <- t.results.map(_ shouldBe success("101"))
+    } yield ()
   }
 
   it should "trigger two timeouts if element is NOT produced and timeout is double time shorter" in {
-    val t = test[Task](499.millis).runToFuture
+    for {
+      t <- TestControl.execute(test[IO](499.millis))
 
-    // Sanity check, value should be empty before start
-    t.value shouldBe none
+      // Sanity check, value should be empty before start
+      _ <- t.results.map(_ shouldBe none)
 
-    // Just before the next element produced, still no value
-    ec.tick(999.millis)
-    t.value shouldBe none
+      // Just before the next element produced, still no value
+      _ <- t.tickFor(999.millis)
+      _ <- t.results.map(_ shouldBe none)
 
-    ec.tick(1.millis)
-    t.value shouldBe success("1001")
+      _ <- t.tickFor(1.millis)
+      _ <- t.results.map(_ shouldBe success("1001"))
+    } yield ()
   }
 
 }

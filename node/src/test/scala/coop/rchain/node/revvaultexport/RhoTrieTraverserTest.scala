@@ -1,6 +1,7 @@
 package coop.rchain.node.revvaultexport
 
-import cats.effect.Concurrent
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, IO}
 import coop.rchain.casper.genesis.contracts.{Registry, StandardDeploys}
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
@@ -11,8 +12,6 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.rholang.RhoType.RhoName
 import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 
 import scala.collection.compat.immutable.LazyList
@@ -59,10 +58,10 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
                                |  }
                                |}""".stripMargin
 
-    implicit val concurrent                  = Concurrent[Task]
-    implicit val metricsEff: Metrics[Effect] = new Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Effect]      = NoopSpan[Task]()
-    implicit val logger: Log[Effect]         = Log.log[Task]
+    implicit val concurrent                  = Async[IO]
+    implicit val metricsEff: Metrics[Effect] = new Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[Effect]      = NoopSpan[IO]()
+    implicit val logger: Log[Effect]         = Log.log[IO]
     val t = rhoRuntimeEff[Effect](false).use {
       case (runtime, _, _) =>
         for {
@@ -111,7 +110,7 @@ class RhoTrieTraverserTest extends AnyFlatSpec {
           })
         } yield ()
     }
-    t.runSyncUnsafe()
+    t.unsafeRunSync()
   }
 
 }

@@ -1,6 +1,7 @@
 package coop.rchain.rspace.serializers
 
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
 import coop.rchain.rspace.util
@@ -161,10 +162,10 @@ object ScodecSerialize {
   implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
 
   private val codecProduce: Codec[Produce] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: bool).as[Produce]
+    (codecBlake2b256Hash :: codecBlake2b256Hash :: bool).as[Produce]
 
   private val codecConsume: Codec[Consume] =
-    (codecSeq[Blake2b256Hash] :: Codec[Blake2b256Hash] :: bool).as[Consume]
+    (codecSeq(codecBlake2b256Hash) :: codecBlake2b256Hash :: bool).as[Consume]
 
   private val codecCOMM: Codec[COMM] =
     (codecConsume :: codecSeq(codecProduce) :: sortedSet(uint8) :: codecMap(codecProduce, int32))
@@ -211,7 +212,7 @@ object ScodecSerialize {
       sp: Serialize[P],
       sk: Serialize[K]
   ): Codec[WaitingContinuation[P, K]] =
-    memoize("Cont", (serializeToCodecContinuation[P, K] _).tupled)(sp, sk)
+    memoize("Cont", (serializeToCodecContinuation[P, K] _).tupled)(sp -> sk)
 
   /*
    * scodec serializers (collection, map, set)

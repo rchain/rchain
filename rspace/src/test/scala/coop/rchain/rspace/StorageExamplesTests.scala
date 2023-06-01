@@ -1,17 +1,18 @@
 package coop.rchain.rspace
 
+import cats.Parallel.Aux
 import cats._
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.util.{getK, runK, unpackOption}
-import monix.eval.Task
 import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import cats.effect.unsafe.implicits.global
 
 trait StorageExamplesTests[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
@@ -272,7 +273,10 @@ abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
       (hr, ts) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](hr, atomicStore)
+          new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](
+            hr,
+            atomicStore
+          )
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)
@@ -280,8 +284,8 @@ abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
 }
 
 class InMemoryHotStoreStorageExamplesTests
-    extends InMemoryHotStoreStorageExamplesTestsBase[Task]
-    with TaskTests[Channel, Pattern, Entry, Entry, EntriesCaptor]
-    with StorageExamplesTests[Task] {
-  implicit val parF = Task.catsParallel
+    extends InMemoryHotStoreStorageExamplesTestsBase[IO]
+    with IOTests[Channel, Pattern, Entry, Entry, EntriesCaptor]
+    with StorageExamplesTests[IO] {
+  implicit val parF: Parallel[IO] = IO.parallelForIO
 }

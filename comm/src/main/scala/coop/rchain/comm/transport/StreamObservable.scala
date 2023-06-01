@@ -1,27 +1,23 @@
 package coop.rchain.comm.transport
 
-import cats.effect.Sync
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.transport.PacketOps._
 import coop.rchain.shared.Log
-import monix.execution.{Cancelable, Scheduler}
-import monix.reactive.Observable
-import monix.reactive.observers.Subscriber
+import fs2.Stream
+import fs2.concurrent.Channel
 
 import scala.collection.concurrent.TrieMap
 
 final case class StreamMsgId(key: String, sender: PeerNode)
 
-class StreamObservable[F[_]: Sync: Log](
+class StreamObservableClass[F[_]: Async: Log](
     peer: PeerNode,
     bufferSize: Int,
-    cache: TrieMap[String, Array[Byte]]
-)(
-    implicit scheduler: Scheduler
-) extends Observable[StreamMsgId] {
-
-  private val subject = buffer.LimitedBufferObservable.dropNew[StreamMsgId](bufferSize)
+    cache: TrieMap[String, Array[Byte]],
+    private val subject: Channel[F, StreamMsgId]
+) {
 
   def enque(blob: Blob): F[Unit] = {
 
@@ -37,7 +33,13 @@ class StreamObservable[F[_]: Sync: Log](
       }
 
     def push(key: String): F[Boolean] =
-      Sync[F].delay(subject.pushNext(StreamMsgId(key, blob.sender)))
+      subject
+        .trySend(StreamMsgId(key, blob.sender))
+        .flatMap(
+          _.leftTraverse(
+            _ => new Exception(s"Channel is closed when trying to send.").raiseError[F, Boolean]
+          ).map(_.merge)
+        )
 
     def propose(key: String): F[Unit] = {
       val processError = Log[F].warn(
@@ -48,9 +50,17 @@ class StreamObservable[F[_]: Sync: Log](
 
     logStreamInformation >> storeBlob >>= (_.fold(().pure[F])(propose))
   }
+}
 
-  def unsafeSubscribeFn(subscriber: Subscriber[StreamMsgId]): Cancelable = {
-    val subscription = subject.subscribe(subscriber)
-    () => subscription.cancel()
-  }
+object StreamObservable {
+  type StreamObservable[F[_]] = (Blob => F[Unit], Stream[F, StreamMsgId])
+  def apply[F[_]: Async: Log](
+      peer: PeerNode,
+      bufferSize: Int,
+      cache: TrieMap[String, Array[Byte]]
+  ): F[StreamObservable[F]] =
+    Channel.bounded[F, StreamMsgId](bufferSize).map { q =>
+      val x = new StreamObservableClass(peer, bufferSize, cache, q)
+      (x.enque, q.stream)
+    }
 }

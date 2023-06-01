@@ -13,8 +13,7 @@ import cats.syntax.traverse._
 import coop.rchain.shared.Log
 import org.bitlet.weupnp._
 
-import scala.collection.JavaConverters._
-import scala.language.higherKinds
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 import scala.util.control.NonFatal
 import scala.util.matching.Regex

@@ -1,7 +1,7 @@
 package coop.rchain.node.revvaultexport
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -18,7 +18,6 @@ import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 
 import java.nio.file.Path
-import scala.concurrent.ExecutionContext
 
 object StateBalances {
 
@@ -40,12 +39,12 @@ object StateBalances {
     } yield unf
   }
 
-  def read[F[_]: Concurrent: Parallel: ContextShift](
+  def read[F[_]: Async: Parallel](
       shardId: String,
       blockHash: String,
       vaultTreeHashMapDepth: Int,
       dataDir: Path
-  )(implicit scheduler: ExecutionContext): F[List[(ByteString, Long)]] = {
+  ): F[List[(ByteString, Long)]] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val span                                        = NoopSpan[F]()
     implicit val log: Log[F]                                 = Log.log

@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.Parallel
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.store.KeyValueStore
@@ -41,7 +41,7 @@ trait History[F[_]] {
 object History {
   val emptyRootHash: Blake2b256Hash = RadixHistory.emptyRootHash
 
-  def create[F[_]: Concurrent: Sync: Parallel](
+  def create[F[_]: Async: Sync: Parallel](
       root: Blake2b256Hash,
       store: KeyValueStore[F]
   ): F[RadixHistory[F]] = RadixHistory(root, RadixHistory.createStore(store))

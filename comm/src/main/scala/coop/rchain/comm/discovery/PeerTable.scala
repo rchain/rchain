@@ -1,11 +1,18 @@
 package coop.rchain.comm.discovery
 
-import coop.rchain.comm.{CommError, PeerNode}, CommError._
+import coop.rchain.comm.{CommError, PeerNode}
+import CommError._
+
 import scala.collection.mutable
 import scala.annotation.tailrec
-import cats._, cats.data._, cats.syntax.all._
-import coop.rchain.catscontrib._, Catscontrib._
+import cats._
+import cats.data._
+import cats.syntax.all._
+import coop.rchain.catscontrib._
+import Catscontrib._
 import cats.effect._
+
+import scala.reflect.ClassTag
 
 trait Keyed {
   def key: Seq[Byte]
@@ -38,7 +45,7 @@ final case class PeerTableEntry[A](entry: A, gkey: A => Seq[Byte]) extends Keyed
 
 object PeerTable {
 
-  def apply[A <: PeerNode, F[_]: Sync: KademliaRPC](
+  def apply[A <: PeerNode: ClassTag, F[_]: Sync: KademliaRPC](
       key: Seq[Byte],
       k: Int = PeerTable.Redundancy,
       alpha: Int = PeerTable.Alpha
@@ -79,7 +86,7 @@ object PeerTable {
   *
   */
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-final class PeerTable[A <: PeerNode, F[_]: Sync: KademliaRPC](
+final class PeerTable[A <: PeerNode: ClassTag, F[_]: Sync: KademliaRPC](
     localKey: Seq[Byte],
     private[discovery] val k: Int,
     alpha: Int
@@ -132,7 +139,7 @@ final class PeerTable[A <: PeerNode, F[_]: Sync: KademliaRPC](
               ps += new Entry(peer, _.key)
               None
             case None =>
-              if (ps.size < k) {
+              if (ps.sizeIs < k) {
                 ps += new Entry(peer, _.key)
                 None
               } else {
@@ -208,13 +215,13 @@ final class PeerTable[A <: PeerNode, F[_]: Sync: KademliaRPC](
         case Some(index) =>
           val entries = new mutable.ListBuffer[Entry]
 
-          for (i <- index until 8 * width; if entries.size < k) {
+          for (i <- index until 8 * width; if entries.sizeIs < k) {
             table(i) synchronized {
               entries ++= table(i).filter(_.entry.key != key)
             }
           }
 
-          for (i <- index - 1 to 0 by -1; if entries.size < k) {
+          for (i <- index - 1 to 0 by -1; if entries.sizeIs < k) {
             table(i) synchronized {
               entries ++= table(i)
             }
@@ -242,7 +249,7 @@ final class PeerTable[A <: PeerNode, F[_]: Sync: KademliaRPC](
     * Return a sequence of all the `A`s in the table.
     */
   def peers: F[Seq[A]] =
-    Sync[F].delay(table.flatMap(l => l synchronized { l.map(_.entry) }))
+    Sync[F].delay(table.flatMap(l => l synchronized { l.map(_.entry) }).toIndexedSeq)
 
   /**
     * Return all distances in order from least to most filled.
@@ -250,12 +257,13 @@ final class PeerTable[A <: PeerNode, F[_]: Sync: KademliaRPC](
     * Optionally, ignore any distance closer than [[limit]].
     */
   def sparseness: F[Seq[Int]] =
-    Sync[F].delay(
-      table
+    Sync[F].delay {
+      val x = table
         .take(256)
         .zipWithIndex
         .map { case (l, i) => (l.size, i) }
         .sortWith(_._1 < _._1)
         .map(_._2)
-    )
+      x.toIndexedSeq
+    }
 }

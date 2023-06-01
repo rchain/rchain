@@ -139,22 +139,14 @@ object RhoTrieTraverser {
           result <- currentNode match {
                      case Some(Left(i)) =>
                        if (key.isEmpty)
-                         Left(
-                           keyRests ++ extendKey(key, i),
-                           depth,
-                           collectedResults
-                         ).pure[F]
+                         Left((keyRests ++ extendKey(key, i), depth, collectedResults)).pure[F]
                        else if (depth == key.length)
-                         Left(keyRests, depth, collectedResults).pure[F]
+                         Left((keyRests, depth, collectedResults)).pure[F]
                        else
-                         Left(
-                           keyRests ++ extendKey(key, i),
-                           depth,
-                           collectedResults
-                         ).pure[F]
+                         Left((keyRests ++ extendKey(key, i), depth, collectedResults)).pure[F]
                      case Some(Right(map)) =>
-                       Left(keyRests, depth, map +: collectedResults).pure[F]
-                     case _ => Left(keyRests, depth, collectedResults).pure[F]
+                       Left((keyRests, depth, map +: collectedResults)).pure[F]
+                     case _ => Left((keyRests, depth, collectedResults)).pure[F]
                    }
         } yield result
       case _ => collectedResults.asRight[ReadParams[F]].pure[F]

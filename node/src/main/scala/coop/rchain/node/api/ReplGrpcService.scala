@@ -1,25 +1,21 @@
 package coop.rchain.node.api
 
 import cats.effect.Sync
-import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
-import coop.rchain.monix.Monixable
-import coop.rchain.node.model.repl._
-import coop.rchain.rholang.interpreter.Interpreter._
+import coop.rchain.node.model.{CmdRequest, EvalRequest, ReplFs2Grpc, ReplResponse}
+import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{RhoRuntime, _}
-import coop.rchain.shared.syntax._
-import monix.eval.Task
-import monix.execution.Scheduler
+import io.grpc.Metadata
+import cats.syntax.all._
 
 object ReplGrpcService {
 
-  def apply[F[_]: Monixable: Sync](runtime: RhoRuntime[F], worker: Scheduler): ReplGrpcMonix.Repl =
-    new ReplGrpcMonix.Repl {
+  def apply[F[_]: Sync](runtime: RhoRuntime[F]): ReplFs2Grpc[F, Metadata] =
+    new ReplFs2Grpc[F, Metadata] {
       def exec(source: String, printUnmatchedSendsOnly: Boolean = false): F[ReplResponse] =
         Sync[F]
           .attempt(
@@ -57,14 +53,11 @@ object ReplGrpcService {
           }
           .map(ReplResponse(_))
 
-      private def defer[A](task: F[A]): Task[A] =
-        task.toTask.executeOn(worker)
+      def run(request: CmdRequest, ctx: Metadata): F[ReplResponse] =
+        exec(request.line)
 
-      def run(request: CmdRequest): Task[ReplResponse] =
-        defer(exec(request.line))
-
-      def eval(request: EvalRequest): Task[ReplResponse] =
-        defer(exec(request.program, request.printUnmatchedSendsOnly))
+      def eval(request: EvalRequest, ctx: Metadata): F[ReplResponse] =
+        exec(request.program, request.printUnmatchedSendsOnly)
 
       private def printNormalizedTerm(normalizedTerm: Par): Unit = {
         Console.println("\nEvaluating:")

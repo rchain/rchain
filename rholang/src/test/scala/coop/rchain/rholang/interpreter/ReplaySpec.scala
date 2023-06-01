@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -8,8 +10,6 @@ import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.SoftCheckpoint
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -57,19 +57,20 @@ class ReplaySpec extends AnyFlatSpec with Matchers {
             evaluateWithRuntime(runtime, replayRuntime)(term, Cost(Integer.MAX_VALUE))
               .onError {
                 case _: Throwable =>
-                  println(s"Test retry count: $i").pure[Task]
+                  println(s"Test retry count: $i").pure[IO]
               }
-              .runSyncUnsafe(1.seconds)
+              .timeout(1.seconds)
+              .unsafeRunSync()
 
           assert(playRes.errors.isEmpty)
           assert(replayRes.errors.isEmpty)
         }
-        ().pure[Task]
-    }.runSyncUnsafe(timeout)
+        ().pure[IO]
+    }.timeout(timeout).unsafeRunSync()
 
   def evaluateWithRuntime(
-      runtime: RhoRuntime[Task],
-      replayRuntime: ReplayRhoRuntime[Task]
+      runtime: RhoRuntime[IO],
+      replayRuntime: ReplayRhoRuntime[IO]
   )(term: String, initialPhlo: Cost) = {
     implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
     for {
@@ -93,13 +94,13 @@ class ReplaySpec extends AnyFlatSpec with Matchers {
                        .onError {
                          case _: Throwable =>
                            println(s"Executed term: $term")
-                           println(s"Event log: $log").pure[Task]
+                           println(s"Event log: $log").pure[IO]
                        }
       _ <- replayRuntime.checkReplayData.onError {
             case _: Throwable =>
               println(s"Executed term: $term")
               println(s"Event log: $log")
-              println(s"Replay result: $replayResult").pure[Task]
+              println(s"Replay result: $replayResult").pure[IO]
           }
 
       // Revert all changes / reset to initial state
@@ -108,13 +109,13 @@ class ReplaySpec extends AnyFlatSpec with Matchers {
     } yield (playResult, replayResult)
   }
 
-  def withRSpaceAndRuntime(op: (RhoRuntime[Task], ReplayRhoRuntime[Task]) => Task[Unit]) = {
-    implicit val logF: Log[Task]           = new Log.NOPLog[Task]
-    implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+  def withRSpaceAndRuntime(op: (RhoRuntime[IO], ReplayRhoRuntime[IO]) => IO[Unit]) = {
+    implicit val logF: Log[IO]           = new Log.NOPLog[IO]
+    implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
 
     val resources = for {
-      res <- Resources.mkRuntimes[Task]("cost-accounting-spec-")
+      res <- Resources.mkRuntimes[IO]("cost-accounting-spec-")
     } yield res
 
     resources.use {

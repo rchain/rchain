@@ -1,30 +1,31 @@
 package coop.rchain.comm.transport
 
 import cats.Applicative
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.kernel.Resource
+import cats.effect.std.Dispatcher
 import cats.effect.syntax.all._
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import coop.rchain.comm.CommError.{protocolException, CommErr}
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.grpc.implicits._
+import coop.rchain.comm.transport.StreamObservable.StreamObservable
 import coop.rchain.metrics.Metrics
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2.Stream
-import io.grpc.ManagedChannel
+import fs2.concurrent.SignallingRef
 import io.grpc.netty._
+import io.grpc.{CallOptions, ManagedChannel, Metadata}
 import io.netty.handler.ssl.SslContext
-import monix.eval.Task
-import monix.execution.Ack.Continue
-import monix.execution.{Cancelable, CancelableFuture, Scheduler}
 
 import java.io.ByteArrayInputStream
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util._
+import cats.effect.{Deferred, Ref}
+import fs2.grpc.client.ClientOptions
 
 /**
   * GRPC channel with a message buffer protecting it from resource exhaustion
@@ -34,20 +35,18 @@ import scala.util._
 final case class BufferedGrpcStreamChannel[F[_]](
     grpcTransport: ManagedChannel,
     buffer: StreamObservable[F],
-    buferSubscriber: Cancelable
+    buferSubscriber: Stream[F, Unit]
 )
 
-class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
+class GrpcTransportClient[F[_]: Async: Log: Metrics](
     networkId: String,
     cert: String,
     key: String,
     maxMessageSize: Int,
     packetChunkSize: Int,
     clientQueueSize: Int,
-    channelsMap: Ref[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]],
-    ioScheduler: Scheduler
-)(implicit scheduler: Scheduler)
-    extends TransportLayer[F] {
+    channelsMap: Ref[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]]
+) extends TransportLayer[F] {
 
   val DefaultSendTimeout: FiniteDuration = 5.seconds
 
@@ -74,33 +73,34 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
         case Left(t)           => t.raiseError[F, SslContext]
       }
 
-  private def createChannel(peer: PeerNode): F[BufferedGrpcStreamChannel[F]] =
+  private def createChannel(
+      peer: PeerNode,
+      d: Dispatcher[F]
+  ): F[BufferedGrpcStreamChannel[F]] =
     for {
       _                <- Log[F].info(s"Creating new channel to peer ${peer.toAddress}")
       clientSslContext <- clientSslContextTask
       grpcChannel = NettyChannelBuilder
         .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
-        .executor(ioScheduler)
         .maxInboundMessageSize(maxMessageSize)
         .negotiationType(NegotiationType.TLS)
         .sslContext(clientSslContext)
-        .intercept(new SslSessionClientInterceptor(networkId))
+        .intercept(new SslSessionClientInterceptor[F](networkId, d))
         .overrideAuthority(peer.id.toString)
         .build()
-      buffer = new StreamObservable[F](peer, clientQueueSize, cache)
+      buffer <- StreamObservable[F](peer, clientQueueSize, cache)
 
-      buferSubscriber = buffer.subscribe(
+      buferSubscriber = buffer._2.evalMap(
         sMsg =>
           streamBlobFile(sMsg.key, peer, sMsg.sender)
             .guarantee(Sync[F].delay(cache.remove(sMsg.key)).void)
-            .toTask
-            .runToFuture >> Continue.pure[CancelableFuture]
       )
 
-      channel = BufferedGrpcStreamChannel(grpcChannel, buffer, buferSubscriber)
+      sig     <- SignallingRef(grpcChannel.isTerminated)
+      channel = BufferedGrpcStreamChannel(grpcChannel, buffer, buferSubscriber.interruptWhen(sig))
     } yield channel
 
-  private def getChannel(peer: PeerNode): F[BufferedGrpcStreamChannel[F]] =
+  private def getChannel(peer: PeerNode, d: Dispatcher[F]): F[BufferedGrpcStreamChannel[F]] =
     for {
       cDefNew <- Deferred[F, BufferedGrpcStreamChannel[F]]
       ret <- channelsMap.modify[(Deferred[F, BufferedGrpcStreamChannel[F]], Boolean)] { chMap =>
@@ -112,49 +112,62 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Log: Metrics](
               }
             }
       (cDef, newChannel) = ret
-      _                  <- Applicative[F].whenA(newChannel)(createChannel(peer) >>= cDef.complete)
+      _                  <- Applicative[F].whenA(newChannel)(createChannel(peer, d) >>= cDef.complete)
       c                  <- cDef.get
       // In case underlying gRPC transport is terminated - clean resources,
       // remove current record and try one more time
       r <- if (c.grpcTransport.isTerminated)
-            Sync[F].delay(c.buferSubscriber.cancel()) >>
-              Log[F].info(
-                s"Channel to peer ${peer.toAddress} is terminated, removing from connections map"
-              ) >>
-              channelsMap.update(_ - peer) >> getChannel(peer)
+            Log[F].info(
+              s"Channel to peer ${peer.toAddress} is terminated, removing from connections map"
+            ) >>
+              channelsMap.update(_ - peer) >> getChannel(peer, d)
           else c.pure[F]
+      _ <- Sync[F]
+            .start(r.buferSubscriber.compile.drain)
+            .onError {
+              case err =>
+                Log[F].error(s"Outbound gPRC channel to peer ${peer.toAddress} failed: $err") >>
+                  channelsMap.update(_ - peer)
+            }
+            .onCancel { channelsMap.update(_ - peer) }
     } yield r
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration)(
-      request: RoutingGrpcMonix.TransportLayer => F[CommErr[A]]
-  ): F[CommErr[A]] =
-    (for {
-      channel <- getChannel(peer)
-      stub <- Sync[F].delay(
-               RoutingGrpcMonix.stub(channel.grpcTransport).withDeadlineAfter(timeout)
-             )
-      result <- request(stub)
-      _      <- Task.unit.asyncBoundary.fromTask // return control to caller thread
-    } yield result).attempt.map(_.fold(e => Left(protocolException(e)), identity))
+      request: TransportLayerFs2Grpc[F, Metadata] => F[CommErr[A]]
+  ): F[CommErr[A]] = {
+    val co = CallOptions.DEFAULT.withDeadlineAfter(timeout.toMillis, MILLISECONDS)
+    Dispatcher.parallel[F].use { d =>
+      (for {
+        channel <- getChannel(peer, d)
+        stub = TransportLayerFs2Grpc.stub(
+          d,
+          channel.grpcTransport,
+          ClientOptions.default.configureCallOptions(_ => co)
+        )
+        result <- request(stub)
+      } yield result).attempt.map(_.fold(e => Left(protocolException(e)), identity))
+    }
+  }
 
   def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
     withClient(peer, DefaultSendTimeout)(GrpcTransport.send(_, peer, msg))
 
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
     Stream
-      .fromIterator(peers.iterator)
+      .fromIterator(peers.iterator, 1)
       .parEvalMapUnorderedProcBounded(send(_, msg))
       .compile
       .to(Seq)
 
-  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
+  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] = Dispatcher.parallel[F].use { d =>
     Stream
-      .fromIterator(peers.iterator)
+      .fromIterator(peers.iterator, 1)
       .parEvalMapUnorderedProcBounded { peer =>
-        getChannel(peer).flatMap(_.buffer.enque(blob))
+        getChannel(peer, d).flatMap(_.buffer._1(blob))
       }
       .compile
       .drain
+  }
 
   private def streamBlobFile(
       key: String,

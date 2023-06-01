@@ -2,8 +2,7 @@ package coop.rchain.node.revvaultexport.mainnet1.reporting
 
 import cats.effect._
 import coop.rchain.node.revvaultexport.reporting.TransactionBalances
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+
 import org.rogach.scallop.ScallopConf
 
 import java.io.PrintWriter
@@ -61,7 +60,7 @@ final case class TransationOptions(arguments: Seq[String]) extends ScallopConf(a
 object TransactionBalanceMain {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
-    val options    = TransationOptions(args)
+    val options    = TransationOptions(args.toIndexedSeq)
     val dataDir    = options.dataDir()
     val blockHash  = options.blockHash()
     val walletPath = options.walletPath()
@@ -74,9 +73,9 @@ object TransactionBalanceMain {
     val transactionBalancesFile = outputDir.resolve("transactionBalances.csv")
     val historyFile             = outputDir.resolve("history.csv")
 
-    implicit val tc = Concurrent[Task]
+    implicit val tc = Async[IO]
 
-    val task: Task[Unit] = for {
+    val task: IO[Unit] = for {
       result <- TransactionBalances.main(
                  dataDir,
                  walletPath,
@@ -110,6 +109,7 @@ object TransactionBalanceMain {
       }
     } yield ()
 
-    task.runSyncUnsafe()
+    import cats.effect.unsafe.implicits.global
+    task.unsafeRunSync()
   }
 }

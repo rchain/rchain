@@ -2,15 +2,15 @@ package coop.rchain.models
 
 import java.util.Objects
 
-import monix.eval.Coeval
+import cats.Eval
 
+import java.util.Objects
 import scala.collection.immutable.BitSet
-import coop.rchain.models.rholang.implicits._
 
 final case class ParMap(
     ps: SortedParMap,
     connectiveUsed: Boolean,
-    locallyFree: Coeval[BitSet],
+    locallyFree: Eval[BitSet],
     remainder: Option[Var]
 ) {
 
@@ -27,7 +27,7 @@ object ParMap {
   def apply(
       seq: Seq[(Par, Par)],
       connectiveUsed: Boolean,
-      locallyFree: Coeval[BitSet],
+      locallyFree: Eval[BitSet],
       remainder: Option[Var]
   ) =
     new ParMap(SortedParMap(seq), connectiveUsed, locallyFree.memoize, remainder)
@@ -38,7 +38,7 @@ object ParMap {
       locallyFree: BitSet,
       remainder: Option[Var]
   ): ParMap =
-    apply(seq, connectiveUsed, Coeval.pure(locallyFree), remainder)
+    apply(seq, connectiveUsed, Eval.now(locallyFree), remainder)
 
   def apply(seq: Seq[(Par, Par)]): ParMap =
     apply(seq, connectiveUsed(seq), updateLocallyFree(seq), None)

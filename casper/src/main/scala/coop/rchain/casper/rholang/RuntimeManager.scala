@@ -71,7 +71,7 @@ trait RuntimeManager[F[_]] {
   def getMergeableStore: MergeableStore[F]
 }
 
-final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
+final case class RuntimeManagerImpl[F[_]: Async: Metrics: Span: Log: Parallel](
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
     historyRepo: RhoHistoryRepository[F],
@@ -258,7 +258,7 @@ object RuntimeManager {
 
   def apply[F[_]](implicit F: RuntimeManager[F]): F.type = F
 
-  def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+  def apply[F[_]: Async: Parallel: Metrics: Span: Log](
       rSpace: RhoISpace[F],
       replayRSpace: RhoReplayISpace[F],
       historyRepo: RhoHistoryRepository[F],
@@ -277,29 +277,29 @@ object RuntimeManager {
       )
     )
 
-  def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+  def apply[F[_]: Async: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
       mergeableTagName: Par,
       executionTracker: BlockExecutionTracker[F]
-  )(
-      implicit ec: ExecutionContext
   ): F[RuntimeManagerImpl[F]] =
-    createWithHistory(store, mergeableStore, mergeableTagName, executionTracker).map(_._1)
+    createWithHistory(store, mergeableStore, mergeableTagName, executionTracker).map(
+      _._1
+    )
 
-  def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+  def createWithHistory[F[_]: Async: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
       mergeableTagName: Par,
       executionTracker: BlockExecutionTracker[F]
-  )(
-      implicit ec: ExecutionContext
   ): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
     RSpace
-      .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
+      .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+        store
+      )
       .flatMap {
         case (rSpacePlay, rSpaceReplay) =>
           val historyRepo = rSpacePlay.historyRepo

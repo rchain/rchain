@@ -1,5 +1,7 @@
 package coop.rchain.rspace.bench
 
+import cats.effect.unsafe.implicits.global
+import coop.rchain.catscontrib.TaskContrib._
 import org.openjdk.jmh.annotations.{Level, Setup}
 import org.openjdk.jmh.infra.Blackhole
 
@@ -9,7 +11,7 @@ abstract class RhoReplayBenchBaseState extends RhoBenchBaseState {
     val r = (for {
       result <- runTask
       _      <- replayRuntime.createCheckpoint
-    } yield result).runSyncUnsafe()
+    } yield result).unsafeRunSync()
     bh.consume(r)
   }
 
@@ -17,13 +19,13 @@ abstract class RhoReplayBenchBaseState extends RhoBenchBaseState {
   override def doSetup(): Unit = {
     super.doSetup()
 
-    runTask.runSyncUnsafe()
+    runTask.unsafeRunSync()
     (for {
       executionCheckpoint <- replayRuntime.createCheckpoint
       _                   <- replayRuntime.rig(executionCheckpoint.log)
       _                   <- replayRuntime.reset(executionCheckpoint.root)
       _                   <- createTest(setupTerm)(replayRuntime, randSetup)
       _                   = runTask = createTest(Some(term))(replayRuntime, randRun)
-    } yield ()).runSyncUnsafe()
+    } yield ()).unsafeRunSync()
   }
 }

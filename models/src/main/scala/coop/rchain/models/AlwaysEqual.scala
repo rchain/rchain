@@ -2,12 +2,12 @@ package coop.rchain.models
 
 import scalapb.TypeMapper
 
-class AlwaysEqual[A](val item: A) {
-  def get(): A = item
+final case class AlwaysEqual[A](item: A) {
+  def get: A = item
 
   override def equals(other: Any): Boolean = other match {
-    case _: (AlwaysEqual[A]) => true
-    case _                   => false
+    case AlwaysEqual(_) => true
+    case _              => false
   }
 
   override def hashCode(): Int    = 121410467

@@ -14,7 +14,7 @@ import coop.rchain.rholang.interpreter.compiler.{
   SourcePosition
 }
 
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
 
 object PNewNormalizer {
   def normalize[F[_]: Sync](p: PNew, input: ProcVisitInputs)(
@@ -22,7 +22,7 @@ object PNewNormalizer {
   ): F[ProcVisitOutputs] = {
 
     // TODO: bindings within a single new shouldn't have overlapping names.
-    val newTaggedBindings = p.listnamedecl_.toVector.map {
+    val newTaggedBindings = p.listnamedecl_.asScala.toVector.map {
       case n: NameDeclSimpl => (None, n.var_, NameSort, n.line_num, n.col_num)
       case n: NameDeclUrn =>
         (
@@ -48,7 +48,7 @@ object PNewNormalizer {
           p = bodyResult.par,
           uri = uris,
           injections = env,
-          locallyFree = bodyResult.par.locallyFree.from(newCount).map(x => x - newCount)
+          locallyFree = bodyResult.par.locallyFree.rangeFrom(newCount).map(x => x - newCount)
         )
         ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.freeMap)
     }

@@ -1,6 +1,7 @@
 package coop.rchain.casper.helper
 
-import cats.effect.{Concurrent, Resource}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, IO, Resource}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -12,8 +13,6 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.rholang
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfter, Suite}
 
 import java.nio.file.Path
@@ -23,41 +22,40 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
 
   def withGenesis[R](
       context: GenesisContext
-  )(f: BlockStore[Task] => BlockDagStorage[Task] => RuntimeManager[Task] => Task[R]): R = {
-    implicit val metrics = new MetricsNOP[Task]()
-    implicit val log     = Log.log[Task]
+  )(f: BlockStore[IO] => BlockDagStorage[IO] => RuntimeManager[IO] => IO[R]): R = {
+    implicit val metrics = new MetricsNOP[IO]()
+    implicit val log     = Log.log[IO]
 
     def create(dir: Path) =
       for {
-        kvm        <- Resources.mkTestRNodeStoreManager[Task](dir)
-        blocks     <- BlockStore[Task](kvm)
-        dag        <- BlockDagKeyValueStorage.create[Task](kvm)
-        indexedDag = BlockDagStorage[Task](dag)
-        runtime <- Resources.mkRuntimeManagerAt[Task](
+        kvm        <- Resources.mkTestRNodeStoreManager[IO](dir)
+        blocks     <- BlockStore[IO](kvm)
+        dag        <- BlockDagKeyValueStorage.create[IO](kvm)
+        indexedDag = BlockDagStorage[IO](dag)
+        runtime <- Resources.mkRuntimeManagerAt[IO](
                     kvm,
                     BlockRandomSeed.nonNegativeMergeableTagName(context.genesisBlock.shardId)
                   )
       } yield (blocks, indexedDag, runtime)
 
     Resources
-      .copyStorage[Task](context.storageDirectory)
+      .copyStorage[IO](context.storageDirectory)
       .evalMap(create)
       .use(Function.uncurried(f).tupled)
-      .runSyncUnsafe()
+      .unsafeRunSync()
   }
 
-  def withStorage[R](f: BlockStore[Task] => BlockDagStorage[Task] => Task[R]): R = {
-    implicit val metrics = new MetricsNOP[Task]()
-    implicit val log     = Log.log[Task]
+  def withStorage[R](f: BlockStore[IO] => BlockDagStorage[IO] => IO[R]): R = {
+    implicit val metrics = new MetricsNOP[IO]()
+    implicit val log     = Log.log[IO]
 
-    BlockDagStorageTestFixture.withStorageF[Task].use(Function.uncurried(f).tupled).runSyncUnsafe()
+    BlockDagStorageTestFixture.withStorageF[IO].use(Function.uncurried(f).tupled).unsafeRunSync()
   }
 }
 
 object BlockDagStorageTestFixture {
 
-  def withStorageF[F[_]: Concurrent: Metrics: Log]
-      : Resource[F, (BlockStore[F], BlockDagStorage[F])] = {
+  def withStorageF[F[_]: Async: Metrics: Log]: Resource[F, (BlockStore[F], BlockDagStorage[F])] = {
     def create(dir: Path) =
       for {
         kvm        <- Resources.mkTestRNodeStoreManager[F](dir)

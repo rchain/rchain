@@ -1,9 +1,11 @@
 package coop.rchain.models
 
 import com.google.protobuf.ByteString
-import monix.eval.Coeval
+import cats.Eval
+import cats.effect.Sync
 import org.scalacheck.ScalacheckShapeless._
 import org.scalacheck.{Arbitrary, Gen, Shrink}
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
 
@@ -27,8 +29,8 @@ object testImplicits {
     ps <- Arbitrary.arbitrary[Seq[(Par, Par)]]
   } yield SortedParMap(ps))
 
-  implicit def coeval[A: Arbitrary]: Arbitrary[Coeval[A]] =
-    Arbitrary(Arbitrary.arbitrary[A].map(a => Coeval.delay(a)))
+  implicit def Eval[A: Arbitrary]: Arbitrary[Eval[A]] =
+    Arbitrary(Arbitrary.arbitrary[A].map(a => Sync[Eval].delay(a)))
 
   //Par and Expr (or Par at least) need to be first here, or else the compiler dies terribly.
   implicit val ParArbitrary                = implicitly[Arbitrary[Par]]

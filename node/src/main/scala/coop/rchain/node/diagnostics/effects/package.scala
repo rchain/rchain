@@ -1,14 +1,15 @@
 package coop.rchain.node.diagnostics
 
-import cats.effect.{ExitCase, Sync}
+import cats.effect.{Outcome, Ref, Sync}
 import cats.syntax.all._
 import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.node.runtime.NodeCallCtx
+import coop.rchain.sdk.syntax.all.sdkSyntaxVoid
 import kamon.Kamon
+import kamon.metric.{Instrument, Tagging}
 import kamon.trace.{Span => KSpan}
-import monix.execution.atomic.AtomicLong
 
 import scala.collection.concurrent.TrieMap
 
@@ -32,16 +33,16 @@ object Trace {
       parent match {
         case Some(st) =>
           Kamon
-            .buildSpan(s)
-            .withTag("network-id", networkId)
-            .withTag("host", host)
+            .spanBuilder(s)
             .asChildOf(st.ks)
+            .tag("network-id", networkId)
+            .tag("host", host)
             .start()
         case None =>
           Kamon
-            .buildSpan(s)
-            .withTag("network-id", networkId)
-            .withTag("host", host)
+            .spanBuilder(s)
+            .tag("network-id", networkId)
+            .tag("host", host)
             .start()
       }
     }
@@ -52,8 +53,8 @@ object Trace {
 
   def source(s: Source, networkId: String, host: String): Trace = SourceTrace(s, networkId, host)
 
+  private val counter = new java.util.concurrent.atomic.AtomicLong(0)
   def next: TraceId   = TraceId(counter.incrementAndGet())
-  private val counter = AtomicLong(0L)
 
   final case class TraceId(id: Long) extends AnyVal
 }
@@ -104,9 +105,9 @@ package object effects {
         Sync[F].bracketCase(
           mark(s"started-$label")
         )(_ => block) {
-          case (_, ExitCase.Completed) => mark(s"finished-$label")
-          case (_, ExitCase.Error(_))  => mark(s"failed-$label")
-          case (_, ExitCase.Canceled)  => mark(s"cancelled-$label")
+          case (_, Outcome.Succeeded(_)) => mark(s"finished-$label")
+          case (_, Outcome.Errored(_))   => mark(s"failed-$label")
+          case (_, Outcome.Canceled())   => mark(s"cancelled-$label")
         }
     }
 
@@ -114,67 +115,128 @@ package object effects {
     new Metrics[F] {
       import kamon._
 
-      private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
+      private val m = Ref.unsafe[F, Map[String, Tagging[_]]](Map())
 
       private def source(name: String)(implicit ev: Metrics.Source): String = s"$ev.$name"
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def incrementCounter(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
-        Sync[F].delay {
-          m.getOrElseUpdate(source(name), Kamon.counter(source(name))) match {
-            case c: metric.Counter => c.increment(delta)
-          }
+        m.update { curV =>
+          val k = source(name)
+          val newM = curV
+            .get(k)
+            .map {
+              case c: metric.Counter => c.increment(delta)
+              case x                 => throw new Exception(s"Wrong Metric: $x")
+            }
+            .getOrElse(Kamon.counter(k).withoutTags())
+          curV.updated(k, newM)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def incrementSampler(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
-        Sync[F].delay {
-          m.getOrElseUpdate(source(name), Kamon.rangeSampler(source(name))) match {
-            case c: metric.RangeSampler => c.increment(delta)
-          }
+        m.update { curV =>
+          val k = source(name)
+          val newM = curV
+            .get(k)
+            .map {
+              case c: metric.RangeSampler => c.increment(delta)
+              case x                      => throw new Exception(s"Wrong Metric: $x")
+            }
+            .getOrElse(Kamon.rangeSampler(k).withoutTags())
+          curV.updated(k, newM)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def sample(name: String)(implicit ev: Metrics.Source): F[Unit] =
-        Sync[F].delay {
-          m.getOrElseUpdate(source(name), Kamon.rangeSampler(source(name))) match {
-            case c: metric.RangeSampler => c.sample
-          }
+        m.update { curV =>
+          val k = source(name)
+          val newM = curV
+            .get(k)
+            .map {
+              case c: metric.RangeSampler => c.sample()
+              case x                      => throw new Exception(s"Wrong Metric: $x")
+            }
+            .getOrElse(Kamon.rangeSampler(k).withoutTags())
+          curV.updated(k, newM)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def setGauge(name: String, value: Long)(implicit ev: Metrics.Source): F[Unit] =
-        Sync[F].delay {
-          m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.set(value)
-          }
+        m.update { curV =>
+          val k = source(name)
+          val newM = curV
+            .get(k)
+            .map {
+              case c: metric.Gauge => c.update(value.toDouble)
+              case x               => throw new Exception(s"Wrong Metric: $x")
+            }
+            .getOrElse(Kamon.gauge(k).withoutTags())
+          curV.updated(k, newM)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def incrementGauge(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
-        Sync[F].delay {
-          m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.increment(delta)
-          }
+        m.update { curV =>
+          val k = source(name)
+          val newM = curV
+            .get(k)
+            .map {
+              case c: metric.Gauge => c.increment(delta.toDouble)
+              case x               => throw new Exception(s"Wrong Metric: $x")
+            }
+            .getOrElse(Kamon.gauge(k).withoutTags())
+          curV.updated(k, newM)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def decrementGauge(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
-        Sync[F].delay {
-          m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.decrement(delta)
-          }
+        m.update { curV =>
+          val k = source(name)
+          val newM = curV
+            .get(k)
+            .map {
+              case c: metric.Gauge => c.decrement(delta.toDouble)
+              case x               => throw new Exception(s"Wrong Metric: $x")
+            }
+            .getOrElse(Kamon.gauge(k).withoutTags())
+          curV.updated(k, newM)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit] =
-        Sync[F].delay {
-          m.getOrElseUpdate(source(name), Kamon.histogram(source(name))) match {
-            case c: metric.Histogram => c.record(value, count)
-          }
+        m.update { curV =>
+          val k = source(name)
+          val newM = curV
+            .get(k)
+            .map {
+              case c: metric.Histogram => c.record(value, count)
+              case x                   => throw new Exception(s"Wrong Metric: $x")
+            }
+            .getOrElse(Kamon.histogram(k).withoutTags())
+          curV.updated(k, newM)
         }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def timer[A](name: String, block: F[A])(implicit ev: Metrics.Source): F[A] =
-        m.getOrElseUpdate(source(name), Kamon.timer(source(name))) match {
-          case c: metric.Timer =>
+        m.modify {
+            case curV =>
+              val k = source(name)
+              lazy val missCase = {
+                val newK: metric.Timer = Kamon.timer(k).withoutTags()
+                (curV + (k -> newK)) -> newK
+              }
+              curV.get(k).fold(missCase) {
+                case t: metric.Timer => curV -> t
+                case x               => throw new Exception(s"Wrong Metric: $x")
+              }
+          }
+          .flatMap { c =>
             for {
               t <- Sync[F].delay(c.start())
               r <- block
               _ = t.stop()
             } yield r
-        }
+          }
     }
 }

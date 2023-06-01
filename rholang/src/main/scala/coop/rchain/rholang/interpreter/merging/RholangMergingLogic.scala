@@ -1,8 +1,7 @@
 package coop.rchain.rholang.interpreter.merging
 
 import cats.Monad
-import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.Async
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -20,6 +19,7 @@ import coop.rchain.scodec.codecs
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{bytes, int64, uint16, variableSizeBytes, vlong}
+import cats.effect.Ref
 
 object RholangMergingLogic {
 
@@ -39,7 +39,7 @@ object RholangMergingLogic {
     * @param channelValues Final values
     * @param getInitialValue Accessor to initial value
     */
-  def calculateNumChannelDiff[F[_]: Concurrent, Key](
+  def calculateNumChannelDiff[F[_]: Async, Key](
       channelValues: Seq[Map[Key, Long]],
       getInitialValue: Key => F[Option[Long]]
   ): F[List[Map[Key, Long]]] = {
@@ -124,8 +124,8 @@ object RholangMergingLogic {
       storeAction = TrieInsertBinaryProduce(channelHash, Seq(datumEncoded))
     } yield storeAction
 
-  private val byteStringOrdering =
-    Ordering.by[ByteString, Iterable[Byte]](_.toByteArray)(Ordering.Iterable[Byte])
+  import scala.Ordering.Implicits._
+  private val byteStringOrdering = Ordering.by((x: ByteString) => x.toByteArray.toSeq)
 
   /* Number channel value encoders/decoders */
 

@@ -1,93 +1,216 @@
 package coop.rchain.node.diagnostics
 
-import java.lang.StringBuilder
+import kamon.metric.MeasurementUnit.Dimension._
+import kamon.metric.MeasurementUnit.{information, time}
+import kamon.metric._
+import kamon.tag.TagSet
+
 import java.text.{DecimalFormat, DecimalFormatSymbols}
 import java.util.Locale
-
-import kamon.Environment
-import kamon.metric.{MetricDistribution, MetricValue}
-import kamon.metric.MeasurementUnit
-import kamon.metric.MeasurementUnit.{information, none, time}
-import kamon.metric.MeasurementUnit.Dimension._
 
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements"))
 class ScrapeDataBuilder(
     prometheusConfig: NewPrometheusReporter.Configuration,
-    environmentTags: Map[String, String] = Map.empty
+    environmentTags: TagSet = TagSet.Empty
 ) {
-  private val builder              = new StringBuilder()
-  private val decimalFormatSymbols = DecimalFormatSymbols.getInstance(Locale.ROOT)
-  private val numberFormat         = new DecimalFormat("#0.0########", decimalFormatSymbols)
+  private val _builder              = new StringBuilder()
+  private val _decimalFormatSymbols = DecimalFormatSymbols.getInstance(Locale.ROOT)
+  private val _numberFormat         = new DecimalFormat("#0.0########", _decimalFormatSymbols)
 
-  import builder.append
+  import _builder.append
 
   def build(): String =
-    builder.toString()
+    _builder.toString()
 
-  def appendCounters(counters: Seq[MetricValue]): ScrapeDataBuilder = {
-    counters.groupBy(_.name).foreach(appendValueMetric("counter", alwaysIncreasing = true))
+  def appendCounters(counters: Seq[MetricSnapshot.Values[Long]]): ScrapeDataBuilder = {
+    counters.foreach(appendCounterMetric)
     this
   }
 
-  def appendGauges(gauges: Seq[MetricValue]): ScrapeDataBuilder = {
-    gauges.groupBy(_.name).foreach(appendValueMetric("gauge", alwaysIncreasing = false))
+  def appendGauges(gauges: Seq[MetricSnapshot.Values[Double]]): ScrapeDataBuilder = {
+    gauges.foreach(appendGaugeMetric)
     this
   }
 
-  def appendHistograms(histograms: Seq[MetricDistribution]): ScrapeDataBuilder = {
-    histograms.groupBy(_.name).foreach(appendDistributionMetric)
+  def appendHistograms(histograms: Seq[MetricSnapshot.Distributions]): ScrapeDataBuilder = {
+    histograms.foreach(appendDistributionMetric)
     this
   }
 
-  private def appendValueMetric(metricType: String, alwaysIncreasing: Boolean)(
-      group: (String, Seq[MetricValue])
-  ): Unit = {
-    val (metricName, snapshots) = group
-    val unit                    = snapshots.headOption.map(_.unit).getOrElse(none)
-    val normalizedMetricName = normalizeMetricName(metricName, unit) + {
-      if (alwaysIncreasing) "_total" else ""
-    }
+  def appendDistributionMetricsAsGauges(
+      distributions: Seq[MetricSnapshot.Distributions]
+  ): ScrapeDataBuilder = {
+    def gaugeFilter(metric: MetricSnapshot.Distributions): Boolean =
+      prometheusConfig.gaugeSettings.metricMatchers.exists(_.accept(metric.name))
 
-    append("# TYPE ").append(normalizedMetricName).append(" ").append(metricType).append("\n")
+    def avg(snap: Instrument.Snapshot[Distribution]): Double =
+      if (snap.value.count == 0) 0 else snap.value.sum.toDouble / snap.value.count
 
-    snapshots.foreach(metric => {
+    distributions
+      .filter(gaugeFilter)
+      .map { metric =>
+        val settings = Metric.Settings.ForValueInstrument(
+          metric.settings.unit,
+          metric.settings.autoUpdateInterval
+        )
+        Seq(
+          MetricSnapshot.ofValues(
+            name = metric.name + ".min",
+            description = metric.description,
+            settings = settings,
+            instruments = metric.instruments
+              .map(snap => Instrument.Snapshot[Double](snap.tags, snap.value.min.toDouble))
+          ),
+          MetricSnapshot.ofValues(
+            name = metric.name + ".max",
+            description = metric.description,
+            settings = settings,
+            instruments = metric.instruments
+              .map(snap => Instrument.Snapshot[Double](snap.tags, snap.value.max.toDouble))
+          ),
+          MetricSnapshot.ofValues(
+            name = metric.name + ".avg",
+            description = metric.description,
+            settings = settings,
+            instruments =
+              metric.instruments.map(snap => Instrument.Snapshot[Double](snap.tags, avg(snap)))
+          )
+        )
+      }
+      .flatten
+      .foreach(appendGaugeMetric)
+    this
+  }
+
+  private def appendCounterMetric(metric: MetricSnapshot.Values[Long]): Unit = {
+    val unit                 = metric.settings.unit
+    val normalizedMetricName = normalizeCounterMetricName(metric.name, unit)
+
+    if (metric.description.nonEmpty)
+      append("# HELP ")
+        .append(normalizedMetricName)
+        .append(" ")
+        .append(metric.description)
+        .append("\n")
+
+    append("# TYPE ").append(normalizedMetricName).append(" counter\n")
+
+    metric.instruments.foreach(instrument => {
       append(normalizedMetricName)
-      appendTags(metric.tags)
+      appendTags(instrument.tags)
       append(" ")
-      append(format(scale(metric.value, metric.unit)))
+      append(format(convert(instrument.value.toDouble, unit)))
       append("\n")
     })
   }
 
-  private def appendDistributionMetric(group: (String, Seq[MetricDistribution])): Unit = {
-    val (metricName, snapshots) = group
-    val unit                    = snapshots.headOption.map(_.unit).getOrElse(none)
-    val normalizedMetricName    = normalizeMetricName(metricName, unit)
+  private def appendGaugeMetric(metric: MetricSnapshot.Values[Double]): Unit = {
+    val unit                 = metric.settings.unit
+    val normalizedMetricName = normalizeMetricName(metric.name, unit)
+
+    if (metric.description.nonEmpty)
+      append("# HELP ")
+        .append(normalizedMetricName)
+        .append(" ")
+        .append(metric.description)
+        .append("\n")
+
+    append("# TYPE ").append(normalizedMetricName).append(" gauge\n")
+
+    metric.instruments.foreach(instrument => {
+      append(normalizedMetricName)
+      appendTags(instrument.tags)
+      append(" ")
+      append(format(convert(instrument.value, unit)))
+      append("\n")
+    })
+  }
+
+  private def appendDistributionMetric(metric: MetricSnapshot.Distributions): Unit = {
+    val reportAsSummary =
+      prometheusConfig.summarySettings.metricMatchers.exists(_.accept(metric.name))
+    if (reportAsSummary) {
+      appendDistributionMetricAsSummary(metric)
+    } else {
+      appendDistributionMetricAsHistogram(metric)
+    }
+  }
+
+  private def appendDistributionMetricAsHistogram(metric: MetricSnapshot.Distributions): Unit = {
+    val unit                 = metric.settings.unit
+    val normalizedMetricName = normalizeMetricName(metric.name, unit)
+
+    if (metric.description.nonEmpty)
+      append("# HELP ")
+        .append(normalizedMetricName)
+        .append(" ")
+        .append(metric.description)
+        .append("\n")
 
     append("# TYPE ").append(normalizedMetricName).append(" histogram").append("\n")
 
-    snapshots.foreach(metric => {
-      if (metric.distribution.count > 0) {
+    metric.instruments.foreach(instrument => {
+      if (instrument.value.count > 0) {
         appendHistogramBuckets(
           normalizedMetricName,
-          metric.tags,
-          metric,
-          resolveBucketConfiguration(metric)
+          instrument.tags,
+          instrument.value,
+          unit,
+          resolveBucketConfiguration(metric.name, unit)
         )
 
-        val count = format(metric.distribution.count.toDouble)
-        val sum   = format(scale(metric.distribution.sum, metric.unit))
-        appendTimeSerieValue(normalizedMetricName, metric.tags, count, "_count")
-        appendTimeSerieValue(normalizedMetricName, metric.tags, sum, "_sum")
+        val count = format(instrument.value.count.toDouble)
+        val sum   = format(convert(instrument.value.sum.toDouble, unit))
+        appendTimeSerieValue(normalizedMetricName, instrument.tags, count, "_count")
+        appendTimeSerieValue(normalizedMetricName, instrument.tags, sum, "_sum")
       }
     })
   }
 
+  private def appendDistributionMetricAsSummary(metric: MetricSnapshot.Distributions): Unit = {
+    val unit                 = metric.settings.unit
+    val normalizedMetricName = normalizeMetricName(metric.name, unit)
+
+    if (metric.description.nonEmpty)
+      append("# HELP ")
+        .append(normalizedMetricName)
+        .append(" ")
+        .append(metric.description)
+        .append("\n")
+
+    append("# TYPE ").append(normalizedMetricName).append(" summary").append("\n")
+
+    metric.instruments.foreach(instrument => {
+      if (instrument.value.count > 0) {
+        appendSummaryQuantiles(
+          normalizedMetricName,
+          instrument.tags,
+          instrument.value,
+          unit,
+          prometheusConfig.summarySettings.quantiles
+        )
+        appendTimeSerieValue(
+          normalizedMetricName,
+          instrument.tags,
+          format(instrument.value.count.toDouble),
+          "_count"
+        )
+        appendTimeSerieValue(
+          normalizedMetricName,
+          instrument.tags,
+          format(instrument.value.sum.toDouble),
+          "_sum"
+        )
+      }
+    })
+
+  }
+
   private def appendTimeSerieValue(
       name: String,
-      tags: Map[String, String],
+      tags: TagSet,
       value: String,
-      suffix: String
+      suffix: String = ""
   ): Unit = {
     append(name)
     append(suffix)
@@ -97,30 +220,60 @@ class ScrapeDataBuilder(
     append("\n")
   }
 
-  private def resolveBucketConfiguration(metric: MetricDistribution): Seq[java.lang.Double] =
+  private def resolveBucketConfiguration(
+      metricName: String,
+      unit: MeasurementUnit
+  ): Seq[java.lang.Double] =
     prometheusConfig.customBuckets.getOrElse(
-      metric.name,
-      metric.unit.dimension match {
+      metricName,
+      unit.dimension match {
         case Time        => prometheusConfig.timeBuckets
         case Information => prometheusConfig.informationBuckets
         case _           => prometheusConfig.defaultBuckets
       }
     )
 
+  private def appendSummaryQuantiles(
+      name: String,
+      tags: TagSet,
+      distribution: Distribution,
+      unit: MeasurementUnit,
+      quantiles: Seq[java.lang.Double]
+  ): Unit = {
+    val percentileIter = distribution.percentilesIterator
+    val percentiles = quantiles.sorted.map { quant =>
+      //find first percentile in iterator that is grater or equal to wanted quantile and extract value right away since the percentile is mutable
+      quant -> percentileIter
+        .find {
+          _.rank >= (quant * 100)
+        }
+        .map(_.value)
+        .getOrElse(0L)
+    }
+    // Add percentiles timeseries for each percentile
+    percentiles.foreach {
+      case (quantileRank, percentile) =>
+        val percTags = tags.withTag("quantile", format(quantileRank))
+        appendTimeSerieValue(name, percTags, format(convert(percentile.toDouble, unit)))
+    }
+  }
+
   private def appendHistogramBuckets(
       name: String,
-      tags: Map[String, String],
-      metric: MetricDistribution,
+      tags: TagSet,
+      distribution: Distribution,
+      unit: MeasurementUnit,
       buckets: Seq[java.lang.Double]
   ): Unit = {
-    val distributionBuckets            = metric.distribution.bucketsIterator
+
+    val distributionBuckets            = distribution.bucketsIterator
     var currentDistributionBucket      = distributionBuckets.next()
-    var currentDistributionBucketValue = scale(currentDistributionBucket.value, metric.unit)
+    var currentDistributionBucketValue = convert(currentDistributionBucket.value.toDouble, unit)
     var inBucketCount                  = 0L
     var leftOver                       = currentDistributionBucket.frequency
 
     buckets.foreach { configuredBucket =>
-      val bucketTags = tags + ("le" -> String.valueOf(configuredBucket))
+      val bucketTags = tags.withTag("le", String.valueOf(configuredBucket))
 
       if (currentDistributionBucketValue <= configuredBucket) {
         inBucketCount += leftOver
@@ -128,7 +281,7 @@ class ScrapeDataBuilder(
 
         while (distributionBuckets.hasNext && currentDistributionBucketValue <= configuredBucket) {
           currentDistributionBucket = distributionBuckets.next()
-          currentDistributionBucketValue = scale(currentDistributionBucket.value, metric.unit)
+          currentDistributionBucketValue = convert(currentDistributionBucket.value.toDouble, unit)
 
           if (currentDistributionBucketValue <= configuredBucket) {
             inBucketCount += currentDistributionBucket.frequency
@@ -146,54 +299,84 @@ class ScrapeDataBuilder(
 
     appendTimeSerieValue(
       name,
-      tags + ("le" -> "+Inf"),
-      format(leftOver + inBucketCount.toDouble),
+      tags.withTag("le", "+Inf"),
+      format(leftOver.toDouble + inBucketCount),
       "_bucket"
     )
   }
 
-  private def appendTags(tags: Map[String, String]): Unit = {
-    val allTags = tags ++ environmentTags
-    if (allTags.nonEmpty) append("{")
+  private def appendTags(tags: TagSet): Unit =
+    appendTagsTo(tags, _builder)
 
-    val tagIterator = allTags.iterator
+  private def appendTagsTo(tags: TagSet, buffer: StringBuilder): Unit = {
+    val allTags = tags.withTags(environmentTags)
+    if (allTags.nonEmpty()) buffer.append("{")
+
+    val tagIterator = allTags.iterator(v => if (v == null) "" else v.toString)
     var tagCount    = 0
 
     while (tagIterator.hasNext) {
-      val (key, value) = tagIterator.next()
-      if (tagCount > 0) append(",")
-      append(normalizeLabelName(key)).append("=\"").append(value).append('"')
+      val pair = tagIterator.next()
+      if (tagCount > 0)
+        buffer.append(",")
+
+      buffer
+        .append(normalizeLabelName(pair.key))
+        .append("=\"")
+        .append(normalizeLabelValue(pair.value))
+        .append('"')
+
       tagCount += 1
     }
 
-    if (allTags.nonEmpty) append("}")
+    if (allTags.nonEmpty()) buffer.append("}")
+  }
+
+  private def normalizeCounterMetricName(metricName: String, unit: MeasurementUnit): String = {
+    val normalizedMetricName = metricName.map(validNameChar(_))
+
+    unit.dimension match {
+      case Time        => addPostfixOnlyIfMissing(normalizedMetricName, "_seconds_total")
+      case Information => addPostfixOnlyIfMissing(normalizedMetricName, "_bytes_total")
+      case _           => addPostfixOnlyIfMissing(normalizedMetricName, "_total")
+    }
   }
 
   private def normalizeMetricName(metricName: String, unit: MeasurementUnit): String = {
-    val normalizedMetricName = metricName.map(charOrUnderscore)
+    val normalizedMetricName = metricName.map(validNameChar(_))
 
     unit.dimension match {
-      case Time        => normalizedMetricName + "_seconds"
-      case Information => normalizedMetricName + "_bytes"
+      case Time        => addPostfixOnlyIfMissing(normalizedMetricName, "_seconds")
+      case Information => addPostfixOnlyIfMissing(normalizedMetricName, "_bytes")
       case _           => normalizedMetricName
     }
   }
 
-  private def normalizeLabelName(label: String): String =
-    label.map(charOrUnderscore)
+  private def addPostfixOnlyIfMissing(metricName: String, postfix: String) =
+    if (metricName.endsWith(postfix)) metricName
+    else metricName + postfix
 
-  private def charOrUnderscore(char: Char): Char =
+  private def normalizeLabelName(label: String): String =
+    label.map(validLabelChar)
+
+  private def validLabelChar(char: Char): Char =
     if (char.isLetterOrDigit || char == '_') char else '_'
 
-  private def format(value: Double): String =
-    numberFormat.format(value)
+  private def validNameChar(char: Char): Char =
+    if (char.isLetterOrDigit || char == '_' || char == ':') char else '_'
 
-  private def scale(value: Long, unit: MeasurementUnit): Double = unit.dimension match {
+  private def normalizeLabelValue(value: String): String =
+    if (value.contains("\\")) value.replace("\\", "\\\\") else value
+
+  private def format(value: Double): String =
+    _numberFormat.format(value)
+
+  private def convert(value: Double, unit: MeasurementUnit): Double = unit.dimension match {
     case Time if unit.magnitude != time.seconds.magnitude =>
-      MeasurementUnit.scale(value, unit, time.seconds)
+      MeasurementUnit.convert(value, unit, time.seconds)
     case Information if unit.magnitude != information.bytes.magnitude =>
-      MeasurementUnit.scale(value, unit, information.bytes)
-    case _ => value.toDouble
+      MeasurementUnit.convert(value, unit, information.bytes)
+    case _ => value
   }
 
 }

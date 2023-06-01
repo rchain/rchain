@@ -1,6 +1,6 @@
 package coop.rchain.casper.helper
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import coop.rchain.crypto.PublicKey
 import coop.rchain.metrics.Span
 import coop.rchain.models.rholang.RhoType
@@ -11,7 +11,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
 object BlockDataContract {
   import cats.syntax.all._
 
-  def set[F[_]: Concurrent: Span](
+  def set[F[_]: Async: Span](
       ctx: ProcessContext[F]
   )(message: Seq[ListParWithRandom]): F[Unit] = {
 

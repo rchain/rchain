@@ -12,7 +12,7 @@ import coop.rchain.comm.transport.CommunicationResponse._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
-import fs2.concurrent.Queue
+import fs2.concurrent.Channel
 
 import java.net.InetAddress
 import scala.Function.const
@@ -26,14 +26,14 @@ object HandleMessages {
 
   def handle[F[_]: Sync: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
       protocol: Protocol,
-      routingMessageQueue: Queue[F, RoutingMessage]
+      routingMessageQueue: Channel[F, RoutingMessage]
   ): F[CommunicationResponse] =
     handle_[F](protocol, ProtocolHelper.sender(protocol), routingMessageQueue)
 
   private def handle_[F[_]: Sync: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
       proto: Protocol,
       sender: PeerNode,
-      routingMessageQueue: Queue[F, RoutingMessage]
+      routingMessageQueue: Channel[F, RoutingMessage]
   ): F[CommunicationResponse] =
     proto.message match {
       case Protocol.Message.Heartbeat(heartbeat) => handleHeartbeat[F](sender, heartbeat)
@@ -61,9 +61,9 @@ object HandleMessages {
   def handlePacket[F[_]: Functor](
       remote: PeerNode,
       packet: Packet,
-      routingMessageQueue: Queue[F, RoutingMessage]
+      routingMessageQueue: Channel[F, RoutingMessage]
   ): F[CommunicationResponse] =
-    routingMessageQueue.enqueue1(RoutingMessage(remote, packet)).as(handledWithoutMessage)
+    routingMessageQueue.trySend(RoutingMessage(remote, packet)).as(handledWithoutMessage)
 
   def handleProtocolHandshakeResponse[F[_]: Monad: TransportLayer: ConnectionsCell: RPConfAsk: Log: Metrics](
       peer: PeerNode

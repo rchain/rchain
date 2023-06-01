@@ -1,5 +1,8 @@
 package coop.rchain.rholang
 
+import cats.Eval
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
@@ -13,24 +16,23 @@ import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil, ParBuilderUtil, PrettyPrinter}
 import coop.rchain.shared.{Log, Serialize}
-import monix.eval.{Coeval, Task}
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.Assertions
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
 
 object StackSafetySpec extends Assertions {
 
-  val mapSize                             = 10L * 1024L * 1024L
-  val tmpPrefix                           = "rspace-store-"
-  val maxDuration                         = 20.seconds
-  implicit val logF: Log[Task]            = new Log.NOPLog[Task]
-  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  val mapSize                           = 10L * 1024L * 1024L
+  val tmpPrefix                         = "rspace-store-"
+  val maxDuration                       = 20.seconds
+  implicit val logF: Log[IO]            = new Log.NOPLog[IO]
+  implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+  implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
 
   def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =
@@ -173,7 +175,7 @@ class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Ma
     Seq.fill(depth)(left).mkString + middle + Seq.fill(depth)(right).mkString
 
   private def checkAll(term: String): Unit = {
-    implicit val logF: Log[Task] = Log.log[Task]
+    implicit val logF: Log[IO] = Log.log[IO]
 
     val rho =
       s"""
@@ -198,19 +200,21 @@ class StackSafetySpec extends AnyFlatSpec with TableDrivenPropertyChecks with Ma
          |""".stripMargin
 
     isolateStackOverflow {
-      val ast = Compiler[Coeval].sourceToADT(rho).value()
+      val ast = Compiler[Eval].sourceToADT(rho).value
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
-        mkRuntime[Task](tmpPrefix).use { runtime =>
+
+        mkRuntime[IO](tmpPrefix).use { runtime =>
           runtime.evaluate(rho)
         }
       }
     }
   }
 
-  private def checkSuccess(rho: String)(task: => Task[_]): Unit =
+  private def checkSuccess(rho: String)(task: => IO[_]): Unit =
     task.attempt
-      .runSyncUnsafe(maxDuration)
+      .timeout(maxDuration)
+      .unsafeRunSync()
       .swap
       .foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:
@@ -242,10 +246,10 @@ class AstTypeclassesStackSafetySpec extends AnyFlatSpec with Matchers {
       val encoded = Serialize[Par].encode(par)
       Serialize[Par].decode(encoded)
 
-      HashM[Par].hash[Coeval](par).value
+      HashM[Par].hash[Eval](par).value
       par.hashCode()
 
-      EqualM[Par].equal[Coeval](par, anotherPar).value
+      EqualM[Par].equal[Eval](par, anotherPar).value
       par == anotherPar
 
     }

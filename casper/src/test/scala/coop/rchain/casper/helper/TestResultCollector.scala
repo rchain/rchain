@@ -1,6 +1,5 @@
 package coop.rchain.casper.helper
-import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
@@ -10,6 +9,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Expr, ListParWithRandom, Par}
 import coop.rchain.rholang.interpreter.ContractCall
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
+import cats.effect.Ref
 
 object IsAssert {
   def unapply(
@@ -32,7 +32,7 @@ object IsComparison {
   def unapply(
       p: Par
   ): Option[(Par, String, Par)] =
-    p.singleExpr().collect {
+    p.singleExpr.collect {
       case Expr(ETupleBody(ETuple(List(expected, RhoType.RhoString(operator), actual), _, _))) =>
         (expected, operator, actual)
     }
@@ -81,13 +81,13 @@ case class TestResult(
 case class AckedActionCtx(ackChannel: Par, rand: Blake2b512Random, sequenceNumber: Long)
 
 object TestResultCollector {
-  def apply[F[_]: Concurrent: Span]: F[TestResultCollector[F]] =
+  def apply[F[_]: Async: Span]: F[TestResultCollector[F]] =
     Ref
       .of(TestResult(Map.empty, hasFinished = false))
       .map(new TestResultCollector(_))
 }
 
-class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
+class TestResultCollector[F[_]: Async: Span](result: Ref[F, TestResult]) {
 
   def getResult: F[TestResult] = result.get
 

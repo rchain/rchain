@@ -100,5 +100,5 @@ sealed abstract class LogInstances {
       Sync[F].delay(Logger(ev.clazz).error(msg, cause))
   }
 
-  val logId: Log[Id] = log
+  val logId: Log[Id] = log[Id]
 }

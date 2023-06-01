@@ -5,7 +5,7 @@ import cats.data.StateT
 import cats.syntax.all._
 
 import scala.Function.tupled
-import scala.collection.immutable.Stream
+import scala.collection.immutable.LazyList
 
 object MaximumBipartiteMatch {
   def apply[P, T, R, F[_]: Monad](
@@ -58,7 +58,7 @@ trait MaximumBipartiteMatch[P, T, R, F[_]] {
     import cats.instances.list._
 
     val ts: Seq[Candidate]      = targets.zipWithIndex.map(tupled(Indexed[T]))
-    val ps: List[Pattern]       = patterns.toList.zip(Stream.continually(ts))
+    val ps: List[Pattern]       = patterns.toList.zip(LazyList.continually(ts))
     val findMatches             = ps.forallM(MBM.resetSeen() >> findMatch(_))
     val result: F[(S, Boolean)] = findMatches.run(S(Map.empty, Set.empty))
     result.map {
@@ -75,7 +75,7 @@ trait MaximumBipartiteMatch[P, T, R, F[_]] {
   private def findMatch(pattern: Pattern): MBM[Boolean] =
     pattern match {
       //there are no more candidates for this pattern, there's not a match
-      case (_, Stream.Empty) => pure(false)
+      case (_, Seq()) => pure(false)
       case (p, candidate +: candidates) =>
         notSeen(candidate).ifM(
           //that is a new candidate, let's try to match it

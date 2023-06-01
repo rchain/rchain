@@ -3,11 +3,12 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.{Par, ReceiveBind, Var}
 import coop.rchain.models.Var.VarInstance.FreeVar
-import monix.eval.Coeval
+import cats.Eval
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{FreeMap, ReceiveBindsSortMatcher, VarSort}
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class ReceiveSortMatcherSpec extends AnyFlatSpec with Matchers {
   val emptyMap = FreeMap.empty[VarSort]
@@ -74,7 +75,7 @@ class ReceiveSortMatcherSpec extends AnyFlatSpec with Matchers {
           emptyMap
         )
       )
-    val result = ReceiveBindsSortMatcher.preSortBinds[Coeval, VarSort](binds).value
+    val result = ReceiveBindsSortMatcher.preSortBinds[Eval, VarSort](binds).value
     result should be(sortedBinds)
   }
 }

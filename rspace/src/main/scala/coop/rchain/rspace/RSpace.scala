@@ -18,7 +18,7 @@ import monix.execution.atomic.AtomicAny
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
-class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
+class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
@@ -27,8 +27,7 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    val m: Match[F, P, A],
-    scheduler: ExecutionContext
+    val m: Match[F, P, A]
 ) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
     with ISpace[F, C, P, A, K] {
 
@@ -235,7 +234,7 @@ object RSpace {
   /**
     * Creates [[RSpace]] from [[HistoryRepository]] and [[HotStore]].
     */
-  def apply[F[_]: Concurrent: ContextShift: Span: Metrics: Log, C, P, A, K](
+  def apply[F[_]: Async: Span: Metrics: Log, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K]
   )(
@@ -244,15 +243,14 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
+      m: Match[F, P, A]
   ): F[RSpace[F, C, P, A, K]] =
     Sync[F].delay(new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store)))
 
   /**
     * Creates [[RSpace]] from [[KeyValueStore]]'s,
     */
-  def create[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
+  def create[F[_]: Async: Parallel: Span: Metrics: Log, C, P, A, K](
       store: RSpaceStore[F]
   )(
       implicit
@@ -260,8 +258,7 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
+      m: Match[F, P, A]
   ): F[RSpace[F, C, P, A, K]] =
     for {
       setup                  <- createHistoryRepo[F, C, P, A, K](store)
@@ -272,15 +269,14 @@ object RSpace {
   /**
     * Creates [[RSpace]] and [[ReplayRSpace]] from [[KeyValueStore]]'s.
     */
-  def createWithReplay[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
+  def createWithReplay[F[_]: Async: Parallel: Span: Metrics: Log, C, P, A, K](
       store: RSpaceStore[F]
   )(
       implicit sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
+      m: Match[F, P, A]
   ): F[(RSpace[F, C, P, A, K], ReplayRSpace[F, C, P, A, K])] =
     for {
       setup                <- createHistoryRepo[F, C, P, A, K](store)
@@ -296,7 +292,7 @@ object RSpace {
   /**
     * Creates [[HistoryRepository]] and [[HotStore]].
     */
-  def createHistoryRepo[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](store: RSpaceStore[F])(
+  def createHistoryRepo[F[_]: Async: Parallel: Log: Span, C, P, A, K](store: RSpaceStore[F])(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],

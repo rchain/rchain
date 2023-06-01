@@ -97,6 +97,6 @@ class ConnectionsSpec extends AnyFunSpec with Matchers with BeforeAndAfterEach w
 
   private def endpoint(host: String, port: Int): Endpoint = Endpoint(host, port, port)
   private def peer(name: String, host: String = "host", port: Int = 8080): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(host, port))
+    PeerNode(NodeIdentifier(name.getBytes.toIndexedSeq), endpoint(host, port))
 
 }

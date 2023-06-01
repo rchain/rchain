@@ -1,6 +1,6 @@
 package coop.rchain.rspace.examples
 
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.{Async, IO}
 import cats.{Applicative, Id}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -14,7 +14,6 @@ import scodec.bits.ByteVector
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContext.Implicits.global
 
 @SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
 object AddressBookExample {
@@ -80,16 +79,6 @@ object AddressBookExample {
   }
 
   object implicits {
-
-    implicit val concurrentF: Concurrent[Id] = coop.rchain.catscontrib.effect.implicits.concurrentId
-
-    implicit val contextShiftId: ContextShift[Id] =
-      new ContextShift[Id] {
-        def shift: Id[Unit]                                   = ???
-        def evalOn[A](ec: ExecutionContext)(fa: Id[A]): Id[A] = fa
-      }
-
-    /* Now I will troll Greg... */
 
     /* Serialize instances */
 
@@ -194,12 +183,13 @@ object AddressBookExample {
     phone = "232-555-1212"
   )
 
-  def exampleOne(): Unit = {
+  import coop.rchain.catscontrib.effect.implicits._
 
-    implicit val log: Log[Id]          = Log.log
+  def exampleOne(): Unit = {
+    implicit val log: Log[Id]          = Log.log[Id]
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]()
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
@@ -234,7 +224,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]()
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
@@ -293,13 +283,13 @@ object AddressBookExample {
       unpackOption(space.produce(Channel("friends"), alice, persist = false))
 
     println("Rollback example: First produce result should return some data")
-    assert(produceAlice.isDefined)
+    assert(produceAlice().isDefined)
 
     println("Rollback example: Second produce result should be empty")
-    assert(produceAlice.isEmpty)
+    assert(produceAlice().isEmpty)
 
     println("Rollback example: Every following produce result should be empty")
-    assert(produceAlice.isEmpty)
+    assert(produceAlice().isEmpty)
 
     println(
       "Rollback example: Let's reset RSpace to the state from before running the produce operations"
@@ -307,10 +297,10 @@ object AddressBookExample {
     space.reset(checkpointHash)
 
     println("Rollback example: Again, first produce result should return some data")
-    assert(produceAlice.isDefined)
+    assert(produceAlice().isDefined)
 
     println("Rollback example: And again second produce result should be empty")
-    assert(produceAlice.isEmpty)
+    assert(produceAlice().isEmpty)
 
   }
 
@@ -321,7 +311,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]()
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores

@@ -1,7 +1,6 @@
 package coop.rchain.node.web
 
-import cats.effect.concurrent.Deferred
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all._
 import coop.rchain.casper.api.BlockReportApi
 import coop.rchain.casper.protocol.{
@@ -21,7 +20,7 @@ import coop.rchain.shared.syntax._
 import scodec.codecs.utf8
 
 import scala.collection.concurrent.TrieMap
-import scala.language.higherKinds
+import cats.effect.Deferred
 
 final case class Transaction(
     fromAddr: String,
@@ -50,7 +49,7 @@ trait TransactionAPI[F[_]] {
   * This API is totally based on how RevVault.rho is written. If the `RevVault.rho` is re-written or changed,
   * this API might end up with useless.
   */
-final case class TransactionAPIImpl[F[_]: Concurrent](
+final case class TransactionAPIImpl[F[_]: Async](
     blockReportAPI: BlockReportApi[F],
     // The transferUnforgeable can be retrieved based on the deployer and the timestamp of RevVault.rho
     // in the genesis ceremony.
@@ -141,7 +140,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
 
 }
 
-final case class CacheTransactionAPI[F[_]: Concurrent](
+final case class CacheTransactionAPI[F[_]: Async](
     transactionAPI: TransactionAPI[F],
     store: TransactionStore[F]
 ) {
@@ -229,19 +228,19 @@ object Transaction {
       .as[TransactionResponse]
   }
 
-  def apply[F[_]: Concurrent](
+  def apply[F[_]: Async](
       blockReportAPI: BlockReportApi[F],
       // The transferUnforgeable can be retrieved based on the deployer and the timestamp of RevVault.rho
       // in the genesis ceremony.
       transferUnforgeable: Par
   ): TransactionAPIImpl[F] = TransactionAPIImpl(blockReportAPI, transferUnforgeable)
 
-  def store[F[_]: Concurrent](
+  def store[F[_]: Async](
       kvm: KeyValueStoreManager[F]
   ): F[KeyValueTypedStore[F, String, TransactionResponse]] =
     kvm.database("transaction", utf8, SCodec.transactionResponseCodec)
 
-  def cacheTransactionAPI[F[_]: Concurrent](
+  def cacheTransactionAPI[F[_]: Async](
       transactionAPI: TransactionAPI[F],
       kvm: KeyValueStoreManager[F]
   ): F[CacheTransactionAPI[F]] =

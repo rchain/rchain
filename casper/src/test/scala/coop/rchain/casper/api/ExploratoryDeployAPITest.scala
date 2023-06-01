@@ -1,6 +1,7 @@
 package coop.rchain.casper.api
 
-import cats.effect.Concurrent
+import cats.effect.testing.scalatest.AsyncIOSpec
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockStore
@@ -21,8 +22,6 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.testing.scalatest.MonixTaskTest
 import org.mockito.cats.IdiomaticMockitoCats
 import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 import org.scalatest.EitherValues
@@ -33,7 +32,7 @@ import scala.collection.immutable.SortedMap
 
 class ExploratoryDeployAPITest
     extends AsyncFlatSpec
-    with MonixTaskTest
+    with AsyncIOSpec
     with Matchers
     with EitherValues
     with BlockGenerator
@@ -67,10 +66,10 @@ class ExploratoryDeployAPITest
    *         genesis
    */
   it should "exploratoryDeploy get data from the read only node" in {
-    implicit val log = mock[Log[Task]]
-    implicit val sp  = mock[Span[Task]]
+    implicit val log = mock[Log[IO]]
+    implicit val sp  = mock[Span[IO]]
 
-    implicit val bs = mock[BlockStore[Task]]
+    implicit val bs = mock[BlockStore[IO]]
     bs.get(Seq(b2.blockHash)) returnsF Seq(b2.some)
 
     val blocks     = List(genesis, b1, b2, b3)
@@ -89,7 +88,7 @@ class ExploratoryDeployAPITest
         blocks.take(blocks.indexOf(block) + 1).map(_.blockHash).toSet
       )
 
-    implicit val bds = mock[BlockDagStorage[Task]]
+    implicit val bds = mock[BlockDagStorage[IO]]
     bds.getRepresentation returnsF DagRepresentation(
       blocks
         .map(_.blockHash)
@@ -128,13 +127,13 @@ class ExploratoryDeployAPITest
 
     val term        = "new return in { for (@data <- @\"store\") {return!(data)}}"
     val storedData  = "data"
-    implicit val rm = mock[RuntimeManager[Task]]
+    implicit val rm = mock[RuntimeManager[IO]]
     rm.playExploratoryDeploy(term, *) returnsF List(Par(exprs = List(Expr(GString(storedData)))))
 
     for {
-      result <- exploratoryDeploy[Task](term, b2.blockHash)
+      result <- exploratoryDeploy[IO](term, b2.blockHash)
     } yield {
-      result shouldBe 'right
+      result shouldBe Symbol("right")
 
       val (par, b) = result.value
       par match {
@@ -154,20 +153,20 @@ class ExploratoryDeployAPITest
   }
 
   it should "exploratoryDeploy return error on bonded validator" in {
-    implicit val blockDagStorage = mock[BlockDagStorage[Task]]
-    implicit val blockStore      = mock[BlockStore[Task]]
-    implicit val runtimeManager  = mock[RuntimeManager[Task]]
-    implicit val log             = mock[Log[Task]]
-    implicit val sp              = mock[Span[Task]]
+    implicit val blockDagStorage = mock[BlockDagStorage[IO]]
+    implicit val blockStore      = mock[BlockStore[IO]]
+    implicit val runtimeManager  = mock[RuntimeManager[IO]]
+    implicit val log             = mock[Log[IO]]
+    implicit val sp              = mock[Span[IO]]
 
     for {
-      result <- exploratoryDeploy[Task](
+      result <- exploratoryDeploy[IO](
                  "new return in { return!(1) }",
                  ByteString.EMPTY,
                  ValidatorIdentity(keys.head._1).some
                )
     } yield {
-      result shouldBe 'left
+      result shouldBe Symbol("left")
       result.left.value shouldBe "Exploratory deploy can only be executed on read-only RNode."
 
       verifyNoMoreInteractions(blockDagStorage)
@@ -176,7 +175,7 @@ class ExploratoryDeployAPITest
     }
   }
 
-  private def exploratoryDeploy[F[_]: Concurrent: BlockStore: BlockDagStorage: RuntimeManager: Log: Span](
+  private def exploratoryDeploy[F[_]: Async: BlockStore: BlockDagStorage: RuntimeManager: Log: Span](
       term: String,
       block: BlockHash,
       validatorIdOpt: Option[ValidatorIdentity] = none

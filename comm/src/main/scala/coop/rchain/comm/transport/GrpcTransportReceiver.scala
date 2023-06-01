@@ -1,46 +1,49 @@
 package coop.rchain.comm.transport
 
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.std.Dispatcher
+import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all._
+import cats.effect.syntax.all._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp.ProtocolHelper
-import coop.rchain.comm.transport.buffer.LimitedBuffer
 import coop.rchain.comm.{CommMetricsSource, PeerNode}
 import coop.rchain.metrics.Metrics
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
+import fs2.Stream
+import io.grpc.{Metadata, Server}
+import fs2.concurrent.Channel
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
-import monix.eval.Task
-import monix.execution.{Cancelable, Scheduler}
-import monix.reactive.Observable
+import io.netty.internal.tcnative.AsyncTask
 
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.DurationInt
+import cats.effect.{Deferred, Ref, Temporal}
 
 object GrpcTransportReceiver {
 
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
 
-  type MessageBuffers        = (LimitedBuffer[Send], LimitedBuffer[StreamMessage], Cancelable)
+  type MessageBuffers[F[_]]  = (Send => F[Boolean], StreamMessage => F[Boolean], Stream[F, Unit])
   type MessageHandlers[F[_]] = (Send => F[Unit], StreamMessage => F[Unit])
 
-  def create[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
+  def create[F[_]: Async: RPConfAsk: Log: Metrics](
       networkId: String,
       port: Int,
       serverSslContext: SslContext,
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
-      buffersMap: Ref[F, Map[PeerNode, Deferred[F, MessageBuffers]]],
+      buffersMap: Ref[F, Map[PeerNode, Deferred[F, MessageBuffers[F]]]],
       messageHandlers: MessageHandlers[F],
       parallelism: Int,
       cache: TrieMap[String, Array[Byte]]
-  )(implicit mainScheduler: Scheduler): F[Cancelable] = {
+  ): Resource[F, Unit] = {
 
-    val service = new RoutingGrpcMonix.TransportLayer {
+    val service = new TransportLayerFs2Grpc[F, Metadata] {
 
       private val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
         if (streamed.header.exists(_.networkId != networkId))
@@ -49,25 +52,52 @@ object GrpcTransportReceiver {
           Opened(StreamHandler.StreamError.circuitOpened)
         else Closed
 
-      private def getBuffers(peer: PeerNode): F[MessageBuffers] = {
-        def createBuffers: MessageBuffers = {
-          val tellBuffer = buffer.LimitedBufferObservable.dropNew[Send](64)
-          val blobBuffer = buffer.LimitedBufferObservable.dropNew[StreamMessage](8)
-          // TODO cancel queues when peer is lost
-          val tellCancellable = tellBuffer
-            .mapParallelUnordered(parallelism)(messageHandlers._1(_).toTask)
-            .subscribe()(mainScheduler)
-          val blobCancellable = blobBuffer
-            .mapParallelUnordered(parallelism)(messageHandlers._2(_).toTask)
-            .subscribe()(mainScheduler)
-          val buffersCancellable = Cancelable.collection(tellCancellable, blobCancellable)
-
-          (tellBuffer, blobBuffer, buffersCancellable)
-        }
+      private def getBuffers(peer: PeerNode): F[MessageBuffers[F]] = {
+        def createBuffers(clear: F[Unit]): F[MessageBuffers[F]] =
+          for {
+            tellBuffer <- Channel.bounded[F, Send](64)
+            blobBuffer <- Channel.bounded[F, StreamMessage](8)
+            stream = tellBuffer.stream
+              .parEvalMapUnordered(parallelism)(messageHandlers._1(_)) concurrently
+              blobBuffer.stream.parEvalMapUnordered(parallelism)(messageHandlers._2(_))
+            // inbound queue lives for 10 minutes TODO synchronize with Kademlia table cleanup
+            s = (Stream.fixedDelay(10.minutes) ++ Stream.eval(clear)) concurrently stream
+            _ <- Sync[F]
+                  .start(s.compile.drain)
+                  .onError {
+                    case err =>
+                      Log[F].info(
+                        s"Inbound gRPC channel with ${peer.toAddress} failed unexpectedly: $err"
+                      )
+                  }
+                  .onCancel(
+                    Log[F].info(
+                      s"Inbound gRPC channel with ${peer.toAddress} closed because fiber has been cancelled."
+                    )
+                  )
+          } yield (
+            (x: Send) =>
+              tellBuffer
+                .trySend(x)
+                .flatMap(
+                  _.leftTraverse(
+                    _ => new Exception("Send channel is closed").raiseError[F, Boolean]
+                  ).map(_.merge)
+                ),
+            (x: StreamMessage) =>
+              blobBuffer
+                .trySend(x)
+                .flatMap(
+                  _.leftTraverse(
+                    _ => new Exception("Stream channel is closed").raiseError[F, Boolean]
+                  ).map(_.merge)
+                ),
+            stream
+          )
 
         for {
-          bDefNew <- Deferred[F, MessageBuffers]
-          r <- buffersMap.modify[(Deferred[F, MessageBuffers], Boolean)] { bMap =>
+          bDefNew <- Deferred[F, MessageBuffers[F]]
+          r <- buffersMap.modify[(Deferred[F, MessageBuffers[F]], Boolean)] { bMap =>
                 val noBuffer = !bMap.exists(c => c._1 equals peer)
                 if (noBuffer) {
                   (bMap + (peer -> bDefNew), (bDefNew, true))
@@ -78,7 +108,7 @@ object GrpcTransportReceiver {
           (mbDef, isNewPeer) = r
           _ <- if (isNewPeer) for {
                 _       <- Log[F].info(s"Creating inbound message queue for ${peer.toAddress}.")
-                newBufs <- Sync[F].delay(createBuffers)
+                newBufs <- createBuffers(buffersMap.update(x => x - peer))
                 _       <- mbDef.complete(newBufs)
               } yield ()
               else ().pure[F]
@@ -86,33 +116,33 @@ object GrpcTransportReceiver {
         } yield c
       }
 
-      def send(request: TLRequest): Task[TLResponse] =
-        (for {
+      def send(request: TLRequest, c: Metadata): F[TLResponse] =
+        for {
           _                <- Metrics[F].incrementCounter("packets.received")
           self             <- RPConfAsk[F].reader(_.local)
           peer             = PeerNode.from(request.protocol.header.sender)
           packetDroppedMsg = s"Packet dropped, ${peer.endpoint.host} packet queue overflown."
           targetBuffer     <- getBuffers(peer).map(_._1)
-          r <- if (targetBuffer.pushNext(Send(request.protocol)))
+          r <- targetBuffer(Send(request.protocol)).ifM(
                 Metrics[F].incrementCounter("packets.enqueued") >>
-                  ack(self).pure[F]
-              else
+                  ack(self).pure[F],
                 Metrics[F].incrementCounter("packets.dropped") >>
                   internalServerError(packetDroppedMsg).pure[F]
-        } yield r).toTask
+              )
+        } yield r
 
-      def stream(observable: Observable[Chunk]): Task[TLResponse] = {
+      def stream(observable: Stream[F, Chunk], c: Metadata): F[TLResponse] = {
         import StreamHandler._
         import StreamError.StreamErrorToMessage
 
-        val result = handleStream(observable, circuitBreaker, cache) >>= {
+        handleStream(observable, circuitBreaker, cache) >>= {
           case Left(error @ StreamError.Unexpected(t)) =>
             Log[F].error(error.message, t).as(internalServerError(error.message))
 
           case Left(error) =>
             Log[F].warn(error.message).as(internalServerError(error.message))
 
-          case Right(msg) => {
+          case Right(msg) =>
             val msgEnqueued =
               s"Stream chunk pushed to message buffer. Sender ${msg.sender.endpoint.host}, message ${msg.typeId}, " +
                 s"size ${msg.contentLength}, file ${msg.key}."
@@ -123,19 +153,17 @@ object GrpcTransportReceiver {
               _            <- Metrics[F].incrementCounter("stream.chunks.received")
               self         <- RPConfAsk[F].reader(_.local)
               targetBuffer <- getBuffers(msg.sender).map(_._2)
-              r <- if (targetBuffer.pushNext(msg))
+              r <- targetBuffer(msg).ifM(
                     Metrics[F].incrementCounter("stream.chunks.enqueued") >>
                       Log[F].debug(msgEnqueued) >>
-                      ack(self).pure[F]
-                  else
+                      ack(self).pure[F],
                     Metrics[F].incrementCounter("stream.chunks.dropped") >>
                       Log[F].debug(msgDropped) >>
                       Sync[F].delay(cache.remove(msg.key)) >>
                       internalServerError(msgDropped).pure[F]
+                  )
             } yield r
-          }
         }
-        result.toTask
       }
 
       // TODO InternalServerError should take msg in constructor
@@ -151,16 +179,19 @@ object GrpcTransportReceiver {
         )
     }
 
-    val server = NettyServerBuilder
-      .forPort(port)
-      .executor(mainScheduler)
-      .maxInboundMessageSize(maxMessageSize)
-      .sslContext(serverSslContext)
-      .addService(RoutingGrpcMonix.bindService(service, mainScheduler))
-      .intercept(new SslSessionServerInterceptor(networkId))
-      .build
-      .start
+    Dispatcher.parallel[F].flatMap { d =>
+      val startF = Sync[F].delay(
+        NettyServerBuilder
+          .forPort(port)
+          .maxInboundMessageSize(maxMessageSize)
+          .sslContext(serverSslContext)
+          .addService(TransportLayerFs2Grpc.bindService(d, service))
+          .intercept(new SslSessionServerInterceptor(networkId, d))
+          .build
+          .start
+      )
+      Resource.make(startF)(server => Sync[F].delay(server.shutdown().awaitTermination())).void
+    }
 
-    Cancelable(() => server.shutdown().awaitTermination()).pure[F]
   }
 }

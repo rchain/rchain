@@ -1,8 +1,12 @@
 package coop.rchain.graphz
 
 import cats._
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import cats.effect.Ref
+
+import java.io.FileOutputStream
+import java.nio.charset.Charset
+import java.util.Locale
 
 trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]
@@ -70,7 +74,7 @@ object Graphz {
     case Record        => "record"
   }
 
-  def smallToString[A]: Show[A] = Show.show(_.toString.toLowerCase)
+  def smallToString[A]: Show[A] = Show.show(_.toString.toLowerCase(Locale.getDefault))
 
   implicit val showStyle: Show[GraphStyle]     = smallToString[GraphStyle]
   implicit val showRank: Show[GraphRank]       = smallToString[GraphRank]

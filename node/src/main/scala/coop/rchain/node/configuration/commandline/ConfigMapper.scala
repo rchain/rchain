@@ -5,7 +5,7 @@ import coop.rchain.comm.PeerNode
 import org.rogach.scallop.ScallopOption
 
 import java.nio.file.Path
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 

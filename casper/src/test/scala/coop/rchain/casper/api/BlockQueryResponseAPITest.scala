@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.{IO, Ref, Sync}
+import cats.effect.testing.scalatest.AsyncIOSpec
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -19,9 +19,7 @@ import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockMetadata, FringeData}
-import coop.rchain.shared.{Log, Time}
-import monix.eval.Task
-import monix.testing.scalatest.MonixTaskTest
+import coop.rchain.shared.Log
 import org.mockito.cats.IdiomaticMockitoCats
 import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito, Mockito, MockitoSugar}
 import org.scalatest._
@@ -32,7 +30,7 @@ import scala.collection.immutable.SortedMap
 
 class BlockQueryResponseAPITest
     extends AsyncFlatSpec
-    with MonixTaskTest
+    with AsyncIOSpec
     with Matchers
     with EitherValues
     with BlockDagStorageFixture
@@ -40,10 +38,9 @@ class BlockQueryResponseAPITest
     with IdiomaticMockito
     with IdiomaticMockitoCats
     with ArgumentMatchersSugar {
-  implicit val timeEff: Time[Task]                  = Time.fromTimer[Task]
-  implicit val spanEff: NoopSpan[Task]              = NoopSpan[Task]()
-  implicit val log: Log[Task]                       = mock[Log[Task]]
-  implicit val runtimeManager: RuntimeManager[Task] = mock[RuntimeManager[Task]]
+  implicit val spanEff: NoopSpan[IO]              = NoopSpan[IO]()
+  implicit val log: Log[IO]                       = mock[Log[IO]]
+  implicit val runtimeManager: RuntimeManager[IO] = mock[RuntimeManager[IO]]
 
   private val tooShortQuery    = "12345"
   private val badTestHashQuery = "1234acd"
@@ -55,8 +52,8 @@ class BlockQueryResponseAPITest
   private val deployCount = 10
   private val randomDeploys =
     (0 until deployCount).toList
-      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i))
-      .runSyncUnsafe()
+      .traverse(i => ConstructDeploy.basicProcessedDeploy[IO](i))
+      .unsafeRunSync()
 
   private val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"
@@ -72,17 +69,18 @@ class BlockQueryResponseAPITest
     )
 
   "getBlock" should "return successful block info response" in {
-    implicit val bs  = createBlockStore[Task]
-    implicit val bds = createBlockDagStorage[Task]
+    implicit val bs  = createBlockStore[IO]
+    implicit val bds = createBlockDagStorage[IO]
 
     for {
-      _                  <- prepareDagStorage[Task]
-      blockApi           <- createBlockApi[Task]("", 1)
-      _                  = Mockito.clearInvocations(bs, bds)
+      _                  <- prepareDagStorage[IO]
+      blockApi           <- createBlockApi[IO]("", 1)
+      _                  = Mockito.clearInvocations(bs)
+      _                  = Mockito.clearInvocations(bds)
       hash               = secondBlock.blockHash.toHexString
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
-      blockQueryResponse shouldBe 'right
+      blockQueryResponse shouldBe Symbol("right")
       val blockInfo = blockQueryResponse.value
       blockInfo.deploys shouldBe randomDeploys.map(_.toDeployInfo)
       blockInfo.blockInfo shouldBe BlockApi.getLightBlockInfo(secondBlock)
@@ -97,15 +95,15 @@ class BlockQueryResponseAPITest
   }
 
   it should "return error when no block exists" in {
-    implicit val bs  = createBlockStore[Task]
-    implicit val bds = createBlockDagStorage[Task]
+    implicit val bs  = createBlockStore[IO]
+    implicit val bds = createBlockDagStorage[IO]
 
     for {
-      blockApi           <- createBlockApi[Task]("", 1)
+      blockApi           <- createBlockApi[IO]("", 1)
       hash               = badTestHashQuery
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
-      blockQueryResponse shouldBe 'left
+      blockQueryResponse shouldBe Symbol("left")
       blockQueryResponse.left.value shouldBe s"Error: Failure to find block with hash: $badTestHashQuery"
 
       bs.get(Seq(badTestHashQuery.unsafeHexToByteString)) wasCalled once
@@ -118,15 +116,15 @@ class BlockQueryResponseAPITest
   }
 
   it should "return error when hash is invalid hex string" in {
-    implicit val bs  = createBlockStore[Task]
-    implicit val bds = createBlockDagStorage[Task]
+    implicit val bs  = createBlockStore[IO]
+    implicit val bds = createBlockDagStorage[IO]
 
     for {
-      blockApi           <- createBlockApi[Task]("", 1)
+      blockApi           <- createBlockApi[IO]("", 1)
       hash               = invalidHexQuery
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
-      blockQueryResponse shouldBe 'left
+      blockQueryResponse shouldBe Symbol("left")
       blockQueryResponse.left.value shouldBe s"Input hash value is not valid hex string: $invalidHexQuery"
 
       verifyNoMoreInteractions(bs)
@@ -138,15 +136,15 @@ class BlockQueryResponseAPITest
   }
 
   it should "return error when hash is to short" in {
-    implicit val bs  = createBlockStore[Task]
-    implicit val bds = createBlockDagStorage[Task]
+    implicit val bs  = createBlockStore[IO]
+    implicit val bds = createBlockDagStorage[IO]
 
     for {
-      blockApi           <- createBlockApi[Task]("", 1)
+      blockApi           <- createBlockApi[IO]("", 1)
       hash               = tooShortQuery
       blockQueryResponse <- blockApi.getBlock(hash)
     } yield {
-      blockQueryResponse shouldBe 'left
+      blockQueryResponse shouldBe Symbol("left")
       blockQueryResponse.left.value shouldBe s"Input hash value must be at least 6 characters: $tooShortQuery"
 
       verifyNoMoreInteractions(bs)
@@ -158,17 +156,18 @@ class BlockQueryResponseAPITest
   }
 
   "findDeploy" should "return successful block info response when a block contains the deploy with given signature" in {
-    implicit val bs  = createBlockStore[Task]
-    implicit val bds = createBlockDagStorage[Task]
+    implicit val bs  = createBlockStore[IO]
+    implicit val bds = createBlockDagStorage[IO]
 
     for {
-      _                  <- prepareDagStorage[Task]
-      blockApi           <- createBlockApi[Task]("", 1)
-      _                  = Mockito.clearInvocations(bs, bds)
+      _                  <- prepareDagStorage[IO]
+      blockApi           <- createBlockApi[IO]("", 1)
+      _                  = Mockito.clearInvocations(bs)
+      _                  = Mockito.clearInvocations(bds)
       deployId           = randomDeploys.head.deploy.sig
       blockQueryResponse <- blockApi.findDeploy(deployId)
     } yield {
-      blockQueryResponse shouldBe 'right
+      blockQueryResponse shouldBe Symbol("right")
       blockQueryResponse.value shouldBe BlockApi.getLightBlockInfo(secondBlock)
 
       bs.get(Seq(secondBlock.blockHash)) wasCalled once
@@ -181,14 +180,14 @@ class BlockQueryResponseAPITest
   }
 
   it should "return an error when no block contains the deploy with the given signature" in {
-    implicit val bs  = createBlockStore[Task]
-    implicit val bds = createBlockDagStorage[Task]
+    implicit val bs  = createBlockStore[IO]
+    implicit val bds = createBlockDagStorage[IO]
 
     for {
-      blockApi           <- createBlockApi[Task]("", 1)
+      blockApi           <- createBlockApi[IO]("", 1)
       blockQueryResponse <- blockApi.findDeploy(unknownDeploy)
     } yield {
-      blockQueryResponse shouldBe 'left
+      blockQueryResponse shouldBe Symbol("left")
       blockQueryResponse.left.value shouldBe
         s"Couldn't find block containing deploy with id: ${PrettyPrinter.buildStringNoLimit(unknownDeploy)}"
 

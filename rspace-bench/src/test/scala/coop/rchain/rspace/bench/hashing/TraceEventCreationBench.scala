@@ -1,19 +1,15 @@
 package coop.rchain.rspace.hashing
 
-import java.util.concurrent.TimeUnit
-
-import scala.collection.immutable.Seq
-
 import coop.rchain.models._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.storage._
-import coop.rchain.rspace._
 import coop.rchain.rspace.bench._
 import coop.rchain.rspace.trace.Consume
 import org.openjdk.jmh.annotations.{State => BenchState, _}
 import org.openjdk.jmh.infra.Blackhole
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalacheck.Arbitrary._
+
+import java.util.concurrent.TimeUnit
 
 @Fork(value = 1)
 @Warmup(iterations = 1)

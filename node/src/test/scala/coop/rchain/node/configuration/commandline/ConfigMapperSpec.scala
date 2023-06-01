@@ -91,7 +91,7 @@ class ConfigMapperSpec extends AnyFunSuite with Matchers {
         "--sigar"
       ).mkString(" ")
 
-    val options = Options(args.split(' '))
+    val options = Options(args.split(' ').toIndexedSeq)
 
     val defaultConfig = ConfigSource
       .resources("defaults.conf")
@@ -117,7 +117,7 @@ class ConfigMapperSpec extends AnyFunSuite with Matchers {
       .fromConfig(ConfigMapper.fromOptions(options))
       .withFallback(defaultConfig)
       .load[NodeConf]
-      .right
+      .toOption
       .get
 
     val expectedConfig = NodeConf(
@@ -143,7 +143,7 @@ class ConfigMapperSpec extends AnyFunSuite with Matchers {
           .fromAddress(
             "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
           )
-          .right
+          .toOption
           .get,
         disableLfs = true,
         batchMaxConnections = 111111,

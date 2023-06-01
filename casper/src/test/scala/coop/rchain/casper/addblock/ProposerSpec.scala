@@ -1,7 +1,7 @@
 package coop.rchain.casper.addblock
 
 import cats.Applicative
-import cats.effect.concurrent.Deferred
+import cats.effect.IO
 import cats.syntax.all._
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer._
@@ -14,10 +14,10 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import cats.effect.Deferred
+import cats.effect.unsafe.implicits.global
 
 class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture {
 
@@ -47,23 +47,23 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
   val dummyValidatorIdentity = ValidatorIdentity(randomValidatorSks(1))
 
   /** implicits for creating Proposer instance  */
-  implicit val logEff: Log[Task]   = Log.log[Task]
-  implicit val spanEff: Span[Task] = NoopSpan[Task]
-  implicit val metrics             = new MetricsNOP[Task]()
+  implicit val logEff: Log[IO]   = Log.log[IO]
+  implicit val spanEff: Span[IO] = NoopSpan[IO]()
+  implicit val metrics           = new MetricsNOP[IO]()
 
   it should "reject to propose if proposer is not active validator" in effectTest {
-    val p = new Proposer[Task](
-      checkActiveValidator = alwaysNotActiveF[Task],
+    val p = new Proposer[IO](
+      checkActiveValidator = alwaysNotActiveF[IO],
       // other params are permissive
-      getLatestSeqNumber = getLatestSeqNumber[Task],
-      createBlock = createBlockF[Task],
-      validateBlock = alwaysSuccesfullValidation[Task],
-      proposeEffect = proposeEffect[Task](0),
+      getLatestSeqNumber = getLatestSeqNumber[IO],
+      createBlock = createBlockF[IO],
+      validateBlock = alwaysSuccesfullValidation[IO],
+      proposeEffect = proposeEffect[IO](0),
       validator = dummyValidatorIdentity
     )
 
     for {
-      d      <- Deferred[Task, ProposerResult]
+      d      <- Deferred[IO, ProposerResult]
       pr     <- p.propose(false, d)
       (r, b) = pr
     } yield assert(r == ProposeResult.notBonded && b.isEmpty)
@@ -71,35 +71,35 @@ class ProposerSpec extends AnyFlatSpec with Matchers with BlockDagStorageFixture
 
   it should "shut down the node if block created is not successfully replayed" in {
     an[Throwable] should be thrownBy {
-      val p = new Proposer[Task](
-        validateBlock = alwaysUnsuccesfullValidation[Task],
+      val p = new Proposer[IO](
+        validateBlock = alwaysUnsuccesfullValidation[IO],
         // other params are permissive
-        checkActiveValidator = alwaysActiveF[Task],
-        getLatestSeqNumber = getLatestSeqNumber[Task],
-        createBlock = createBlockF[Task],
-        proposeEffect = proposeEffect[Task](0),
+        checkActiveValidator = alwaysActiveF[IO],
+        getLatestSeqNumber = getLatestSeqNumber[IO],
+        createBlock = createBlockF[IO],
+        proposeEffect = proposeEffect[IO](0),
         validator = dummyValidatorIdentity
       )
 
       (for {
-        d <- Deferred[Task, ProposerResult]
+        d <- Deferred[IO, ProposerResult]
         _ <- p.propose(false, d)
-      } yield ()).runSyncUnsafe()
+      } yield ()).unsafeRunSync()
     }
   }
 
   it should "execute propose effects if block created successfully replayed" in effectTest {
-    val p = new Proposer[Task](
-      validateBlock = alwaysSuccesfullValidation[Task],
-      checkActiveValidator = alwaysActiveF[Task],
-      getLatestSeqNumber = getLatestSeqNumber[Task],
-      createBlock = createBlockF[Task],
-      proposeEffect = proposeEffect[Task](10),
+    val p = new Proposer[IO](
+      validateBlock = alwaysSuccesfullValidation[IO],
+      checkActiveValidator = alwaysActiveF[IO],
+      getLatestSeqNumber = getLatestSeqNumber[IO],
+      createBlock = createBlockF[IO],
+      proposeEffect = proposeEffect[IO](10),
       validator = dummyValidatorIdentity
     )
 
     for {
-      d      <- Deferred[Task, ProposerResult]
+      d      <- Deferred[IO, ProposerResult]
       pr     <- p.propose(false, d)
       (r, b) = pr
     } yield assert(

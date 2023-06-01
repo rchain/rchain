@@ -1,30 +1,40 @@
 package coop.rchain.rspace
 
-import cats.syntax.all._
 import cats.effect._
-import cats.effect.concurrent.{Deferred, Ref}
 import coop.rchain.rspace.history.HistoryReaderBase
 import coop.rchain.rspace.internal._
 
-import scala.collection.immutable.Map
+import cats.syntax.all._
+import cats.effect.{Deferred, Ref}
+import scala.language.postfixOps
 
 trait HotStore[F[_], C, P, A, K] {
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
+
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit]
+
   def installContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit]
+
   def removeContinuation(channels: Seq[C], index: Int): F[Unit]
 
   def getData(channel: C): F[Seq[Datum[A]]]
+
   def putDatum(channel: C, d: Datum[A]): F[Unit]
+
   def removeDatum(channel: C, index: Int): F[Unit]
 
   def getJoins(channel: C): F[Seq[Seq[C]]]
+
   def putJoin(channel: C, join: Seq[C]): F[Unit]
+
   def installJoin(channel: C, join: Seq[C]): F[Unit]
+
   def removeJoin(channel: C, join: Seq[C]): F[Unit]
 
   def changes: F[Seq[HotStoreAction]]
+
   def toMap: F[Map[Seq[C], Row[P, A, K]]]
+
   def snapshot: F[HotStoreState[C, P, A, K]]
 }
 
@@ -61,7 +71,7 @@ private final case class HistoryStoreCache[F[_], C, P, A, K](
     joins: Map[C, Deferred[F, Seq[Seq[C]]]]
 )
 
-private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
+private class InMemHotStore[F[_]: Async, C, P, A, K](
     hotStoreState: Ref[F, HotStoreState[C, P, A, K]],
     // this is what is inside history store, lazily populated. Starting data for HotStoreState
     historyStoreCache: Ref[F, HistoryStoreCache[F, C, P, A, K]],
@@ -87,8 +97,8 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                      // update with what is in historyStore and return the same
                      state.copy(
                        continuations = state.continuations.updated(channels, fromHistoryStore)
-                     ),
-                     state.installedContinuations.get(channels) ++: fromHistoryStore
+                     ) ->
+                       (state.installedContinuations.get(channels) ++: fromHistoryStore)
                    )
                }
     } yield result
@@ -166,8 +176,8 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                    .map((state, _)) // just return what is in hot store already
                    .getOrElse(
                      // update with what is in historyStore and return the same
-                     state.copy(data = state.data.updated(channel, fromHistoryStore)),
-                     fromHistoryStore
+                     state.copy(data = state.data.updated(channel, fromHistoryStore)) ->
+                       fromHistoryStore
                    )
                }
     } yield result
@@ -224,8 +234,8 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                    )
                    .getOrElse(
                      // update with what is in historyStore and return the same
-                     state.copy(joins = state.joins.updated(channel, fromHistoryStore)),
-                     state.installedJoins.getOrElse(channel, Seq.empty) ++: fromHistoryStore
+                     state.copy(joins = state.joins.updated(channel, fromHistoryStore)) ->
+                       (state.installedJoins.getOrElse(channel, Seq.empty) ++: fromHistoryStore)
                    )
                }
     } yield result
@@ -307,12 +317,12 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       cache         <- hotStoreState.get
       data          = cache.data.map(_.leftMap(Seq(_)))
-      continuations = cache.continuations ++ cache.installedContinuations.mapValues(Seq(_))
-      mapped = data.padZip(continuations).mapValues {
+      continuations = cache.continuations ++ cache.installedContinuations.view.mapValues(Seq(_))
+      mapped = data.padZip(continuations).view.mapValues {
         case (d, k) =>
           Row(d.getOrElse(Seq.empty[Datum[A]]), k.getOrElse(Seq.empty[WaitingContinuation[P, K]]))
       }
-    } yield mapped.filter { case (_, v) => !(v.data.isEmpty && v.wks.isEmpty) }
+    } yield mapped.filter { case (_, v) => !(v.data.isEmpty && v.wks.isEmpty) }.to(Map)
 
   private def getContFromHistoryStore(channels: Seq[C]) =
     for {
@@ -322,8 +332,8 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
               .get(channels)
               .map(v => (cache, (v, true)))
               .getOrElse(
-                cache.copy(continuations = cache.continuations + ((channels, d))),
-                (d, false)
+                cache.copy(continuations = cache.continuations + ((channels, d))) ->
+                  (d, false)
               )
           }
       (deferred, isComplete) = r
@@ -338,7 +348,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             cache.datums
               .get(channel)
               .map(v => (cache, (v, true)))
-              .getOrElse(cache.copy(datums = cache.datums + ((channel, d))), (d, false))
+              .getOrElse(cache.copy(datums = cache.datums + ((channel, d))) -> (d, false))
           }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getData(channel) >>= deferred.complete).whenA(!isComplete)
@@ -352,7 +362,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             cache.joins
               .get(channel)
               .map(v => (cache, (v, true)))
-              .getOrElse(cache.copy(joins = cache.joins + ((channel, d))), (d, false))
+              .getOrElse(cache.copy(joins = cache.joins + ((channel, d))) -> (d, false))
           }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getJoins(channel) >>= deferred.complete).whenA(!isComplete)
@@ -362,7 +372,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
 
 object HotStore {
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       hotStoreStateRef: Ref[F, HotStoreState[C, P, A, K]],
       historyReaderBase: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
@@ -372,7 +382,7 @@ object HotStore {
       )
       .map(new InMemHotStore[F, C, P, A, K](hotStoreStateRef, _, historyReaderBase))
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       cache: HotStoreState[C, P, A, K],
       historyReader: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
@@ -381,7 +391,7 @@ object HotStore {
       store <- HotStore(cache, historyReader)
     } yield store
 
-  def apply[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Async, C, P, A, K](
       historyReader: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
     apply(HotStoreState[C, P, A, K](), historyReader)

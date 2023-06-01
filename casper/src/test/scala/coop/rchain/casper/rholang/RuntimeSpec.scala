@@ -1,5 +1,7 @@
 package coop.rchain.casper.rholang
 
+import cats.effect.IO
+import cats.effect.testing.scalatest.AsyncIOSpec
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.syntax._
 import coop.rchain.models.syntax._
@@ -11,19 +13,17 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval.Task
-import monix.testing.scalatest.MonixTaskTest
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
+class RuntimeSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
 
   "emptyStateHash" should "be the same as hard-coded cached value" in {
-    implicit val log: Log[Task]         = new Log.NOPLog[Task]
-    implicit val span: Span[Task]       = new NoopSpan[Task]
-    implicit val metrics: Metrics[Task] = new MetricsNOP[Task]
+    implicit val log: Log[IO]         = new Log.NOPLog[IO]
+    implicit val span: Span[IO]       = new NoopSpan[IO]
+    implicit val metrics: Metrics[IO] = new MetricsNOP[IO]
 
-    val kvm = InMemoryStoreManager[Task]()
+    val kvm = InMemoryStoreManager[IO]()
 
     val dummyShardId = "dummy"
     for {
@@ -54,11 +54,11 @@ class RuntimeSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
   }
 
   "stateHash after fixed rholang term execution " should "be hash fixed without hard fork" in {
-    implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
-    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val logger: Log[Task]         = Log.log[Task]
-    val kvm                                = InMemoryStoreManager[Task]()
-    val dummyShardId                       = "dummy"
+    implicit val metricsEff: Metrics[IO] = new Metrics.MetricsNOP[IO]
+    implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
+    implicit val logger: Log[IO]         = Log.log[IO]
+    val kvm                              = InMemoryStoreManager[IO]()
+    val dummyShardId                     = "dummy"
 
     // fixed term , if the term changed, it is possible that the stateHash also changed.
     val contract =

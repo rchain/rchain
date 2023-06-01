@@ -22,7 +22,8 @@ import coop.rchain.rholang.interpreter.compiler.normalizer.{
 
 import scala.collection.immutable.BitSet
 import java.util.UUID
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
+
 object PLetNormalizer {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def normalize[F[_]: Sync](p: PLet, input: ProcVisitInputs)(
@@ -35,10 +36,11 @@ object PLetNormalizer {
           decl match {
             case declImpl: DeclImpl =>
               (declImpl.listname_, declImpl.nameremainder_, declImpl.listproc_)
+
           }
 
         val (listNames, listNameRemainders, listProcs) =
-          (extractNamesAndProcs(p.decl_) :: concDeclsImpl.listconcdecl_.toList.map {
+          (extractNamesAndProcs(p.decl_) :: concDeclsImpl.listconcdecl_.asScala.toList.map {
             case concDeclImpl: ConcDeclImpl => extractNamesAndProcs(concDeclImpl.decl_)
           }).unzip3
 
@@ -107,7 +109,7 @@ object PLetNormalizer {
             case _: EmptyDeclImpl => p.proc_
             case linearDeclsImpl: LinearDeclsImpl =>
               val newDecl =
-                linearDeclsImpl.listlineardecl_.head match {
+                linearDeclsImpl.listlineardecl_.asScala.head match {
                   case impl: LinearDeclImpl => impl.decl_
                 }
               val newDecls =
@@ -115,10 +117,11 @@ object PLetNormalizer {
                   new EmptyDeclImpl()
                 else {
                   val newListLinearDecls = new ListLinearDecl()
-                  linearDeclsImpl.listlineardecl_.tail.foreach(newListLinearDecls.add)
+                  linearDeclsImpl.listlineardecl_.asScala.tail.foreach(newListLinearDecls.add)
                   new LinearDeclsImpl(newListLinearDecls)
                 }
               new PLet(newDecl, newDecls, p.proc_)
+
           }
 
         def listProcToEList(
@@ -190,9 +193,9 @@ object PLetNormalizer {
 
         p.decl_ match {
           case declImpl: DeclImpl =>
-            listProcToEList(declImpl.listproc_.toList, input.freeMap) >>= {
+            listProcToEList(declImpl.listproc_.asScala.toList, input.freeMap) >>= {
               case ProcVisitOutputs(valueListPar, valueKnownFree) =>
-                listNameToEList(declImpl.listname_.toList, declImpl.nameremainder_) >>= {
+                listNameToEList(declImpl.listname_.asScala.toList, declImpl.nameremainder_) >>= {
                   case ProcVisitOutputs(patternListPar, patternKnownFree) =>
                     normalizeMatch[F](
                       newContinuation,
@@ -215,7 +218,7 @@ object PLetNormalizer {
                                 )
                               ),
                               locallyFree = valueListPar.locallyFree | patternListPar.locallyFree | continuationPar.locallyFree
-                                .from(patternKnownFree.countNoWildcards)
+                                .rangeFrom(patternKnownFree.countNoWildcards)
                                 .map(_ - patternKnownFree.countNoWildcards),
                               connectiveUsed = valueListPar.connectiveUsed || continuationPar.connectiveUsed
                             )

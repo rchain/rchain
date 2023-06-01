@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.testing.scalatest.AsyncIOSpec
+import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -11,19 +12,17 @@ import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, SyntaxError}
 import coop.rchain.rholang.syntax._
 import coop.rchain.shared.Log
-import monix.eval.Task
-import monix.testing.scalatest.MonixTaskTest
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class BigIntNormalizerSpec extends AsyncFlatSpec with MonixTaskTest with Matchers {
-  implicit val logF: Log[Task]            = Log.log[Task]
-  implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+class BigIntNormalizerSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
+  implicit val logF: Log[IO]            = Log.log[IO]
+  implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
+  implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
 
   val outcomeCh = "ret"
 
-  private def execute[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
+  private def execute[F[_]: Async: Parallel: Metrics: Span: Log](
       source: String
   ): F[Either[InterpreterError, BigInt]] =
     mkRuntime[F]("rholang-bigint")
@@ -52,15 +51,15 @@ class BigIntNormalizerSpec extends AsyncFlatSpec with MonixTaskTest with Matcher
       s"""
            # @"$outcomeCh"!((-9223372036854775807).toBigInt())
            # """.stripMargin('#')
-    for {
-      r1 <- execute[Task](termWithNull)
-      r2 <- execute[Task](termWithMaxLong)
-      r3 <- execute[Task](termWithMinLong)
+    (for {
+      r1 <- execute[IO](termWithNull)
+      r2 <- execute[IO](termWithMaxLong)
+      r3 <- execute[IO](termWithMinLong)
     } yield {
       r1 should equal(Right(BigInt(0)))
       r2 should equal(Right(BigInt(9223372036854775807L)))
       r3 should equal(Right(BigInt(-9223372036854775807L)))
-    }
+    }).unsafeToFuture()
   }
 
   it should "convert Rholang String to BigInt" in {
@@ -76,15 +75,15 @@ class BigIntNormalizerSpec extends AsyncFlatSpec with MonixTaskTest with Matcher
       s"""
          # @"$outcomeCh"!("-9999999999999999999999999999999999999999999999".toBigInt())
          # """.stripMargin('#')
-    for {
-      r1 <- execute[Task](termWithNull)
-      r2 <- execute[Task](termWithPositiveBigValue)
-      r3 <- execute[Task](termWithNegativeBigValue)
+    (for {
+      r1 <- execute[IO](termWithNull)
+      r2 <- execute[IO](termWithPositiveBigValue)
+      r3 <- execute[IO](termWithNegativeBigValue)
     } yield {
       r1 should equal(Right(BigInt("0")))
       r2 should equal(Right(BigInt("9999999999999999999999999999999999999999999999")))
       r3 should equal(Right(BigInt("-9999999999999999999999999999999999999999999999")))
-    }
+    }).unsafeToFuture()
   }
 
   "BigInt() constructor" should "create BigInt value" in {
@@ -100,15 +99,15 @@ class BigIntNormalizerSpec extends AsyncFlatSpec with MonixTaskTest with Matcher
       s"""
            # @"$outcomeCh"!( -BigInt(9999999999999999999999999999999999999999999999) )
            # """.stripMargin('#')
-    for {
-      r1 <- execute[Task](termWithNull)
-      r2 <- execute[Task](termWithPositiveBigValue)
-      r3 <- execute[Task](termWithNegativeBigValue)
+    (for {
+      r1 <- execute[IO](termWithNull)
+      r2 <- execute[IO](termWithPositiveBigValue)
+      r3 <- execute[IO](termWithNegativeBigValue)
     } yield {
       r1 should equal(Right(BigInt("0")))
       r2 should equal(Right(BigInt("9999999999999999999999999999999999999999999999")))
       r3 should equal(Right(BigInt("-9999999999999999999999999999999999999999999999")))
-    }
+    }).unsafeToFuture()
   }
 
   it should "return throw error if input data isn't number string or it is negative number" in {
@@ -128,16 +127,16 @@ class BigIntNormalizerSpec extends AsyncFlatSpec with MonixTaskTest with Matcher
       s"""
          # @"$outcomeCh"!(BigInt(-9999999999999999999999999999999999999999999999))
          # """.stripMargin('#')
-    for {
-      r1 <- execute[Task](term1)
-      r2 <- execute[Task](term2)
-      r3 <- execute[Task](term3)
-      r4 <- execute[Task](term4)
+    (for {
+      r1 <- execute[IO](term1)
+      r2 <- execute[IO](term2)
+      r3 <- execute[IO](term3)
+      r4 <- execute[IO](term4)
     } yield {
       r1 should equal(Left(SyntaxError("syntax error(): NOTNUMBER at 2:17-2:26")))
       r2 should equal(Left(SyntaxError("syntax error(): NOTNUMBER at 2:63-2:72")))
       r3 should equal(Left(SyntaxError("syntax error(): NOTNUMBER at 2:64-2:73")))
       r4 should equal(Left(SyntaxError("syntax error(): - at 2:17-2:18")))
-    }
+    }).unsafeToFuture()
   }
 }

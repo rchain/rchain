@@ -4,12 +4,13 @@ import coop.rchain.models.PrettyPrinted
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.ast.rholang_mercury.PrettyPrinter
-import monix.eval.Coeval
+import cats.Eval
 import org.scalacheck.Arbitrary
 import org.scalacheck.Test.Parameters
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import coop.rchain.catscontrib.effect.implicits.sEval
 
 class ProcGenTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   implicit val params: Parameters = Parameters.defaultVerbose.withMinSuccessfulTests(1000)
@@ -21,7 +22,7 @@ class ProcGenTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
   it should "generate correct procs that are normalized successfully" in {
 
     forAll { p: PrettyPrinted[Proc] =>
-      Compiler[Coeval].astToADT(p.value).apply
+      Compiler[Eval].astToADT(p.value)
     }
   }
 
@@ -32,9 +33,7 @@ class ProcGenTest extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
       ProcGen.procShrinker
         .shrink(original.value)
         .headOption
-        .map(shrinked => Compiler[Coeval].astToADT(shrinked).apply)
-        .getOrElse(true)
-
+        .forall(shrinked => Compiler[Eval].astToADT(shrinked).map(_ => true).value)
     }
   }
 

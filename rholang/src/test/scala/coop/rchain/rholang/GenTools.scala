@@ -14,7 +14,7 @@ object GenTools {
   def nonemptySubSeq[T](items: Seq[T]): Gen[Seq[T]] =
     for {
       count  <- Gen.choose(1, items.length)
-      output <- Gen.pick(count, items)
+      output <- Gen.pick(count, items).map(_.toSeq)
     } yield output
 
   def nonemptyLimitedList[T](maxLength: Int, gen: Gen[T]): Gen[List[T]] =

@@ -8,7 +8,7 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.PMethod
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
 
-import scala.collection.convert.ImplicitConversionsToScala._
+import scala.jdk.CollectionConverters._
 import scala.collection.immutable.BitSet
 
 object PMethodNormalizer {
@@ -24,7 +24,7 @@ object PMethodNormalizer {
         BitSet(),
         false
       )
-      argResults <- p.listproc_.toList.reverse.foldM(initAcc)((acc, e) => {
+      argResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)((acc, e) => {
                      normalizeMatch[F](e, acc._2).map(
                        procMatchResult =>
                          (

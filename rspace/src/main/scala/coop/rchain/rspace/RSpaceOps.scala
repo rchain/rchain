@@ -1,11 +1,9 @@
 package coop.rchain.rspace
 
 import cats.Applicative
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.concurrent.ConcurrentTwoStepLockF
@@ -13,15 +11,16 @@ import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce, Log => EventLog}
-import coop.rchain.shared.SyncVarOps._
 import coop.rchain.shared.{Log, Serialize}
 import monix.execution.atomic.AtomicAny
 
+import java.util.concurrent.LinkedBlockingQueue
 import scala.collection.SortedSet
-import scala.concurrent.{ExecutionContext, SyncVar}
+import scala.concurrent.ExecutionContext
 import scala.util.Random
+import cats.effect.Ref
 
-abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
+abstract class RSpaceOps[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     val storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
@@ -29,11 +28,11 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
-    serializeK: Serialize[K],
-    scheduler: ExecutionContext
+    serializeK: Serialize[K]
 ) extends SpaceMatcher[F, C, P, A, K] {
 
   override def syncF: Sync[F] = Sync[F]
+
   override def spanF: Span[F] = Span[F]
 
   type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
@@ -137,8 +136,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       _ <- store.putContinuation(channels, wc)
       _ <- channels.traverse(channel => store.putJoin(channel, channels))
       _ <- Log[F].debug(s"""|consume: no data found,
-                          |storing <(patterns, continuation): (${wc.patterns}, ${wc.continuation})>
-                          |at <channels: ${channels}>""".stripMargin.replace('\n', ' '))
+            |storing <(patterns, continuation): (${wc.patterns}, ${wc.continuation})>
+            |at <channels: ${channels}>""".stripMargin.replace('\n', ' '))
     } yield None
 
   protected[this] def storeData(
@@ -182,30 +181,28 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
   ): F[MaybeActionResult] =
-    ContextShift[F].evalOn(scheduler) {
-      if (channels.isEmpty) {
-        val msg = "channels can't be empty"
-        Log[F].error(msg) >> Sync[F]
-          .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
-      } else if (channels.length =!= patterns.length) {
-        val msg = "channels.length must equal patterns.length"
-        Log[F].error(msg) >> Sync[F]
-          .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
-      } else
-        (for {
-          consumeRef <- Sync[F].delay(Consume(channels, patterns, continuation, persist))
-          result <- consumeLockF(channels) {
-                     lockedConsume(
-                       channels,
-                       patterns,
-                       continuation,
-                       persist,
-                       peeks,
-                       consumeRef
-                     )
-                   }
-        } yield result).timer(consumeTimeCommLabel)(Metrics[F], MetricsSource)
-    }
+    if (channels.isEmpty) {
+      val msg = "channels can't be empty"
+      Log[F].error(msg) >> Sync[F]
+        .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
+    } else if (channels.length =!= patterns.length) {
+      val msg = "channels.length must equal patterns.length"
+      Log[F].error(msg) >> Sync[F]
+        .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
+    } else
+      (for {
+        consumeRef <- Sync[F].delay(Consume(channels, patterns, continuation, persist))
+        result <- consumeLockF(channels) {
+                   lockedConsume(
+                     channels,
+                     patterns,
+                     continuation,
+                     persist,
+                     peeks,
+                     consumeRef
+                   )
+                 }
+      } yield result).timer(consumeTimeCommLabel)(Metrics[F], MetricsSource)
 
   protected[this] def lockedConsume(
       channels: Seq[C],
@@ -221,14 +218,12 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       data: A,
       persist: Boolean
   ): F[MaybeActionResult] =
-    ContextShift[F].evalOn(scheduler) {
-      (for {
-        produceRef <- Sync[F].delay(Produce(channel, data, persist))
-        result <- produceLockF(channel)(
-                   lockedProduce(channel, data, persist, produceRef)
-                 )
-      } yield result).timer(produceTimeCommLabel)(Metrics[F], MetricsSource)
-    }
+    (for {
+      produceRef <- Sync[F].delay(Produce(channel, data, persist))
+      result <- produceLockF(channel)(
+                 lockedProduce(channel, data, persist, produceRef)
+               )
+    } yield result).timer(produceTimeCommLabel)(Metrics[F], MetricsSource)
 
   protected[this] def lockedProduce(
       channel: C,
@@ -397,8 +392,6 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
         acc: Seq[CandidateChannels]
     ): F[Either[Seq[CandidateChannels], MaybeProduceCandidate]] =
       acc match {
-        case Nil =>
-          none[ProduceCandidate[C, P, A, K]].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
             matchCandidates <- fetchMatchingContinuations(channels)
@@ -414,7 +407,10 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
             case None             => remaining.asLeft[MaybeProduceCandidate]
             case produceCandidate => produceCandidate.asRight[Seq[CandidateChannels]]
           }
+        case _ =>
+          none[ProduceCandidate[C, P, A, K]].asRight[Seq[CandidateChannels]].pure[F]
       }
+
     groupedChannels.tailRecM(go)
   }
 

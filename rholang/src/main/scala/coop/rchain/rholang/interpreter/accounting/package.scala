@@ -1,14 +1,15 @@
 package coop.rchain.rholang.interpreter
 
 import cats._
+import cats.arrow.FunctionK
 import cats.data._
 import cats.effect.Sync
-import cats.effect.concurrent.Semaphore
+import cats.effect.kernel.{MonadCancel, Resource}
 import cats.syntax.all._
 import cats.mtl._
-
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import cats.effect.std.Semaphore
 
 package object accounting extends Costs {
 
@@ -37,14 +38,19 @@ package object accounting extends Costs {
     override def count: F[Long]                   = semaphore.count
     override def releaseN(n: Long): F[Unit]       = semaphore.releaseN(n)
     override def tryAcquireN(n: Long): F[Boolean] = semaphore.tryAcquireN(n)
-    override def withPermit[A](t: F[A]): F[A]     = semaphore.withPermit(t)
 
+    override def permit: Resource[F, Unit] = semaphore.permit
+    override def mapK[G[_]](f: F ~> G)(implicit G: MonadCancel[G, _]): Semaphore[G] =
+      semaphore.mapK(f)
   }
 
-  def charge[F[_]: Monad](
+  def withPermit[F[_]: Sync, A](cost: _cost[F])(t: F[A]) =
+    Sync[F].bracket[Unit, A](cost.acquire)(kp(t))(kp(cost.release))
+
+  def charge[F[_]: Sync](
       amount: Cost
   )(implicit cost: _cost[F], error: _error[F]): F[Unit] =
-    cost.withPermit(
+    withPermit[F, Unit](cost)(
       cost.get.flatMap { c =>
         if (c.value < 0) error.raiseError[Unit](OutOfPhlogistonsError)
         else cost.tell(Chain.one(amount)) >> cost.set(c - amount)
@@ -60,7 +66,7 @@ package object accounting extends Costs {
 
   implicit def ntCostLog[F[_]: Monad, G[_]: Sync](
       nt: F ~> G
-  )(implicit C: _cost[F]): _cost[G] =
+  )(implicit C: _cost[F], mc: MonadCancel[F, Throwable]): _cost[G] =
     new Semaphore[G] with MonadState[G, Cost] with FunctorTell[G, Chain[Cost]] {
       override val functor: Functor[G]                  = Functor[G]
       override def tell(l: Chain[Cost]): G[Unit]        = nt(C.tell(l))
@@ -78,8 +84,9 @@ package object accounting extends Costs {
       override def count: G[Long]                   = nt(C.count)
       override def releaseN(n: Long): G[Unit]       = nt(C.releaseN(n))
       override def tryAcquireN(n: Long): G[Boolean] = nt(C.tryAcquireN(n))
-      override def withPermit[A](t: G[A]): G[A] =
-        Sync[G].bracket[Unit, A](acquire)(kp(t))(kp(release))
+      override def permit: Resource[G, Unit]        = C.permit.mapK(nt)
+      override def mapK[K[_]](f: G ~> K)(implicit G: MonadCancel[K, _]): Semaphore[K] =
+        C.mapK(nt andThen f)
     }
 
 }

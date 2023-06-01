@@ -1,8 +1,7 @@
 package coop.rchain.comm.transport
 
 import cats._
-import cats.effect.concurrent.MVar2
-import cats.effect.{Sync, Timer}
+import cats.effect.{Async, Sync, Temporal}
 import cats.syntax.all._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError.CommErr
@@ -14,8 +13,9 @@ import java.net.ServerSocket
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.util.{Try, Using}
+import cats.effect.std.PQueue
 
-abstract class TransportLayerRuntime[F[_]: Sync: Timer, E <: Environment] {
+abstract class TransportLayerRuntime[F[_]: Async, E <: Environment] {
 
   val networkId = "test"
 
@@ -91,7 +91,7 @@ abstract class TransportLayerRuntime[F[_]: Sync: Timer, E <: Environment] {
                   for {
                     r <- execute(localTl, local, remote)
                     _ <- if (blockUntilDispatched) cb.waitUntilDispatched()
-                        else implicitly[Timer[F]].sleep(1.second)
+                        else implicitly[Temporal[F]].sleep(1.second)
                   } yield r
                 }
           } yield new TwoNodesResult {
@@ -179,9 +179,9 @@ abstract class TransportLayerRuntime[F[_]: Sync: Timer, E <: Environment] {
                   for {
                     r <- execute(localTl, local, remote1, remote2)
                     _ <- if (blockUntilDispatched) cb1.waitUntilDispatched()
-                        else implicitly[Timer[F]].sleep(1.second)
+                        else implicitly[Temporal[F]].sleep(1.second)
                     _ <- if (blockUntilDispatched) cb2.waitUntilDispatched()
-                        else implicitly[Timer[F]].sleep(1.second)
+                        else implicitly[Temporal[F]].sleep(1.second)
                   } yield r
                 }
           } yield new ThreeNodesResult {
@@ -225,12 +225,12 @@ trait Environment {
   def port: Int
 }
 
-final class DispatcherCallback[F[_]: Functor](state: MVar2[F, Unit]) {
-  def notifyThatDispatched(): F[Unit] = state.tryPut(()).void
+final class DispatcherCallback[F[_]: Functor](state: PQueue[F, Unit]) {
+  def notifyThatDispatched(): F[Unit] = state.tryOffer(()).void
   def waitUntilDispatched(): F[Unit]  = state.take
 }
 
-final class Dispatcher[F[_]: Monad: Timer, R, S](
+final class Dispatcher[F[_]: Monad: Temporal, R, S](
     response: PeerNode => S,
     delay: Option[FiniteDuration] = None,
     ignore: R => Boolean = kp(false)
@@ -238,31 +238,32 @@ final class Dispatcher[F[_]: Monad: Timer, R, S](
   def dispatch(peer: PeerNode, callback: DispatcherCallback[F]): R => F[S] =
     p =>
       for {
-        _ <- delay.fold(().pure[F])(implicitly[Timer[F]].sleep)
+        _ <- delay.fold(().pure[F])(implicitly[Temporal[F]].sleep)
         _ = if (!ignore(p)) receivedMessages.synchronized(receivedMessages += ((peer, p)))
         r = response(peer)
         _ <- callback.notifyThatDispatched()
       } yield r
 
-  def received: Seq[(PeerNode, R)] = receivedMessages
-  private val receivedMessages     = mutable.MutableList.empty[(PeerNode, R)]
+  def received: Seq[(PeerNode, R)] = receivedMessages.toSeq
+  private val receivedMessages     = mutable.ArrayDeque.empty[(PeerNode, R)]
 }
 
 object Dispatcher {
 
-  def withoutMessageDispatcher[F[_]: Monad: Timer]: Dispatcher[F, Protocol, CommunicationResponse] =
+  def withoutMessageDispatcher[F[_]: Monad: Temporal]
+      : Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.handledWithoutMessage,
       ignore = _.message.isDisconnect
     )
 
-  def internalCommunicationErrorDispatcher[F[_]: Monad: Timer]
+  def internalCommunicationErrorDispatcher[F[_]: Monad: Temporal]
       : Dispatcher[F, Protocol, CommunicationResponse] =
     new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")),
       ignore = _.message.isDisconnect
     )
 
-  def devNullPacketDispatcher[F[_]: Monad: Timer]: Dispatcher[F, Blob, Unit] =
+  def devNullPacketDispatcher[F[_]: Monad: Temporal]: Dispatcher[F, Blob, Unit] =
     new Dispatcher[F, Blob, Unit](response = kp(()))
 }

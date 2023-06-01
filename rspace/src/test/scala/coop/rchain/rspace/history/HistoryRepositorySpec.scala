@@ -1,6 +1,6 @@
 package coop.rchain.rspace.history
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.rspace._
@@ -17,12 +17,11 @@ import coop.rchain.shared.Log.NOPLog
 import coop.rchain.shared.syntax._
 import coop.rchain.state.TrieNode
 import coop.rchain.store.InMemoryKeyValueStore
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.OptionValues
 import scodec.bits.ByteVector
+import cats.effect.unsafe.implicits.global
 
 import java.nio.ByteBuffer
 import scala.collection.SortedSet
@@ -35,7 +34,7 @@ class HistoryRepositorySpec
     with OptionValues
     with InMemoryHistoryRepositoryTestBase {
 
-  type TestHistoryRepository = HistoryRepository[Task, String, String, String, String]
+  type TestHistoryRepository = HistoryRepository[IO, String, String, String, String]
 
   "HistoryRepository" should "process insert one datum" in withEmptyRepository { repo =>
     val testDatum = datum(1)
@@ -175,15 +174,15 @@ class HistoryRepositorySpec
   def datum(s: Any): Datum[String] =
     Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, false))
 
-  protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
-    val pastRoots                 = rootRepository
-    implicit val log: Log[Task]   = new NOPLog()
-    implicit val span: Span[Task] = new NoopSpan[Task]()
+  protected def withEmptyRepository(f: TestHistoryRepository => IO[Unit]): Unit = {
+    val pastRoots               = rootRepository
+    implicit val log: Log[IO]   = new NOPLog()
+    implicit val span: Span[IO] = new NoopSpan[IO]()
 
     (for {
-      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
+      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[IO]())
       _            <- pastRoots.commit(History.emptyRootHash)
-      repo = HistoryRepositoryImpl[Task, String, String, String, String](
+      repo = HistoryRepositoryImpl[IO, String, String, String, String](
         emptyHistory,
         pastRoots,
         inMemColdStore,
@@ -195,7 +194,7 @@ class HistoryRepositorySpec
         stringSerialize
       )
       _ <- f(repo)
-    } yield ()).runSyncUnsafe(20.seconds)
+    } yield ()).timeout(20.seconds).unsafeRunSync()
   }
 }
 
@@ -206,17 +205,17 @@ object RuntimeException {
 trait InMemoryHistoryRepositoryTestBase {
 
   def inmemRootsStore =
-    new RootsStore[Task] {
+    new RootsStore[IO] {
       var roots: Set[Blake2b256Hash]               = Set.empty
       var maybeCurrentRoot: Option[Blake2b256Hash] = None
 
-      override def currentRoot(): Task[Option[Blake2b256Hash]] =
-        Task.delay {
+      override def currentRoot(): IO[Option[Blake2b256Hash]] =
+        IO.delay {
           maybeCurrentRoot
         }
 
-      override def validateAndSetCurrentRoot(key: Blake2b256Hash): Task[Option[Blake2b256Hash]] =
-        Task.delay {
+      override def validateAndSetCurrentRoot(key: Blake2b256Hash): IO[Option[Blake2b256Hash]] =
+        IO.delay {
           if (roots.contains(key)) {
             maybeCurrentRoot = Some(key)
             maybeCurrentRoot
@@ -225,8 +224,8 @@ trait InMemoryHistoryRepositoryTestBase {
           }
         }
 
-      override def recordRoot(key: Blake2b256Hash): Task[Unit] =
-        Task.delay {
+      override def recordRoot(key: Blake2b256Hash): IO[Unit] =
+        IO.delay {
           maybeCurrentRoot = Some(key)
           roots += key
         }
@@ -234,10 +233,10 @@ trait InMemoryHistoryRepositoryTestBase {
     }
 
   def rootRepository =
-    new RootRepository[Task](inmemRootsStore)
+    new RootRepository[IO](inmemRootsStore)
 
-  def inMemColdStore: ColdKeyValueStore[Task] = {
-    val store = InMemoryKeyValueStore[Task]
+  def inMemColdStore: ColdKeyValueStore[IO] = {
+    val store = InMemoryKeyValueStore[IO]()
     store.toTypedStore(codecBlake2b256Hash, codecPersistedData)
   }
 

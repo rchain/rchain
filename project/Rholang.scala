@@ -13,15 +13,15 @@ object Rholang {
 
   lazy val rholangSettings = Seq(
     exportJars := true,
-    rholangSource in Compile := (sourceDirectory in Compile).value / "rholang",
-    rholangSource in Test := (sourceDirectory in Test).value / "rholang",
-    mappings in (Compile, packageBin) ++= {
+    Compile / rholangSource := (Compile / sourceDirectory).value / "rholang",
+    Test / rholangSource := (sourceDirectory in Test).value / "rholang",
+    Compile / packageBin / mappings ++= {
       val generatedProtos = (resourceManaged in Compile).value ** "*.proto"
       generatedProtos pair relativeTo((resourceManaged in Compile).value)
     },
-    mappings in (Test, packageBin) ++= {
-      val generatedProtos = (resourceManaged in Test).value ** "*.proto"
-      generatedProtos pair relativeTo((resourceManaged in Test).value)
+    Test / packageBin / mappings ++= {
+      val generatedProtos = (Test / resourceManaged).value ** "*.proto"
+      generatedProtos pair relativeTo((Test / resourceManaged).value)
     }
   )
 }

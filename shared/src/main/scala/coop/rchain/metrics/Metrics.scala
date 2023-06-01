@@ -13,7 +13,7 @@ trait Span[F[_]] {
 
 object Span {
   def apply[F[_]](implicit S: Span[F]) = S
-  def noop[F[_]: Applicative]: Span[F] = NoopSpan[F]
+  def noop[F[_]: Applicative]: Span[F] = NoopSpan[F]()
 }
 
 final case class NoopSpan[F[_]: Applicative]() extends Span[F] {

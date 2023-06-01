@@ -5,7 +5,6 @@ import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.Inspectors
 import org.scalatest.matchers.should.Matchers
@@ -32,7 +31,10 @@ class MultiParentCasperMergeSpec extends AnyFlatSpec with Matchers with Inspecto
                         shardId = shardId
                       )
         deployData1 <- ConstructDeploy
-                        .sourceDeployNowF("@1!(1) | for(@x <- @1){ @1!(x) }", shardId = shardId)
+                        .sourceDeployNowF[Effect](
+                          "@1!(1) | for(@x <- @1){ @1!(x) }",
+                          shardId = shardId
+                        )
         deployData2 <- ConstructDeploy.basicDeployData[Effect](2, shardId = shardId)
         deploys = Vector(
           deployData0,

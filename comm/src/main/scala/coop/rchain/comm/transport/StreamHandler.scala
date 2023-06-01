@@ -7,11 +7,10 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.transport.PacketOps._
-import coop.rchain.monix.Monixable
 import coop.rchain.shared.Compression._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import monix.reactive.Observable
+import fs2.Stream
 
 import scala.collection.concurrent.TrieMap
 
@@ -72,47 +71,35 @@ object StreamHandler {
     }
   }
 
-  def handleStream[F[_]: Monixable: Sync: Log](
-      stream: Observable[Chunk],
+  def handleStream[F[_]: Sync: Log](
+      stream: Stream[F, Chunk],
       circuitBreaker: CircuitBreaker,
       cache: TrieMap[String, Array[Byte]]
   ): F[Either[StreamError, StreamMessage]] =
-    init(cache).toTask
-      .bracketE { initStmd =>
-        (collect(initStmd, stream, circuitBreaker, cache) >>= toResult[F]).value.toTask
-      }({
-        // failed while collecting stream
-        case (stmd, Right(Left(_))) =>
-          (Log[F].warn("Failed collecting stream.") >>
-            Sync[F].delay(cache.remove(stmd.key)).void).toTask
-        // should not happend (errors handled witin bracket) but covered for safety
-        case (stmd, Left(_)) =>
-          (Log[F].error(
-            "Stream collection ended unexpected way. Please contact RNode code maintainer."
-          ) >> Sync[F].delay(cache.remove(stmd.key)).void).toTask
-        // succesfully collected
-        case (_, _) =>
-          Log[F].debug("Stream collected.").toTask
-      })
+    init(cache)
+      .flatMap { initStmd =>
+        (collect(initStmd, stream, circuitBreaker, cache) >>= toResult[F]).value.flatTap(
+          _.leftMap(_ => cache.remove(initStmd.key)).pure
+        )
+      }
       .attempt
       .map(_.leftMap(StreamError.unexpected).flatten)
-      .fromTask
 
   private def init[F[_]: Sync](cache: TrieMap[String, Array[Byte]]): F[Streamed] =
     createCacheEntry[F]("packet_send/", cache) map (key => Streamed(key = key))
 
-  private def collect[F[_]: Monixable: Sync](
+  private def collect[F[_]: Sync](
       init: Streamed,
-      stream: Observable[Chunk],
+      stream: Stream[F, Chunk],
       circuitBreaker: CircuitBreaker,
       cache: TrieMap[String, Array[Byte]]
   ): EitherT[F, StreamError, Streamed] = {
 
     def collectStream: F[Streamed] =
       stream
-        .foldWhileLeftL(init) {
+        .scan(init.asLeft[Streamed]) {
           case (
-              stmd,
+              Left(stmd),
               Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl, nid)))
               ) =>
             val newStmd = stmd.copy(
@@ -122,7 +109,7 @@ object StreamHandler {
             if (circuit.broken) Right(newStmd.copy(circuit = circuit))
             else Left(newStmd)
 
-          case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
+          case (Left(stmd), Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
             val receivedBytes = newData.toByteArray
 
             // Write data to cache
@@ -136,14 +123,18 @@ object StreamHandler {
             if (circuit.broken)
               Right(newStmd.copy(circuit = circuit))
             else Left(newStmd)
-          case (stmd, _) =>
+          case (Left(stmd), _) =>
             Right(
               stmd.copy(
                 circuit = Opened(StreamHandler.StreamError.notFullMessage("Not all data received"))
               )
             )
+          case (x @ Right(_), _) => x
         }
-        .fromTask
+        .takeThrough(x => x.isLeft)
+        .map(_.merge)
+        .compile
+        .lastOrError
 
     EitherT(collectStream.attempt.map {
       case Right(Streamed(_, _, Opened(error), _)) => error.asLeft

@@ -1,7 +1,7 @@
 package coop.rchain.node.revvaultexport.reporting
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Async, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.DagRepresentation
@@ -115,13 +115,13 @@ object TransactionBalances {
     } yield perValidatorVaultAddr
   }
 
-  def generateRevAccountFromWalletAndBond[F[_]: Sync: ContextShift: Log](
+  def generateRevAccountFromWalletAndBond[F[_]: Async: Log](
       walletPath: Path,
       bondsPath: Path
   ): F[Map[String, RevAccount]] =
     for {
-      bondsMap <- BondsParser.parse(bondsPath)
-      vaults   <- VaultParser.parse(walletPath)
+      bondsMap <- BondsParser.parse[F](fs2.io.file.Path.fromNioPath(bondsPath))
+      vaults   <- VaultParser.parse[F](fs2.io.file.Path.fromNioPath(walletPath))
       accountMap = vaults
         .map(v => (v.revAddress.toBase58, RevAccount(v.revAddress, v.initialBalance, NormalVault)))
         .toMap
@@ -147,7 +147,7 @@ object TransactionBalances {
           val fromVault = m.getOrElse(
             fromAddr,
             RevAccount(
-              address = RevAddress.parse(fromAddr).right.get,
+              address = RevAddress.parse(fromAddr).toOption.get,
               amount = 0L,
               accountType = NormalVault
             )
@@ -156,7 +156,7 @@ object TransactionBalances {
           val toVault = newVaultMap.getOrElse(
             toAddr,
             RevAccount(
-              address = RevAddress.parse(toAddr).right.get,
+              address = RevAddress.parse(toAddr).toOption.get,
               amount = 0L,
               accountType = NormalVault
             )
@@ -168,7 +168,7 @@ object TransactionBalances {
     genesisVault.copy(vaultMaps = resultMap)
   }
 
-  def getGenesisVaultMap[F[_]: Sync: ContextShift: Span: Log](
+  def getGenesisVaultMap[F[_]: Async: Span: Log](
       walletPath: Path,
       bondsPath: Path,
       runtime: RhoRuntime[F],
@@ -178,7 +178,7 @@ object TransactionBalances {
       vaultMap <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
       coopVault = vaultMap.getOrElse(
         CoopVaultAddr,
-        RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
+        RevAccount(RevAddress.parse(CoopVaultAddr).toOption.get, 0, CoopPosMultiSigVault)
       )
       perValidatorVaults <- getPerValidatorVaults(runtime, block).map(
                              addrs =>
@@ -187,7 +187,7 @@ object TransactionBalances {
                                    vaultMap.getOrElse(
                                      addr,
                                      RevAccount(
-                                       RevAddress.parse(addr).right.get,
+                                       RevAddress.parse(addr).toOption.get,
                                        0,
                                        PerValidatorVault
                                      )
@@ -220,12 +220,12 @@ object TransactionBalances {
     } yield blockMes
   }
 
-  def main[F[_]: Concurrent: Parallel: ContextShift](
+  def main[F[_]: Async: Parallel](
       dataDir: Path,
       walletPath: Path,
       bondPath: Path,
       targetBlockHash: String
-  )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
+  ): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
     implicit val metrics: Metrics.MetricsNOP[F] = new Metrics.MetricsNOP[F]()
     import coop.rchain.rholang.interpreter.storage._
     implicit val span: NoopSpan[F]                           = NoopSpan[F]()

@@ -1,10 +1,9 @@
 package coop.rchain.store
 
-import cats.effect.Concurrent
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.{Async, Deferred, Ref, Sync}
 import cats.syntax.all._
 
-class LazyKeyValueCache[F[_]: Concurrent, K, V] private[LazyKeyValueCache] (
+class LazyKeyValueCache[F[_]: Async, K, V] private[LazyKeyValueCache] (
     cache: Ref[F, Map[K, Deferred[F, V]]],
     populate: K => F[V]
 ) {
@@ -20,7 +19,7 @@ class LazyKeyValueCache[F[_]: Concurrent, K, V] private[LazyKeyValueCache] (
               }
             }
       (d, empty) = ret
-      _ <- Concurrent[F].whenA(empty)(
+      _ <- Sync[F].whenA(empty)(
             populate(key) >>= d.complete
           )
       r <- d.get
@@ -42,7 +41,7 @@ class LazyKeyValueCache[F[_]: Concurrent, K, V] private[LazyKeyValueCache] (
   * Cache that populates value using supplied function only once per value request.
   */
 object LazyKeyValueCache {
-  def apply[F[_]: Concurrent, K, V](
+  def apply[F[_]: Async, K, V](
       populateKeyWithValue: K => F[V]
   ): F[LazyKeyValueCache[F, K, V]] =
     for {

@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 
 import cats.Applicative
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Async, IO, Sync, Temporal}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -25,14 +25,13 @@ import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, LogSource, Time}
-import monix.eval.Task
+import coop.rchain.shared.{Log, LogSource}
 
 object BlockGenerator {
   private[this] val GenerateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "generate-block")
 
-  implicit val timeEff              = new LogicalTime[Task]
+  implicit val timeEff              = new LogicalTime[IO]
   implicit val logSource: LogSource = LogSource(this.getClass)
 
   // Dummy empty Casper snapshot
@@ -49,7 +48,7 @@ object BlockGenerator {
     rejectedDeploys = Set()
   )
 
-  def step[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  def step[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage
   ): F[Unit] =
     for {
@@ -58,7 +57,7 @@ object BlockGenerator {
       result                                    <- injectPostStateHash[F](block, postB1StateHash, postB1ProcessedDeploys)
     } yield result
 
-  private def computeBlockCheckpoint[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
+  private def computeBlockCheckpoint[F[_]: Async: RuntimeManager: BlockDagStorage: BlockStore: Log: Metrics: Span](
       block: BlockMessage,
       preState: ParentsMergedState
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
@@ -183,7 +182,7 @@ trait BlockGenerator {
     sendersLatest.map(_.senderSeq).toList.maximumOption.getOrElse(-1L)
   }
 
-  def createValidatorBlock[F[_]: Sync: Time: BlockStore: BlockDagStorage](
+  def createValidatorBlock[F[_]: Async: BlockStore: BlockDagStorage](
       justifications: Seq[BlockMessage],
       validator: Validator,
       bonds: Map[Validator, Long],

@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter
 
+import cats.arrow.FunctionK
 import cats.data.StateT
-import cats.effect.Sync
+import cats.effect.{MonadCancel, Sync}
 import cats.mtl._
 import cats.syntax.all._
 import cats.{~>, Monad}
@@ -19,6 +20,8 @@ package object matcher {
 
   import coop.rchain.rholang.interpreter.matcher.StreamT
 
+  import coop.rchain.catscontrib._
+
   implicit def matcherMonadCostLog[F[_]: Monad: Sync: _cost](): _cost[MatcherMonadT[F, *]] =
     λ[F ~> MatcherMonadT[F, *]](fa => StateT.liftF(StreamT.liftF(fa)))
 
@@ -34,7 +37,7 @@ package object matcher {
 
   private[matcher] def run[F[_]: Monad, A](
       f: MatcherMonadT[F, A]
-  ): F[Stream[(FreeMap, A)]] =
+  ): F[LazyList[(FreeMap, A)]] =
     StreamT.run(f.run(emptyMap))
 
   private[rholang] def runFirst[F[_]: Monad, A](

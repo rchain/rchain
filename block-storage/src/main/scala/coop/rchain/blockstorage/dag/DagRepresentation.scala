@@ -36,7 +36,7 @@ final case class DagRepresentation(
 
   // TODO: pick highest block from fringe until LFB is replaced with fringe completely
   lazy val lastFinalizedBlockHash: Option[BlockHash] =
-    latestFringe.toList.sortBy(_.height).lastOption.map(_.id)
+    latestFringe.toList.maxByOption(_.height).map(_.id)
 
   def contains(blockHash: BlockHash): Boolean =
     blockHash.size == BlockHash.Length && dagSet.contains(blockHash)
@@ -54,7 +54,7 @@ final case class DagRepresentation(
     val endNumber   = maybeEndBlockNumber.map(Math.min(maxNumber, _)).getOrElse(maxNumber)
     val validRange  = startNumber >= 0 && startNumber <= endNumber
     validRange.guard[Option].as {
-      heightMap
+      heightMap.view
         .filterKeys(h => h >= startNumber && h <= endNumber)
         .map { case (_, v) => v.toVector }
         .toVector

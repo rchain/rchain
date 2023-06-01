@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
-import cats.effect.Sync
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Sync}
 import cats.syntax.all._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.syntax._
@@ -9,8 +10,6 @@ import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Signed
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalacheck._
 import org.scalacheck.commands.Commands
 
@@ -43,7 +42,7 @@ object HashSetCasperActions {
   ): Effect[Either[ParsingError, DeployId]] =
     node.deploy(deployData)
 
-  def create(node: TestNode[Effect]): Task[BlockMessage] =
+  def create(node: TestNode[Effect]): IO[BlockMessage] =
     for {
       createBlockResult1 <- node.proposeSync
       block              <- node.blockStore.getUnsafe(createBlockResult1)
@@ -61,7 +60,7 @@ object HashSetCasperActions {
     ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, shardId = "root")
 
   implicit class EffectOps[A](f: Effect[A]) {
-    def result: A = f.runSyncUnsafe()
+    def result: A = f.unsafeRunSync()
   }
 }
 
@@ -78,8 +77,8 @@ object HashSetCasperSpecification extends Commands {
 
   override def canCreateNewSut(
       newState: State,
-      initSuts: Traversable[State],
-      runningSuts: Traversable[Sut]
+      initSuts: Iterable[State],
+      runningSuts: Iterable[Sut]
   ): Boolean =
     true
 
@@ -161,7 +160,7 @@ object HashSetCasperSpecification extends Commands {
 
     override def run(sut: Sut): Result = {
       val validator = sut.nodes(node.idx)
-      val result    = add(validator.node, validator.lastBlock.get).result.right.get
+      val result    = add(validator.node, validator.lastBlock.get).result.toOption.get
       validator.update(None)
       (result, validator.node.logEff.errors ++ validator.node.logEff.warns)
     }
@@ -181,7 +180,7 @@ object HashSetCasperSpecification extends Commands {
       val validator = sut.nodes(node.idx).node
       val result = (deploy(validator, deployment(0)) >> create(validator) >>= (
           b => add(validator, b)
-      )).result.right.get
+      )).result.toOption.get
       (result, validator.logEff.errors ++ validator.logEff.warns)
     }
 
