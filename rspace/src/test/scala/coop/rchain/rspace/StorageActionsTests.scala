@@ -11,6 +11,7 @@ import coop.rchain.rspace.test._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util.{getK, runK, unpackOption}
 import coop.rchain.shared.Serialize
+import org.scalatest.EitherValues
 import org.scalatestplus.scalacheck._
 
 import scala.collection.SortedSet
@@ -18,7 +19,8 @@ import scala.collection.SortedSet
 trait StorageActionsTests[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with ScalaCheckDrivenPropertyChecks
-    with Checkers {
+    with Checkers
+    with EitherValues {
 
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSuccessful = 5, sizeRange = 30)
@@ -1059,7 +1061,7 @@ trait StorageActionsTests[F[_]]
     for {
       _   <- space.produce(channel, datum, persist = false)
       res <- Sync[F].attempt(space.install(key, patterns, new StringsCaptor))
-      ex  = res.swap.toOption.get
+      ex  = res.left.value
     } yield ex.getMessage shouldBe "Installing can be done only on startup"
   }
 
@@ -1069,7 +1071,7 @@ trait StorageActionsTests[F[_]]
       res <- Sync[F].attempt(
               space.consume(List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false)
             )
-      err           = res.swap.toOption.get
+      err           = res.left.value
       _             = err shouldBe an[IllegalArgumentException]
       _             = err.getMessage shouldBe "channels.length must equal patterns.length"
       insertActions <- store.changes.map(collectActions[InsertAction])

@@ -7,7 +7,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.shared.Base16
 import coop.rchain.store.InMemoryKeyValueStore
-import org.scalatest.Assertion
+import org.scalatest.{Assertion, EitherValues}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
@@ -17,7 +17,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
 
-class HistoryActionTests extends AnyFlatSpec with Matchers {
+class HistoryActionTests extends AnyFlatSpec with Matchers with EitherValues {
 
   "creating and read one record" should "works" in withEmptyHistory { emptyHistoryF =>
     val data = insert(_zeros) :: Nil
@@ -82,8 +82,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         emptyHistory <- emptyHistoryF
         err          <- emptyHistory.process(data).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.swap.toOption.get
+        val ex = err.left.value
         ex shouldBe a[AssertionError]
         ex.getMessage shouldBe s"assertion failed: The length of all prefixes in the subtree must be the same."
       }
@@ -96,8 +95,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         emptyHistory <- emptyHistoryF
         err          <- emptyHistory.process(data1).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.swap.toOption.get
+        val ex = err.left.value
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe s"Cannot process duplicate actions on one key."
       }
@@ -106,8 +104,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         emptyHistory <- emptyHistoryF
         err          <- emptyHistory.process(data2).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.swap.toOption.get
+        val ex = err.left.value
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe s"Cannot process duplicate actions on one key."
       }
@@ -211,8 +208,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
         _            <- inMemoStore.put[ByteVector](Seq(collisionKVPair), copyBVToBuf)
         err          <- newHistory.process(deleteRecord).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.swap.toOption.get
+        val ex = err.left.value
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe
           s"1 collisions in KVDB (first collision with key = " +

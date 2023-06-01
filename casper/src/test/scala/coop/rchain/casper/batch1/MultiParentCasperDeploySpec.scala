@@ -7,14 +7,15 @@ import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.Inspectors
+import org.scalatest.{EitherValues, Inspectors}
 import org.scalatest.matchers.should.Matchers
 
 class MultiParentCasperDeploySpec
     extends AnyFlatSpec
     with Matchers
     with Inspectors
-    with BlockApiFixture {
+    with BlockApiFixture
+    with EitherValues {
 
   import coop.rchain.casper.util.GenesisBuilder._
 
@@ -67,8 +68,7 @@ class MultiParentCasperDeploySpec
         blockApi <- createBlockApi(node)
         err      <- blockApi.deploy(deployData).attempt
       } yield {
-        err.isLeft shouldBe true
-        val ex = err.swap.toOption.get
+        val ex = err.left.value
         ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe s"Phlo price $phloPrice is less than minimum price $minPhloPrice."
       }

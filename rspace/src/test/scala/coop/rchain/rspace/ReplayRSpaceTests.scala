@@ -29,7 +29,9 @@ import cats.effect.Ref
 import cats.effect.unsafe.implicits.global
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
-trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
+trait ReplayRSpaceTests
+    extends ReplayRSpaceTestsBase[String, Pattern, String, String]
+    with EitherValues {
 
   implicit val log: Log[IO]        = new Log.NOPLog[IO]
   val arbitraryRangeSize: Gen[Int] = Gen.chooseNum[Int](1, 10)
@@ -1210,7 +1212,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         c   <- space.createCheckpoint()
         _   <- replaySpace.rigAndReset(c.root, c.log)
         res <- replaySpace.checkReplayData().attempt
-        ex  = res.swap.toOption.get
+        ex  = res.left.value
       } yield ex shouldBe a[ReplayException]
   }
 
