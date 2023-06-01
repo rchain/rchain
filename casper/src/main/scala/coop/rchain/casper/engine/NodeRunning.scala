@@ -251,7 +251,7 @@ class NodeRunning[F[_]
                 s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
               ),
-              incomingBlocksQueue.trySend(b).void <* Log[F].debug(
+              incomingBlocksQueue.trySend(b) *> Log[F].debug(
                 s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
                   s"from ${peer.endpoint.host}"
               )

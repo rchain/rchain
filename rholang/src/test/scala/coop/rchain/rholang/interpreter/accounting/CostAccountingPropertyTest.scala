@@ -81,8 +81,8 @@ object CostAccountingPropertyTest {
     tasks.toList
       .sequence[IO, A]
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
-      .unsafeRunTimed(duration)
-      .get
+      .timeout(duration)
+      .unsafeRunSync()
 
   def execute[F[_]: Sync](runtime: RhoRuntime[F], p: Proc): F[Long] =
     for {

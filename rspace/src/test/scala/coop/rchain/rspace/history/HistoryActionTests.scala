@@ -278,7 +278,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
 
   protected def withEmptyHistory(f: IO[History[IO]] => IO[Unit]): Unit = {
     val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[IO]())
-    f(emptyHistory).unsafeRunTimed(1.minute)
+    f(emptyHistory).timeout(1.minute).unsafeRunSync()
   }
 
   protected def withEmptyHistoryAndStore(
@@ -286,7 +286,7 @@ class HistoryActionTests extends AnyFlatSpec with Matchers {
   ): Unit = {
     val store        = InMemoryKeyValueStore[IO]()
     val emptyHistory = History.create(History.emptyRootHash, store)
-    f(emptyHistory, store).unsafeRunTimed(20.seconds)
+    f(emptyHistory, store).timeout(20.seconds).unsafeRunSync()
   }
 
   def randomKey(size: Int): KeySegment =

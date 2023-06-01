@@ -806,6 +806,6 @@ class RadixTreeSpec extends AnyFlatSpec with Matchers with OptionValues {
     val store         = InMemoryKeyValueStore[IO]()
     val typedStore    = store.toTypedStore(RadixHistory.codecBlakeHash, scodec.codecs.bytes)
     val radixTreeImpl = new RadixTreeImpl[IO](typedStore)
-    f(radixTreeImpl, store).unsafeRunTimed(20.seconds)
+    f(radixTreeImpl, store).timeout(20.seconds).unsafeRunSync()
   }
 };

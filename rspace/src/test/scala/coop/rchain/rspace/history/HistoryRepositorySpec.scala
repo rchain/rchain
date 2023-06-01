@@ -194,7 +194,7 @@ class HistoryRepositorySpec
         stringSerialize
       )
       _ <- f(repo)
-    } yield ()).unsafeRunTimed(20.seconds)
+    } yield ()).timeout(20.seconds).unsafeRunSync()
   }
 }
 

@@ -119,7 +119,8 @@ abstract class HistoryRepositoryGenerativeDefinition
             } yield next
           }
       }
-      .unsafeRunTimed(20.seconds)
+      .timeout(20.seconds)
+      .unsafeRunSync()
   }
 
   def checkData(seq: Seq[Datum[String]], data: Seq[Datum[Any]]): Assertion =

@@ -1136,7 +1136,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[IO] {
       cache        <- C()
       hotStore     <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
       res          <- f(cache, history, hotStore)
-    } yield res).unsafeRunTimed(1.second)
+    } yield res).timeout(1.second).unsafeRunSync()
 
   override def fixture(cache: HotStoreState[String, Pattern, String, StringsCaptor])(
       f: HotStore[F, String, Pattern, String, StringsCaptor] => F[Unit]
@@ -1147,7 +1147,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[IO] {
       cache        <- C(cache)
       hotStore     <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
       res          <- f(hotStore)
-    } yield res).unsafeRunTimed(1.second)
+    } yield res).timeout(1.second).unsafeRunSync()
 
 }
 
