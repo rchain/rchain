@@ -11,8 +11,6 @@ import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
-import monix.eval._
-import monix.execution.atomic.AtomicAny
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,10 +18,10 @@ import cats.effect.{Async, IO, Ref}
 import cats.effect.unsafe.implicits.global
 
 trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with OptionValues {
-  type T    = ISpace[F, C, P, A, K]
-  type ST   = HotStore[F, C, P, A, K]
-  type HR   = HistoryRepository[F, C, P, A, K]
-  type AtST = AtomicAny[ST]
+  type T     = ISpace[F, C, P, A, K]
+  type ST    = HotStore[F, C, P, A, K]
+  type HR    = HistoryRepository[F, C, P, A, K]
+  type RefST = Ref[F, ST]
 
   implicit def concurrentF: Async[F]
   implicit def parF: Parallel[F]
@@ -41,16 +39,16 @@ trait StorageTestsBase[F[_], C, P, A, K] extends AnyFlatSpec with Matchers with 
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def fixture[R](f: (ST, AtST, T) => F[R]): R
+  def fixture[R](f: (ST, RefST, T) => F[R]): R
 
-  def fixtureNonF[R](f: (ST, AtST, T) => R): R =
-    fixture((st: ST, ast: AtST, t: T) => concurrentF.delay(f(st, ast, t)))
+  def fixtureNonF[R](f: (ST, RefST, T) => R): R =
+    fixture((st: ST, ast: RefST, t: T) => concurrentF.delay(f(st, ast, t)))
 
   def run[S](f: F[S]): S
 
   protected def setupTestingSpace[S, STORE](
-      createISpace: (HR, ST) => F[(ST, AtST, T)],
-      f: (ST, AtST, T) => F[S]
+      createISpace: (HR, ST) => F[(ST, RefST, T)],
+      f: (ST, RefST, T) => F[S]
   )(
       implicit
       sc: Serialize[C],
@@ -98,16 +96,14 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
 
-  override def fixture[S](f: (ST, AtST, T) => F[S]): S = {
-    val creator: (HR, ST) => F[(ST, AtST, T)] =
+  override def fixture[S](f: (ST, RefST, T) => F[S]): S = {
+    val creator: (HR, ST) => F[(ST, RefST, T)] =
       (hr, ts) => {
-        val atomicStore = AtomicAny(ts)
-        val space =
-          new RSpace[F, String, Pattern, String, StringsCaptor](
-            hr,
-            atomicStore
-          )
-        Applicative[F].pure((ts, atomicStore, space))
+        val atomicRef = Ref.of[F, ST](ts)
+        atomicRef.map { ref =>
+          val space = new RSpace[F, String, Pattern, String, StringsCaptor](hr, ref)
+          (ts, ref, space)
+        }
       }
     setupTestingSpace(creator, f)
   }

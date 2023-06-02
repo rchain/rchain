@@ -972,21 +972,21 @@ trait StorageActionsTests[F[_]]
       space.createCheckpoint().map(_.root shouldBe emptyRootHash)
   }
 
-  "createCheckpoint" should "clear the store contents" in fixture { (_, storeAtom, space) =>
+  "createCheckpoint" should "clear the store contents" in fixture { (_, storeRef, space) =>
     val key1     = List("ch1")
     val patterns = List(Wildcard)
 
     for {
       _                  <- space.consume(key1, patterns, new StringsCaptor, persist = false)
       _                  <- space.createCheckpoint()
-      store0             = storeAtom.get()
+      store0             <- storeRef.get
       checkpoint0Changes <- store0.changes
       _                  = checkpoint0Changes.length shouldBe 0
     } yield ()
   }
 
   "reset" should "change the state of the store, and reset the trie updates log" in fixture {
-    (_, storeAtom, space) =>
+    (_, storeRef, space) =>
       val key      = List("ch1")
       val patterns = List(Wildcard)
 
@@ -994,7 +994,7 @@ trait StorageActionsTests[F[_]]
         checkpoint0          <- space.createCheckpoint()
         r                    <- space.consume(key, patterns, new StringsCaptor, persist = false)
         _                    = r shouldBe None
-        postCheckpoint0Store = storeAtom.get()
+        postCheckpoint0Store <- storeRef.get
         checkpoint0Changes <- postCheckpoint0Store.changes
                                .map(
                                  collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
@@ -1003,7 +1003,7 @@ trait StorageActionsTests[F[_]]
         _ = checkpoint0Changes.length shouldBe 1
 
         _              <- space.reset(checkpoint0.root)
-        postResetStore = storeAtom.get()
+        postResetStore <- storeRef.get
         resetChanges   <- postResetStore.changes
         _              = resetChanges.isEmpty shouldBe true
         _              = resetChanges.length shouldBe 0
@@ -1168,7 +1168,7 @@ trait StorageActionsTests[F[_]]
   }
 
   "revertToSoftCheckpoint" should "revert the state of the store to the given checkpoint" in fixture {
-    (_, storeAtom, space) =>
+    (_, storeRef, space) =>
       val channel      = "ch1"
       val channels     = List(channel)
       val patterns     = List(Wildcard)
@@ -1178,22 +1178,18 @@ trait StorageActionsTests[F[_]]
         // create an initial soft checkpoint
         s1 <- space.createSoftCheckpoint()
         // do an operation
-        _ <- space.consume(channels, patterns, continuation, persist = false)
-        changes <- storeAtom
-                    .get()
-                    .changes
-                    .map(
-                      collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
-                    )
+        _      <- space.consume(channels, patterns, continuation, persist = false)
+        store1 <- storeRef.get
+        changes <- store1.changes.map(
+                    collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
+                  )
         // the operation should be on the list of changes
-        _ = changes should not be empty
-        _ <- space.revertToSoftCheckpoint(s1)
-        changes <- storeAtom
-                    .get()
-                    .changes
-                    .map(
-                      collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
-                    )
+        _      = changes should not be empty
+        _      <- space.revertToSoftCheckpoint(s1)
+        store2 <- storeRef.get
+        changes <- store2.changes.map(
+                    collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
+                  )
         // after reverting to the initial soft checkpoint the operation is no longer present in the hot store
         _ = changes shouldBe empty
       } yield ()

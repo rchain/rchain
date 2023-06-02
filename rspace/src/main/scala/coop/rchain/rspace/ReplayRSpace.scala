@@ -4,7 +4,6 @@ import cats.effect._
 import cats.syntax.all._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
-import coop.rchain.catscontrib._
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.history.HistoryRepository
@@ -12,15 +11,13 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Serialize}
-import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
-import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 
 class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+    storeRef: Ref[F, HotStore[F, C, P, A, K]]
 )(
     implicit
     serializeC: Serialize[C],
@@ -28,7 +25,7 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val m: Match[F, P, A]
-) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
+) extends RSpaceOps[F, C, P, A, K](historyRepository, storeRef)
     with IReplaySpace[F, C, P, A, K] {
 
   protected override def logF: Log[F] = Log[F]
@@ -95,7 +92,7 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     for {
       channelToIndexedDataList <- channels.traverse { c: C =>
                                    store
-                                     .getData(c)
+                                     .flatMap(_.getData(c))
                                      .flatMap(
                                        _.iterator.zipWithIndex.to(Seq).filterA(matches(comm))
                                      )
@@ -113,7 +110,8 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   ): F[MaybeActionResult] =
     Span[F].traceI("locked-produce") {
       for {
-        groupedChannels <- store.getJoins(channel)
+        hotStore        <- store
+        groupedChannels <- hotStore.getJoins(channel)
         _ <- logF.debug(
               s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
             )
@@ -163,14 +161,14 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
       groupedChannels,
       channels =>
         store
-          .getContinuations(channels)
+          .flatMap(_.getContinuations(channels))
           .map(_.iterator.zipWithIndex.filter {
             case (WaitingContinuation(_, _, _, _, source), _) =>
               comm.consume == source
           }.toSeq),
       c =>
         store
-          .getData(c)
+          .flatMap(_.getData(c))
           .map(_.iterator.zipWithIndex.to(Seq))
           .flatMap { datums =>
             (if (c == channel) (Datum(data, persist, produceRef), -1) +: datums else datums)
@@ -207,10 +205,11 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
             comms.contains(commRef),
             s"COMM Event $commRef was not contained in the trace $comms"
           )
-      _ <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
-      _ <- removeMatchedDatumAndJoin(channels, dataCandidates)
-      _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
-      _ <- removeBindingsFor(commRef)
+      hotStore <- store
+      _        <- hotStore.removeContinuation(channels, continuationIndex).unlessA(persistK)
+      _        <- removeMatchedDatumAndJoin(channels, dataCandidates)
+      _        <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
+      _        <- removeBindingsFor(commRef)
     } yield wrapResult(channels, wk, consumeRef, dataCandidates)
   }
 
@@ -226,9 +225,11 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
 
   override def createCheckpoint(): F[Checkpoint] = checkReplayData() >> syncF.defer {
     for {
-      changes       <- storeAtom.get().changes
-      nextHistory   <- historyRepositoryAtom.get().checkpoint(changes.toList)
-      _             = historyRepositoryAtom.set(nextHistory)
+      store         <- storeRef.get
+      changes       <- store.changes
+      historyRepo   <- historyRepositoryRef.get
+      nextHistory   <- historyRepo.checkpoint(changes.toList)
+      _             <- historyRepositoryRef.set(nextHistory)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       _             <- createNewHotStore(historyReader)
       _             <- restoreInstalls()
@@ -292,7 +293,7 @@ class ReplayRSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
 
   def spawn: F[IReplaySpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
     for {
-      historyRepo   <- Sync[F].delay(historyRepositoryAtom.get())
+      historyRepo   <- historyRepositoryRef.get
       nextHistory   <- historyRepo.reset(historyRepo.history.root)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       hotStore      <- HotStore(historyReader.base)
@@ -317,8 +318,9 @@ object ReplayRSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       m: Match[F, P, A]
-  ): F[ReplayRSpace[F, C, P, A, K]] = Sync[F].delay {
-    new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
-  }
+  ): F[ReplayRSpace[F, C, P, A, K]] =
+    Ref
+      .of[F, HotStore[F, C, P, A, K]](store)
+      .map(storeRef => new ReplayRSpace[F, C, P, A, K](historyRepository, storeRef))
 
 }

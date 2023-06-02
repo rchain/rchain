@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import cats.Parallel.Aux
 import cats._
+import cats.effect.kernel.Ref
 import cats.effect.{Async, IO}
 import cats.syntax.all._
 import coop.rchain.rspace.examples.AddressBookExample
@@ -9,9 +10,7 @@ import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.util.{getK, runK, unpackOption}
-import monix.execution.atomic.AtomicAny
 import scodec.Codec
-
 import cats.effect.unsafe.implicits.global
 
 trait StorageExamplesTests[F[_]]
@@ -268,16 +267,14 @@ trait StorageExamplesTests[F[_]]
 abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
-  override def fixture[R](f: (ST, AtST, T) => F[R]): R = {
-    val creator: (HR, ST) => F[(ST, AtST, T)] =
+  override def fixture[R](f: (ST, RefST, T) => F[R]): R = {
+    val creator: (HR, ST) => F[(ST, RefST, T)] =
       (hr, ts) => {
-        val atomicStore = AtomicAny(ts)
-        val space =
-          new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](
-            hr,
-            atomicStore
-          )
-        Applicative[F].pure((ts, atomicStore, space))
+        val atomicRef = Ref.of[F, ST](ts)
+        atomicRef.map { ref =>
+          val space = new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](hr, ref)
+          (ts, ref, space)
+        }
       }
     setupTestingSpace(creator, f)
   }

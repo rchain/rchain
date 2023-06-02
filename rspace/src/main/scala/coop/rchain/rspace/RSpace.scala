@@ -13,14 +13,13 @@ import coop.rchain.rspace.internal.{ConsumeCandidate, Datum, ProduceCandidate, W
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
-import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
 class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+    storeRef: Ref[F, HotStore[F, C, P, A, K]]
 )(
     implicit
     serializeC: Serialize[C],
@@ -28,7 +27,7 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val m: Match[F, P, A]
-) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
+) extends RSpaceOps[F, C, P, A, K](historyRepository, storeRef)
     with ISpace[F, C, P, A, K] {
 
   protected[this] override val logger: Logger = Logger[this.type]
@@ -81,7 +80,7 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   private[this] def fetchChannelToIndexData(channels: Seq[C]): F[Map[C, Seq[(Datum[A], Int)]]] =
     channels
       .traverse { c: C =>
-        store.getData(c).shuffleWithIndex.map(c -> _)
+        store.flatMap(_.getData(c).shuffleWithIndex.map(c -> _))
       }
       .map(_.toMap)
 
@@ -94,7 +93,8 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     Span[F].traceI("locked-produce") {
       for {
         //TODO fix double join fetch
-        groupedChannels <- store.getJoins(channel)
+        hotStore        <- store
+        groupedChannels <- hotStore.getJoins(channel)
         _ <- Log[F].debug(
               s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
             )
@@ -118,10 +118,7 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
   ): F[MaybeProduceCandidate] =
     runMatcherForChannels(
       groupedChannels,
-      channels =>
-        store
-          .getContinuations(channels)
-          .shuffleWithIndex,
+      channels => store.flatMap(_.getContinuations(channels).shuffleWithIndex),
       /*
        * Here, we create a cache of the data at each channel as `channelToIndexedData`
        * which is used for finding matches.  When a speculative match is found, we can
@@ -134,8 +131,7 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
        */
       c =>
         store
-          .getData(c)
-          .shuffleWithIndex
+          .flatMap(_.getData(c).shuffleWithIndex)
           .map { d =>
             if (c == batChannel) (data, -1) +: d else d
           }
@@ -153,11 +149,12 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
     ) = pc
 
     for {
-      comm <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
-      _    <- logComm(dataCandidates, channels, wk, comm, produceCommLabel)
-      _    <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
-      _    <- removeMatchedDatumAndJoin(channels, dataCandidates)
-      _    <- Log[F].debug(s"produce: matching continuation found at <channels: $channels>")
+      comm     <- COMM(dataCandidates, consumeRef, peeks, produceCounters _)
+      _        <- logComm(dataCandidates, channels, wk, comm, produceCommLabel)
+      hotStore <- store
+      _        <- hotStore.removeContinuation(channels, continuationIndex).unlessA(persistK)
+      _        <- removeMatchedDatumAndJoin(channels, dataCandidates)
+      _        <- Log[F].debug(s"produce: matching continuation found at <channels: $channels>")
     } yield wrapResult(channels, wk, consumeRef, dataCandidates)
   }
 
@@ -195,11 +192,13 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
 
   override def createCheckpoint(): F[Checkpoint] = spanF.withMarks("create-checkpoint") {
     for {
-      changes <- spanF.withMarks("changes") { storeAtom.get().changes }
+      store       <- storeRef.get
+      changes     <- spanF.withMarks("changes") { store.changes }
+      historyRepo <- historyRepositoryRef.get
       nextHistory <- spanF.withMarks("history-checkpoint") {
-                      historyRepositoryAtom.get().checkpoint(changes.toList)
+                      historyRepo.checkpoint(changes.toList)
                     }
-      _             = historyRepositoryAtom.set(nextHistory)
+      _             <- historyRepositoryRef.set(nextHistory)
       log           <- eventLog.getAndSet(Seq.empty)
       _             <- produceCounter.set(Map.empty.withDefaultValue(0))
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
@@ -210,7 +209,7 @@ class RSpace[F[_]: Async: Log: Metrics: Span, C, P, A, K](
 
   def spawn: F[ISpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
     for {
-      historyRepo   <- Sync[F].delay(historyRepositoryAtom.get())
+      historyRepo   <- historyRepositoryRef.get
       nextHistory   <- historyRepo.reset(historyRepo.history.root)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
       hotStore      <- HotStore(historyReader.base)
@@ -245,7 +244,9 @@ object RSpace {
       sk: Serialize[K],
       m: Match[F, P, A]
   ): F[RSpace[F, C, P, A, K]] =
-    Sync[F].delay(new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store)))
+    Ref
+      .of[F, HotStore[F, C, P, A, K]](store)
+      .map(storeRef => new RSpace[F, C, P, A, K](historyRepository, storeRef))
 
   /**
     * Creates [[RSpace]] from [[KeyValueStore]]'s,

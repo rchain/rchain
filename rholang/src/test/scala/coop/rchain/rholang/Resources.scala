@@ -16,7 +16,6 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.KeyValueStoreManager
-import monix.execution.Scheduler
 
 import java.io.File
 import java.nio.file.{Files, Path}
@@ -86,7 +85,8 @@ object Resources {
       runtimes <- RhoRuntime
                    .createRuntimes[F](space, replay, initRegistry, additionalSystemProcesses, Par())
       (runtime, replayRuntime) = runtimes
-    } yield (runtime, replayRuntime, space.historyRepo)
+      historyRepo              <- space.historyRepo
+    } yield (runtime, replayRuntime, historyRepo)
   }
 
 }

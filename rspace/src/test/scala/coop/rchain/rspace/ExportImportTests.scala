@@ -13,7 +13,6 @@ import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
-import monix.execution.atomic.AtomicAny
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import scodec.bits.ByteVector
@@ -282,7 +281,7 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       historyReader <- historyRepository1.getHistoryReader(historyRepository1.root)
       store1 <- {
         val hr = historyReader.base
-        HotStore[IO, C, P, A, K](cache1, hr).map(AtomicAny(_))
+        HotStore[IO, C, P, A, K](cache1, hr).flatMap(Ref.of[IO, HotStore[IO, C, P, A, K]](_))
       }
       space1 = new RSpace[IO, C, P, A, K](
         historyRepository1,
@@ -303,7 +302,7 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       historyReader <- historyRepository2.getHistoryReader(historyRepository2.root)
       store2 <- {
         val hr = historyReader.base
-        HotStore[IO, C, P, A, K](cache2, hr).map(AtomicAny(_))
+        HotStore[IO, C, P, A, K](cache2, hr).flatMap(Ref.of[IO, HotStore[IO, C, P, A, K]](_))
       }
       space2 = new RSpace[IO, C, P, A, K](
         historyRepository2,

@@ -302,15 +302,17 @@ object RuntimeManager {
       )
       .flatMap {
         case (rSpacePlay, rSpaceReplay) =>
-          val historyRepo = rSpacePlay.historyRepo
-          RuntimeManager[F](
-            rSpacePlay,
-            rSpaceReplay,
-            historyRepo,
-            mergeableStore,
-            mergeableTagName,
-            executionTracker
-          ).map((_, historyRepo))
+          rSpacePlay.historyRepo.flatMap(
+            historyRepo =>
+              RuntimeManager[F](
+                rSpacePlay,
+                rSpaceReplay,
+                historyRepo,
+                mergeableStore,
+                mergeableTagName,
+                executionTracker
+              ).map((_, historyRepo))
+          )
       }
   }
 

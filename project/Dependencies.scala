@@ -8,7 +8,6 @@ object Dependencies {
   val catsEffectVersion = "3.4.8"
   val catsMtlVersion    = "0.7.1"
   val fs2Version        = "3.6.1"
-  val monixVersion      = "3.4.0"
   val http4sVersion     = "0.23.6"
   val endpointsVersion  = "1.9.0"
   val circeVersion      = "0.14.3"
@@ -71,8 +70,6 @@ object Dependencies {
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.17.0"
   val mockito             = "org.mockito"                %% "mockito-scala-cats"        % "1.17.14" % "test"
-  // TODO monix can be completely removed once AtomicAny in RSpace is replaced with Ref or AtomicCell from CE3
-  val monix               = "io.monix"                   %% "monix"                     % monixVersion
   val monixTesting        = "io.monix"                   %% "monix-testing-scalatest"   % "0.3.0"
   val ceTesting           = "org.typelevel"              %% "cats-effect-testing-scalatest"% "1.5.0" % Test
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
