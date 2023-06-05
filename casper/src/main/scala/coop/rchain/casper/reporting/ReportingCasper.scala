@@ -68,9 +68,13 @@ trait ReportingCasper[F[_]] {
 }
 
 object ReportingCasper {
-  def noop[F[_]: Sync]: ReportingCasper[F] =
-    (_: BlockMessage) =>
+  def noop[F[_]: Sync]: ReportingCasper[F] = new ReportingCasper[F] {
+
+    override def trace(
+        block: BlockMessage
+    ): F[ReplayResult] =
       Sync[F].delay(ReplayResult(List.empty, List.empty, ByteString.copyFromUtf8("empty")))
+  }
 
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
