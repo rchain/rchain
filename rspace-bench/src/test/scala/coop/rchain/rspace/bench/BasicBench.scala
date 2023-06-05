@@ -8,8 +8,8 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.{CostAccounting, RholangCLI}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.Log

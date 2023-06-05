@@ -12,12 +12,12 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoTuplespace}
+import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
-import coop.rchain.rholang.interpreter.{accounting, CostAccounting}
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib.AnyShouldF
 import coop.rchain.store.InMemoryStoreManager

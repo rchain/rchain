@@ -21,10 +21,11 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.RholangMetricsSource
-import coop.rchain.rholang.interpreter.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, createRhoEnv}
 import coop.rchain.rholang.interpreter.SystemProcesses.{BlockData, Definition}
-import coop.rchain.rholang.interpreter.{CostAccounting, Reduce, ReplayRhoRuntimeImpl}
+import coop.rchain.rholang.interpreter.accounting.CostAccounting
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.CostStateRef
+import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.{ReportingRspace, Match => RSpaceMatch}

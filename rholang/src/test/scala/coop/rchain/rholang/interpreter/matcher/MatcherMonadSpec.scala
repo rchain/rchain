@@ -9,8 +9,7 @@ import cats.mtl.implicits._
 import cats.syntax.all._
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.CostAccounting.{CostState, CostStateRef}
-import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.{CostState, CostStateRef}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher}
