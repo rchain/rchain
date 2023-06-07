@@ -128,7 +128,6 @@ lazy val sdk = (project in file("sdk"))
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
       catsEffect,
-      catsTagless,
       fs2Core
     )
   )
@@ -141,7 +140,6 @@ lazy val shared = (project in file("shared"))
       catsCore,
       catsEffect,
       catsMtl,
-      catsTagless,
       fs2Core,
       lz4,
       scodecCore,
@@ -221,7 +219,6 @@ lazy val comm = (project in file("comm"))
       weupnp,
       catsCore,
       catsMtl,
-      catsTagless,
       guava
     )
   )
@@ -300,7 +297,6 @@ lazy val node = (project in file("node"))
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
-        catsTagless,
         catsRetry,
         grpcNetty,
         grpcServices,

@@ -3,7 +3,6 @@ package coop.rchain.casper.protocol
 import cats.Monad
 import cats.effect._
 import cats.syntax.all._
-import cats.tagless.autoFunctorK
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
 import coop.rchain.casper.protocol.CommUtil.StandaloneNodeSendToBootstrapError
@@ -21,7 +20,6 @@ import scala.concurrent.duration._
 import cats.effect.Temporal
 
 // TODO: remove CommUtil completely and move to extensions (syntax) on TransportLayer
-@autoFunctorK
 trait CommUtil[F[_]] {
   // Broadcast packet (in one piece)
   def sendToPeers(message: Packet, scopeSize: Option[Int] = None): F[Unit]

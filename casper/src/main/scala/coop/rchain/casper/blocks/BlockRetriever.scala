@@ -2,7 +2,6 @@ package coop.rchain.casper.blocks
 
 import cats.Monad
 import cats.syntax.all._
-import cats.tagless.autoFunctorK
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.CommUtil
 import coop.rchain.casper.syntax._
@@ -21,7 +20,6 @@ import cats.effect.{Clock, Ref, Temporal}
   * BlockRetriever makes sure block is received once Casper request it.
   * Block is in scope of BlockRetriever until it is added to CasperBuffer.
   */
-@autoFunctorK
 trait BlockRetriever[F[_]] {
 
   /** Make BlocksRetriever process incoming hash

@@ -49,10 +49,7 @@ object CompilerSettings {
 
       // With > 16: [error] invalid setting for -Ybackend-parallelism must be between 1 and 16
       // https://github.com/scala/scala/blob/v2.12.6/src/compiler/scala/tools/nsc/settings/ScalaSettings.scala#L240
-      "-Ybackend-parallelism", getRuntime.availableProcessors().min(16).toString,
-
-      // Needed for Cats-tagless (after migration to Scala 2.13)
-      "-Ymacro-annotations"
+      "-Ybackend-parallelism", getRuntime.availableProcessors().min(16).toString
     )
   }
   // format: on
