@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.Sync
+import cats.effect.{Ref, Sync}
 import cats.syntax.all._
 import cats.{Parallel, Eval => _}
 import com.google.protobuf.ByteString
@@ -14,6 +14,7 @@ import coop.rchain.models.rholang.RhoType
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.syntax._
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
@@ -28,7 +29,6 @@ import scalapb.GeneratedMessage
 import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
 import scala.util.Try
-import cats.effect.Ref
 
 /** Reduce is the interface for evaluating Rholang expressions.
   *
@@ -43,7 +43,7 @@ trait Reduce[M[_]] {
 
 }
 
-class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
+class DebruijnInterpreter[M[_]: Sync: Parallel: CostStateRef](
     space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par],

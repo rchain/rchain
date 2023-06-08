@@ -1,8 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import cats.data.Chain
 import cats.effect._
-import cats.mtl.FunctorTell
 import cats.syntax.all._
 import cats.{Monad, Parallel}
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -13,10 +11,11 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.RholangMetricsSource
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.SystemProcesses._
-import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting, HasCost}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting, HasCost}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rspace.RSpace.RSpaceStore
@@ -26,9 +25,6 @@ import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.util.unpackOption
 import coop.rchain.rspace.{Match, _}
 import coop.rchain.shared.Log
-
-import scala.concurrent.ExecutionContext
-import cats.effect.Ref
 
 trait RhoRuntime[F[_]] extends HasCost[F] {
 
@@ -145,7 +141,7 @@ trait ReplayRhoRuntime[F[_]] extends RhoRuntime[F] {
 class RhoRuntimeImpl[F[_]: Sync: Span](
     val reducer: Reduce[F],
     val space: RhoISpace[F],
-    val cost: _cost[F],
+    val cost: CostStateRef[F],
     val blockDataRef: Ref[F, BlockData],
     val mergeChs: Ref[F, Set[Par]]
 ) extends RhoRuntime[F] {
@@ -169,9 +165,9 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
       normalizerEnv: Map[String, Name],
       rand: Blake2b512Random
   ): F[EvaluateResult] = {
-    implicit val c: _cost[F]       = cost
-    implicit val m                 = mergeChs
-    implicit val i: Interpreter[F] = Interpreter.newIntrepreter[F]
+    implicit val c: CostStateRef[F] = cost
+    implicit val m                  = mergeChs
+    implicit val i: Interpreter[F]  = Interpreter.newIntrepreter[F]
     Interpreter[F].injAttempt(
       reducer,
       term,
@@ -211,7 +207,7 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
 class ReplayRhoRuntimeImpl[F[_]: Sync: Span](
     override val reducer: Reduce[F],
     override val space: RhoReplayISpace[F],
-    override val cost: _cost[F],
+    override val cost: CostStateRef[F],
     // TODO: Runtime must be immutable. Block data and invalid blocks should be supplied when Runtime is created.
     //  This also means to unify all special names necessary to spawn a new Runtime.
     override val blockDataRef: Ref[F, BlockData],
@@ -227,7 +223,7 @@ object ReplayRhoRuntime {
   def apply[F[_]: Sync: Span](
       reducer: Reduce[F],
       space: RhoReplayISpace[F],
-      cost: _cost[F],
+      cost: CostStateRef[F],
       blockDataRef: Ref[F, BlockData],
       mergeChs: Ref[F, Set[Par]]
   ) = new ReplayRhoRuntimeImpl[F](reducer, space, cost, blockDataRef, mergeChs)
@@ -242,7 +238,7 @@ object RhoRuntime {
   def apply[F[_]: Sync: Span](
       reducer: Reduce[F],
       space: RhoISpace[F],
-      cost: _cost[F],
+      cost: CostStateRef[F],
       blockDataRef: Ref[F, BlockData],
       mergeChs: Ref[F, Set[Par]]
   ) = new RhoRuntimeImpl[F](reducer, space, cost, blockDataRef, mergeChs)
@@ -258,7 +254,7 @@ object RhoRuntime {
   type TCPAK[M[_], F[_[_], _, _, _, _]] =
     F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def introduceSystemProcesses[F[_]: Sync: _cost: Span](
+  def introduceSystemProcesses[F[_]: Sync: CostStateRef: Span](
       spaces: List[RhoTuplespace[F]],
       processes: List[(Name, Arity, Remainder, BodyRef)]
   ): F[List[Option[(TaggedContinuation, Seq[ListParWithRandom])]]] =
@@ -397,7 +393,7 @@ object RhoRuntime {
     )
   )
 
-  def setupReducer[F[_]: Async: Parallel: _cost: Log: Metrics: Span](
+  def setupReducer[F[_]: Async: Parallel: CostStateRef: Log: Metrics: Span](
       chargingRSpace: RhoTuplespace[F],
       blockDataRef: Ref[F, BlockData],
       extraSystemProcesses: Seq[Definition[F]],
@@ -432,7 +428,7 @@ object RhoRuntime {
         .map(_.toProcDefs)
     } yield (blockDataRef, urnMap, procDefs)
 
-  def createRhoEnv[F[_]: Async: Parallel: _cost: Log: Metrics: Span](
+  def createRhoEnv[F[_]: Async: Parallel: CostStateRef: Log: Metrics: Span](
       rspace: RhoISpace[F],
       mergeChs: Ref[F, Set[Par]],
       mergeableTagName: Par,
@@ -475,13 +471,13 @@ object RhoRuntime {
       extraSystemProcesses: Seq[Definition[F]],
       initRegistry: Boolean,
       mergeableTagName: Par
-  )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
+  ): F[RhoRuntime[F]] =
     Span[F].trace(createPlayRuntime) {
       for {
         cost     <- CostAccounting.emptyCost[F]
         mergeChs <- Ref.of(Set[Par]())
         rhoEnv <- {
-          implicit val c: _cost[F] = cost
+          implicit val c: CostStateRef[F] = cost
           createRhoEnv(rspace, mergeChs, mergeableTagName, extraSystemProcesses)
         }
         (reducer, blockRef) = rhoEnv
@@ -504,9 +500,6 @@ object RhoRuntime {
     *                     For a exist rspace which bootstrap registry before, you can skip this.
     *                     For some test cases, you don't need the registry then you can skip this
     *                     init process which can be faster.
-    * @param costLog currently only the testcases needs a special costLog for test information.
-    *                Normally you can just
-    *                use [[coop.rchain.rholang.interpreter.accounting.noOpCostLog]]
     * @return
     */
   def createRhoRuntime[F[_]: Async: Log: Metrics: Span: Parallel](
@@ -514,7 +507,7 @@ object RhoRuntime {
       mergeableTagName: Par,
       initRegistry: Boolean = true,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty
-  )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
+  ): F[RhoRuntime[F]] =
     createRuntime[F](rspace, extraSystemProcesses, initRegistry, mergeableTagName)
 
   /**
@@ -522,7 +515,6 @@ object RhoRuntime {
     * @param rspace the replay rspace which the runtime operate on it
     * @param extraSystemProcesses same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
     * @param initRegistry same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
-    * @param costLog same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
     * @return
     */
   def createReplayRhoRuntime[F[_]: Async: Log: Metrics: Span: Parallel](
@@ -530,13 +522,13 @@ object RhoRuntime {
       mergeableTagName: Par,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
       initRegistry: Boolean = true
-  )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[ReplayRhoRuntime[F]] =
+  ): F[ReplayRhoRuntime[F]] =
     Span[F].trace(createReplayRuntime) {
       for {
         cost     <- CostAccounting.emptyCost[F]
         mergeChs <- Ref.of(Set[Par]())
         rhoEnv <- {
-          implicit val c: _cost[F] = cost
+          implicit val c: CostStateRef[F] = cost
           createRhoEnv(rspace, mergeChs, mergeableTagName, extraSystemProcesses)
         }
         (reducer, blockRef) = rhoEnv

@@ -4,40 +4,39 @@ import cats.data.EitherT
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource, Sync}
 import cats.syntax.all._
-import cats.{Applicative, Functor, Id}
+import cats.{Applicative, Functor}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
-import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.protocol.{
+  BlockMessage,
+  DeployData,
+  ProcessedDeploy,
+  ProcessedSystemDeploy
+}
 import coop.rchain.casper.rholang.sysdeploys._
 import coop.rchain.casper.rholang.types._
-import coop.rchain.models.syntax._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.PCost
 import coop.rchain.models.block.StateHash.StateHash
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, ReplayRhoRuntime}
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Base16, Log}
 import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
-
 sealed trait SystemDeployReplayResult[A]
 
 final case class ReplaySucceeded[A](stateHash: StateHash, result: A)
@@ -58,10 +57,10 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers with EitherValues {
   implicit val metricsEff: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
   implicit val noopSpan: Span[IO]      = NoopSpan[IO]()
 
-  val genesisContext  = GenesisBuilder.buildGenesis()
-  val genesis         = genesisContext.genesisBlock
-  val genesisBlockNum = genesis.blockNumber
-  val genesisSeqNum   = genesis.seqNum
+  val genesisContext: GenesisBuilder.GenesisContext = GenesisBuilder.buildGenesis()
+  val genesis: BlockMessage                         = genesisContext.genesisBlock
+  val genesisBlockNum: Long                         = genesis.blockNumber
+  val genesisSeqNum: Long                           = genesis.seqNum
 
   val runtimeManagerResource: Resource[IO, RuntimeManager[IO]] =
     Resources
@@ -264,10 +263,10 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers with EitherValues {
   "closeBlock" should "make epoch change and reward validator" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       compareSuccessfulSystemDeploys(runtimeManager)(genesis.postStateHash)(
-        new CloseBlockDeploy(
+        CloseBlockDeploy(
           initialRand = Blake2b512Random(Array(0.toByte))
         ),
-        new CloseBlockDeploy(
+        CloseBlockDeploy(
           initialRand = Blake2b512Random(Array(0.toByte))
         )
       )(_ => true)
@@ -278,10 +277,10 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers with EitherValues {
     an[Exception] should be thrownBy effectTest({
       runtimeManagerResource.use { runtimeManager =>
         compareSuccessfulSystemDeploys(runtimeManager)(genesis.postStateHash)(
-          new CloseBlockDeploy(
+          CloseBlockDeploy(
             initialRand = Blake2b512Random(Array(0.toByte))
           ),
-          new CloseBlockDeploy(
+          CloseBlockDeploy(
             initialRand = Blake2b512Random(Array(1.toByte))
           )
         )(_ => true)
@@ -421,7 +420,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers with EitherValues {
             _             <- runtime.cost.set(initialPhlo)
             term          <- Compiler[IO].sourceToADT(deploy.data.term)
             _             <- runtime.inj(term)
-            phlosLeft     <- runtime.cost.get
+            phlosLeft     <- runtime.cost.current
             reductionCost = initialPhlo - phlosLeft
 
             parsingCost = accounting.parsingCost(correctRholang)
@@ -591,7 +590,7 @@ class RuntimeManagerTest extends AnyFlatSpec with Matchers with EitherValues {
         replayComputeStateResult match {
           case Right(replayPostState) =>
             assert(playPostState == replayPostState)
-          case Left(replayFailure) => fail(s"Found replay failure: ${replayFailure}")
+          case Left(replayFailure) => fail(s"Found replay failure: $replayFailure")
         }
       }
     }

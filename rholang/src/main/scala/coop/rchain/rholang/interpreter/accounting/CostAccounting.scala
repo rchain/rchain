@@ -1,50 +1,45 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import cats._
 import cats.data._
-import cats.effect.Async
+import cats.effect.{Ref, Sync}
 import cats.syntax.all._
-import cats.mtl._
-import cats.Monad
-
-import coop.rchain.metrics.{Metrics, MetricsSemaphore}
-import cats.effect.Ref
 
 object CostAccounting {
-
-  private[this] def of[F[_]: Async](init: Cost): F[MonadState[F, Cost]] =
-    Ref[F]
-      .of(init)
-      .map(defaultMonadState)
-
-  private[this] def empty[F[_]: Async]: F[MonadState[F, Cost]] =
-    Ref[F]
-      .of(Cost(0, "init"))
-      .map(defaultMonadState)
-
-  def emptyCost[F[_]: Async: Metrics](
-      implicit L: FunctorTell[F, Chain[Cost]],
-      ms: Metrics.Source
-  ): F[_cost[F]] =
-    for {
-      s <- MetricsSemaphore.single
-      c <- empty
-    } yield (loggingCost(c, L, s))
-
-  def initialCost[F[_]: Async: Metrics](
-      init: Cost
-  )(implicit L: FunctorTell[F, Chain[Cost]], ms: Metrics.Source): F[_cost[F]] =
-    for {
-      s <- MetricsSemaphore.single
-      c <- of(init)
-    } yield (loggingCost(c, L, s))
-
-  private[this] def defaultMonadState[F[_]: Async] =
-    (state: Ref[F, Cost]) =>
-      new DefaultMonadState[F, Cost] {
-        val monad: cats.Monad[F]  = implicitly[Monad[F]]
-        def get: F[Cost]          = state.get
-        def set(s: Cost): F[Unit] = state.set(s)
-
-        override def modify(f: Cost => Cost): F[Unit] = state.modify(f.map((_, ())))
+  final case class CostState(
+      total: Cost = Cost(0),
+      trace: Chain[Cost] = Chain.empty
+  ) {
+    def charge(amount: Cost): (CostState, Boolean) =
+      if (total.value < 0) {
+        this -> true
+      } else {
+        val newAmount   = total - amount
+        val newTrace    = trace :+ amount
+        val newSt       = CostState(newAmount, newTrace)
+        val isOutOfPhlo = newAmount.value < 0
+        newSt -> isOutOfPhlo
       }
+
+    def reset(amount: Cost): CostState = CostState(amount, Chain())
+  }
+
+  type CostStateRef[F[_]] = Ref[F, CostState]
+
+  def CostStateRef[F[_]](implicit instance: CostStateRef[F]): CostStateRef[F] = instance
+
+  def initialCost[F[_]: Sync](amount: Cost): F[Ref[F, CostState]] =
+    Ref.of[F, CostState](CostState(amount))
+
+  def emptyCost[F[_]: Sync]: F[Ref[F, CostState]] =
+    Ref.of[F, CostState](CostState(Cost(0, "init")))
+
+  implicit class CostStateOps[F[_]](private val cost: CostStateRef[F]) extends AnyVal {
+    def set(amount: Cost): F[Unit] = cost.update(_.reset(amount))
+
+    def current(implicit f: Functor[F]): F[Cost] = cost.get.map(_.total)
+
+    // Used in tests
+    def <+(amount: Cost): F[Unit] = cost.update(s => s.copy(s.total + amount))
+  }
 }

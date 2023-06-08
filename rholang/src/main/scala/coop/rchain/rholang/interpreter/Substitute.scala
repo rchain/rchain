@@ -10,6 +10,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sorter._
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.SubstituteError
 
@@ -19,7 +20,7 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
-  private[interpreter] def charge[A: Chargeable, M[_]: Sync: _cost: _error](
+  private[interpreter] def charge[A: Chargeable, M[_]: Sync: CostStateRef](
       substitutionResult: M[A],
       failureCost: Cost
   ): M[A] =
@@ -33,14 +34,14 @@ object Substitute {
       .flatMap({ case (result, cost) => accounting.charge[M](cost).as(result) })
       .rethrow
 
-  def substituteAndCharge[A: Chargeable, M[_]: _cost: _error: Substitute[*[_], A]: Sync](
+  def substituteAndCharge[A: Chargeable, M[_]: CostStateRef: Substitute[*[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par]
   ): M[A] =
     charge(Substitute[M, A].substitute(term)(depth, env), Cost(term))
 
-  def substituteNoSortAndCharge[A: Chargeable, M[_]: _cost: _error: Substitute[*[_], A]: Sync](
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: CostStateRef: Substitute[*[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par]

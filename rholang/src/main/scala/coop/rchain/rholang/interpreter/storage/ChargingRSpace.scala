@@ -1,19 +1,18 @@
 package coop.rchain.rholang.interpreter.storage
 
-import java.nio.ByteBuffer
-
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.storage.ChargingRSpace.consumeId
 import coop.rchain.rspace.{ContResult, Result, Match => StorageMatch}
 
+import java.nio.ByteBuffer
 import scala.collection.SortedSet
 
 object ChargingRSpace {
@@ -40,9 +39,9 @@ object ChargingRSpace {
       case Empty => BugFoundError("Damn you pROTOBUF").raiseError[F, Blake2b512Random]
     }
 
-  def chargingRSpace[F[_]: Sync: Span](
+  def chargingRSpace[F[_]: Sync: CostStateRef: Span](
       space: RhoTuplespace[F]
-  )(implicit cost: _cost[F]): RhoTuplespace[F] =
+  ): RhoTuplespace[F] =
     new RhoTuplespace[F] {
 
       implicit override val m: StorageMatch[F, BindPattern, ListParWithRandom] = space.m

@@ -1,20 +1,55 @@
 package coop.rchain.rholang.interpreter.matcher
 
+import cats._
+import cats.data.{State, StateT}
 import cats.effect._
 import cats.effect.unsafe.implicits.global
+import cats.instances.list._
 import cats.mtl.implicits._
 import cats.syntax.all._
-import cats.{Alternative, Foldable, Monad, MonadError, MonoidK, SemigroupK}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.{CostState, CostStateRef}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+object MatcherMonadHelper {
+  type CostStateMonad[F[_]] = CostStateRef[F] with Monad[F]
+
+  implicit def ntCostLog[F[_]: Monad: CostStateRef, G[_]: Sync](
+      nt: F ~> G
+  ): CostStateMonad[G] = {
+    val C = CostStateRef[F]
+    val M = Monad[G]
+    new Ref[G, CostState] with Monad[G] {
+      override def get: G[CostState]                     = nt(C.get)
+      override def set(a: CostState): G[Unit]            = nt(C.set(a))
+      override def getAndSet(a: CostState): G[CostState] = nt(C.getAndSet(a))
+      override def access: G[(CostState, CostState => G[Boolean])] =
+        nt(C.access.map { case (s, f) => (s, x => nt(f(x))) })
+      override def tryUpdate(f: CostState => CostState): G[Boolean]           = nt(C.tryUpdate(f))
+      override def tryModify[B](f: CostState => (CostState, B)): G[Option[B]] = nt(C.tryModify(f))
+      override def update(f: CostState => CostState): G[Unit]                 = nt(C.update(f))
+      override def modify[B](f: CostState => (CostState, B)): G[B]            = nt(C.modify(f))
+      override def tryModifyState[B](state: State[CostState, B]): G[Option[B]] =
+        nt(C.tryModifyState(state))
+      override def modifyState[B](state: State[CostState, B]): G[B] = nt(C.modifyState(state))
+
+      override def pure[A](x: A): G[A]                                 = M.pure(x)
+      override def flatMap[A, B](fa: G[A])(f: A => G[B]): G[B]         = M.flatMap(fa)(f)
+      override def tailRecM[A, B](a: A)(f: A => G[Either[A, B]]): G[B] = M.tailRecM(a)(f)
+    }
+  }
+
+  def matcherMonadCostLog[F[_]: Sync: CostStateRef](): CostStateMonad[MatcherMonadT[F, *]] =
+    λ[F ~> MatcherMonadT[F, *]](fa => StateT.liftF(StreamT.liftF(fa)))
+}
+
 class MatcherMonadSpec extends AnyFlatSpec with Matchers {
+  import MatcherMonadHelper._
   implicit val metrics: Metrics[IO] = new Metrics.MetricsNOP[IO]
   implicit val ms: Metrics.Source   = Metrics.BaseSource
 
@@ -26,8 +61,8 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
 
   implicit val cost = CostAccounting.emptyCost[IO].unsafeRunSync()
 
-  implicit val costF: _cost[F]   = matcherMonadCostLog[IO]()
-  implicit val matcherMonadError = implicitly[Sync[F]]
+  implicit val costF: CostStateRef[F] = matcherMonadCostLog[IO]()
+  implicit val matcherMonadError      = implicitly[Sync[F]]
 
   private def combineK[FF[_]: MonoidK, G[_]: Foldable, A](gfa: G[FF[A]]): FF[A] =
     gfa.foldLeft(MonoidK[FF].empty[A])(SemigroupK[FF].combineK[A])
@@ -46,24 +81,24 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
     val computation     = A.unite(possibleResults.pure[F])
     val sum             = computation.map { case (x, y) => x + y } >>= (charge[F](Cost(1)).as(_))
     val (phloLeft, _)   = runWithCost(runMatcher(sum), possibleResults.size)
-    assert(phloLeft.value == 0)
+    assert(phloLeft.total.value == 0)
 
     val moreVariants    = sum.flatMap(x => A.unite(LazyList(x, 0, -x).pure[F]))
     val moreComputation = moreVariants.map(x => "Do sth with " + x) >>= (charge[F](Cost(1)).as(_))
     val (phloLeft2, _) =
       runWithCost(runMatcher(moreComputation), possibleResults.size * 3 + possibleResults.size)
-    assert(phloLeft2.value == 0)
+    assert(phloLeft2.total.value == 0)
 
   }
 
   val modifyStates = for {
     _ <- _freeMap[F].set(Map(42 -> Par()))
-    _ <- costF.modify(_ + Cost(1))
+    _ <- costF <+ Cost(1)
   } yield ()
 
   it should "retain cost and matches when attemptOpt is called on successful match" in {
     val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](modifyStates)), 0)
-    assert(phloLeft.value == 1)
+    assert(phloLeft.total.value == 1)
     assert(res == Some((Map(42 -> Par()), Some(()))))
   }
 
@@ -74,7 +109,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
     } yield ()
 
     val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](failed)), 0)
-    assert(phloLeft.value == 1)
+    assert(phloLeft.total.value == 1)
     assert(res == Some((Map.empty, None)))
 
   }
@@ -86,7 +121,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
     } yield ()
 
     val (phloLeft, res) = runWithCost(runFirst(attemptOpt[F, Unit](failed)), 0)
-    assert(phloLeft.value == 1)
+    assert(phloLeft.total.value == 1)
     assert(res == Some((Map.empty, None)))
   }
 
@@ -97,7 +132,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
     val combined  = combineK(List(a, b, c))
 
     val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
-    assert(phloLeft.value == 0)
+    assert(phloLeft.total.value == 0)
     assert(res == LazyList((Map.empty, 1), (Map.empty, 3)))
   }
 
@@ -108,13 +143,13 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
     val combined  = combineK(List(a, b, c))
 
     val (phloLeft, res) = runWithCost(runMatcher(combined), 0)
-    assert(phloLeft.value == 0)
+    assert(phloLeft.total.value == 0)
     assert(res == LazyList((Map.empty, 2)))
   }
 
   it should "fail all branches when using `_error[F].raise`" in {
     val a: F[Int] = 1.pure[F]
-    val b: F[Int] = 2.pure[F] >> _error[F].raiseError[Int](OutOfPhlogistonsError)
+    val b: F[Int] = 2.pure[F] >> Sync[F].raiseError[Int](OutOfPhlogistonsError)
     val c: F[Int] = 3.pure[F]
 
     val combined = combineK(List(a, b, c))
@@ -134,7 +169,7 @@ class MatcherMonadSpec extends AnyFlatSpec with Matchers {
     val combined        = combineK(List(a, b, c, d, e))
     val (phloLeft, res) = runWithCost(runMatcher(combined), 1 + 2 + 8)
 
-    assert(phloLeft.value == 0)
+    assert(phloLeft.total.value == 0)
     assert(res == LazyList((Map.empty, ())))
 
   }

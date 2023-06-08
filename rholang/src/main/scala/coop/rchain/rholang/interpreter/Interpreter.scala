@@ -7,6 +7,7 @@ import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.RholangMetricsSource
+import coop.rchain.rholang.interpreter.accounting.CostAccounting.CostStateRef
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.{
@@ -14,7 +15,6 @@ import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   OutOfPhlogistonsError
 }
-import cats.effect.Ref
 
 final case class EvaluateResult(
     cost: Cost,
@@ -34,7 +34,7 @@ trait Interpreter[F[_]] {
   )(implicit rand: Blake2b512Random): F[EvaluateResult]
 }
 
-class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F], mergeChs: Ref[F, Set[Par]])
+class InterpreterImpl[F[_]: Sync: Span: CostStateRef](mergeChs: Ref[F, Set[Par]])
     extends Interpreter[F] {
   implicit val InterpreterMetricSource = Metrics.Source(RholangMetricsSource, "interpreter")
 
@@ -52,7 +52,7 @@ class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F], mergeChs: Ref[F, S
 
     val parsingCost = accounting.parsingCost(term)
     val evaluationResult = for {
-      _ <- Span[F].traceI("set-initial-cost") { C.set(initialPhlo) }
+      _ <- Span[F].traceI("set-initial-cost") { CostStateRef[F].set(initialPhlo) }
       _ <- Span[F].traceI("charge-parsing-cost") { charge[F](parsingCost) }
       parsed <- Span[F].traceI("build-normalized-term") {
                  Compiler[F]
@@ -65,14 +65,16 @@ class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F], mergeChs: Ref[F, S
       _ <- mergeChs.update(_.empty)
 
       _                 <- Span[F].traceI("reduce-term") { reducer.inj(parsed) }
-      phlosLeft         <- C.get
+      phlosLeft         <- CostStateRef[F].current
       mergeableChannels <- mergeChs.get
     } yield EvaluateResult(initialPhlo - phlosLeft, Vector(), mergeableChannels)
 
     // Convert InterpreterError(s) to EvaluateResult
     // - all other errors are rethrown (not valid interpreter errors)
     evaluationResult.handleErrorWith { error =>
-      C.get >>= (phlosLeft => handleError(initialPhlo, parsingCost, initialPhlo - phlosLeft, error))
+      CostStateRef[F].get.map(_.total) >>= (
+          phlosLeft => handleError(initialPhlo, parsingCost, initialPhlo - phlosLeft, error)
+      )
     }
   }
 
@@ -114,10 +116,8 @@ object Interpreter {
 
   def apply[F[_]](implicit instance: Interpreter[F]): Interpreter[F] = instance
 
-  def newIntrepreter[F[_]: Sync: Span](
-      implicit cost: _cost[F],
-      mergeChs: Ref[F, Set[Par]]
-  ): Interpreter[F] =
-    new InterpreterImpl[F]()
+  def newIntrepreter[F[_]: Sync: Span: CostStateRef](
+      implicit mergeChs: Ref[F, Set[Par]]
+  ): Interpreter[F] = new InterpreterImpl[F](mergeChs)
 
 }

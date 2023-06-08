@@ -104,7 +104,6 @@ object CostAccountingPropertyTest {
     implicit val logF: Log[IO]            = new Log.NOPLog[IO]
     implicit val noopMetrics: Metrics[IO] = new metrics.Metrics.MetricsNOP[IO]
     implicit val noopSpan: Span[IO]       = NoopSpan[IO]()
-    implicit val ms: Metrics.Source       = Metrics.BaseSource
 
     val prefix = "cost-accounting-property-test"
     mkRuntime[IO](prefix).use { runtime =>
