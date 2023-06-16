@@ -13,7 +13,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "test Pars" in {
     val left            = GNilN()
     val tmp: ByteVector = left.toBytes
-    val right           = RhoTypeN.fromBytes(tmp)
+    val right           = ParN.fromBytes(tmp)
     left should be(right)
   }
 }

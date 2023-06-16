@@ -5,28 +5,31 @@ import coop.rchain.models.rholangN._
 import scala.annotation.unused
 
 private[ParManager] object ConnectiveUsed {
-  private def cUsedParSeq(ps: Seq[ParN])            = ps.exists(_.connectiveUsed)
+  private def cUsedParSeq(ps: Seq[ParN]) = ps.exists(_.connectiveUsed)
 
-  /** Main types */
-  def connectiveUsedParProc(ps: Seq[ParN]): Boolean = cUsedParSeq(ps)
-  def connectiveUsedSend(chan: ParN, data: Seq[ParN], @unused persistent: Boolean): Boolean =
-    chan.connectiveUsed || cUsedParSeq(data)
+  def connectiveUsedFn(p: RhoTypeN): Boolean = p match {
 
-  /** Ground types */
-  def connectiveUsedGNil(): Boolean                 = false
-  def connectiveUsedGInt(@unused v: Long): Boolean  = false
+    /** Main types */
+    case pproc: ParProcN => cUsedParSeq(pproc.ps)
+    case send: SendN     => send.chan.connectiveUsed || cUsedParSeq(send.data)
 
-  /** Collections */
-  def connectiveUsedEList(ps: Seq[ParN]): Boolean   = cUsedParSeq(ps)
+    /** Ground types */
+    case _: GNilN => false
+    case _: GIntN => false
 
-  /** Vars */
-  def connectiveUsedBoundVar(@unused value: Int): Boolean = false
-  def connectiveUsedFreeVar(@unused value: Int): Boolean  = true
-  def connectiveUsedWildcard(): Boolean                   = true
+    /** Collections */
+    case list: EListN => cUsedParSeq(list.ps)
 
-  /** Expr */
+    /** Vars */
+    case _: BoundVar => false
+    case _: FreeVar  => true
+    case _: Wildcard => true
 
-  /** Bundle */
-
-  /** Connective */
+    /** Expr */
+    /** Bundle */
+    /** Connective */
+    case _ =>
+      assert(assertion = false, "Not defined type")
+      false
+  }
 }

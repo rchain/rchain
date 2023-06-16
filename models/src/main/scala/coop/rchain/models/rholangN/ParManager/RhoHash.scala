@@ -74,59 +74,56 @@ private[ParManager] object RhoHash {
   }
   private def booleanToByte(v: Boolean): Byte = if (v) 1 else 0
 
-  /** Main types */
-  def hashParProc(ps: Seq[ParN]): Blake2b256Hash = {
-    val bodySize = hashSize * ps.size
-    val hashable = Hashable(PARPROC, bodySize)
-    sort(ps).foreach(hashable.appendParHash)
-    hashable.calcHash
+  def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
+
+    /** Main types */
+    case pproc: ParProcN =>
+      val bodySize = hashSize * pproc.ps.size
+      val hashable = Hashable(PARPROC, bodySize)
+      sort(pproc.ps).foreach(hashable.appendParHash)
+      hashable.calcHash
+
+    case send: SendN =>
+      val bodySize = hashSize * (send.data.size + 1) + booleanSize
+      val hashable = Hashable(SEND, bodySize)
+      hashable.appendParHash(send.chan)
+      send.data.foreach(hashable.appendParHash)
+      hashable.appendByte(booleanToByte(send.persistent))
+      hashable.calcHash
+
+    /** Ground types */
+    case _: GNilN => Hashable(GNIL, 0).calcHash
+
+    case gInt: GIntN =>
+      val hashable = Hashable(GINT, longSize)
+      hashable.appendBytes(longToBytes(gInt.v))
+      hashable.calcHash
+
+    /** Collections */
+    case list: EListN =>
+      val bodySize = hashSize * list.ps.size
+      val hashable = Hashable(ELIST, bodySize)
+      list.ps.foreach(hashable.appendParHash)
+      hashable.calcHash
+
+    /** Vars */
+    case bv: BoundVar =>
+      val hashable = Hashable(BOUND_VAR, intSize)
+      hashable.appendBytes(intToBytes(bv.value))
+      hashable.calcHash
+
+    case fv: FreeVar =>
+      val hashable = Hashable(FREE_VAR, intSize)
+      hashable.appendBytes(intToBytes(fv.value))
+      hashable.calcHash
+
+    case _: Wildcard => Hashable(WILDCARD, 0).calcHash
+
+    /** Expr */
+    /** Bundle */
+    /** Connective */
+    case _ =>
+      assert(assertion = false, "Not defined type")
+      Blake2b256Hash.fromByteArray(Array())
   }
-
-  def hashSend(chan: ParN, data: Seq[ParN], persistent: Boolean): Blake2b256Hash = {
-    val bodySize = hashSize * (data.size + 1) + booleanSize
-    val hashable = Hashable(SEND, bodySize)
-    hashable.appendParHash(chan)
-    data.foreach(hashable.appendParHash)
-    hashable.appendByte(booleanToByte(persistent))
-    hashable.calcHash
-  }
-
-  /** Ground types */
-  def hashGNil(): Blake2b256Hash = Hashable(GNIL, 0).calcHash
-
-  def hashGInt(v: Long): Blake2b256Hash = {
-    val hashable = Hashable(GINT, longSize)
-    hashable.appendBytes(longToBytes(v))
-    hashable.calcHash
-  }
-
-  /** Collections */
-  def hashEList(ps: Seq[ParN]): Blake2b256Hash = {
-    val bodySize = hashSize * ps.size
-    val hashable = Hashable(ELIST, bodySize)
-    ps.foreach(hashable.appendParHash)
-    hashable.calcHash
-  }
-
-  /** Vars */
-  def hashBoundVar(value: Int): Blake2b256Hash = {
-    val hashable = Hashable(BOUND_VAR, intSize)
-    hashable.appendBytes(intToBytes(value))
-    hashable.calcHash
-  }
-
-  def hashFreeVar(value: Int): Blake2b256Hash = {
-    val hashable = Hashable(FREE_VAR, intSize)
-    hashable.appendBytes(intToBytes(value))
-    hashable.calcHash
-  }
-
-  def hashWildcard(): Blake2b256Hash = Hashable(WILDCARD, 0).calcHash
-
-  /** Expr */
-
-  /** Bundle */
-
-  /** Connective */
-
 }

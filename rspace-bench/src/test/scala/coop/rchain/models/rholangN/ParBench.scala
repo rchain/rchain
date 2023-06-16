@@ -35,13 +35,13 @@ class ParBench {
     }
   }
   val nestedSize: Int            = 500
-  var nestedPar: ParN             = _
-  var nestedAnotherPar: ParN      = _
+  var nestedPar: ParN            = _
+  var nestedAnotherPar: ParN     = _
   var nestedParSData: ByteVector = _
 
   val parProcSize: Int         = 500
-  var parProc: ParN             = _
-  var parProcAnother: ParN      = _
+  var parProc: ParN            = _
+  var parProcAnother: ParN     = _
   var parProcSData: ByteVector = _
 
   @Setup(Level.Iteration)
@@ -73,7 +73,7 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedDeserialization(): Unit = {
-    val _ = RhoTypeN.fromBytes(nestedParSData)
+    val _ = ParN.fromBytes(nestedParSData)
   }
 
   @Benchmark
@@ -121,7 +121,7 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcDeserialization(): Unit = {
-    val _ = RhoTypeN.fromBytes(parProcSData)
+    val _ = ParN.fromBytes(parProcSData)
   }
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
@@ -150,7 +150,7 @@ class ParBench {
   def parProcAdd(): Unit = {
     val _ = parProc match {
       case proc: ParProcN => proc.add(GIntN(0))
-      case _             => assert(false)
+      case _              => assert(false)
     }
   }
 

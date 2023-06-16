@@ -1,19 +1,21 @@
 package coop.rchain.models.rholangN.ParManager
 
 import coop.rchain.models.rholangN._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import scala.collection.BitSet
 
 object Manager {
 
-  def parToBytes(p: RhoTypeN): ByteVector = {
+  def parToBytes(p: ParN): ByteVector = {
     val baos = new ByteArrayOutputStream(p.serializedSize)
     Codecs.serialize(p, baos)
     ByteVector(baos.toByteArray)
   }
 
-  def parFromBytes(bv: ByteVector): RhoTypeN = {
+  def parFromBytes(bv: ByteVector): ParN = {
     val bais = new ByteArrayInputStream(bv.toArray)
     Codecs.deserialize(bais)
   }
@@ -23,28 +25,12 @@ object Manager {
     case _           => false
   }
 
-  /** Main types */
-  def createParProc(ps: Seq[ParN]): ParProcN = Constructor.createParProc(ps)
-  def createSend(chan: ParN, data: Seq[ParN], persistent: Boolean): SendN = Constructor.createSend(chan, data, persistent)
+  /** MetaData */
+  def rhoHashFn(p: RhoTypeN): Blake2b256Hash     = RhoHash.rhoHashFn(p)
+  def serializedSizeFn(p: RhoTypeN): Int         = SerializedSize.serializedSizeFn(p)
+  def locallyFreeFn(p: RhoTypeN): BitSet         = LocallyFree.locallyFreeFn(p)
+  def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
+  def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
+  def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)
 
-  /** Ground types */
-  def createGNil: GNilN = Constructor.createGNil
-
-  def createGInt(v: Long): GIntN = Constructor.createGInt(v)
-
-  /** Collections */
-  def createEList(ps: Seq[ParN], remainder: Option[VarN]): EListN = Constructor.createEList(ps, remainder)
-
-  /** Vars */
-  def createBoundVar(value: Int): BoundVar = Constructor.createBoundVar(value)
-
-  def createFreeVar(value: Int): FreeVar = Constructor.createFreeVar(value)
-
-  def createWildcard: Wildcard = Constructor.createWildcard
-
-  /** Expr */
-
-  /** Bundle */
-
-  /** Connective */
 }

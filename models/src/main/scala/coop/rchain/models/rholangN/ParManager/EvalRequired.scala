@@ -5,32 +5,31 @@ import coop.rchain.models.rholangN._
 import scala.annotation.unused
 
 private[ParManager] object EvalRequired {
-  private def eRequiredParSeq(ps: Seq[ParN])      = ps.exists(_.evalRequired)
+  private def eRequiredParSeq(ps: Seq[ParN]) = ps.exists(_.evalRequired)
 
-  /** Main types */
-  def evalRequiredParProc(ps: Seq[ParN]): Boolean = eRequiredParSeq(ps)
-  def evalRequiredSend(
-                        @unused chan: ParN,
-                        data: Seq[ParN],
-                        @unused persistent: Boolean
-                      ): Boolean =
-    eRequiredParSeq(data)
+  def evalRequiredFn(p: RhoTypeN): Boolean = p match {
 
-  /** Ground types */
-  def evalRequiredGNil(): Boolean                 = false
-  def evalRequiredGInt(@unused v: Long): Boolean  = false
+    /** Main types */
+    case pproc: ParProcN => eRequiredParSeq(pproc.ps)
+    case send: SendN     => eRequiredParSeq(send.data)
 
-  /** Collections */
-  def evalRequiredEList(ps: Seq[ParN]): Boolean   = eRequiredParSeq(ps)
+    /** Ground types */
+    case _: GNilN => false
+    case _: GIntN => false
 
-  /** Vars */
-  def evalRequiredBoundVar(@unused value: Int): Boolean = true
-  def evalRequiredFreeVar(@unused value: Int): Boolean  = true
-  def evalRequiredWildcard(): Boolean                   = true
+    /** Collections */
+    case list: EListN => eRequiredParSeq(list.ps)
 
-  /** Expr */
+    /** Vars */
+    case _: BoundVar => true
+    case _: FreeVar  => true
+    case _: Wildcard => true
 
-  /** Bundle */
-
-  /** Connective */
+    /** Expr */
+    /** Bundle */
+    /** Connective */
+    case _ =>
+      assert(assertion = false, "Not defined type")
+      false
+  }
 }

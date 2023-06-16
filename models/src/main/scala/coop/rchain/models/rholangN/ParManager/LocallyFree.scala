@@ -9,26 +9,30 @@ private[ParManager] object LocallyFree {
   private def locallyFreeParSeq(ps: Seq[ParN]) =
     ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
 
-  /** Main types */
-  def locallyFreeParProc(ps: Seq[ParN]): BitSet = locallyFreeParSeq(ps)
-  def locallyFreeSend(chan: ParN, data: Seq[ParN], @unused persistent: Boolean): BitSet =
-    chan.locallyFree | locallyFreeParSeq(data)
+  def locallyFreeFn(p: RhoTypeN): BitSet = p match {
 
-  /** Ground types */
-  def locallyFreeGNil(): BitSet                 = BitSet()
-  def locallyFreeGInt(@unused v: Long): BitSet  = BitSet()
+    /** Main types */
+    case pproc: ParProcN => locallyFreeParSeq(pproc.ps)
+    case send: SendN     => send.chan.locallyFree | locallyFreeParSeq(send.data)
 
-  /** Collections */
-  def locallyFreeEList(ps: Seq[ParN]): BitSet   = locallyFreeParSeq(ps)
+    /** Ground types */
+    case _: GNilN => BitSet()
+    case _: GIntN => BitSet()
 
-  /** Vars */
-  def locallyFreeBoundVar(value: Int): BitSet        = BitSet(value)
-  def locallyFreeFreeVar(@unused value: Int): BitSet = BitSet()
-  def locallyFreeWildcard(): BitSet                  = BitSet()
+    /** Collections */
+    case list: EListN => locallyFreeParSeq(list.ps)
 
-  /** Expr */
+    /** Vars */
+    case bv: BoundVar => BitSet(bv.value)
+    case _: FreeVar   => BitSet()
+    case _: Wildcard  => BitSet()
 
-  /** Bundle */
+    /** Expr */
+    /** Bundle */
+    /** Connective */
+    case _ =>
+      assert(assertion = false, "Not defined type")
+      BitSet()
 
-  /** Connective */
+  }
 }

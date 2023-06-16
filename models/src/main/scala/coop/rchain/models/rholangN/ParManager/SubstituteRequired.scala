@@ -7,35 +7,29 @@ import scala.annotation.unused
 private[ParManager] object SubstituteRequired {
   private def sRequiredParSeq(ps: Seq[ParN]) = ps.exists(_.substituteRequired)
 
-  /** Main types */
-  def substituteRequiredParProc(ps: Seq[ParN]): Boolean = sRequiredParSeq(ps)
+  def substituteRequiredFn(p: RhoTypeN): Boolean = p match {
 
-  def substituteRequiredSend(
-                              @unused chan: ParN,
-                              data: Seq[ParN],
-                              @unused persistent: Boolean
-                            ): Boolean =
-    sRequiredParSeq(data)
+    /** Main types */
+    case pproc: ParProcN => sRequiredParSeq(pproc.ps)
+    case send: SendN     => sRequiredParSeq(send.data)
 
-  /** Ground types */
-  def substituteRequiredGNil(): Boolean = false
+    /** Ground types */
+    case _: GNilN => false
+    case _: GIntN => false
 
-  def substituteRequiredGInt(@unused v: Long): Boolean = false
+    /** Collections */
+    case list: EListN => sRequiredParSeq(list.ps)
 
-  /** Collections */
-  def substituteRequiredEList(ps: Seq[ParN]): Boolean = sRequiredParSeq(ps)
+    /** Vars */
+    case _: BoundVar => true
+    case _: FreeVar  => false
+    case _: Wildcard => false
 
-  /** Vars */
-  def substituteRequiredBoundVar(@unused value: Int): Boolean = true
-
-  def substituteRequiredFreeVar(@unused value: Int): Boolean = false
-
-  def substituteRequiredWildcard(): Boolean = false
-
-  /** Expr */
-
-  /** Bundle */
-
-  /** Connective */
+    /** Expr */
+    /** Bundle */
+    /** Connective */
+    case _ =>
+      assert(assertion = false, "Not defined type")
+      false
+  }
 }
-

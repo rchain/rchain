@@ -8,7 +8,7 @@ import coop.rchain.models.rholangN._
 import java.io.{InputStream, OutputStream}
 
 private[ParManager] object Codecs {
-  def serialize(par: RhoTypeN, output: OutputStream): Unit = {
+  def serialize(par: ParN, output: OutputStream): Unit = {
     val cos = CodedOutputStream.newInstance(output)
 
     def writeTag(x: Byte): Unit = cos.writeRawByte(x)
@@ -25,6 +25,7 @@ private[ParManager] object Codecs {
 
     def writePar(p: RhoTypeN): Unit =
       p match {
+
         /** Main types */
         case parProc: ParProcN =>
           writeTag(PARPROC)
@@ -65,17 +66,17 @@ private[ParManager] object Codecs {
           writeTag(WILDCARD)
 
         /** Expr */
-
         /** Bundle */
-
         /** Connective */
+        case _ => assert(assertion = false, "Not defined type")
+
       }
 
     writePar(par)
     cos.flush()
   }
 
-  def deserialize(input: InputStream): RhoTypeN = {
+  def deserialize(input: InputStream): ParN = {
     val cis = CodedInputStream.newInstance(input)
 
     def readTag(): Byte = cis.readRawByte()
@@ -93,16 +94,17 @@ private[ParManager] object Codecs {
     def readPar(): ParN = {
       val tag = readTag()
       tag match {
+
         /** Main types */
         case PARPROC =>
           val count = readLength()
-          val ps = readPars(count)
+          val ps    = readPars(count)
           ParProcN(ps)
 
         case SEND =>
-          val chan = readPar()
-          val dataSize = readLength()
-          val dataSeq = readPars(dataSize)
+          val chan       = readPar()
+          val dataSize   = readLength()
+          val dataSeq    = readPars(dataSize)
           val persistent = readBool()
           SendN(chan, dataSeq, persistent)
 
@@ -117,7 +119,7 @@ private[ParManager] object Codecs {
         /** Collections */
         case ELIST =>
           val count = readLength()
-          val ps = readPars(count)
+          val ps    = readPars(count)
           EListN(ps)
 
         /** Vars */
@@ -133,11 +135,8 @@ private[ParManager] object Codecs {
           Wildcard()
 
         /** Expr */
-
         /** Bundle */
-
         /** Connective */
-
         case _ =>
           assert(assertion = false, "Invalid tag for ParN deserialization")
           GNilN()

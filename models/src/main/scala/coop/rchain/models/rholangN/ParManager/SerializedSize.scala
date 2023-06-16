@@ -23,46 +23,44 @@ private[ParManager] object SerializedSize {
 
   private def sizePars(ps: Seq[ParN]): Int = ps.map(sizePar).sum
 
-  /** Main types */
-  def sizeParProc(ps: Seq[ParN]): Int = {
-    val tagSize = sizeTag()
-    val lengthSize = sizeLength(ps.size)
-    val psSize = sizePars(ps)
-    tagSize + lengthSize + psSize
+  def serializedSizeFn(p: RhoTypeN): Int = p match {
+
+    /** Main types */
+    case pproc: ParProcN =>
+      val tagSize    = sizeTag()
+      val lengthSize = sizeLength(pproc.ps.size)
+      val psSize     = sizePars(pproc.ps)
+      tagSize + lengthSize + psSize
+
+    case send: SendN =>
+      val tagSize        = sizeTag()
+      val chanSize       = sizePar(send.chan)
+      val dataLengthSize = sizeLength(send.data.size)
+      val dataSize       = sizePars(send.data)
+      val persistentSize = sizeBool()
+      tagSize + chanSize + dataLengthSize + dataSize + persistentSize
+
+    /** Ground types */
+    case _: GNilN    => sizeTag()
+    case gInt: GIntN => sizeTag() + sizeLong(gInt.v)
+
+    /** Collections */
+    case list: EListN =>
+      val tagSize    = sizeTag()
+      val lengthSize = sizeLength(list.ps.size)
+      val psSize     = sizePars(list.ps)
+      tagSize + lengthSize + psSize
+
+    /** Vars */
+    case v: BoundVar => sizeTag() + sizeInt(v.value)
+    case v: FreeVar  => sizeTag() + sizeInt(v.value)
+    case _: Wildcard => sizeTag()
+
+    /** Expr */
+    /** Bundle */
+    /** Connective */
+    case _ =>
+      assert(assertion = false, "Not defined type")
+      0
   }
-
-  def sizeSend(chan: ParN, data: Seq[ParN], @unused persistent: Boolean): Int = {
-    val tagSize = sizeTag()
-    val chanSize = sizePar(chan)
-    val dataLengthSize = sizeLength(data.size)
-    val dataSize = sizePars(data)
-    val persistentSize = sizeBool()
-    tagSize + chanSize + dataLengthSize + dataSize + persistentSize
-  }
-
-  /** Ground types */
-  def sizeGNil(): Int = sizeTag()
-
-  def sizeGInt(v: Long): Int = sizeTag() + sizeLong(v)
-
-  /** Collections */
-  def sizeEList(ps: Seq[ParN]): Int = {
-    val tagSize = sizeTag()
-    val lengthSize = sizeLength(ps.size)
-    val psSize = sizePars(ps)
-    tagSize + lengthSize + psSize
-  }
-
-  /** Vars */
-  def sizeBoundVar(value: Int): Int = sizeTag() + sizeInt(value)
-
-  def sizeFreeVar(value: Int): Int = sizeTag() + sizeInt(value)
-
-  def sizeWildcard(): Int = sizeTag()
-
-  /** Expr */
-
-  /** Bundle */
-
-  /** Connective */
 }

@@ -3,16 +3,16 @@ package coop.rchain.models.rholangN.ParManager
 import coop.rchain.rspace.hashing.Blake2b256Hash
 
 private[ParManager] object Constants {
-  final val intSize = 4
-  final val longSize = 8
+  final val intSize     = 4
+  final val longSize    = 8
   final val booleanSize = 1
-  final val hashSize = Blake2b256Hash.length
+  final val hashSize    = Blake2b256Hash.length
 
   final val tagSize = 1
 
   /** Main pars */
   final val PARPROC: Byte = 0x01.toByte
-  final val SEND = 0x02.toByte
+  final val SEND          = 0x02.toByte
   //    final val RECEIVE = 0x03.toByte
   //    final val MATCH = 0x04.toByte
   //    final val NEW = 0x05.toByte
@@ -34,8 +34,8 @@ private[ParManager] object Constants {
 
   /** Vars */
   final val BOUND_VAR = 0x30.toByte
-  final val FREE_VAR = 0x31.toByte
-  final val WILDCARD = 0x32.toByte
+  final val FREE_VAR  = 0x31.toByte
+  final val WILDCARD  = 0x32.toByte
 
   /** Expr */
   //    final val EVAR        = 0x40.toByte
