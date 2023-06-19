@@ -3,7 +3,6 @@ package coop.rchain.models.rholangN
 import scodec.bits.ByteVector
 import coop.rchain.rspace.hashing.Blake2b256Hash
 
-import scala.collection.BitSet
 import coop.rchain.models.rholangN.ParManager.Manager._
 
 sealed trait RhoTypeN {
@@ -24,9 +23,26 @@ trait ParN extends RhoTypeN {
 object ParN {
   def fromBytes(bytes: ByteVector): ParN = parFromBytes(bytes)
 }
+
+/** Any process may be an operand to an expression.
+ * Only processes equivalent to a ground process of compatible type will reduce.
+ */
 trait ExprN extends ParN
+
+/** A variable used as a var should be bound in a process context, not a name
+ * context. For example:
+* for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
+* for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
+ */
 trait VarN  extends ParN
 
+/** *
+ * A receive is written `for(binds) { body }`
+ * i.e. `for(patterns <- source) { body }`
+ * or for a persistent recieve: `for(patterns <- source) { body }`.
+ *
+ * It's an error for free Variable to occur more than once in a pattern.
+ */
 //final class ReceiveN(
 //    val binds: Seq[ReceiveBindN],
 //    val body: ParN,
