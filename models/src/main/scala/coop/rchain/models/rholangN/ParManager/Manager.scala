@@ -28,7 +28,6 @@ object Manager {
   /** MetaData */
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash     = RhoHash.rhoHashFn(p)
   def serializedSizeFn(p: RhoTypeN): Int         = SerializedSize.serializedSizeFn(p)
-  def locallyFreeFn(p: RhoTypeN): BitSet         = LocallyFree.locallyFreeFn(p)
   def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
   def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
   def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)

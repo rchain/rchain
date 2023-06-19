@@ -101,9 +101,9 @@ private[ParManager] object RhoHash {
 
     /** Collections */
     case list: EListN =>
-      val remainderSize = if(list.remainder.isDefined) hashSize else 0
-      val bodySize = hashSize * list.ps.size + remainderSize
-      val hashable = Hashable(ELIST, bodySize)
+      val remainderSize = if (list.remainder.isDefined) hashSize else 0
+      val bodySize      = hashSize * list.ps.size + remainderSize
+      val hashable      = Hashable(ELIST, bodySize)
       list.ps.foreach(hashable.appendParHash)
       list.remainder.foreach(hashable.appendParHash)
       hashable.calcHash

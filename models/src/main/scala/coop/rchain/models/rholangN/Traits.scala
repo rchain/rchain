@@ -11,7 +11,6 @@ sealed trait RhoTypeN {
 
   lazy val rhoHash: Blake2b256Hash     = rhoHashFn(this)
   lazy val serializedSize: Int         = serializedSizeFn(this)
-  lazy val locallyFree: BitSet         = locallyFreeFn(this)
   lazy val connectiveUsed: Boolean     = connectiveUsedFn(this)
   lazy val evalRequired: Boolean       = evalRequiredFn(this)
   lazy val substituteRequired: Boolean = substituteRequiredFn(this)

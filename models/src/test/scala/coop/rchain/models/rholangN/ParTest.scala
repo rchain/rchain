@@ -11,8 +11,8 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     val recover1      = ParN.fromBytes(bytes1)
     val res1: Boolean = p1.rhoHash == recover1.rhoHash
     val res2: Boolean = if (p2Opt.isDefined) {
-      val p2       = p2Opt.get
-      val bytes2   = p2.toBytes
+      val p2     = p2Opt.get
+      val bytes2 = p2.toBytes
       (p1.rhoHash == p2.rhoHash) && (bytes1 == bytes2)
     } else true
     res1 && res2
@@ -23,8 +23,8 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   /** Main types */
   it should "test ParProc" in {
     val p1 = ParProcN(Seq(GNilN(), ParProcN()))
-    val p2 = ParProcN(Seq(ParProcN(),GNilN()))
-    simpleCheck (p1, Some(p2)) should be (true)
+    val p2 = ParProcN(Seq(ParProcN(), GNilN()))
+    simpleCheck(p1, Some(p2)) should be(true)
   }
 
   it should "test Send with same data order" in {
@@ -62,7 +62,6 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   /** Vars */
-
   it should "test BoundVar" in {
     val p = BoundVarN(42)
     simpleCheck(p) should be(true)
