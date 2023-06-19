@@ -101,23 +101,25 @@ private[ParManager] object RhoHash {
 
     /** Collections */
     case list: EListN =>
-      val bodySize = hashSize * list.ps.size
+      val remainderSize = if(list.remainder.isDefined) hashSize else 0
+      val bodySize = hashSize * list.ps.size + remainderSize
       val hashable = Hashable(ELIST, bodySize)
       list.ps.foreach(hashable.appendParHash)
+      list.remainder.foreach(hashable.appendParHash)
       hashable.calcHash
 
     /** Vars */
-    case bv: BoundVar =>
+    case bv: BoundVarN =>
       val hashable = Hashable(BOUND_VAR, intSize)
       hashable.appendBytes(intToBytes(bv.value))
       hashable.calcHash
 
-    case fv: FreeVar =>
+    case fv: FreeVarN =>
       val hashable = Hashable(FREE_VAR, intSize)
       hashable.appendBytes(intToBytes(fv.value))
       hashable.calcHash
 
-    case _: Wildcard => Hashable(WILDCARD, 0).calcHash
+    case _: WildcardN => Hashable(WILDCARD, 0).calcHash
 
     /** Expr */
     /** Bundle */

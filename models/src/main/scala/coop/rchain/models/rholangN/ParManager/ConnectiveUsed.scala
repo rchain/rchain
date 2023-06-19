@@ -18,12 +18,12 @@ private[ParManager] object ConnectiveUsed {
     case _: GIntN => false
 
     /** Collections */
-    case list: EListN => cUsedParSeq(list.ps)
+    case list: EListN => cUsedParSeq(list.ps) || list.remainder.isDefined
 
     /** Vars */
-    case _: BoundVar => false
-    case _: FreeVar  => true
-    case _: Wildcard => true
+    case _: BoundVarN => false
+    case _: FreeVarN  => true
+    case _: WildcardN => true
 
     /** Expr */
     /** Bundle */

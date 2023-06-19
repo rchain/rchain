@@ -23,9 +23,9 @@ private[ParManager] object LocallyFree {
     case list: EListN => locallyFreeParSeq(list.ps)
 
     /** Vars */
-    case bv: BoundVar => BitSet(bv.value)
-    case _: FreeVar   => BitSet()
-    case _: Wildcard  => BitSet()
+    case bv: BoundVarN => BitSet(bv.value)
+    case _: FreeVarN   => BitSet()
+    case _: WildcardN  => BitSet()
 
     /** Expr */
     /** Bundle */

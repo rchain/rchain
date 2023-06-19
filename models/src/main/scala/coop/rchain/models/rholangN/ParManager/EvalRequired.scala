@@ -21,9 +21,9 @@ private[ParManager] object EvalRequired {
     case list: EListN => eRequiredParSeq(list.ps)
 
     /** Vars */
-    case _: BoundVar => true
-    case _: FreeVar  => true
-    case _: Wildcard => true
+    case _: BoundVarN => true
+    case _: FreeVarN  => true
+    case _: WildcardN => true
 
     /** Expr */
     /** Bundle */

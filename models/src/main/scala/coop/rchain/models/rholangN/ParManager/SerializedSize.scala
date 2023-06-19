@@ -23,6 +23,9 @@ private[ParManager] object SerializedSize {
 
   private def sizePars(ps: Seq[ParN]): Int = ps.map(sizePar).sum
 
+  private def sizeParOpt(pOpt: Option[ParN]): Int =
+    sizeBool() + (if (pOpt.isDefined) pOpt.get.serializedSize else 0)
+
   def serializedSizeFn(p: RhoTypeN): Int = p match {
 
     /** Main types */
@@ -46,15 +49,16 @@ private[ParManager] object SerializedSize {
 
     /** Collections */
     case list: EListN =>
-      val tagSize    = sizeTag()
-      val lengthSize = sizeLength(list.ps.size)
-      val psSize     = sizePars(list.ps)
-      tagSize + lengthSize + psSize
+      val tagSize      = sizeTag()
+      val lengthSize   = sizeLength(list.ps.size)
+      val psSize       = sizePars(list.ps)
+      val reminderSize = sizeParOpt(list.remainder)
+      tagSize + lengthSize + psSize + reminderSize
 
     /** Vars */
-    case v: BoundVar => sizeTag() + sizeInt(v.value)
-    case v: FreeVar  => sizeTag() + sizeInt(v.value)
-    case _: Wildcard => sizeTag()
+    case v: BoundVarN => sizeTag() + sizeInt(v.value)
+    case v: FreeVarN  => sizeTag() + sizeInt(v.value)
+    case _: WildcardN => sizeTag()
 
     /** Expr */
     /** Bundle */

@@ -21,6 +21,12 @@ private[ParManager] object Codecs {
 
     def writeBool(x: Boolean): Unit = cos.writeBoolNoTag(x)
 
+    def writeParOpt(pOpt: Option[RhoTypeN]): Unit =
+      if (pOpt.isDefined) {
+        writeBool(true)
+        writePar(pOpt.get)
+      } else writeBool(false)
+
     def writePars(ps: Seq[RhoTypeN]): Unit = ps.foreach(writePar)
 
     def writePar(p: RhoTypeN): Unit =
@@ -52,17 +58,18 @@ private[ParManager] object Codecs {
           writeTag(ELIST)
           writeLength(eList.ps.size)
           writePars(eList.ps)
+          writeParOpt(eList.remainder)
 
         /** Vars */
-        case bVar: BoundVar =>
+        case bVar: BoundVarN =>
           writeTag(BOUND_VAR)
           writeInt(bVar.value)
 
-        case fVar: FreeVar =>
+        case fVar: FreeVarN =>
           writeTag(FREE_VAR)
           writeInt(fVar.value)
 
-        case _: Wildcard =>
+        case _: WildcardN =>
           writeTag(WILDCARD)
 
         /** Expr */
@@ -88,6 +95,15 @@ private[ParManager] object Codecs {
     def readLong(): Long = cis.readInt64()
 
     def readBool(): Boolean = cis.readBool()
+
+    def readVar(): VarN = readPar() match {
+      case v: VarN => v
+      case _ =>
+        assert(assertion = false, "Value must be Var")
+        WildcardN()
+    }
+
+    def readVarOpt(): Option[VarN] = if (readBool()) Some(readVar()) else None
 
     def readPars(count: Int): Seq[ParN] = (1 to count).map(_ => readPar())
 
@@ -118,21 +134,22 @@ private[ParManager] object Codecs {
 
         /** Collections */
         case ELIST =>
-          val count = readLength()
-          val ps    = readPars(count)
-          EListN(ps)
+          val count     = readLength()
+          val ps        = readPars(count)
+          val remainder = readVarOpt()
+          EListN(ps, remainder)
 
         /** Vars */
         case BOUND_VAR =>
           val v = readInt()
-          BoundVar(v)
+          BoundVarN(v)
 
         case FREE_VAR =>
           val v = readInt()
-          FreeVar(v)
+          FreeVarN(v)
 
         case WILDCARD =>
-          Wildcard()
+          WildcardN()
 
         /** Expr */
         /** Bundle */

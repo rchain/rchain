@@ -1,10 +1,10 @@
 package coop.rchain.models.rholangN
 
-final class BoundVar(val value: Int) extends VarN
-object BoundVar { def apply(value: Int): BoundVar = new BoundVar(value) }
+final class BoundVarN (val value: Int) extends VarN
+object BoundVarN { def apply(value: Int): BoundVarN = new BoundVarN(value) }
 
-final class FreeVar(val value: Int) extends VarN
-object FreeVar { def apply(value: Int): FreeVar = new FreeVar(value) }
+final class FreeVarN(val value: Int) extends VarN
+object FreeVarN { def apply(value: Int): FreeVarN = new FreeVarN(value) }
 
-final class Wildcard() extends VarN
-object Wildcard { def apply(): Wildcard = new Wildcard }
+final class WildcardN() extends VarN
+object WildcardN { def apply(): WildcardN = new WildcardN }

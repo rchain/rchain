@@ -21,9 +21,9 @@ private[ParManager] object SubstituteRequired {
     case list: EListN => sRequiredParSeq(list.ps)
 
     /** Vars */
-    case _: BoundVar => true
-    case _: FreeVar  => false
-    case _: Wildcard => false
+    case _: BoundVarN => true
+    case _: FreeVarN  => false
+    case _: WildcardN => false
 
     /** Expr */
     /** Bundle */
