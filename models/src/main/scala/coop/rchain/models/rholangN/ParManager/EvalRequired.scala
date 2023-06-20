@@ -2,23 +2,23 @@ package coop.rchain.models.rholangN.ParManager
 
 import coop.rchain.models.rholangN._
 
-import scala.annotation.unused
-
 private[ParManager] object EvalRequired {
-  private def eRequiredParSeq(ps: Seq[ParN]) = ps.exists(_.evalRequired)
+  private def erPar(p: RhoTypeN)        = p.evalRequired
+  private def erPars(ps: Seq[RhoTypeN]) = ps.exists(erPar)
 
   def evalRequiredFn(p: RhoTypeN): Boolean = p match {
 
     /** Main types */
-    case pproc: ParProcN => eRequiredParSeq(pproc.ps)
-    case send: SendN     => eRequiredParSeq(send.data)
+    case pproc: ParProcN   => erPars(pproc.ps)
+    case send: SendN       => erPar(send.chan) || erPars(send.data)
+    case receive: ReceiveN => erPars(receive.binds)
 
     /** Ground types */
     case _: GNilN => false
     case _: GIntN => false
 
     /** Collections */
-    case list: EListN => eRequiredParSeq(list.ps)
+    case list: EListN => erPars(list.ps)
 
     /** Vars */
     case _: BoundVarN => true
@@ -28,6 +28,9 @@ private[ParManager] object EvalRequired {
     /** Expr */
     /** Bundle */
     /** Connective */
+    /** Auxiliary types */
+    case bind: ReceiveBindN => erPar(bind.source)
+
     case _ =>
       assert(assertion = false, "Not defined type")
       false

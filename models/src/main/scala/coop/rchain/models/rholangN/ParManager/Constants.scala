@@ -13,8 +13,8 @@ private[ParManager] object Constants {
   /** Main pars */
   final val PARPROC: Byte = 0x01.toByte
   final val SEND          = 0x02.toByte
-  //    final val RECEIVE = 0x03.toByte
-  //    final val MATCH = 0x04.toByte
+  final val RECEIVE       = 0x03.toByte
+  final val MATCH         = 0x04.toByte
   //    final val NEW = 0x05.toByte
 
   /** Ground types */
@@ -81,4 +81,7 @@ private[ParManager] object Constants {
   //    final val CONNECTIVE_URI       = 0x78.toByte
   //    final val CONNECTIVE_BYTEARRAY = 0x79.toByte
   //    final val CONNECTIVE_BIG_INT   = 0x7A.toByte
+
+  /** Auxiliary types */
+  final val RECEIVE_BIND = 0x80.toByte
 }

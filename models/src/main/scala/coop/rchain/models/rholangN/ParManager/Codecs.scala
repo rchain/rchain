@@ -11,75 +11,89 @@ private[ParManager] object Codecs {
   def serialize(par: ParN, output: OutputStream): Unit = {
     val cos = CodedOutputStream.newInstance(output)
 
-    def writeTag(x: Byte): Unit = cos.writeRawByte(x)
+    object Serializer {
+      private def write(x: Byte): Unit = cos.writeRawByte(x)
 
-    def writeLength(x: Int): Unit = cos.writeUInt32NoTag(x)
+      private def write(x: Boolean): Unit = cos.writeBoolNoTag(x)
 
-    def writeInt(x: Int): Unit = cos.writeInt32NoTag(x)
+      private def write(x: Int): Unit = cos.writeInt32NoTag(x)
 
-    def writeLong(x: Long): Unit = cos.writeInt64NoTag(x)
+      private def write(x: Long): Unit = cos.writeInt64NoTag(x)
 
-    def writeBool(x: Boolean): Unit = cos.writeBoolNoTag(x)
+      private def write(pOpt: Option[RhoTypeN]): Unit =
+        if (pOpt.isDefined) {
+          write(true)
+          write(pOpt.get)
+        } else write(false)
 
-    def writeParOpt(pOpt: Option[RhoTypeN]): Unit =
-      if (pOpt.isDefined) {
-        writeBool(true)
-        writePar(pOpt.get)
-      } else writeBool(false)
+      private def write(ps: Seq[RhoTypeN]): Unit = {
+        write(ps.size)
+        ps.foreach(write)
+      }
 
-    def writePars(ps: Seq[RhoTypeN]): Unit = ps.foreach(writePar)
-
-    def writePar(p: RhoTypeN): Unit =
-      p match {
+      def write(p: RhoTypeN): Unit = p match {
 
         /** Main types */
         case parProc: ParProcN =>
-          writeTag(PARPROC)
-          writeLength(parProc.ps.size)
-          writePars(sort(parProc.ps))
+          write(PARPROC)
+          write(sort(parProc.ps))
 
         case send: SendN =>
-          writeTag(SEND)
-          writePar(send.chan)
-          writeLength(send.data.size)
-          writePars(send.data)
-          writeBool(send.persistent)
+          write(SEND)
+          write(send.chan)
+          write(send.data)
+          write(send.persistent)
+
+        case receive: ReceiveN =>
+          write(RECEIVE)
+          write(receive.binds)
+          write(receive.body)
+          write(receive.persistent)
+          write(receive.peek)
+          write(receive.bindCount)
 
         /** Ground types */
         case _: GNilN =>
-          writeTag(GNIL)
+          write(GNIL)
 
         case gInt: GIntN =>
-          writeTag(GINT)
-          writeLong(gInt.v)
+          write(GINT)
+          write(gInt.v)
 
         /** Collections */
         case eList: EListN =>
-          writeTag(ELIST)
-          writeLength(eList.ps.size)
-          writePars(eList.ps)
-          writeParOpt(eList.remainder)
+          write(ELIST)
+          write(eList.ps)
+          write(eList.remainder)
 
         /** Vars */
         case bVar: BoundVarN =>
-          writeTag(BOUND_VAR)
-          writeInt(bVar.value)
+          write(BOUND_VAR)
+          write(bVar.value)
 
         case fVar: FreeVarN =>
-          writeTag(FREE_VAR)
-          writeInt(fVar.value)
+          write(FREE_VAR)
+          write(fVar.value)
 
         case _: WildcardN =>
-          writeTag(WILDCARD)
+          write(WILDCARD)
 
         /** Expr */
         /** Bundle */
         /** Connective */
+        /** Auxiliary types */
+        case bind: ReceiveBindN =>
+          write(RECEIVE_BIND)
+          write(bind.patterns)
+          write(bind.source)
+          write(bind.remainder)
+          write(bind.freeCount)
+
         case _ => assert(assertion = false, "Not defined type")
-
       }
+    }
 
-    writePar(par)
+    Serializer.write(par)
     cos.flush()
   }
 
@@ -88,9 +102,9 @@ private[ParManager] object Codecs {
 
     def readTag(): Byte = cis.readRawByte()
 
-    def readLength(): Int = cis.readUInt32()
-
     def readInt(): Int = cis.readInt32()
+
+    def readLength(): Int = cis.readUInt32()
 
     def readLong(): Long = cis.readInt64()
 
@@ -105,7 +119,30 @@ private[ParManager] object Codecs {
 
     def readVarOpt(): Option[VarN] = if (readBool()) Some(readVar()) else None
 
-    def readPars(count: Int): Seq[ParN] = (1 to count).map(_ => readPar())
+    def readPars(): Seq[ParN] = {
+      val count = readLength()
+      (1 to count).map(_ => readPar())
+    }
+
+    /** Auxiliary types deserialization */
+    def readReceiveBinds(): Seq[ReceiveBindN] = {
+      def readReceiveBind(): ReceiveBindN = {
+        val tag = readTag()
+        tag match {
+          case RECEIVE_BIND =>
+            val patterns  = readPars()
+            val source    = readPar()
+            val remainder = readVarOpt()
+            val freeCount = readInt()
+            ReceiveBindN(patterns, source, remainder, freeCount)
+          case _ =>
+            assert(assertion = false, "Invalid tag for ReceiveBindN deserialization")
+            ReceiveBindN(Seq(), GNilN(), None, 0)
+        }
+      }
+      val count = readLength()
+      (1 to count).map(_ => readReceiveBind())
+    }
 
     def readPar(): ParN = {
       val tag = readTag()
@@ -113,16 +150,22 @@ private[ParManager] object Codecs {
 
         /** Main types */
         case PARPROC =>
-          val count = readLength()
-          val ps    = readPars(count)
+          val ps = readPars()
           ParProcN(ps)
 
         case SEND =>
           val chan       = readPar()
-          val dataSize   = readLength()
-          val dataSeq    = readPars(dataSize)
+          val dataSeq    = readPars()
           val persistent = readBool()
           SendN(chan, dataSeq, persistent)
+
+        case RECEIVE =>
+          val binds      = readReceiveBinds()
+          val body       = readPar()
+          val persistent = readBool()
+          val peek       = readBool()
+          val bindCount  = readInt()
+          ReceiveN(binds, body, persistent, peek, bindCount)
 
         /** Ground types */
         case GNIL =>
@@ -134,8 +177,7 @@ private[ParManager] object Codecs {
 
         /** Collections */
         case ELIST =>
-          val count     = readLength()
-          val ps        = readPars(count)
+          val ps        = readPars()
           val remainder = readVarOpt()
           EListN(ps, remainder)
 

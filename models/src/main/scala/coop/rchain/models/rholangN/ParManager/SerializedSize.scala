@@ -9,60 +9,65 @@ private[ParManager] object SerializedSize {
 
   import Constants._
 
-  private def sizeTag(): Int = tagSize
+  private def sSize(value: Int): Int = CodedOutputStream.computeInt32SizeNoTag(value)
 
-  private def sizeLength(value: Int): Int = CodedOutputStream.computeUInt32SizeNoTag(value)
+  private def sSize(value: Long): Int = CodedOutputStream.computeInt64SizeNoTag(value)
 
-  private def sizeInt(value: Int): Int = CodedOutputStream.computeInt32SizeNoTag(value)
+  private def sSize(@unused value: Boolean): Int = booleanSize
 
-  private def sizeLong(value: Long): Int = CodedOutputStream.computeInt64SizeNoTag(value)
+  private def sSize(p: RhoTypeN): Int = p.serializedSize
 
-  private def sizeBool(): Int = 1
+  private def sSize(ps: Seq[RhoTypeN]): Int =
+    sSize(ps.size) + ps.map(sSize).sum
 
-  private def sizePar(p: ParN): Int = p.serializedSize
+  private def sSize(pOpt: Option[RhoTypeN]): Int =
+    booleanSize + (if (pOpt.isDefined) pOpt.get.serializedSize else 0)
 
-  private def sizePars(ps: Seq[ParN]): Int = ps.map(sizePar).sum
-
-  private def sizeParOpt(pOpt: Option[ParN]): Int =
-    sizeBool() + (if (pOpt.isDefined) pOpt.get.serializedSize else 0)
+  private def totalSize(sizes: Int*): Int =
+    tagSize + sizes.sum
 
   def serializedSizeFn(p: RhoTypeN): Int = p match {
 
     /** Main types */
     case pproc: ParProcN =>
-      val tagSize    = sizeTag()
-      val lengthSize = sizeLength(pproc.ps.size)
-      val psSize     = sizePars(pproc.ps)
-      tagSize + lengthSize + psSize
+      val psSize = sSize(pproc.ps)
+      totalSize(psSize)
 
     case send: SendN =>
-      val tagSize        = sizeTag()
-      val chanSize       = sizePar(send.chan)
-      val dataLengthSize = sizeLength(send.data.size)
-      val dataSize       = sizePars(send.data)
-      val persistentSize = sizeBool()
-      tagSize + chanSize + dataLengthSize + dataSize + persistentSize
+      totalSize(sSize(send.chan), sSize(send.data), sSize(send.persistent))
+
+    case receive: ReceiveN =>
+      val bindsSize      = sSize(receive.binds)
+      val bodySize       = sSize(receive.body)
+      val persistentSize = sSize(receive.persistent)
+      val peekSize       = sSize(receive.peek)
+      val bindCountSize  = sSize(receive.bindCount)
+      totalSize(bindsSize, bodySize, persistentSize, peekSize, bindCountSize)
 
     /** Ground types */
-    case _: GNilN    => sizeTag()
-    case gInt: GIntN => sizeTag() + sizeLong(gInt.v)
+    case _: GNilN    => totalSize()
+    case gInt: GIntN => totalSize(sSize(gInt.v))
 
     /** Collections */
     case list: EListN =>
-      val tagSize      = sizeTag()
-      val lengthSize   = sizeLength(list.ps.size)
-      val psSize       = sizePars(list.ps)
-      val reminderSize = sizeParOpt(list.remainder)
-      tagSize + lengthSize + psSize + reminderSize
+      totalSize(sSize(list.ps), sSize(list.remainder))
 
     /** Vars */
-    case v: BoundVarN => sizeTag() + sizeInt(v.value)
-    case v: FreeVarN  => sizeTag() + sizeInt(v.value)
-    case _: WildcardN => sizeTag()
+    case v: BoundVarN => totalSize(sSize(v.value))
+    case v: FreeVarN  => totalSize(sSize(v.value))
+    case _: WildcardN => totalSize()
 
     /** Expr */
     /** Bundle */
     /** Connective */
+    /** Auxiliary types */
+    case bind: ReceiveBindN =>
+      val patternsSize  = sSize(bind.patterns)
+      val sourceSize    = sSize(bind.source)
+      val reminderSize  = sSize(bind.remainder)
+      val freeCountSize = sSize(bind.freeCount)
+      totalSize(patternsSize, sourceSize, reminderSize, freeCountSize)
+
     case _ =>
       assert(assertion = false, "Not defined type")
       0

@@ -2,9 +2,12 @@ package coop.rchain.models.rholangN.ParManager
 
 import coop.rchain.models.rholangN._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+
 import java.util.concurrent.atomic.AtomicInteger
 import Constants._
 import Sorting._
+
+import scala.annotation.unused
 
 private[ParManager] object RhoHash {
 
@@ -16,20 +19,46 @@ private[ParManager] object RhoHash {
 
     arr(0) = tag // Fill the first element of arr with the tag
 
-    def appendByte(b: Byte): Unit = {
+    /** Appending methods */
+    private def append(b: Byte): Unit = {
       val currentPos = pos.getAndIncrement()
       assert(currentPos + 1 <= arrSize, "Array size exceeded")
       arr(currentPos) = b
     }
-
-    def appendBytes(bytes: Array[Byte]): Unit = {
+    private def append(bytes: Array[Byte]): Unit = {
       val bytesLength = bytes.length
       val currentPos  = pos.getAndAdd(bytesLength)
       assert(currentPos + bytesLength <= arrSize, "Array size exceeded")
       Array.copy(bytes, 0, arr, currentPos, bytesLength)
     }
 
-    def appendParHash(p: ParN): Unit = appendBytes(p.rhoHash.bytes.toArray)
+    def append(b: Boolean): Unit = {
+      def booleanToByte(v: Boolean): Byte = if (v) 1 else 0
+      append(booleanToByte(b))
+    }
+    def append(i: Int): Unit = {
+      def intToBytes(value: Int): Array[Byte] = {
+        val byteArray = new Array[Byte](intSize)
+        for (i <- 0 until intSize) {
+          byteArray(intSize - 1 - i) = ((value >>> (i * 8)) & 0xFF).toByte
+        }
+        byteArray
+      }
+      append(intToBytes(i))
+    }
+    def append(l: Long): Unit = {
+      def longToBytes(value: Long): Array[Byte] = {
+        val byteArray = new Array[Byte](longSize)
+        for (i <- 0 until longSize) {
+          byteArray(longSize - 1 - i) = ((value >>> (i * longSize)) & 0xFF).toByte
+        }
+        byteArray
+      }
+      append(longToBytes(l))
+    }
+    def append(p: RhoTypeN): Unit            = append(p.rhoHash.bytes.toArray)
+    def append(ps: Seq[RhoTypeN]): Unit      = ps.foreach(append)
+    def append(pOpt: Option[RhoTypeN]): Unit = pOpt.foreach(append)
 
     // Get the hash of the current array
     def calcHash: Blake2b256Hash = {
@@ -55,75 +84,86 @@ private[ParManager] object RhoHash {
     }
   }
   private object Hashable {
-    def apply(tag: Byte, size: Int): Hashable = new Hashable(tag, size)
+    def apply(tag: Byte, size: Int = 0): Hashable = new Hashable(tag, size)
   }
 
-  private def longToBytes(value: Long): Array[Byte] = {
-    val byteArray = new Array[Byte](longSize)
-    for (i <- 0 until longSize) {
-      byteArray(longSize - 1 - i) = ((value >>> (i * longSize)) & 0xFF).toByte
-    }
-    byteArray
-  }
-  private def intToBytes(value: Int): Array[Byte] = {
-    val byteArray = new Array[Byte](intSize)
-    for (i <- 0 until intSize) {
-      byteArray(intSize - 1 - i) = ((value >>> (i * 8)) & 0xFF).toByte
-    }
-    byteArray
-  }
-  private def booleanToByte(v: Boolean): Byte = if (v) 1 else 0
+  private def hSize(ps: Seq[RhoTypeN]): Int      = hashSize * ps.size
+  private def hSize(@unused p: RhoTypeN): Int    = hashSize
+  private def hSize(pOpt: Option[RhoTypeN]): Int = if (pOpt.isDefined) hashSize else 0
+  private def hSize(@unused b: Boolean): Int     = booleanSize
+  private def hSize(@unused i: Int): Int         = intSize
+  private def hSize(@unused l: Long): Int        = longSize
 
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
 
     /** Main types */
     case pproc: ParProcN =>
-      val bodySize = hashSize * pproc.ps.size
-      val hashable = Hashable(PARPROC, bodySize)
-      sort(pproc.ps).foreach(hashable.appendParHash)
-      hashable.calcHash
+      val hs = Hashable(PARPROC, hSize(pproc.ps))
+      hs.append(sort(pproc.ps))
+      hs.calcHash
 
     case send: SendN =>
-      val bodySize = hashSize * (send.data.size + 1) + booleanSize
-      val hashable = Hashable(SEND, bodySize)
-      hashable.appendParHash(send.chan)
-      send.data.foreach(hashable.appendParHash)
-      hashable.appendByte(booleanToByte(send.persistent))
-      hashable.calcHash
+      val bodySize = hSize(send.chan) + hSize(send.data) + hSize(send.persistent)
+      val hs       = Hashable(SEND, bodySize)
+      hs.append(send.chan)
+      hs.append(send.data)
+      hs.append(send.persistent)
+      hs.calcHash
+
+    case receive: ReceiveN =>
+      val bodySize = hSize(receive.binds) + hSize(receive.body) +
+        hSize(receive.persistent) + hSize(receive.peek) + hSize(receive.bindCount)
+      val hs = Hashable(RECEIVE, bodySize)
+      hs.append(receive.binds)
+      hs.append(receive.body)
+      hs.append(receive.persistent)
+      hs.append(receive.peek)
+      hs.append(receive.bindCount)
+      hs.calcHash
 
     /** Ground types */
-    case _: GNilN => Hashable(GNIL, 0).calcHash
+    case _: GNilN => Hashable(GNIL).calcHash
 
     case gInt: GIntN =>
-      val hashable = Hashable(GINT, longSize)
-      hashable.appendBytes(longToBytes(gInt.v))
-      hashable.calcHash
+      val hs = Hashable(GINT, hSize(gInt.v))
+      hs.append(gInt.v)
+      hs.calcHash
 
     /** Collections */
     case list: EListN =>
-      val remainderSize = if (list.remainder.isDefined) hashSize else 0
-      val bodySize      = hashSize * list.ps.size + remainderSize
-      val hashable      = Hashable(ELIST, bodySize)
-      list.ps.foreach(hashable.appendParHash)
-      list.remainder.foreach(hashable.appendParHash)
-      hashable.calcHash
+      val bodySize = hSize(list.ps) + hSize(list.remainder)
+      val hs       = Hashable(ELIST, bodySize)
+      hs.append(list.ps)
+      hs.append(list.remainder)
+      hs.calcHash
 
     /** Vars */
     case bv: BoundVarN =>
-      val hashable = Hashable(BOUND_VAR, intSize)
-      hashable.appendBytes(intToBytes(bv.value))
-      hashable.calcHash
+      val hs = Hashable(BOUND_VAR, hSize(bv.value))
+      hs.append(bv.value)
+      hs.calcHash
 
     case fv: FreeVarN =>
-      val hashable = Hashable(FREE_VAR, intSize)
-      hashable.appendBytes(intToBytes(fv.value))
-      hashable.calcHash
+      val hs = Hashable(FREE_VAR, hSize(fv.value))
+      hs.append(fv.value)
+      hs.calcHash
 
-    case _: WildcardN => Hashable(WILDCARD, 0).calcHash
+    case _: WildcardN => Hashable(WILDCARD).calcHash
 
     /** Expr */
     /** Bundle */
     /** Connective */
+    /** Auxiliary types */
+    case bind: ReceiveBindN =>
+      val bodySize = hSize(bind.patterns) + hSize(bind.source) +
+        hSize(bind.remainder) + hSize(bind.freeCount)
+      val hs = Hashable(RECEIVE_BIND, bodySize)
+      hs.append(bind.patterns)
+      hs.append(bind.source)
+      hs.append(bind.remainder)
+      hs.append(bind.freeCount)
+      hs.calcHash
+
     case _ =>
       assert(assertion = false, "Not defined type")
       Blake2b256Hash.fromByteArray(Array())

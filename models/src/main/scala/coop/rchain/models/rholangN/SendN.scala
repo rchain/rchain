@@ -1,10 +1,10 @@
 package coop.rchain.models.rholangN
 
 /** *
- * A send is written `chan!(data)` or `chan!!(data)` for a persistent send.
- *
- * Upon send, all free variables in data are substituted with their values.
- */
+  * A send is written `chan!(data)` or `chan!!(data)` for a persistent send.
+  *
+  * Upon send, all free variables in data are substituted with their values.
+  */
 final class SendN(val chan: ParN, val data: Seq[ParN], val persistent: Boolean) extends ParN
 
 object SendN {

@@ -28,14 +28,21 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test Send with same data order" in {
-    val p1 = SendN(GNilN(), Seq(GNilN(), SendN(GNilN(), GNilN())), persistent = true)
-    simpleCheck(p1) should be(true)
+    val p = SendN(GNilN(), Seq(GNilN(), SendN(GNilN(), GNilN())), persistent = true)
+    simpleCheck(p) should be(true)
   }
 
   it should "test Send with different data order" in {
     val p1 = SendN(GNilN(), Seq(GNilN(), SendN(GNilN(), GNilN())), persistent = true)
     val p2 = SendN(GNilN(), Seq(SendN(GNilN(), GNilN()), GNilN()), persistent = true)
     simpleCheck(p1, Some(p2)) should be(false)
+  }
+
+  it should "test Receive with same data order" in {
+    val bind1 = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), GNilN(), Some(BoundVarN(42)), 2)
+    val bind2 = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), GNilN(), Some(BoundVarN(42)), 2)
+    val p     = ReceiveN(Seq(bind1, bind2), GNilN(), persistent = true, peek = false, 4)
+    simpleCheck(p) should be(true)
   }
 
   /** Ground types */
