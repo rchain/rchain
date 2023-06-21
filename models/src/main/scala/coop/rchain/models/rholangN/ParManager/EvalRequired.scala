@@ -12,6 +12,7 @@ private[ParManager] object EvalRequired {
     case pProc: ParProcN => eReq(pProc.ps)
     case _: SendN        => true
     case _: ReceiveN     => true
+    case _: MatchN       => true
 
     /** Ground types */
     case _: GNilN => false
@@ -30,6 +31,7 @@ private[ParManager] object EvalRequired {
     /** Connective */
     /** Auxiliary types */
     case _: ReceiveBindN => true
+    case _: MatchCaseN   => true
 
     case _ =>
       assert(assertion = false, "Not defined type")

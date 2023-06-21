@@ -14,6 +14,7 @@ private[ParManager] object ConnectiveUsed {
     case pproc: ParProcN   => cUsed(pproc.ps)
     case send: SendN       => cUsed(send.chan) || cUsed(send.data)
     case receive: ReceiveN => cUsed(receive.binds) || cUsed(receive.body)
+    case m: MatchN         => cUsed(m.target) || cUsed(m.cases)
 
     /** Ground types */
     case _: GNilN => false
@@ -32,6 +33,8 @@ private[ParManager] object ConnectiveUsed {
     /** Connective */
     /** Auxiliary types */
     case bind: ReceiveBindN => cUsed(bind.source)
+
+    case mCase: MatchCaseN => cUsed(mCase.source)
 
     case _ =>
       assert(assertion = false, "Not defined type")

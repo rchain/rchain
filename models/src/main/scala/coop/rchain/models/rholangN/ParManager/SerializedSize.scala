@@ -44,6 +44,11 @@ private[ParManager] object SerializedSize {
       val bindCountSize  = sSize(receive.bindCount)
       totalSize(bindsSize, bodySize, persistentSize, peekSize, bindCountSize)
 
+    case m: MatchN =>
+      val targetSize = sSize(m.target)
+      val casesSize  = sSize(m.cases)
+      totalSize(targetSize, casesSize)
+
     /** Ground types */
     case _: GNilN    => totalSize()
     case gInt: GIntN => totalSize(sSize(gInt.v))
@@ -67,6 +72,12 @@ private[ParManager] object SerializedSize {
       val reminderSize  = sSize(bind.remainder)
       val freeCountSize = sSize(bind.freeCount)
       totalSize(patternsSize, sourceSize, reminderSize, freeCountSize)
+
+    case mCase: MatchCaseN =>
+      val patternSize   = sSize(mCase.pattern)
+      val sourceSize    = sSize(mCase.source)
+      val freeCountSize = sSize(mCase.freeCount)
+      totalSize(patternSize, sourceSize, freeCountSize)
 
     case _ =>
       assert(assertion = false, "Not defined type")

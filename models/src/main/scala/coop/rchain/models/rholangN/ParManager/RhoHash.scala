@@ -121,6 +121,13 @@ private[ParManager] object RhoHash {
       hs.append(receive.bindCount)
       hs.calcHash
 
+    case m: MatchN =>
+      val bodySize = hSize(m.target) + hSize(m.cases)
+      val hs       = Hashable(MATCH, bodySize)
+      hs.append(m.target)
+      hs.append(m.cases)
+      hs.calcHash
+
     /** Ground types */
     case _: GNilN => Hashable(GNIL).calcHash
 
@@ -162,6 +169,14 @@ private[ParManager] object RhoHash {
       hs.append(bind.source)
       hs.append(bind.remainder)
       hs.append(bind.freeCount)
+      hs.calcHash
+
+    case mCase: MatchCaseN =>
+      val bodySize = hSize(mCase.pattern) + hSize(mCase.source) + hSize(mCase.freeCount)
+      val hs       = Hashable(MATCH_CASE, bodySize)
+      hs.append(mCase.pattern)
+      hs.append(mCase.source)
+      hs.append(mCase.freeCount)
       hs.calcHash
 
     case _ =>

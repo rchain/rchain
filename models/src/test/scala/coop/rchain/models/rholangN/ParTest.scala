@@ -45,6 +45,13 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
+  it should "test match with same data order" in {
+    val case1 = MatchCaseN(FreeVarN(41), BoundVarN(42), 1)
+    val case2 = MatchCaseN(WildcardN(), BoundVarN(42), 0)
+    val p     = MatchN(GNilN(), Seq(case1, case2))
+    simpleCheck(p) should be(true)
+  }
+
   /** Ground types */
   it should "test GNil" in {
     val p = GNilN()

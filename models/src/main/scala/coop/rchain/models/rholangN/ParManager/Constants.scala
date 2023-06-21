@@ -10,6 +10,7 @@ private[ParManager] object Constants {
 
   final val tagSize = 1
 
+  /** Tags for serialization */
   /** Main pars */
   final val PARPROC: Byte = 0x01.toByte
   final val SEND          = 0x02.toByte
@@ -84,4 +85,5 @@ private[ParManager] object Constants {
 
   /** Auxiliary types */
   final val RECEIVE_BIND = 0x80.toByte
+  final val MATCH_CASE   = 0x81.toByte
 }

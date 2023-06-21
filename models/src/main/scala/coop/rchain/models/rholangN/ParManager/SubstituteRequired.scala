@@ -12,6 +12,7 @@ private[ParManager] object SubstituteRequired {
     case pproc: ParProcN   => sReq(pproc.ps)
     case send: SendN       => sReq(send.chan) || sReq(send.data)
     case receive: ReceiveN => sReq(receive.binds) || sReq(receive.body)
+    case m: MatchN         => sReq(m.target) || sReq(m.cases)
 
     /** Ground types */
     case _: GNilN => false
@@ -30,6 +31,7 @@ private[ParManager] object SubstituteRequired {
     /** Connective */
     /** Auxiliary types */
     case bind: ReceiveBindN => sReq(bind.patterns) || sReq(bind.source)
+    case mCase: MatchCaseN  => sReq(mCase.pattern) || sReq(mCase.source)
 
     case _ =>
       assert(assertion = false, "Not defined type")

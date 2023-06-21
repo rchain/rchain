@@ -52,6 +52,11 @@ private[ParManager] object Codecs {
           write(receive.peek)
           write(receive.bindCount)
 
+        case m: MatchN =>
+          write(MATCH)
+          write(m.target)
+          write(m.cases)
+
         /** Ground types */
         case _: GNilN =>
           write(GNIL)
@@ -88,6 +93,12 @@ private[ParManager] object Codecs {
           write(bind.source)
           write(bind.remainder)
           write(bind.freeCount)
+
+        case mCase: MatchCaseN =>
+          write(MATCH_CASE)
+          write(mCase.pattern)
+          write(mCase.source)
+          write(mCase.freeCount)
 
         case _ => assert(assertion = false, "Not defined type")
       }
@@ -143,6 +154,21 @@ private[ParManager] object Codecs {
       readSeq(readReceiveBind _)
     }
 
+    def readMatchCases(): Seq[MatchCaseN] = {
+      def matchMCase(tag: Byte): MatchCaseN = tag match {
+        case MATCH_CASE =>
+          val pattern   = readPar()
+          val source    = readPar()
+          val freeCount = readInt()
+          MatchCaseN(pattern, source, freeCount)
+        case _ =>
+          assert(assertion = false, "Invalid tag for ReceiveBindN deserialization")
+          MatchCaseN(GNilN(), GNilN(), 0)
+      }
+      def readMatchCase() = readTagAndMatch(matchMCase)
+      readSeq(readMatchCase _)
+    }
+
     def matchPar(tag: Byte): ParN = tag match {
 
       /** Main types */
@@ -163,6 +189,11 @@ private[ParManager] object Codecs {
         val peek       = readBool()
         val bindCount  = readInt()
         ReceiveN(binds, body, persistent, peek, bindCount)
+
+      case MATCH =>
+        val target = readPar()
+        val cases  = readMatchCases()
+        MatchN(target, cases)
 
       /** Ground types */
       case GNIL =>
