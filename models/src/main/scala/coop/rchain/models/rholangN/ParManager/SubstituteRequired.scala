@@ -3,22 +3,22 @@ package coop.rchain.models.rholangN.ParManager
 import coop.rchain.models.rholangN._
 
 private[ParManager] object SubstituteRequired {
-  private def srPar(p: RhoTypeN)        = p.substituteRequired
-  private def srPars(ps: Seq[RhoTypeN]) = ps.exists(srPar)
+  private def sReq(p: RhoTypeN): Boolean       = p.substituteRequired
+  private def sReq(ps: Seq[RhoTypeN]): Boolean = ps.exists(sReq)
 
   def substituteRequiredFn(p: RhoTypeN): Boolean = p match {
 
     /** Main types */
-    case pproc: ParProcN   => srPars(pproc.ps)
-    case send: SendN       => srPar(send.chan) || srPars(send.data)
-    case receive: ReceiveN => srPars(receive.binds) || srPar(receive.body)
+    case pproc: ParProcN   => sReq(pproc.ps)
+    case send: SendN       => sReq(send.chan) || sReq(send.data)
+    case receive: ReceiveN => sReq(receive.binds) || sReq(receive.body)
 
     /** Ground types */
     case _: GNilN => false
     case _: GIntN => false
 
     /** Collections */
-    case list: EListN => srPars(list.ps)
+    case list: EListN => sReq(list.ps)
 
     /** Vars */
     case _: BoundVarN => true
@@ -29,7 +29,7 @@ private[ParManager] object SubstituteRequired {
     /** Bundle */
     /** Connective */
     /** Auxiliary types */
-    case bind: ReceiveBindN => srPars(bind.patterns) || srPar(bind.source)
+    case bind: ReceiveBindN => sReq(bind.patterns) || sReq(bind.source)
 
     case _ =>
       assert(assertion = false, "Not defined type")

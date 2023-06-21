@@ -119,88 +119,88 @@ private[ParManager] object Codecs {
 
     def readVarOpt(): Option[VarN] = if (readBool()) Some(readVar()) else None
 
-    def readPars(): Seq[ParN] = {
+    def readSeq[T](f: () => T): Seq[T] = {
       val count = readLength()
-      (1 to count).map(_ => readPar())
+      (1 to count).map(_ => f())
     }
+
+    def readPars(): Seq[ParN] = readSeq(readPar _)
 
     /** Auxiliary types deserialization */
     def readReceiveBinds(): Seq[ReceiveBindN] = {
-      def readReceiveBind(): ReceiveBindN = {
-        val tag = readTag()
-        tag match {
-          case RECEIVE_BIND =>
-            val patterns  = readPars()
-            val source    = readPar()
-            val remainder = readVarOpt()
-            val freeCount = readInt()
-            ReceiveBindN(patterns, source, remainder, freeCount)
-          case _ =>
-            assert(assertion = false, "Invalid tag for ReceiveBindN deserialization")
-            ReceiveBindN(Seq(), GNilN(), None, 0)
-        }
-      }
-      val count = readLength()
-      (1 to count).map(_ => readReceiveBind())
-    }
-
-    def readPar(): ParN = {
-      val tag = readTag()
-      tag match {
-
-        /** Main types */
-        case PARPROC =>
-          val ps = readPars()
-          ParProcN(ps)
-
-        case SEND =>
-          val chan       = readPar()
-          val dataSeq    = readPars()
-          val persistent = readBool()
-          SendN(chan, dataSeq, persistent)
-
-        case RECEIVE =>
-          val binds      = readReceiveBinds()
-          val body       = readPar()
-          val persistent = readBool()
-          val peek       = readBool()
-          val bindCount  = readInt()
-          ReceiveN(binds, body, persistent, peek, bindCount)
-
-        /** Ground types */
-        case GNIL =>
-          GNilN()
-
-        case GINT =>
-          val v = readLong()
-          GIntN(v)
-
-        /** Collections */
-        case ELIST =>
-          val ps        = readPars()
+      def matchReceiveBind(tag: Byte): ReceiveBindN = tag match {
+        case RECEIVE_BIND =>
+          val patterns  = readPars()
+          val source    = readPar()
           val remainder = readVarOpt()
-          EListN(ps, remainder)
-
-        /** Vars */
-        case BOUND_VAR =>
-          val v = readInt()
-          BoundVarN(v)
-
-        case FREE_VAR =>
-          val v = readInt()
-          FreeVarN(v)
-
-        case WILDCARD =>
-          WildcardN()
-
-        /** Expr */
-        /** Bundle */
-        /** Connective */
+          val freeCount = readInt()
+          ReceiveBindN(patterns, source, remainder, freeCount)
         case _ =>
-          assert(assertion = false, "Invalid tag for ParN deserialization")
-          GNilN()
+          assert(assertion = false, "Invalid tag for ReceiveBindN deserialization")
+          ReceiveBindN(Seq(), GNilN(), None, 0)
       }
+      def readReceiveBind() = readTagAndMatch(matchReceiveBind)
+      readSeq(readReceiveBind _)
     }
+
+    def matchPar(tag: Byte): ParN = tag match {
+
+      /** Main types */
+      case PARPROC =>
+        val ps = readPars()
+        ParProcN(ps)
+
+      case SEND =>
+        val chan       = readPar()
+        val dataSeq    = readPars()
+        val persistent = readBool()
+        SendN(chan, dataSeq, persistent)
+
+      case RECEIVE =>
+        val binds      = readReceiveBinds()
+        val body       = readPar()
+        val persistent = readBool()
+        val peek       = readBool()
+        val bindCount  = readInt()
+        ReceiveN(binds, body, persistent, peek, bindCount)
+
+      /** Ground types */
+      case GNIL =>
+        GNilN()
+
+      case GINT =>
+        val v = readLong()
+        GIntN(v)
+
+      /** Collections */
+      case ELIST =>
+        val ps        = readPars()
+        val remainder = readVarOpt()
+        EListN(ps, remainder)
+
+      /** Vars */
+      case BOUND_VAR =>
+        val v = readInt()
+        BoundVarN(v)
+
+      case FREE_VAR =>
+        val v = readInt()
+        FreeVarN(v)
+
+      case WILDCARD =>
+        WildcardN()
+
+      /** Expr */
+      /** Bundle */
+      /** Connective */
+      case _ =>
+        assert(assertion = false, "Invalid tag for ParN deserialization")
+        GNilN()
+    }
+
+    def readTagAndMatch[T](f: Byte => T): T = f(readTag())
+    def readPar(): ParN                     = readTagAndMatch(matchPar)
+
     readPar()
   }
 }

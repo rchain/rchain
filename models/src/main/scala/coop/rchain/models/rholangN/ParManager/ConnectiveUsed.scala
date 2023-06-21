@@ -2,26 +2,25 @@ package coop.rchain.models.rholangN.ParManager
 
 import coop.rchain.models.rholangN._
 
-import scala.annotation.unused
-
 private[ParManager] object ConnectiveUsed {
-  private def cuPar(p: RhoTypeN)               = p.connectiveUsed
-  private def cuPars(ps: Seq[RhoTypeN])        = ps.exists(cuPar)
-  private def cuParOpt(pOpt: Option[RhoTypeN]) = if (pOpt.isDefined) cuPar(pOpt.get) else false
+  private def cUsed(p: RhoTypeN): Boolean       = p.connectiveUsed
+  private def cUsed(ps: Seq[RhoTypeN]): Boolean = ps.exists(cUsed)
+  private def cUsed(pOpt: Option[RhoTypeN]): Boolean =
+    if (pOpt.isDefined) cUsed(pOpt.get) else false
 
   def connectiveUsedFn(p: RhoTypeN): Boolean = p match {
 
     /** Main types */
-    case pproc: ParProcN   => cuPars(pproc.ps)
-    case send: SendN       => cuPar(send.chan) || cuPars(send.data)
-    case receive: ReceiveN => cuPars(receive.binds) || cuPar(receive.body)
+    case pproc: ParProcN   => cUsed(pproc.ps)
+    case send: SendN       => cUsed(send.chan) || cUsed(send.data)
+    case receive: ReceiveN => cUsed(receive.binds) || cUsed(receive.body)
 
     /** Ground types */
     case _: GNilN => false
     case _: GIntN => false
 
     /** Collections */
-    case list: EListN => cuPars(list.ps) || cuParOpt(list.remainder)
+    case list: EListN => cUsed(list.ps) || cUsed(list.remainder)
 
     /** Vars */
     case _: BoundVarN => false
@@ -32,7 +31,7 @@ private[ParManager] object ConnectiveUsed {
     /** Bundle */
     /** Connective */
     /** Auxiliary types */
-    case bind: ReceiveBindN => cuPar(bind.source)
+    case bind: ReceiveBindN => cUsed(bind.source)
 
     case _ =>
       assert(assertion = false, "Not defined type")
