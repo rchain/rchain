@@ -12,6 +12,7 @@ import scala.annotation.unused
 private[ParManager] object RhoHash {
 
   private class Hashable(val tag: Byte, val bodySize: Int) {
+    import Hashable._
 
     private val arrSize: Int     = bodySize + tagSize
     private val arr: Array[Byte] = new Array[Byte](arrSize)
@@ -32,33 +33,14 @@ private[ParManager] object RhoHash {
       Array.copy(bytes, 0, arr, currentPos, bytesLength)
     }
 
-    def append(b: Boolean): Unit = {
-      def booleanToByte(v: Boolean): Byte = if (v) 1 else 0
-      append(booleanToByte(b))
-    }
-    def append(i: Int): Unit = {
-      def intToBytes(value: Int): Array[Byte] = {
-        val byteArray = new Array[Byte](intSize)
-        for (i <- 0 until intSize) {
-          byteArray(intSize - 1 - i) = ((value >>> (i * 8)) & 0xFF).toByte
-        }
-        byteArray
-      }
-      append(intToBytes(i))
-    }
-    def append(l: Long): Unit = {
-      def longToBytes(value: Long): Array[Byte] = {
-        val byteArray = new Array[Byte](longSize)
-        for (i <- 0 until longSize) {
-          byteArray(longSize - 1 - i) = ((value >>> (i * longSize)) & 0xFF).toByte
-        }
-        byteArray
-      }
-      append(longToBytes(l))
-    }
-    def append(p: RhoTypeN): Unit            = append(p.rhoHash.bytes.toArray)
-    def append(ps: Seq[RhoTypeN]): Unit      = ps.foreach(append)
-    def append(pOpt: Option[RhoTypeN]): Unit = pOpt.foreach(append)
+    def append(b: Boolean): Unit                  = append(booleanToByte(b))
+    def append(i: Int): Unit                      = append(intToBytes(i))
+    def append(l: Long): Unit                     = append(longToBytes(l))
+    def append(str: String): Unit                 = append(stringToBytes(str))
+    def append(p: RhoTypeN): Unit                 = append(p.rhoHash.bytes.toArray)
+    def appendStrings(strings: Seq[String]): Unit = strings.foreach(append)
+    def append(ps: Seq[RhoTypeN]): Unit           = ps.foreach(append)
+    def append(pOpt: Option[RhoTypeN]): Unit      = pOpt.foreach(append)
 
     // Get the hash of the current array
     def calcHash: Blake2b256Hash = {
@@ -85,21 +67,46 @@ private[ParManager] object RhoHash {
   }
   private object Hashable {
     def apply(tag: Byte, size: Int = 0): Hashable = new Hashable(tag, size)
+
+    private def booleanToByte(v: Boolean): Byte = if (v) 1 else 0
+
+    private def intToBytes(value: Int): Array[Byte] = {
+      val byteArray = new Array[Byte](intSize)
+      for (i <- 0 until intSize) {
+        byteArray(intSize - 1 - i) = ((value >>> (i * 8)) & 0xFF).toByte
+      }
+      byteArray
+    }
+
+    private def longToBytes(value: Long): Array[Byte] = {
+      val byteArray = new Array[Byte](longSize)
+      for (i <- 0 until longSize) {
+        byteArray(longSize - 1 - i) = ((value >>> (i * longSize)) & 0xFF).toByte
+      }
+      byteArray
+    }
+
+    private def stringToBytes(v: String): Array[Byte] = v.getBytes("UTF-8")
+
+    private def hSizeSeq[T](seq: Seq[T], f: T => Int): Int = seq.map(f).sum
+
+    def hSize(@unused b: Boolean): Int         = booleanSize
+    def hSize(@unused i: Int): Int             = intSize
+    def hSize(@unused l: Long): Int            = longSize
+    def hSize(str: String): Int                = stringToBytes(str).length
+    def hSize(@unused p: RhoTypeN): Int        = hashSize
+    def hSize(ps: Seq[RhoTypeN]): Int          = hSizeSeq[RhoTypeN](ps, hSize)
+    def hSizeString(strings: Seq[String]): Int = hSizeSeq[String](strings, hSize)
+    def hSize(pOpt: Option[RhoTypeN]): Int     = if (pOpt.isDefined) hashSize else 0
   }
 
-  private def hSize(ps: Seq[RhoTypeN]): Int      = hashSize * ps.size
-  private def hSize(@unused p: RhoTypeN): Int    = hashSize
-  private def hSize(pOpt: Option[RhoTypeN]): Int = if (pOpt.isDefined) hashSize else 0
-  private def hSize(@unused b: Boolean): Int     = booleanSize
-  private def hSize(@unused i: Int): Int         = intSize
-  private def hSize(@unused l: Long): Int        = longSize
-
+  import Hashable._
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
 
     /** Main types */
-    case pproc: ParProcN =>
-      val hs = Hashable(PARPROC, hSize(pproc.ps))
-      hs.append(sort(pproc.ps))
+    case pProc: ParProcN =>
+      val hs = Hashable(PARPROC, hSize(pProc.ps))
+      hs.append(sortPars(pProc.ps))
       hs.calcHash
 
     case send: SendN =>
@@ -126,6 +133,14 @@ private[ParManager] object RhoHash {
       val hs       = Hashable(MATCH, bodySize)
       hs.append(m.target)
       hs.append(m.cases)
+      hs.calcHash
+
+    case n: NewN =>
+      val bodySize = hSize(n.bindCount) + hSize(n.p) + hSizeString(n.uri)
+      val hs       = Hashable(NEW, bodySize)
+      hs.append(n.bindCount)
+      hs.append(n.p)
+      hs.appendStrings(sortStrings(n.uri))
       hs.calcHash
 
     /** Ground types */

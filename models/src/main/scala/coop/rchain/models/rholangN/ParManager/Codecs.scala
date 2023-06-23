@@ -12,13 +12,11 @@ private[ParManager] object Codecs {
     val cos = CodedOutputStream.newInstance(output)
 
     object Serializer {
-      private def write(x: Byte): Unit = cos.writeRawByte(x)
-
+      private def write(x: Byte): Unit    = cos.writeRawByte(x)
       private def write(x: Boolean): Unit = cos.writeBoolNoTag(x)
-
-      private def write(x: Int): Unit = cos.writeInt32NoTag(x)
-
-      private def write(x: Long): Unit = cos.writeInt64NoTag(x)
+      private def write(x: Int): Unit     = cos.writeInt32NoTag(x)
+      private def write(x: Long): Unit    = cos.writeInt64NoTag(x)
+      private def write(x: String): Unit  = cos.writeStringNoTag(x)
 
       private def write(pOpt: Option[RhoTypeN]): Unit =
         if (pOpt.isDefined) {
@@ -26,17 +24,19 @@ private[ParManager] object Codecs {
           write(pOpt.get)
         } else write(false)
 
-      private def write(ps: Seq[RhoTypeN]): Unit = {
-        write(ps.size)
-        ps.foreach(write)
+      private def writeSeq[T](seq: Seq[T], f: T => Unit): Unit = {
+        write(seq.size)
+        seq.foreach(f)
       }
+      private def write(ps: Seq[RhoTypeN]): Unit           = writeSeq[RhoTypeN](ps, write)
+      private def writeStrings(strings: Seq[String]): Unit = writeSeq[String](strings, write)
 
       def write(p: RhoTypeN): Unit = p match {
 
         /** Main types */
-        case parProc: ParProcN =>
+        case pProc: ParProcN =>
           write(PARPROC)
-          write(sort(parProc.ps))
+          write(sortPars(pProc.ps))
 
         case send: SendN =>
           write(SEND)
@@ -56,6 +56,12 @@ private[ParManager] object Codecs {
           write(MATCH)
           write(m.target)
           write(m.cases)
+
+        case n: NewN =>
+          write(NEW)
+          write(n.bindCount)
+          write(n.p)
+          writeStrings(sortStrings(n.uri))
 
         /** Ground types */
         case _: GNilN =>
@@ -113,13 +119,15 @@ private[ParManager] object Codecs {
 
     def readTag(): Byte = cis.readRawByte()
 
+    def readBool(): Boolean = cis.readBool()
+
     def readInt(): Int = cis.readInt32()
 
     def readLength(): Int = cis.readUInt32()
 
     def readLong(): Long = cis.readInt64()
 
-    def readBool(): Boolean = cis.readBool()
+    def readString(): String = cis.readString()
 
     def readVar(): VarN = readPar() match {
       case v: VarN => v
@@ -134,6 +142,8 @@ private[ParManager] object Codecs {
       val count = readLength()
       (1 to count).map(_ => f())
     }
+
+    def readStrings(): Seq[String] = readSeq(readString _)
 
     def readPars(): Seq[ParN] = readSeq(readPar _)
 
@@ -194,6 +204,12 @@ private[ParManager] object Codecs {
         val target = readPar()
         val cases  = readMatchCases()
         MatchN(target, cases)
+
+      case NEW =>
+        val bindCount = readInt()
+        val p         = readPar()
+        val uri       = readStrings()
+        NewN(bindCount, p, uri)
 
       /** Ground types */
       case GNIL =>

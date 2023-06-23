@@ -9,16 +9,21 @@ private[ParManager] object SerializedSize {
 
   import Constants._
 
-  private def sSize(value: Int): Int = CodedOutputStream.computeInt32SizeNoTag(value)
-
-  private def sSize(value: Long): Int = CodedOutputStream.computeInt64SizeNoTag(value)
-
   private def sSize(@unused value: Boolean): Int = booleanSize
+  private def sSize(value: Int): Int             = CodedOutputStream.computeInt32SizeNoTag(value)
+  private def sSize(value: Long): Int            = CodedOutputStream.computeInt64SizeNoTag(value)
+  private def sSize(value: String): Int          = CodedOutputStream.computeStringSizeNoTag(value)
 
   private def sSize(p: RhoTypeN): Int = p.serializedSize
 
+  private def sSizeSeq[T](seq: Seq[T], f: T => Int): Int =
+    sSize(seq.size) + seq.map(f).sum
+
   private def sSize(ps: Seq[RhoTypeN]): Int =
-    sSize(ps.size) + ps.map(sSize).sum
+    sSizeSeq[RhoTypeN](ps, sSize)
+
+  private def sSizeStrings(strings: Seq[String]): Int =
+    sSizeSeq[String](strings, sSize)
 
   private def sSize(pOpt: Option[RhoTypeN]): Int =
     booleanSize + (if (pOpt.isDefined) pOpt.get.serializedSize else 0)
@@ -29,8 +34,8 @@ private[ParManager] object SerializedSize {
   def serializedSizeFn(p: RhoTypeN): Int = p match {
 
     /** Main types */
-    case pproc: ParProcN =>
-      val psSize = sSize(pproc.ps)
+    case pProc: ParProcN =>
+      val psSize = sSize(pProc.ps)
       totalSize(psSize)
 
     case send: SendN =>
@@ -48,6 +53,12 @@ private[ParManager] object SerializedSize {
       val targetSize = sSize(m.target)
       val casesSize  = sSize(m.cases)
       totalSize(targetSize, casesSize)
+
+    case n: NewN =>
+      val bindCountSize = sSize(n.bindCount)
+      val pSize         = sSize(n.p)
+      val uriSize       = sSizeStrings(n.uri)
+      totalSize(bindCountSize, pSize, uriSize)
 
     /** Ground types */
     case _: GNilN    => totalSize()

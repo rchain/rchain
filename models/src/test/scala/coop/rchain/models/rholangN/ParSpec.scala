@@ -6,6 +6,11 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
+  /** Test hashing and serialization for par
+    * @param p1 Par for testing
+    * @param p2Opt optional Par (used for testing if necessary to check the correct sorting)
+    * @return true - if the result of serialization and hashing for both pairs is the same
+    */
   def simpleCheck(p1: ParN, p2Opt: Option[ParN] = None): Boolean = {
     val bytes1        = p1.toBytes
     val recover1      = ParN.fromBytes(bytes1)
@@ -50,6 +55,12 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     val case2 = MatchCaseN(WildcardN(), BoundVarN(42), 0)
     val p     = MatchN(GNilN(), Seq(case1, case2))
     simpleCheck(p) should be(true)
+  }
+
+  it should "test New" in {
+    val p1 = NewN(1, BoundVarN(0), Seq("rho:io:stdout", "rho:io:stderr"))
+    val p2 = NewN(1, BoundVarN(0), Seq("rho:io:stderr", "rho:io:stdout"))
+    simpleCheck(p1, Some(p2)) should be(true)
   }
 
   /** Ground types */

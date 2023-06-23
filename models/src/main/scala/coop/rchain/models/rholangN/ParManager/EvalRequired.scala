@@ -13,6 +13,7 @@ private[ParManager] object EvalRequired {
     case _: SendN        => true
     case _: ReceiveN     => true
     case _: MatchN       => true
+    case _: NewN         => true
 
     /** Ground types */
     case _: GNilN => false

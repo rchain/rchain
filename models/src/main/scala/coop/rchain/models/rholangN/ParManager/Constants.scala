@@ -16,7 +16,7 @@ private[ParManager] object Constants {
   final val SEND          = 0x02.toByte
   final val RECEIVE       = 0x03.toByte
   final val MATCH         = 0x04.toByte
-  //    final val NEW = 0x05.toByte
+  final val NEW           = 0x05.toByte
 
   /** Ground types */
   final val GNIL = 0x10.toByte
