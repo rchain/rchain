@@ -16,8 +16,9 @@ private[ParManager] object EvalRequired {
     case _: NewN         => true
 
     /** Ground types */
-    case _: GNilN => false
-    case _: GIntN => false
+    case _: GNilN  => false
+    case _: GBoolN => false
+    case _: GIntN  => false
 
     /** Collections */
     case list: EListN => eReq(list.ps)

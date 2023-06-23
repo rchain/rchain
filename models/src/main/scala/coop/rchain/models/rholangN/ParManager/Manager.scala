@@ -11,13 +11,13 @@ object Manager {
 
   def parToBytes(p: ParN): ByteVector = {
     val baos = new ByteArrayOutputStream(p.serializedSize)
-    Codecs.serialize(p, baos)
+    Serialization.serialize(p, baos)
     ByteVector(baos.toByteArray)
   }
 
   def parFromBytes(bv: ByteVector): ParN = {
     val bais = new ByteArrayInputStream(bv.toArray)
-    Codecs.deserialize(bais)
+    Serialization.deserialize(bais)
   }
 
   def equals(self: RhoTypeN, other: Any): Boolean = other match {

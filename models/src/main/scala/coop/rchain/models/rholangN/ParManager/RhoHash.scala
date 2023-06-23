@@ -146,6 +146,11 @@ private[ParManager] object RhoHash {
     /** Ground types */
     case _: GNilN => Hashable(GNIL).calcHash
 
+    case gBool: GBoolN =>
+      val hs = Hashable(GBOOL, hSize(gBool.v))
+      hs.append(gBool.v)
+      hs.calcHash
+
     case gInt: GIntN =>
       val hs = Hashable(GINT, hSize(gInt.v))
       hs.append(gInt.v)

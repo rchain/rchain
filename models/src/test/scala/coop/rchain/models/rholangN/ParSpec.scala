@@ -69,6 +69,11 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
+  it should "test GBool" in {
+    val p = GBoolN(true)
+    simpleCheck(p) should be(true)
+  }
+
   it should "test GInt" in {
     val p = GIntN(42)
     simpleCheck(p) should be(true)

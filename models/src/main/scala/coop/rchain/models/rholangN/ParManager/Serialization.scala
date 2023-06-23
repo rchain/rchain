@@ -7,7 +7,7 @@ import coop.rchain.models.rholangN._
 
 import java.io.{InputStream, OutputStream}
 
-private[ParManager] object Codecs {
+private[ParManager] object Serialization {
   def serialize(par: ParN, output: OutputStream): Unit = {
     val cos = CodedOutputStream.newInstance(output)
 
@@ -67,6 +67,10 @@ private[ParManager] object Codecs {
         case _: GNilN =>
           write(GNIL)
 
+        case gBool: GBoolN =>
+          write(GBOOL)
+          write(gBool.v)
+
         case gInt: GIntN =>
           write(GINT)
           write(gInt.v)
@@ -117,16 +121,11 @@ private[ParManager] object Codecs {
   def deserialize(input: InputStream): ParN = {
     val cis = CodedInputStream.newInstance(input)
 
-    def readTag(): Byte = cis.readRawByte()
-
-    def readBool(): Boolean = cis.readBool()
-
-    def readInt(): Int = cis.readInt32()
-
-    def readLength(): Int = cis.readUInt32()
-
-    def readLong(): Long = cis.readInt64()
-
+    def readTag(): Byte      = cis.readRawByte()
+    def readBool(): Boolean  = cis.readBool()
+    def readInt(): Int       = cis.readInt32()
+    def readLength(): Int    = cis.readUInt32()
+    def readLong(): Long     = cis.readInt64()
     def readString(): String = cis.readString()
 
     def readVar(): VarN = readPar() match {
@@ -144,8 +143,7 @@ private[ParManager] object Codecs {
     }
 
     def readStrings(): Seq[String] = readSeq(readString _)
-
-    def readPars(): Seq[ParN] = readSeq(readPar _)
+    def readPars(): Seq[ParN]      = readSeq(readPar _)
 
     /** Auxiliary types deserialization */
     def readReceiveBinds(): Seq[ReceiveBindN] = {
@@ -214,6 +212,10 @@ private[ParManager] object Codecs {
       /** Ground types */
       case GNIL =>
         GNilN()
+
+      case GBOOL =>
+        val v = readBool()
+        GBoolN(v)
 
       case GINT =>
         val v = readLong()

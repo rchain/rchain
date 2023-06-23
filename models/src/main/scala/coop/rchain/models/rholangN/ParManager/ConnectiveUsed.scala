@@ -11,15 +11,16 @@ private[ParManager] object ConnectiveUsed {
   def connectiveUsedFn(p: RhoTypeN): Boolean = p match {
 
     /** Main types */
-    case pproc: ParProcN   => cUsed(pproc.ps)
+    case pProc: ParProcN   => cUsed(pProc.ps)
     case send: SendN       => cUsed(send.chan) || cUsed(send.data)
     case receive: ReceiveN => cUsed(receive.binds) || cUsed(receive.body)
     case m: MatchN         => cUsed(m.target) || cUsed(m.cases)
     case _: NewN           => false // There are no situations when New gets into the matcher
 
     /** Ground types */
-    case _: GNilN => false
-    case _: GIntN => false
+    case _: GNilN  => false
+    case _: GBoolN => false
+    case _: GIntN  => false
 
     /** Collections */
     case list: EListN => cUsed(list.ps) || cUsed(list.remainder)

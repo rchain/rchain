@@ -61,8 +61,9 @@ private[ParManager] object SerializedSize {
       totalSize(bindCountSize, pSize, uriSize)
 
     /** Ground types */
-    case _: GNilN    => totalSize()
-    case gInt: GIntN => totalSize(sSize(gInt.v))
+    case _: GNilN      => totalSize()
+    case gBool: GBoolN => totalSize(sSize(gBool.v))
+    case gInt: GIntN   => totalSize(sSize(gInt.v))
 
     /** Collections */
     case list: EListN =>
