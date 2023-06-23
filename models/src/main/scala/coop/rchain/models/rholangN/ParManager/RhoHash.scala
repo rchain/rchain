@@ -166,13 +166,13 @@ private[ParManager] object RhoHash {
 
     /** Vars */
     case bv: BoundVarN =>
-      val hs = Hashable(BOUND_VAR, hSize(bv.value))
-      hs.append(bv.value)
+      val hs = Hashable(BOUND_VAR, hSize(bv.idx))
+      hs.append(bv.idx)
       hs.calcHash
 
     case fv: FreeVarN =>
-      val hs = Hashable(FREE_VAR, hSize(fv.value))
-      hs.append(fv.value)
+      val hs = Hashable(FREE_VAR, hSize(fv.idx))
+      hs.append(fv.idx)
       hs.calcHash
 
     case _: WildcardN => Hashable(WILDCARD).calcHash

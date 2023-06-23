@@ -70,8 +70,8 @@ private[ParManager] object SerializedSize {
       totalSize(sSize(list.ps), sSize(list.remainder))
 
     /** Vars */
-    case v: BoundVarN => totalSize(sSize(v.value))
-    case v: FreeVarN  => totalSize(sSize(v.value))
+    case v: BoundVarN => totalSize(sSize(v.idx))
+    case v: FreeVarN  => totalSize(sSize(v.idx))
     case _: WildcardN => totalSize()
 
     /** Expr */

@@ -1,22 +1,40 @@
 package coop.rchain.models.rholangN
 
-import scodec.bits.ByteVector
-import coop.rchain.rspace.hashing.Blake2b256Hash
-
 import coop.rchain.models.rholangN.ParManager.Manager._
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import scodec.bits.ByteVector
 
+/** Base trait for Rholang elements in the Reducer */
 sealed trait RhoTypeN {
-  override def equals(x: Any): Boolean = ParManager.Manager.equals(this, x)
 
-  lazy val rhoHash: Blake2b256Hash     = rhoHashFn(this)
-  lazy val serializedSize: Int         = serializedSizeFn(this)
-  lazy val connectiveUsed: Boolean     = connectiveUsedFn(this)
-  lazy val evalRequired: Boolean       = evalRequiredFn(this)
+  /** Cryptographic hash code of the element */
+  lazy val rhoHash: Blake2b256Hash = rhoHashFn(this)
+
+  /** Element size after serialization (in bytes) */
+  lazy val serializedSize: Int = serializedSizeFn(this)
+
+  /** True if the element or at least one of the nested elements non-concrete.
+    * Such element cannot be viewed as if it were a term.*/
+  // TODO: Rename connectiveUsed for more clarity
+  lazy val connectiveUsed: Boolean = connectiveUsedFn(this)
+
+  /** True if the element or at least one of the nested elements can be evaluate in Reducer */
+  lazy val evalRequired: Boolean = evalRequiredFn(this)
+
+  /** True if the element or at least one of the nested elements can be substitute in Reducer */
   lazy val substituteRequired: Boolean = substituteRequiredFn(this)
+
+  override def equals(x: Any): Boolean = ParManager.Manager.equals(this, x)
 }
 
+/* TODO: In the future, it is necessary to append the classification.
+         Add main types and ground types.
+         Ground types must be part of expressions, and expressions are part of the main types.
+ */
+/** Auxiliary elements included in other pairs */
 trait AuxParN extends RhoTypeN
 
+/** Rholang element that can be processed in parallel, together with other elements */
 trait ParN extends RhoTypeN {
   def toBytes: ByteVector = parToBytes(this)
 }
@@ -24,19 +42,8 @@ object ParN {
   def fromBytes(bytes: ByteVector): ParN = parFromBytes(bytes)
 }
 
-/** Any process may be an operand to an expression.
-  * Only processes equivalent to a ground process of compatible type will reduce.
-  */
+/** Expressions included in Rholang elements  */
 trait ExprN extends ParN
 
-/** A variable used as a var should be bound in a process context, not a name
-  * context. For example:
-  * for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
-  * for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
-  */
+/** Variables in Rholang (can be bound, free and wildcard) */
 trait VarN extends ParN
-
-//final class MatchN(val target: ParN, val cases: Seq[MatchCase])
-//final class MatchCase(val pattern: ParN, val source: ParN, val freeCount: Int = 0)
-
-//final class VarRefN(index: Int = 0, depth: Int = 0)

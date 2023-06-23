@@ -84,11 +84,11 @@ private[ParManager] object Serialization {
         /** Vars */
         case bVar: BoundVarN =>
           write(BOUND_VAR)
-          write(bVar.value)
+          write(bVar.idx)
 
         case fVar: FreeVarN =>
           write(FREE_VAR)
-          write(fVar.value)
+          write(fVar.idx)
 
         case _: WildcardN =>
           write(WILDCARD)

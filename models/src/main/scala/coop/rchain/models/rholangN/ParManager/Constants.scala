@@ -19,9 +19,9 @@ private[ParManager] object Constants {
   final val NEW           = 0x05.toByte
 
   /** Ground types */
-  final val GNIL = 0x10.toByte
+  final val GNIL  = 0x10.toByte
   final val GBOOL = 0x11.toByte
-  final val GINT = 0x12.toByte
+  final val GINT  = 0x12.toByte
   //    final val BIG_INT = 0x13.toByte
   //    final val STRING = 0x14.toByte
   //    final val URI = 0x15.toByte
