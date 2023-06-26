@@ -42,8 +42,11 @@ object ParN {
   def fromBytes(bytes: ByteVector): ParN = parFromBytes(bytes)
 }
 
-/** Expressions included in Rholang elements  */
+/** Expressions included in Rholang elements */
 trait ExprN extends ParN
 
 /** Variables in Rholang (can be bound, free and wildcard) */
 trait VarN extends ParN
+
+/** Rholang unforgeable names (stored in internal environment map)*/
+trait UnforgeableN extends ParN { val v: ByteVector }

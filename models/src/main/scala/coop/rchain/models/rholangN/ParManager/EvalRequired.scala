@@ -31,6 +31,9 @@ private[ParManager] object EvalRequired {
     case _: FreeVarN  => true
     case _: WildcardN => true
 
+    /** Unforgeable names */
+    case _: UnforgeableN => false
+
     /** Expr */
     /** Bundle */
     /** Connective */

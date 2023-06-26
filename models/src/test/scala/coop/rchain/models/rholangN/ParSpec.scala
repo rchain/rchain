@@ -34,6 +34,10 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     res1 && res2
   }
 
+  val sizeTest: Int          = 50
+  val bytesTest: Array[Byte] = Array.fill(sizeTest)(42)
+  val strTest: String        = List.fill(sizeTest)("42").mkString
+
   behavior of "Par"
 
   /** Main types */
@@ -90,11 +94,8 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
-  val strTest = "4242424424242424424242424242424242424242424242424242424242424242424242424242"
   it should "test GBigInt" in {
-    val p = GBigIntN(
-      BigInt(strTest)
-    )
+    val p = GBigIntN(BigInt(bytesTest))
     simpleCheck(p) should be(true)
   }
 
@@ -136,8 +137,23 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
+  /** Unforgeable names */
+  it should "test UPrivate" in {
+    val p = UPrivateN(bytesTest)
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test UDeployId" in {
+    val p = UDeployIdN(bytesTest)
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test UDeployerId" in {
+    val p = UDeployerIdN(bytesTest)
+    simpleCheck(p) should be(true)
+  }
+
   /** Expr */
   /** Bundle */
   /** Connective */
-
 }

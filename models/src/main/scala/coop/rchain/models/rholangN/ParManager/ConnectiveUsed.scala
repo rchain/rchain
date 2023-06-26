@@ -33,6 +33,9 @@ private[ParManager] object ConnectiveUsed {
     case _: FreeVarN  => true
     case _: WildcardN => true
 
+    /** Unforgeable names */
+    case _: UnforgeableN => false
+
     /** Expr */
     /** Bundle */
     /** Connective */

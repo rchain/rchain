@@ -31,6 +31,9 @@ private[ParManager] object SubstituteRequired {
     case _: FreeVarN  => false
     case _: WildcardN => false
 
+    /** Unforgeable names */
+    case _: UnforgeableN => false
+
     /** Expr */
     /** Bundle */
     /** Connective */

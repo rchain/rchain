@@ -2,6 +2,7 @@ package coop.rchain.models.rholangN.ParManager
 
 import com.google.protobuf.CodedOutputStream
 import coop.rchain.models.rholangN._
+import scodec.bits.ByteVector
 
 import scala.annotation.unused
 
@@ -9,13 +10,14 @@ private[ParManager] object SerializedSize {
 
   import Constants._
 
-  private def sSize(arr: Array[Byte]): Int = CodedOutputStream.computeByteArraySizeNoTag(arr)
+  private def sSize(bytes: Array[Byte]): Int = CodedOutputStream.computeByteArraySizeNoTag(bytes)
 
   private def sSize(@unused v: Boolean): Int = booleanSize
   private def sSize(v: Int): Int             = CodedOutputStream.computeInt32SizeNoTag(v)
   private def sSize(v: Long): Int            = CodedOutputStream.computeInt64SizeNoTag(v)
   private def sSize(v: BigInt): Int          = sSize(v.toByteArray)
   private def sSize(v: String): Int          = CodedOutputStream.computeStringSizeNoTag(v)
+  private def sSize(v: ByteVector): Int      = sSize(v.toArray)
 
   private def sSize(p: RhoTypeN): Int = p.serializedSize
 
@@ -76,6 +78,9 @@ private[ParManager] object SerializedSize {
     case v: BoundVarN => totalSize(sSize(v.idx))
     case v: FreeVarN  => totalSize(sSize(v.idx))
     case _: WildcardN => totalSize()
+
+    /** Unforgeable names */
+    case unf: UnforgeableN => totalSize(sSize(unf.v))
 
     /** Expr */
     /** Bundle */

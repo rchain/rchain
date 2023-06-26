@@ -4,6 +4,7 @@ import coop.rchain.models.rholangN.ParManager.Constants._
 import coop.rchain.models.rholangN.ParManager.Sorting._
 import coop.rchain.models.rholangN._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import scodec.bits.ByteVector
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.annotation.unused
@@ -35,9 +36,11 @@ private[ParManager] object RhoHash {
     def append(v: Boolean): Unit = append(booleanToByte(v))
     def append(v: Int): Unit     = append(intToBytes(v))
     def append(v: Long): Unit    = append(longToBytes(v))
-    def append(v: BigInt): Unit  = append(v.toByteArray)
 
-    def append(v: String): Unit                   = append(stringToBytes(v))
+    def append(v: BigInt): Unit     = append(v.toByteArray)
+    def append(v: String): Unit     = append(stringToBytes(v))
+    def append(v: ByteVector): Unit = append(v.toArray)
+
     def append(p: RhoTypeN): Unit                 = append(p.rhoHash.bytes.toArray)
     def appendStrings(strings: Seq[String]): Unit = strings.foreach(append)
     def append(ps: Seq[RhoTypeN]): Unit           = ps.foreach(append)
@@ -91,13 +94,14 @@ private[ParManager] object RhoHash {
 
     private def hSizeSeq[T](seq: Seq[T], f: T => Int): Int = seq.map(f).sum
 
-    def hSize(arr: Array[Byte]): Int = arr.length
+    def hSize(bytes: Array[Byte]): Int = bytes.length
 
     def hSize(@unused v: Boolean): Int = booleanSize
     def hSize(@unused v: Int): Int     = intSize
     def hSize(@unused v: Long): Int    = longSize
     def hSize(v: BigInt): Int          = hSize(v.toByteArray)
     def hSize(v: String): Int          = stringToBytes(v).length
+    def hSize(v: ByteVector): Int      = hSize(v.toArray)
 
     def hSize(@unused p: RhoTypeN): Int        = hashSize
     def hSize(ps: Seq[RhoTypeN]): Int          = hSizeSeq[RhoTypeN](ps, hSize)
@@ -196,6 +200,18 @@ private[ParManager] object RhoHash {
       hs.calcHash
 
     case _: WildcardN => Hashable(WILDCARD).calcHash
+
+    /** Unforgeable names */
+    case unf: UnforgeableN =>
+      val bodySize = hSize(unf.v)
+      val t = unf match {
+        case _: UPrivateN    => UPRIVATE
+        case _: UDeployIdN   => UDEPLOY_ID
+        case _: UDeployerIdN => UDEPLOYER_ID
+      }
+      val hs = Hashable(t, bodySize)
+      hs.append(unf.v)
+      hs.calcHash
 
     /** Expr */
     /** Bundle */

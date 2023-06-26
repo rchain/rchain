@@ -109,6 +109,15 @@ private[ParManager] object Serialization {
         case _: WildcardN =>
           write(WILDCARD)
 
+        /** Unforgeable names */
+        case unf: UnforgeableN =>
+          unf match {
+            case _: UPrivateN    => write(UPRIVATE)
+            case _: UDeployIdN   => write(UDEPLOY_ID)
+            case _: UDeployerIdN => write(UDEPLOYER_ID)
+          }
+          write(unf.v.toArray)
+
         /** Expr */
         /** Bundle */
         /** Connective */
@@ -137,12 +146,12 @@ private[ParManager] object Serialization {
   def deserialize(input: InputStream): ParN = {
     val cis = CodedInputStream.newInstance(input)
 
-    def readByteArray(): Array[Byte] = cis.readByteArray()
+    def readBytes(): Array[Byte] = cis.readByteArray()
 
     def readTag(): Byte      = cis.readRawByte()
     def readBool(): Boolean  = cis.readBool()
     def readInt(): Int       = cis.readInt32()
-    def readBigInt(): BigInt = BigInt(readByteArray())
+    def readBigInt(): BigInt = BigInt(readBytes())
     def readLong(): Long     = cis.readInt64()
     def readString(): String = cis.readString()
 
@@ -269,6 +278,19 @@ private[ParManager] object Serialization {
 
       case WILDCARD =>
         WildcardN()
+
+      /** Unforgeable names */
+      case UPRIVATE =>
+        val v = readBytes()
+        UPrivateN(v)
+
+      case UDEPLOY_ID =>
+        val v = readBytes()
+        UDeployIdN(v)
+
+      case UDEPLOYER_ID =>
+        val v = readBytes()
+        UDeployerIdN(v)
 
       /** Expr */
       /** Bundle */
