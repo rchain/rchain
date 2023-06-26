@@ -12,14 +12,25 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     * @return true - if the result of serialization and hashing for both pairs is the same
     */
   def simpleCheck(p1: ParN, p2Opt: Option[ParN] = None): Boolean = {
+    // Serialization and hashing testing
     val bytes1        = p1.toBytes
     val recover1      = ParN.fromBytes(bytes1)
     val res1: Boolean = p1.rhoHash == recover1.rhoHash
+
+    // Testing possibility of calculating the rest of the metadata (without checking correctness)
+    val _ = p1.connectiveUsed || p1.evalRequired || p1.substituteRequired
+
+    // the correct sorting testing
     val res2: Boolean = if (p2Opt.isDefined) {
       val p2     = p2Opt.get
       val bytes2 = p2.toBytes
-      (p1.rhoHash == p2.rhoHash) && (bytes1 == bytes2)
+      (p1.rhoHash == p2.rhoHash) &&
+      (bytes1 == bytes2) &&
+      (p1.connectiveUsed == p2.connectiveUsed) &&
+      (p1.evalRequired == p2.evalRequired) &&
+      (p1.substituteRequired == p2.substituteRequired)
     } else true
+
     res1 && res2
   }
 
