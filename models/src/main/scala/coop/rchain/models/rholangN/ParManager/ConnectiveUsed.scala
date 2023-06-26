@@ -23,6 +23,7 @@ private[ParManager] object ConnectiveUsed {
     case _: GIntN    => false
     case _: GBigIntN => false
     case _: GStringN => false
+    case _: GUriN    => false
 
     /** Collections */
     case list: EListN => cUsed(list.ps) || cUsed(list.remainder)

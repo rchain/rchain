@@ -171,6 +171,11 @@ private[ParManager] object RhoHash {
       hs.append(gString.v)
       hs.calcHash
 
+    case gUri: GUriN =>
+      val hs = Hashable(GURI, hSize(gUri.v))
+      hs.append(gUri.v)
+      hs.calcHash
+
     /** Collections */
     case list: EListN =>
       val bodySize = hSize(list.ps) + hSize(list.remainder)

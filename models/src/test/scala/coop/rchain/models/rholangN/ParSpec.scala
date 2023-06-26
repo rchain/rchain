@@ -90,15 +90,21 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
+  val strTest = "4242424424242424424242424242424242424242424242424242424242424242424242424242"
   it should "test GBigInt" in {
     val p = GBigIntN(
-      BigInt("4242424424242424424242424242424242424242424242424242424242424242424242424242")
+      BigInt(strTest)
     )
     simpleCheck(p) should be(true)
   }
 
   it should "test GString" in {
-    val p = GStringN("4242424424242424424242424242424242424242424242424242424242424242424242424242")
+    val p = GStringN(strTest)
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test GUri" in {
+    val p = GUriN(strTest)
     simpleCheck(p) should be(true)
   }
 

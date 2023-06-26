@@ -87,6 +87,10 @@ private[ParManager] object Serialization {
           write(GSTRING)
           write(gString.v)
 
+        case gUri: GUriN =>
+          write(GURI)
+          write(gUri.v)
+
         /** Collections */
         case eList: EListN =>
           write(ELIST)
@@ -243,6 +247,10 @@ private[ParManager] object Serialization {
       case GSTRING =>
         val v = readString()
         GStringN(v)
+
+      case GURI =>
+        val v = readString()
+        GUriN(v)
 
       /** Collections */
       case ELIST =>

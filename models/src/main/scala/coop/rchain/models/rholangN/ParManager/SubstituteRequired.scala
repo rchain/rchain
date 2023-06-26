@@ -21,6 +21,7 @@ private[ParManager] object SubstituteRequired {
     case _: GIntN    => false
     case _: GBigIntN => false
     case _: GStringN => false
+    case _: GUriN    => false
 
     /** Collections */
     case list: EListN => sReq(list.ps)
