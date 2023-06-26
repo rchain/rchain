@@ -1,12 +1,11 @@
 package coop.rchain.models.rholangN.ParManager
 
+import coop.rchain.models.rholangN.ParManager.Constants._
+import coop.rchain.models.rholangN.ParManager.Sorting._
 import coop.rchain.models.rholangN._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 
 import java.util.concurrent.atomic.AtomicInteger
-import Constants._
-import Sorting._
-
 import scala.annotation.unused
 
 private[ParManager] object RhoHash {
@@ -33,10 +32,12 @@ private[ParManager] object RhoHash {
       Array.copy(bytes, 0, arr, currentPos, bytesLength)
     }
 
-    def append(b: Boolean): Unit                  = append(booleanToByte(b))
-    def append(i: Int): Unit                      = append(intToBytes(i))
-    def append(l: Long): Unit                     = append(longToBytes(l))
-    def append(str: String): Unit                 = append(stringToBytes(str))
+    def append(v: Boolean): Unit = append(booleanToByte(v))
+    def append(v: Int): Unit     = append(intToBytes(v))
+    def append(v: Long): Unit    = append(longToBytes(v))
+    def append(v: BigInt): Unit  = append(v.toByteArray)
+
+    def append(v: String): Unit                   = append(stringToBytes(v))
     def append(p: RhoTypeN): Unit                 = append(p.rhoHash.bytes.toArray)
     def appendStrings(strings: Seq[String]): Unit = strings.foreach(append)
     def append(ps: Seq[RhoTypeN]): Unit           = ps.foreach(append)
@@ -90,10 +91,14 @@ private[ParManager] object RhoHash {
 
     private def hSizeSeq[T](seq: Seq[T], f: T => Int): Int = seq.map(f).sum
 
-    def hSize(@unused b: Boolean): Int         = booleanSize
-    def hSize(@unused i: Int): Int             = intSize
-    def hSize(@unused l: Long): Int            = longSize
-    def hSize(str: String): Int                = stringToBytes(str).length
+    def hSize(arr: Array[Byte]): Int = arr.length
+
+    def hSize(@unused v: Boolean): Int = booleanSize
+    def hSize(@unused v: Int): Int     = intSize
+    def hSize(@unused v: Long): Int    = longSize
+    def hSize(v: BigInt): Int          = hSize(v.toByteArray)
+    def hSize(v: String): Int          = stringToBytes(v).length
+
     def hSize(@unused p: RhoTypeN): Int        = hashSize
     def hSize(ps: Seq[RhoTypeN]): Int          = hSizeSeq[RhoTypeN](ps, hSize)
     def hSizeString(strings: Seq[String]): Int = hSizeSeq[String](strings, hSize)
@@ -154,6 +159,11 @@ private[ParManager] object RhoHash {
     case gInt: GIntN =>
       val hs = Hashable(GINT, hSize(gInt.v))
       hs.append(gInt.v)
+      hs.calcHash
+
+    case gBigInt: GBigIntN =>
+      val hs = Hashable(GBIG_INT, hSize(gBigInt.v))
+      hs.append(gBigInt.v)
       hs.calcHash
 
     /** Collections */

@@ -12,9 +12,12 @@ private[ParManager] object Serialization {
     val cos = CodedOutputStream.newInstance(output)
 
     object Serializer {
+      private def write(x: Array[Byte]): Unit = cos.writeByteArrayNoTag(x)
+
       private def write(x: Byte): Unit    = cos.writeRawByte(x)
       private def write(x: Boolean): Unit = cos.writeBoolNoTag(x)
       private def write(x: Int): Unit     = cos.writeInt32NoTag(x)
+      private def write(x: BigInt): Unit  = write(x.toByteArray)
       private def write(x: Long): Unit    = cos.writeInt64NoTag(x)
       private def write(x: String): Unit  = cos.writeStringNoTag(x)
 
@@ -28,6 +31,7 @@ private[ParManager] object Serialization {
         write(seq.size)
         seq.foreach(f)
       }
+
       private def write(ps: Seq[RhoTypeN]): Unit           = writeSeq[RhoTypeN](ps, write)
       private def writeStrings(strings: Seq[String]): Unit = writeSeq[String](strings, write)
 
@@ -75,6 +79,10 @@ private[ParManager] object Serialization {
           write(GINT)
           write(gInt.v)
 
+        case gBigInt: GBigIntN =>
+          write(GBIG_INT)
+          write(gBigInt.v)
+
         /** Collections */
         case eList: EListN =>
           write(ELIST)
@@ -121,9 +129,13 @@ private[ParManager] object Serialization {
   def deserialize(input: InputStream): ParN = {
     val cis = CodedInputStream.newInstance(input)
 
+    def readByteArray(): Array[Byte] = cis.readByteArray()
+
     def readTag(): Byte      = cis.readRawByte()
     def readBool(): Boolean  = cis.readBool()
     def readInt(): Int       = cis.readInt32()
+    def readBigInt(): BigInt = BigInt(readByteArray())
+
     def readLength(): Int    = cis.readUInt32()
     def readLong(): Long     = cis.readInt64()
     def readString(): String = cis.readString()
@@ -220,6 +232,10 @@ private[ParManager] object Serialization {
       case GINT =>
         val v = readLong()
         GIntN(v)
+
+      case GBIG_INT =>
+        val v = readBigInt()
+        GBigIntN(v)
 
       /** Collections */
       case ELIST =>

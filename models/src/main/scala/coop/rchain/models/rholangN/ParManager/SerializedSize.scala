@@ -9,27 +9,27 @@ private[ParManager] object SerializedSize {
 
   import Constants._
 
-  private def sSize(@unused value: Boolean): Int = booleanSize
-  private def sSize(value: Int): Int             = CodedOutputStream.computeInt32SizeNoTag(value)
-  private def sSize(value: Long): Int            = CodedOutputStream.computeInt64SizeNoTag(value)
-  private def sSize(value: String): Int          = CodedOutputStream.computeStringSizeNoTag(value)
+  private def sSize(arr: Array[Byte]): Int = CodedOutputStream.computeByteArraySizeNoTag(arr)
+
+  private def sSize(@unused v: Boolean): Int = booleanSize
+  private def sSize(v: Int): Int             = CodedOutputStream.computeInt32SizeNoTag(v)
+  private def sSize(v: Long): Int            = CodedOutputStream.computeInt64SizeNoTag(v)
+  private def sSize(v: BigInt): Int          = sSize(v.toByteArray)
+  private def sSize(v: String): Int          = CodedOutputStream.computeStringSizeNoTag(v)
 
   private def sSize(p: RhoTypeN): Int = p.serializedSize
 
   private def sSizeSeq[T](seq: Seq[T], f: T => Int): Int =
     sSize(seq.size) + seq.map(f).sum
 
-  private def sSize(ps: Seq[RhoTypeN]): Int =
-    sSizeSeq[RhoTypeN](ps, sSize)
+  private def sSize(ps: Seq[RhoTypeN]): Int = sSizeSeq[RhoTypeN](ps, sSize)
 
-  private def sSizeStrings(strings: Seq[String]): Int =
-    sSizeSeq[String](strings, sSize)
+  private def sSizeStrings(strings: Seq[String]): Int = sSizeSeq[String](strings, sSize)
 
   private def sSize(pOpt: Option[RhoTypeN]): Int =
     booleanSize + (if (pOpt.isDefined) pOpt.get.serializedSize else 0)
 
-  private def totalSize(sizes: Int*): Int =
-    tagSize + sizes.sum
+  private def totalSize(sizes: Int*): Int = tagSize + sizes.sum
 
   def serializedSizeFn(p: RhoTypeN): Int = p match {
 
@@ -61,9 +61,10 @@ private[ParManager] object SerializedSize {
       totalSize(bindCountSize, pSize, uriSize)
 
     /** Ground types */
-    case _: GNilN      => totalSize()
-    case gBool: GBoolN => totalSize(sSize(gBool.v))
-    case gInt: GIntN   => totalSize(sSize(gInt.v))
+    case _: GNilN          => totalSize()
+    case gBool: GBoolN     => totalSize(sSize(gBool.v))
+    case gInt: GIntN       => totalSize(sSize(gInt.v))
+    case gBigInt: GBigIntN => totalSize(sSize(gBigInt.v))
 
     /** Collections */
     case list: EListN =>

@@ -5,7 +5,6 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
-import scala.collection.BitSet
 
 object Manager {
 

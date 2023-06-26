@@ -8,3 +8,6 @@ object GBoolN { def apply(v: Boolean): GBoolN = new GBoolN(v) }
 
 final class GIntN(val v: Long) extends ExprN
 object GIntN { def apply(v: Long): GIntN = new GIntN(v) }
+
+final class GBigIntN(val v: BigInt) extends ExprN
+object GBigIntN { def apply(v: BigInt): GBigIntN = new GBigIntN(v) }

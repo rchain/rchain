@@ -16,9 +16,10 @@ private[ParManager] object SubstituteRequired {
     case n: NewN           => sReq(n.p)
 
     /** Ground types */
-    case _: GNilN  => false
-    case _: GBoolN => false
-    case _: GIntN  => false
+    case _: GNilN    => false
+    case _: GBoolN   => false
+    case _: GIntN    => false
+    case _: GBigIntN => false
 
     /** Collections */
     case list: EListN => sReq(list.ps)
