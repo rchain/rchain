@@ -166,6 +166,11 @@ private[ParManager] object RhoHash {
       hs.append(gBigInt.v)
       hs.calcHash
 
+    case gString: GStringN =>
+      val hs = Hashable(GSTRING, hSize(gString.v))
+      hs.append(gString.v)
+      hs.calcHash
+
     /** Collections */
     case list: EListN =>
       val bodySize = hSize(list.ps) + hSize(list.remainder)

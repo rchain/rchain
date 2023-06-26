@@ -11,3 +11,6 @@ object GIntN { def apply(v: Long): GIntN = new GIntN(v) }
 
 final class GBigIntN(val v: BigInt) extends ExprN
 object GBigIntN { def apply(v: BigInt): GBigIntN = new GBigIntN(v) }
+
+final class GStringN(val v: String) extends ExprN
+object GStringN { def apply(v: String): GStringN = new GStringN(v) }

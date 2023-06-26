@@ -23,7 +23,7 @@ private[ParManager] object Constants {
   final val GBOOL    = 0x11.toByte
   final val GINT     = 0x12.toByte
   final val GBIG_INT = 0x13.toByte
-  //    final val GSTRING = 0x14.toByte
+  final val GSTRING  = 0x14.toByte
   //    final val GURI = 0x15.toByte
   //    final val GPRIVATE = 0x16.toByte
 

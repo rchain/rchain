@@ -20,6 +20,7 @@ private[ParManager] object EvalRequired {
     case _: GBoolN   => false
     case _: GIntN    => false
     case _: GBigIntN => false
+    case _: GStringN => false
 
     /** Collections */
     case list: EListN => eReq(list.ps)

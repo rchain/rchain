@@ -65,6 +65,7 @@ private[ParManager] object SerializedSize {
     case gBool: GBoolN     => totalSize(sSize(gBool.v))
     case gInt: GIntN       => totalSize(sSize(gInt.v))
     case gBigInt: GBigIntN => totalSize(sSize(gBigInt.v))
+    case gString: GStringN => totalSize(sSize(gString.v))
 
     /** Collections */
     case list: EListN =>

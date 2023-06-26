@@ -86,6 +86,11 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
+  it should "test GString" in {
+    val p = GStringN("4242424424242424424242424242424242424242424242424242424242424242424242424242")
+    simpleCheck(p) should be(true)
+  }
+
   /** Collections */
   it should "test EList with same data order" in {
     val p = EListN(Seq(GNilN(), EListN()))

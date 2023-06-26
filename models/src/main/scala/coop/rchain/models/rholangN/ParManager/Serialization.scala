@@ -83,6 +83,10 @@ private[ParManager] object Serialization {
           write(GBIG_INT)
           write(gBigInt.v)
 
+        case gString: GStringN =>
+          write(GSTRING)
+          write(gString.v)
+
         /** Collections */
         case eList: EListN =>
           write(ELIST)
@@ -135,8 +139,6 @@ private[ParManager] object Serialization {
     def readBool(): Boolean  = cis.readBool()
     def readInt(): Int       = cis.readInt32()
     def readBigInt(): BigInt = BigInt(readByteArray())
-
-    def readLength(): Int    = cis.readUInt32()
     def readLong(): Long     = cis.readInt64()
     def readString(): String = cis.readString()
 
@@ -149,6 +151,7 @@ private[ParManager] object Serialization {
 
     def readVarOpt(): Option[VarN] = if (readBool()) Some(readVar()) else None
 
+    def readLength(): Int = cis.readUInt32()
     def readSeq[T](f: () => T): Seq[T] = {
       val count = readLength()
       (1 to count).map(_ => f())
@@ -236,6 +239,10 @@ private[ParManager] object Serialization {
       case GBIG_INT =>
         val v = readBigInt()
         GBigIntN(v)
+
+      case GSTRING =>
+        val v = readString()
+        GStringN(v)
 
       /** Collections */
       case ELIST =>
