@@ -128,7 +128,11 @@ private[ParManager] object Serialization {
           }
           write(unf.v)
 
-        /** Expr */
+        /** Operations */
+        case eNeg: ENegN =>
+          write(ENEG)
+          write(eNeg.p)
+
         /** Bundle */
         /** Connective */
         /** Auxiliary types */
@@ -221,11 +225,12 @@ private[ParManager] object Serialization {
 
     def matchPar(tag: Byte): ParN = tag match {
 
-      /** Main types */
+      /** Par */
       case PARPROC =>
         val ps = readPars()
         ParProcN(ps)
 
+      /** Basic types */
       case SEND =>
         val chan       = readPar()
         val dataSeq    = readPars()
@@ -314,7 +319,11 @@ private[ParManager] object Serialization {
         val v = readBytes()
         UDeployerIdN(v)
 
-      /** Expr */
+      /** Operations */
+      case ENEG =>
+        val p = readPar()
+        ENegN(p)
+
       /** Bundle */
       /** Connective */
       /** Other types */

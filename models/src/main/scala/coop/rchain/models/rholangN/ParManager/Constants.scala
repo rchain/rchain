@@ -11,12 +11,14 @@ private[ParManager] object Constants {
   final val tagSize = 1
 
   /** Tags for serialization */
-  /** Main pars */
+  /** Par */
   final val PARPROC: Byte = 0x01.toByte
-  final val SEND          = 0x02.toByte
-  final val RECEIVE       = 0x03.toByte
-  final val MATCH         = 0x04.toByte
-  final val NEW           = 0x05.toByte
+
+  /** Basic types */
+  final val SEND    = 0x02.toByte
+  final val RECEIVE = 0x03.toByte
+  final val MATCH   = 0x04.toByte
+  final val NEW     = 0x05.toByte
 
   /** Ground types */
   final val GNIL        = 0x10.toByte
@@ -43,31 +45,30 @@ private[ParManager] object Constants {
   final val UDEPLOY_ID   = 0x31.toByte
   final val UDEPLOYER_ID = 0x32.toByte
 
-  /** Expr */
-  //    final val ENEG        = 0x41.toByte
-  //    final val EMULT       = 0x42.toByte
-  //    final val EDIV        = 0x43.toByte
-  //    final val EPLUS       = 0x44.toByte
-  //    final val EMINUS      = 0x45.toByte
-  //    final val ELT         = 0x56.toByte
+  /** Operations */
+  final val ENEG = 0x40.toByte
+  //    final val EPLUS       = 0x41.toByte
+  //    final val EMINUS      = 0x42.toByte
+  //    final val EMULT       = 0x43.toByte
+  //    final val EDIV        = 0x44.toByte
+  //    final val EMOD        = 0x45.toByte
+  //    final val ELT         = 0x46.toByte
   //    final val ELTE        = 0x47.toByte
   //    final val EGT         = 0x48.toByte
   //    final val EGTE        = 0x49.toByte
   //    final val EEQ         = 0x4A.toByte
   //    final val ENEQ        = 0x4B.toByte
   //    final val ENOT        = 0x4C.toByte
-  //    final val EAND        = 0x4E.toByte
+  //    final val EAND        = 0x4D.toByte
+  //    final val ESHORTAND   = 0x4E.toByte
   //    final val EOR         = 0x4F.toByte
-  //    final val EMETHOD     = 0x50.toByte
-  //    final val EBYTEARR    = 0x51.toByte
-  //    final val EEVAL       = 0x52.toByte
-  //    final val EMATCHES    = 0x53.toByte
-  //    final val EPERCENT    = 0x54.toByte
-  //    final val EPLUSPLUS   = 0x55.toByte
-  //    final val EMINUSMINUS = 0x56.toByte
-  //    final val EMOD        = 0x57.toByte
-  //    final val ESHORTAND   = 0x58.toByte
-  //    final val ESHORTOR    = 0x59.toByte
+  //    final val ESHORTOR    = 0x50.toByte
+  //    final val EPLUSPLUS   = 0x51.toByte
+  //    final val EMINUSMINUS = 0x52.toByte
+
+  //    final val EMETHOD     = 0x5A.toByte
+  //    final val EMATCHES    = 0x5B.toByte
+  //    final val EPERCENT    = 0x5C.toByte
 
   /** Bundle */
   //    final val BUNDLE_EQUIV      = 0x60.toByte

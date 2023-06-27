@@ -42,10 +42,19 @@ object ParN {
   def fromBytes(bytes: ByteVector): ParN = parFromBytes(bytes)
 }
 
+/** Basic rholang operations that can be executed in parallel*/
+trait BasicN extends ParN
+
+/** Rholang unforgeable names (stored in internal environment map) */
+trait UnforgeableN extends ParN { val v: ByteVector }
+
+/** Other types that can't be categorized */
+trait OtherN extends ParN
+
 /** Expressions included in Rholang elements */
 trait ExprN extends ParN
 
-/** Base types for rolang expressions */
+/** Base types for Rholang expressions */
 trait GroundN extends ExprN
 
 /** Rholang collections */
@@ -54,8 +63,5 @@ trait CollectionN extends ExprN
 /** Variables in Rholang (can be bound, free and wildcard) */
 trait VarN extends ExprN
 
-/** Rholang unforgeable names (stored in internal environment map) */
-trait UnforgeableN extends ParN { val v: ByteVector }
-
-/** Other types that can't be categorized */
-trait OtherN extends ParN
+/** Operations in Rholang */
+trait OperationN extends ExprN

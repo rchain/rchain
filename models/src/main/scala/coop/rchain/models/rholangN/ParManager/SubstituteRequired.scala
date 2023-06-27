@@ -8,21 +8,17 @@ private[ParManager] object SubstituteRequired {
 
   def substituteRequiredFn(p: RhoTypeN): Boolean = p match {
 
-    /** Main types */
-    case pProc: ParProcN   => sReq(pProc.ps)
+    /** Par */
+    case pProc: ParProcN => sReq(pProc.ps)
+
+    /** Basic types */
     case send: SendN       => sReq(send.chan) || sReq(send.data)
     case receive: ReceiveN => sReq(receive.binds) || sReq(receive.body)
     case m: MatchN         => sReq(m.target) || sReq(m.cases)
     case n: NewN           => sReq(n.p)
 
     /** Ground types */
-    case _: GNilN       => false
-    case _: GBoolN      => false
-    case _: GIntN       => false
-    case _: GBigIntN    => false
-    case _: GStringN    => false
-    case _: GByteArrayN => false
-    case _: GUriN       => false
+    case _: GroundN => false
 
     /** Collections */
     case eList: EListN   => sReq(eList.ps)
@@ -36,7 +32,9 @@ private[ParManager] object SubstituteRequired {
     /** Unforgeable names */
     case _: UnforgeableN => false
 
-    /** Expr */
+    /** Operations */
+    case eNeg: ENegN => sReq(eNeg.p)
+
     /** Bundle */
     /** Connective */
     /** Auxiliary types */

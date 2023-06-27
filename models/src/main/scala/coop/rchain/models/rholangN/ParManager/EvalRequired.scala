@@ -8,35 +8,28 @@ private[ParManager] object EvalRequired {
 
   def evalRequiredFn(p: RhoTypeN): Boolean = p match {
 
-    /** Main types */
+    /** Par */
     case pProc: ParProcN => eReq(pProc.ps)
-    case _: SendN        => true
-    case _: ReceiveN     => true
-    case _: MatchN       => true
-    case _: NewN         => true
+
+    /** Basic types */
+    case _: BasicN => true
 
     /** Ground types */
-    case _: GNilN       => false
-    case _: GBoolN      => false
-    case _: GIntN       => false
-    case _: GBigIntN    => false
-    case _: GStringN    => false
-    case _: GByteArrayN => false
-    case _: GUriN       => false
+    case _: GroundN => false
 
     /** Collections */
     case eList: EListN   => eReq(eList.ps)
     case eTuple: ETupleN => eReq(eTuple.ps)
 
     /** Vars */
-    case _: BoundVarN => true
-    case _: FreeVarN  => true
-    case _: WildcardN => true
+    case _: VarN => true
 
     /** Unforgeable names */
     case _: UnforgeableN => false
 
-    /** Expr */
+    /** Operations */
+    case _: OperationN => true
+
     /** Bundle */
     /** Connective */
     /** Auxiliary types */

@@ -112,12 +112,13 @@ private[ParManager] object RhoHash {
   import Hashable._
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
 
-    /** Main types */
+    /** Par */
     case pProc: ParProcN =>
       val hs = Hashable(PARPROC, hSize(pProc.ps))
       hs.append(sortPars(pProc.ps))
       hs.calcHash
 
+    /** Basic types */
     case send: SendN =>
       val bodySize = hSize(send.chan) + hSize(send.data) + hSize(send.persistent)
       val hs       = Hashable(SEND, bodySize)
@@ -224,7 +225,13 @@ private[ParManager] object RhoHash {
       hs.append(unf.v)
       hs.calcHash
 
-    /** Expr */
+    /** Operations */
+    case eNeg: ENegN =>
+      val bodySize = hSize(eNeg.p)
+      val hs       = Hashable(ENEG, bodySize)
+      hs.append(eNeg.p)
+      hs.calcHash
+
     /** Bundle */
     /** Connective */
     /** Auxiliary types */
