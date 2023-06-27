@@ -97,6 +97,10 @@ private[ParManager] object Serialization {
           write(eList.ps)
           write(eList.remainder)
 
+        case eTuple: ETupleN =>
+          write(ETUPLE)
+          write(eTuple.ps)
+
         /** Vars */
         case bVar: BoundVarN =>
           write(BOUND_VAR)
@@ -270,6 +274,10 @@ private[ParManager] object Serialization {
         val ps        = readPars()
         val remainder = readVarOpt()
         EListN(ps, remainder)
+
+      case ETUPLE =>
+        val ps = readPars()
+        ETupleN(ps)
 
       /** Vars */
       case BOUND_VAR =>

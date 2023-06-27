@@ -27,15 +27,15 @@ private[ParManager] object Constants {
   final val GURI     = 0x15.toByte
 
   /** Collections */
-  final val ELIST = 0x17.toByte
-  //    final val ETUPLE = 0x18.toByte
-  //    final val ESET = 0x19.toByte
-  //    final val EMAP = 0x1A.toByte
+  final val ELIST  = 0x20.toByte
+  final val ETUPLE = 0x21.toByte
+  //    final val ESET = 0x22.toByte
+  //    final val EMAP = 0x23.toByte
 
   /** Vars */
-  final val BOUND_VAR = 0x20.toByte
-  final val FREE_VAR  = 0x21.toByte
-  final val WILDCARD  = 0x22.toByte
+  final val BOUND_VAR = 0x2A.toByte
+  final val FREE_VAR  = 0x2B.toByte
+  final val WILDCARD  = 0x2C.toByte
 
   /** Unforgeable names */
   final val UPRIVATE     = 0x30.toByte

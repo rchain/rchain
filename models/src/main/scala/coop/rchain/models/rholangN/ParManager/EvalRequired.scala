@@ -24,7 +24,8 @@ private[ParManager] object EvalRequired {
     case _: GUriN    => false
 
     /** Collections */
-    case list: EListN => eReq(list.ps)
+    case eList: EListN   => eReq(eList.ps)
+    case eTuple: ETupleN => eReq(eTuple.ps)
 
     /** Vars */
     case _: BoundVarN => true

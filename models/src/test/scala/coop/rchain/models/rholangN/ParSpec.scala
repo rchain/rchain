@@ -38,8 +38,6 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   val bytesTest: Array[Byte] = Array.fill(sizeTest)(42)
   val strTest: String        = List.fill(sizeTest)("42").mkString
 
-  behavior of "Par"
-
   /** Main types */
   it should "test ParProc" in {
     val p1 = ParProcN(Seq(GNilN(), ParProcN()))
@@ -111,14 +109,31 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   /** Collections */
   it should "test EList with same data order" in {
-    val p = EListN(Seq(GNilN(), EListN()))
+    val p = EListN(Seq(GNilN(), EListN()), Some(BoundVarN(42)))
     simpleCheck(p) should be(true)
   }
 
   it should "test EList with different data order" in {
-    val p1 = EListN(Seq(GNilN(), EListN()))
-    val p2 = EListN(Seq(EListN(), GNilN()))
+    val p1 = EListN(Seq(GNilN(), EListN()), Some(BoundVarN(42)))
+    val p2 = EListN(Seq(EListN(), GNilN()), Some(BoundVarN(42)))
     simpleCheck(p1, Some(p2)) should be(false)
+  }
+
+  it should "test ETuple with same data order" in {
+    val p = ETupleN(Seq(GNilN(), ETupleN(GNilN())))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ETuple with different data order" in {
+    val p1 = ETupleN(Seq(GNilN(), ETupleN(GNilN())))
+    val p2 = ETupleN(Seq(ETupleN(GNilN()), GNilN()))
+    simpleCheck(p1, Some(p2)) should be(false)
+  }
+
+  it should "throw exception during creation ETuple with an empty par sequence " in {
+    try {
+      ETupleN(Seq())
+    } catch { case ex: AssertionError => ex shouldBe a[AssertionError] }
   }
 
   /** Vars */

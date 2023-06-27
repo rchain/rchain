@@ -181,11 +181,17 @@ private[ParManager] object RhoHash {
       hs.calcHash
 
     /** Collections */
-    case list: EListN =>
-      val bodySize = hSize(list.ps) + hSize(list.remainder)
+    case eList: EListN =>
+      val bodySize = hSize(eList.ps) + hSize(eList.remainder)
       val hs       = Hashable(ELIST, bodySize)
-      hs.append(list.ps)
-      hs.append(list.remainder)
+      hs.append(eList.ps)
+      hs.append(eList.remainder)
+      hs.calcHash
+
+    case eTuple: ETupleN =>
+      val bodySize = hSize(eTuple.ps)
+      val hs       = Hashable(ETUPLE, bodySize)
+      hs.append(eTuple.ps)
       hs.calcHash
 
     /** Vars */

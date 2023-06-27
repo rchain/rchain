@@ -24,7 +24,8 @@ private[ParManager] object SubstituteRequired {
     case _: GUriN    => false
 
     /** Collections */
-    case list: EListN => sReq(list.ps)
+    case eList: EListN   => sReq(eList.ps)
+    case eTuple: ETupleN => sReq(eTuple.ps)
 
     /** Vars */
     case _: BoundVarN => true
