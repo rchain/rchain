@@ -19,12 +19,13 @@ private[ParManager] object Constants {
   final val NEW           = 0x05.toByte
 
   /** Ground types */
-  final val GNIL     = 0x10.toByte
-  final val GBOOL    = 0x11.toByte
-  final val GINT     = 0x12.toByte
-  final val GBIG_INT = 0x13.toByte
-  final val GSTRING  = 0x14.toByte
-  final val GURI     = 0x15.toByte
+  final val GNIL        = 0x10.toByte
+  final val GBOOL       = 0x11.toByte
+  final val GINT        = 0x12.toByte
+  final val GBIG_INT    = 0x13.toByte
+  final val GSTRING     = 0x14.toByte
+  final val GBYTE_ARRAY = 0x15.toByte
+  final val GURI        = 0x16.toByte
 
   /** Collections */
   final val ELIST  = 0x20.toByte
@@ -43,7 +44,6 @@ private[ParManager] object Constants {
   final val UDEPLOYER_ID = 0x32.toByte
 
   /** Expr */
-  //    final val EVAR        = 0x40.toByte
   //    final val ENEG        = 0x41.toByte
   //    final val EMULT       = 0x42.toByte
   //    final val EDIV        = 0x43.toByte

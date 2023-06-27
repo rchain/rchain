@@ -4,6 +4,7 @@ import com.google.protobuf.{CodedInputStream, CodedOutputStream}
 import coop.rchain.models.rholangN.ParManager.Constants._
 import coop.rchain.models.rholangN.ParManager.Sorting._
 import coop.rchain.models.rholangN._
+import scodec.bits.ByteVector
 
 import java.io.{InputStream, OutputStream}
 
@@ -14,12 +15,13 @@ private[ParManager] object Serialization {
     object Serializer {
       private def write(x: Array[Byte]): Unit = cos.writeByteArrayNoTag(x)
 
-      private def write(x: Byte): Unit    = cos.writeRawByte(x)
-      private def write(x: Boolean): Unit = cos.writeBoolNoTag(x)
-      private def write(x: Int): Unit     = cos.writeInt32NoTag(x)
-      private def write(x: BigInt): Unit  = write(x.toByteArray)
-      private def write(x: Long): Unit    = cos.writeInt64NoTag(x)
-      private def write(x: String): Unit  = cos.writeStringNoTag(x)
+      private def write(x: Byte): Unit       = cos.writeRawByte(x)
+      private def write(x: Boolean): Unit    = cos.writeBoolNoTag(x)
+      private def write(x: Int): Unit        = cos.writeInt32NoTag(x)
+      private def write(x: BigInt): Unit     = write(x.toByteArray)
+      private def write(x: Long): Unit       = cos.writeInt64NoTag(x)
+      private def write(x: String): Unit     = cos.writeStringNoTag(x)
+      private def write(x: ByteVector): Unit = write(x.toArray)
 
       private def write(pOpt: Option[RhoTypeN]): Unit =
         if (pOpt.isDefined) {
@@ -87,6 +89,10 @@ private[ParManager] object Serialization {
           write(GSTRING)
           write(gString.v)
 
+        case gByteArray: GByteArrayN =>
+          write(GBYTE_ARRAY)
+          write(gByteArray.v)
+
         case gUri: GUriN =>
           write(GURI)
           write(gUri.v)
@@ -120,7 +126,7 @@ private[ParManager] object Serialization {
             case _: UDeployIdN   => write(UDEPLOY_ID)
             case _: UDeployerIdN => write(UDEPLOYER_ID)
           }
-          write(unf.v.toArray)
+          write(unf.v)
 
         /** Expr */
         /** Bundle */
@@ -264,6 +270,10 @@ private[ParManager] object Serialization {
       case GSTRING =>
         val v = readString()
         GStringN(v)
+
+      case GBYTE_ARRAY =>
+        val v = readBytes()
+        GByteArrayN(v)
 
       case GURI =>
         val v = readString()

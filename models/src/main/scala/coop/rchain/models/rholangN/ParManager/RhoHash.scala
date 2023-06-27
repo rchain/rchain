@@ -175,6 +175,11 @@ private[ParManager] object RhoHash {
       hs.append(gString.v)
       hs.calcHash
 
+    case gByteArrayN: GByteArrayN =>
+      val hs = Hashable(GBYTE_ARRAY, hSize(gByteArrayN.v))
+      hs.append(gByteArrayN.v)
+      hs.calcHash
+
     case gUri: GUriN =>
       val hs = Hashable(GURI, hSize(gUri.v))
       hs.append(gUri.v)

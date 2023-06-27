@@ -18,12 +18,13 @@ private[ParManager] object ConnectiveUsed {
     case _: NewN           => false // There are no situations when New gets into the matcher
 
     /** Ground types */
-    case _: GNilN    => false
-    case _: GBoolN   => false
-    case _: GIntN    => false
-    case _: GBigIntN => false
-    case _: GStringN => false
-    case _: GUriN    => false
+    case _: GNilN       => false
+    case _: GBoolN      => false
+    case _: GIntN       => false
+    case _: GBigIntN    => false
+    case _: GStringN    => false
+    case _: GByteArrayN => false
+    case _: GUriN       => false
 
     /** Collections */
     case eList: EListN   => cUsed(eList.ps) || cUsed(eList.remainder)

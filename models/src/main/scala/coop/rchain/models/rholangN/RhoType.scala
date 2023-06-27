@@ -45,8 +45,14 @@ object ParN {
 /** Expressions included in Rholang elements */
 trait ExprN extends ParN
 
+/** Base types for rolang expressions */
+trait GroundN extends ExprN
+
+/** Rholang collections */
+trait CollectionN extends ExprN
+
 /** Variables in Rholang (can be bound, free and wildcard) */
-trait VarN extends ParN
+trait VarN extends ExprN
 
 /** Rholang unforgeable names (stored in internal environment map) */
 trait UnforgeableN extends ParN { val v: ByteVector }
