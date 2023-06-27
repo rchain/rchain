@@ -135,6 +135,10 @@ private[ParManager] object Serialization {
           write(mCase.source)
           write(mCase.freeCount)
 
+        /** Other types */
+        case _: SysAuthToken =>
+          write(SYS_AUTH_TOKEN)
+
         case _ => assert(assertion = false, "Not defined type")
       }
     }
@@ -295,6 +299,10 @@ private[ParManager] object Serialization {
       /** Expr */
       /** Bundle */
       /** Connective */
+      /** Other types */
+      case SYS_AUTH_TOKEN =>
+        SysAuthToken()
+
       case _ =>
         assert(assertion = false, "Invalid tag for ParN deserialization")
         GNilN()

@@ -156,4 +156,9 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   /** Expr */
   /** Bundle */
   /** Connective */
+  /** Other types */
+  it should "test SysAuthToken" in {
+    val p = SysAuthToken()
+    simpleCheck(p) should be(true)
+  }
 }

@@ -48,5 +48,8 @@ trait ExprN extends ParN
 /** Variables in Rholang (can be bound, free and wildcard) */
 trait VarN extends ParN
 
-/** Rholang unforgeable names (stored in internal environment map)*/
+/** Rholang unforgeable names (stored in internal environment map) */
 trait UnforgeableN extends ParN { val v: ByteVector }
+
+/** Other types that can't be categorized */
+trait OtherN extends ParN

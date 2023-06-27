@@ -41,6 +41,9 @@ private[ParManager] object SubstituteRequired {
     case bind: ReceiveBindN => sReq(bind.patterns) || sReq(bind.source)
     case mCase: MatchCaseN  => sReq(mCase.pattern) || sReq(mCase.source)
 
+    /** Other types */
+    case _: SysAuthToken => false
+
     case _ =>
       assert(assertion = false, "Not defined type")
       false

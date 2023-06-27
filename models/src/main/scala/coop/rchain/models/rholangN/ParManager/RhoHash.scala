@@ -235,6 +235,9 @@ private[ParManager] object RhoHash {
       hs.append(mCase.freeCount)
       hs.calcHash
 
+    /** Other types */
+    case _: SysAuthToken => Hashable(SYS_AUTH_TOKEN).calcHash
+
     case _ =>
       assert(assertion = false, "Not defined type")
       Blake2b256Hash.fromByteArray(Array())

@@ -99,6 +99,9 @@ private[ParManager] object SerializedSize {
       val freeCountSize = sSize(mCase.freeCount)
       totalSize(patternSize, sourceSize, freeCountSize)
 
+    /** Other types */
+    case _: SysAuthToken => totalSize()
+
     case _ =>
       assert(assertion = false, "Not defined type")
       0

@@ -41,6 +41,9 @@ private[ParManager] object EvalRequired {
     case _: ReceiveBindN => true
     case _: MatchCaseN   => true
 
+    /** Other types */
+    case _: SysAuthToken => false
+
     case _ =>
       assert(assertion = false, "Not defined type")
       false

@@ -90,4 +90,7 @@ private[ParManager] object Constants {
   /** Auxiliary types */
   final val RECEIVE_BIND = 0x80.toByte
   final val MATCH_CASE   = 0x81.toByte
+
+  /** Other types */
+  final val SYS_AUTH_TOKEN = 0x90.toByte
 }
