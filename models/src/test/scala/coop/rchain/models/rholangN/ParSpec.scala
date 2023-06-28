@@ -180,6 +180,117 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
+  it should "test ENot" in {
+    val p = ENotN(GBoolN(true))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EPlus with same data order" in {
+    val p = EPlusN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EPlus with different data order" in {
+    val p1 = EPlusN(GIntN(42), GIntN(43))
+    val p2 = EPlusN(GIntN(43), GIntN(42))
+    simpleCheck(p1, Some(p2)) should be(false)
+  }
+
+  it should "test EMinus" in {
+    val p = EMinusN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EMult" in {
+    val p = EMultN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EDiv" in {
+    val p = EDivN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EMod" in {
+    val p = EModN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ELt" in {
+    val p = ELtN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ELte" in {
+    val p = ELteN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EGt" in {
+    val p = EGtN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EGteN" in {
+    val p = EGteN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EEq with same data order" in {
+    val p = EEqN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ENeq" in {
+    val p = ENeqN(GIntN(42), GIntN(43))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EAnd" in {
+    val p = EAndN(GBoolN(true), GBoolN(false))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EShortAnd" in {
+    val p = EShortAndN(GBoolN(true), GBoolN(false))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EOr" in {
+    val p = EOrN(GBoolN(true), GBoolN(false))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EShortOr" in {
+    val p = EShortOrN(GBoolN(true), GBoolN(false))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EPlusPlus" in {
+    val p = EPlusPlusN(GStringN("42"), GStringN("43"))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EMinusMinus" in {
+    val p = EMinusMinusN(EListN(GNilN()), EListN(GNilN()))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EMatches" in {
+    val p = EMatchesN(GIntN(42), GIntN(42))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EPercentPercent" in {
+    val p = EPercentPercentN(GStringN("x"), GIntN(42))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EMethod" in {
+    val p = EMethodN("nth", EListN(GNilN()), GIntN(1))
+    simpleCheck(p) should be(true)
+  }
+
   /** Bundle */
   /** Connective */
   /** Other types */

@@ -112,13 +112,12 @@ private[ParManager] object RhoHash {
   import Hashable._
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
 
-    /** Par */
+    /** Basic types */
     case pProc: ParProcN =>
       val hs = Hashable(PARPROC, hSize(pProc.ps))
       hs.append(sortPars(pProc.ps))
       hs.calcHash
 
-    /** Basic types */
     case send: SendN =>
       val bodySize = hSize(send.chan) + hSize(send.data) + hSize(send.persistent)
       val hs       = Hashable(SEND, bodySize)
@@ -226,10 +225,56 @@ private[ParManager] object RhoHash {
       hs.calcHash
 
     /** Operations */
-    case eNeg: ENegN =>
-      val bodySize = hSize(eNeg.p)
-      val hs       = Hashable(ENEG, bodySize)
-      hs.append(eNeg.p)
+    case op: Operation1ParN =>
+      val tag = op match {
+        case _: ENegN => ENEG
+        case _: ENotN => ENOT
+      }
+      val bodySize = hSize(op.p)
+      val hs       = Hashable(tag, bodySize)
+      hs.append(op.p)
+      hs.calcHash
+
+    case op: Operation2ParN =>
+      val tag = op match {
+        case _: EPlusN           => EPLUS
+        case _: EMinusN          => EMINUS
+        case _: EMultN           => EMULT
+        case _: EDivN            => EDIV
+        case _: EModN            => EMOD
+        case _: ELtN             => ELT
+        case _: ELteN            => ELTE
+        case _: EGtN             => EGT
+        case _: EGteN            => EGTE
+        case _: EEqN             => EEQ
+        case _: ENeqN            => ENEQ
+        case _: EAndN            => EAND
+        case _: EShortAndN       => ESHORTAND
+        case _: EOrN             => EOR
+        case _: EShortOrN        => ESHORTOR
+        case _: EPlusPlusN       => EPLUSPLUS
+        case _: EMinusMinusN     => EMINUSMINUS
+        case _: EPercentPercentN => EPERCENT
+      }
+      val bodySize = hSize(op.p1) + hSize(op.p2)
+      val hs       = Hashable(tag, bodySize)
+      hs.append(op.p1)
+      hs.append(op.p2)
+      hs.calcHash
+
+    case eMethod: EMethodN =>
+      val bodySize = hSize(eMethod.methodName) + hSize(eMethod.target) + hSize(eMethod.arguments)
+      val hs       = Hashable(EMETHOD, bodySize)
+      hs.append(eMethod.methodName)
+      hs.append(eMethod.target)
+      hs.append(eMethod.arguments)
+      hs.calcHash
+
+    case eMatches: EMatchesN =>
+      val bodySize = hSize(eMatches.target) + hSize(eMatches.pattern)
+      val hs       = Hashable(EMATCHES, bodySize)
+      hs.append(eMatches.target)
+      hs.append(eMatches.pattern)
       hs.calcHash
 
     /** Bundle */

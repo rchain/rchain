@@ -37,9 +37,20 @@ private[ParManager] object Serialization {
       private def write(ps: Seq[RhoTypeN]): Unit           = writeSeq[RhoTypeN](ps, write)
       private def writeStrings(strings: Seq[String]): Unit = writeSeq[String](strings, write)
 
+      private def write1ParOp(tag: Byte, p: ParN): Unit = {
+        write(tag)
+        write(p)
+      }
+
+      private def write2ParOp(tag: Byte, p1: ParN, p2: ParN): Unit = {
+        write(tag)
+        write(p1)
+        write(p2)
+      }
+
       def write(p: RhoTypeN): Unit = p match {
 
-        /** Main types */
+        /** Basic types */
         case pProc: ParProcN =>
           write(PARPROC)
           write(sortPars(pProc.ps))
@@ -129,9 +140,43 @@ private[ParManager] object Serialization {
           write(unf.v)
 
         /** Operations */
-        case eNeg: ENegN =>
-          write(ENEG)
-          write(eNeg.p)
+        case op: Operation1ParN =>
+          val tag = op match {
+            case _: ENegN => ENEG
+            case _: ENotN => ENOT
+          }
+          write1ParOp(tag, op.p)
+
+        case op: Operation2ParN =>
+          val tag = op match {
+            case _: EPlusN           => EPLUS
+            case _: EMinusN          => EMINUS
+            case _: EMultN           => EMULT
+            case _: EDivN            => EDIV
+            case _: EModN            => EMOD
+            case _: ELtN             => ELT
+            case _: ELteN            => ELTE
+            case _: EGtN             => EGT
+            case _: EGteN            => EGTE
+            case _: EEqN             => EEQ
+            case _: ENeqN            => ENEQ
+            case _: EAndN            => EAND
+            case _: EShortAndN       => ESHORTAND
+            case _: EOrN             => EOR
+            case _: EShortOrN        => ESHORTOR
+            case _: EPlusPlusN       => EPLUSPLUS
+            case _: EMinusMinusN     => EMINUSMINUS
+            case _: EPercentPercentN => EPERCENT
+          }
+          write2ParOp(tag, op.p1, op.p2)
+
+        case eMethod: EMethodN =>
+          write(EMETHOD)
+          write(eMethod.methodName)
+          write(eMethod.target)
+          write(eMethod.arguments)
+
+        case eMatches: EMatchesN => write2ParOp(EMATCHES, eMatches.target, eMatches.pattern)
 
         /** Bundle */
         /** Connective */
@@ -225,12 +270,11 @@ private[ParManager] object Serialization {
 
     def matchPar(tag: Byte): ParN = tag match {
 
-      /** Par */
+      /** Basic types */
       case PARPROC =>
         val ps = readPars()
         ParProcN(ps)
 
-      /** Basic types */
       case SEND =>
         val chan       = readPar()
         val dataSeq    = readPars()
@@ -323,6 +367,111 @@ private[ParManager] object Serialization {
       case ENEG =>
         val p = readPar()
         ENegN(p)
+
+      case ENOT =>
+        val p = readPar()
+        ENotN(p)
+
+      case EPLUS =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EPlusN(p1, p2)
+
+      case EMINUS =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EMinusN(p1, p2)
+
+      case EMULT =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EMultN(p1, p2)
+
+      case EDIV =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EDivN(p1, p2)
+
+      case EMOD =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EModN(p1, p2)
+
+      case ELT =>
+        val p1 = readPar()
+        val p2 = readPar()
+        ELtN(p1, p2)
+
+      case ELTE =>
+        val p1 = readPar()
+        val p2 = readPar()
+        ELteN(p1, p2)
+
+      case EGT =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EGtN(p1, p2)
+
+      case EGTE =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EGteN(p1, p2)
+
+      case EEQ =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EEqN(p1, p2)
+
+      case ENEQ =>
+        val p1 = readPar()
+        val p2 = readPar()
+        ENeqN(p1, p2)
+
+      case EAND =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EAndN(p1, p2)
+
+      case ESHORTAND =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EShortAndN(p1, p2)
+
+      case EOR =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EOrN(p1, p2)
+
+      case ESHORTOR =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EShortOrN(p1, p2)
+
+      case EPLUSPLUS =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EPlusPlusN(p1, p2)
+
+      case EMINUSMINUS =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EMinusMinusN(p1, p2)
+
+      case EPERCENT =>
+        val p1 = readPar()
+        val p2 = readPar()
+        EPercentPercentN(p1, p2)
+
+      case EMETHOD =>
+        val methodName = readString()
+        val target     = readPar()
+        val arguments  = readPars()
+        EMethodN(methodName, target, arguments)
+
+      case EMATCHES =>
+        val target  = readPar()
+        val pattern = readPar()
+        EMatchesN(target, pattern)
 
       /** Bundle */
       /** Connective */

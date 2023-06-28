@@ -8,11 +8,12 @@ private[ParManager] object EvalRequired {
 
   def evalRequiredFn(p: RhoTypeN): Boolean = p match {
 
-    /** Par */
-    case pProc: ParProcN => eReq(pProc.ps)
-
     /** Basic types */
-    case _: BasicN => true
+    case p: BasicN =>
+      p match {
+        case pProc: ParProcN => eReq(pProc.ps)
+        case _               => true
+      }
 
     /** Ground types */
     case _: GroundN => false

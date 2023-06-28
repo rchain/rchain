@@ -35,12 +35,11 @@ private[ParManager] object SerializedSize {
 
   def serializedSizeFn(p: RhoTypeN): Int = p match {
 
-    /** Par */
+    /** Basic types */
     case pProc: ParProcN =>
       val psSize = sSize(pProc.ps)
       totalSize(psSize)
 
-    /** Basic types */
     case send: SendN =>
       totalSize(sSize(send.chan), sSize(send.data), sSize(send.persistent))
 
@@ -85,7 +84,14 @@ private[ParManager] object SerializedSize {
     case unf: UnforgeableN => totalSize(sSize(unf.v))
 
     /** Operations */
-    case eNeg: ENegN => totalSize(sSize(eNeg.p))
+    case op: Operation1ParN => totalSize(sSize(op.p))
+    case op: Operation2ParN => totalSize(sSize(op.p1), sSize(op.p2))
+    case eMethod: EMethodN =>
+      val methodNameSize = sSize(eMethod.methodName)
+      val targetSize     = sSize(eMethod.target)
+      val argumentsSize  = sSize(eMethod.arguments)
+      totalSize(methodNameSize, targetSize, argumentsSize)
+    case eMatches: EMatchesN => totalSize(sSize(eMatches.target), sSize(eMatches.pattern))
 
     /** Bundle */
     /** Connective */

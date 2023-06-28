@@ -10,10 +10,8 @@ private[ParManager] object ConnectiveUsed {
 
   def connectiveUsedFn(p: RhoTypeN): Boolean = p match {
 
-    /** Par */
-    case pProc: ParProcN => cUsed(pProc.ps)
-
     /** Basic types */
+    case pProc: ParProcN   => cUsed(pProc.ps)
     case send: SendN       => cUsed(send.chan) || cUsed(send.data)
     case receive: ReceiveN => cUsed(receive.binds) || cUsed(receive.body)
     case m: MatchN         => cUsed(m.target) || cUsed(m.cases)
@@ -35,7 +33,10 @@ private[ParManager] object ConnectiveUsed {
     case _: UnforgeableN => false
 
     /** Operations */
-    case eNeg: ENegN => cUsed(eNeg.p)
+    case op: Operation1ParN  => cUsed(op.p)
+    case op: Operation2ParN  => cUsed(op.p1) || cUsed(op.p2)
+    case eMethod: EMethodN   => cUsed(eMethod.target) || cUsed(eMethod.arguments)
+    case eMatches: EMatchesN => cUsed(eMatches.target)
 
     /** Bundle */
     /** Connective */

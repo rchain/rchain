@@ -35,7 +35,7 @@ sealed trait RhoTypeN {
 trait AuxParN extends RhoTypeN
 
 /** Rholang element that can be processed in parallel, together with other elements */
-trait ParN extends RhoTypeN {
+sealed trait ParN extends RhoTypeN {
   def toBytes: ByteVector = parToBytes(this)
 }
 object ParN {
@@ -46,13 +46,15 @@ object ParN {
 trait BasicN extends ParN
 
 /** Rholang unforgeable names (stored in internal environment map) */
-trait UnforgeableN extends ParN { val v: ByteVector }
+trait UnforgeableN extends ParN {
+  val v: ByteVector
+}
 
 /** Other types that can't be categorized */
 trait OtherN extends ParN
 
 /** Expressions included in Rholang elements */
-trait ExprN extends ParN
+sealed trait ExprN extends ParN
 
 /** Base types for Rholang expressions */
 trait GroundN extends ExprN
@@ -64,4 +66,18 @@ trait CollectionN extends ExprN
 trait VarN extends ExprN
 
 /** Operations in Rholang */
-trait OperationN extends ExprN
+sealed trait OperationN extends ExprN
+
+/** Operation with one par */
+trait Operation1ParN extends OperationN {
+  val p: ParN
+}
+
+/** Operation with two par */
+trait Operation2ParN extends OperationN {
+  val p1: ParN
+  val p2: ParN
+}
+
+/** Method in Rholang */
+trait OperationOtherN extends OperationN
