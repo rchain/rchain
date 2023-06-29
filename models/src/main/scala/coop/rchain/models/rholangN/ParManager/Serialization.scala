@@ -51,6 +51,9 @@ private[ParManager] object Serialization {
       def write(p: RhoTypeN): Unit = p match {
 
         /** Basic types */
+        case _: NilN =>
+          write(NIL)
+
         case pProc: ParProcN =>
           write(PARPROC)
           write(sortPars(pProc.ps))
@@ -81,9 +84,6 @@ private[ParManager] object Serialization {
           writeStrings(sortStrings(n.uri))
 
         /** Ground types */
-        case _: GNilN =>
-          write(GNIL)
-
         case gBool: GBoolN =>
           write(GBOOL)
           write(gBool.v)
@@ -253,7 +253,7 @@ private[ParManager] object Serialization {
           ReceiveBindN(patterns, source, remainder, freeCount)
         case _ =>
           assert(assertion = false, "Invalid tag for ReceiveBindN deserialization")
-          ReceiveBindN(Seq(), GNilN(), None, 0)
+          ReceiveBindN(Seq(), NilN(), None, 0)
       }
       def readReceiveBind() = readTagAndMatch(matchReceiveBind)
       readSeq(readReceiveBind _)
@@ -268,7 +268,7 @@ private[ParManager] object Serialization {
           MatchCaseN(pattern, source, freeCount)
         case _ =>
           assert(assertion = false, "Invalid tag for ReceiveBindN deserialization")
-          MatchCaseN(GNilN(), GNilN(), 0)
+          MatchCaseN(NilN(), NilN(), 0)
       }
       def readMatchCase() = readTagAndMatch(matchMCase)
       readSeq(readMatchCase _)
@@ -308,7 +308,7 @@ private[ParManager] object Serialization {
 
       /** Ground types */
       case GNIL =>
-        GNilN()
+        NilN()
 
       case GBOOL =>
         val v = readBool()
@@ -493,7 +493,7 @@ private[ParManager] object Serialization {
 
       case _ =>
         assert(assertion = false, "Invalid tag for ParN deserialization")
-        GNilN()
+        NilN()
     }
 
     def readTagAndMatch[T](f: Byte => T): T = f(readTag())

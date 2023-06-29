@@ -113,6 +113,8 @@ private[ParManager] object RhoHash {
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
 
     /** Basic types */
+    case _: NilN => Hashable(NIL).calcHash
+
     case pProc: ParProcN =>
       val hs = Hashable(PARPROC, hSize(pProc.ps))
       hs.append(sortPars(pProc.ps))
@@ -153,8 +155,6 @@ private[ParManager] object RhoHash {
       hs.calcHash
 
     /** Ground types */
-    case _: GNilN => Hashable(GNIL).calcHash
-
     case gBool: GBoolN =>
       val hs = Hashable(GBOOL, hSize(gBool.v))
       hs.append(gBool.v)

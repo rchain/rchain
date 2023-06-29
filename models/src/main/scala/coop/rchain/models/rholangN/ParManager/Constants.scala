@@ -12,20 +12,20 @@ private[ParManager] object Constants {
 
   /** Tags for serialization */
   /** Basic types */
-  final val PARPROC = 0x01.toByte
-  final val SEND    = 0x02.toByte
-  final val RECEIVE = 0x03.toByte
-  final val MATCH   = 0x04.toByte
-  final val NEW     = 0x05.toByte
+  final val NIL     = 0x01.toByte
+  final val PARPROC = 0x02.toByte
+  final val SEND    = 0x03.toByte
+  final val RECEIVE = 0x04.toByte
+  final val MATCH   = 0x05.toByte
+  final val NEW     = 0x06.toByte
 
   /** Ground types */
-  final val GNIL        = 0x10.toByte
-  final val GBOOL       = 0x11.toByte
-  final val GINT        = 0x12.toByte
-  final val GBIG_INT    = 0x13.toByte
-  final val GSTRING     = 0x14.toByte
-  final val GBYTE_ARRAY = 0x15.toByte
-  final val GURI        = 0x16.toByte
+  final val GBOOL       = 0x10.toByte
+  final val GINT        = 0x11.toByte
+  final val GBIG_INT    = 0x12.toByte
+  final val GSTRING     = 0x13.toByte
+  final val GBYTE_ARRAY = 0x14.toByte
+  final val GURI        = 0x15.toByte
 
   /** Collections */
   final val ELIST  = 0x20.toByte

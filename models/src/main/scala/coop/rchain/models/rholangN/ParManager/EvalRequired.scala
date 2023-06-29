@@ -11,6 +11,7 @@ private[ParManager] object EvalRequired {
     /** Basic types */
     case p: BasicN =>
       p match {
+        case _: NilN         => false
         case pProc: ParProcN => eReq(pProc.ps)
         case _               => true
       }

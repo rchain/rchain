@@ -40,34 +40,34 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   /** Par */
   it should "test ParProc" in {
-    val p1 = ParProcN(Seq(GNilN(), ParProcN()))
-    val p2 = ParProcN(Seq(ParProcN(), GNilN()))
+    val p1 = ParProcN(Seq(NilN(), ParProcN()))
+    val p2 = ParProcN(Seq(ParProcN(), NilN()))
     simpleCheck(p1, Some(p2)) should be(true)
   }
 
   /** Basic types */
   it should "test Send with same data order" in {
-    val p = SendN(GNilN(), Seq(GNilN(), SendN(GNilN(), GNilN())), persistent = true)
+    val p = SendN(NilN(), Seq(NilN(), SendN(NilN(), NilN())), persistent = true)
     simpleCheck(p) should be(true)
   }
 
   it should "test Send with different data order" in {
-    val p1 = SendN(GNilN(), Seq(GNilN(), SendN(GNilN(), GNilN())), persistent = true)
-    val p2 = SendN(GNilN(), Seq(SendN(GNilN(), GNilN()), GNilN()), persistent = true)
+    val p1 = SendN(NilN(), Seq(NilN(), SendN(NilN(), NilN())), persistent = true)
+    val p2 = SendN(NilN(), Seq(SendN(NilN(), NilN()), NilN()), persistent = true)
     simpleCheck(p1, Some(p2)) should be(false)
   }
 
   it should "test Receive with same data order" in {
-    val bind1 = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), GNilN(), Some(BoundVarN(42)), 2)
-    val bind2 = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), GNilN(), Some(BoundVarN(42)), 2)
-    val p     = ReceiveN(Seq(bind1, bind2), GNilN(), persistent = true, peek = false, 4)
+    val bind1 = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), NilN(), Some(BoundVarN(42)), 2)
+    val bind2 = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), NilN(), Some(BoundVarN(42)), 2)
+    val p     = ReceiveN(Seq(bind1, bind2), NilN(), persistent = true, peek = false, 4)
     simpleCheck(p) should be(true)
   }
 
   it should "test match with same data order" in {
     val case1 = MatchCaseN(FreeVarN(41), BoundVarN(42), 1)
     val case2 = MatchCaseN(WildcardN(), BoundVarN(42), 0)
-    val p     = MatchN(GNilN(), Seq(case1, case2))
+    val p     = MatchN(NilN(), Seq(case1, case2))
     simpleCheck(p) should be(true)
   }
 
@@ -79,7 +79,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   /** Ground types */
   it should "test GNil" in {
-    val p = GNilN()
+    val p = NilN()
     simpleCheck(p) should be(true)
   }
 
@@ -115,24 +115,24 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   /** Collections */
   it should "test EList with same data order" in {
-    val p = EListN(Seq(GNilN(), EListN()), Some(BoundVarN(42)))
+    val p = EListN(Seq(NilN(), EListN()), Some(BoundVarN(42)))
     simpleCheck(p) should be(true)
   }
 
   it should "test EList with different data order" in {
-    val p1 = EListN(Seq(GNilN(), EListN()), Some(BoundVarN(42)))
-    val p2 = EListN(Seq(EListN(), GNilN()), Some(BoundVarN(42)))
+    val p1 = EListN(Seq(NilN(), EListN()), Some(BoundVarN(42)))
+    val p2 = EListN(Seq(EListN(), NilN()), Some(BoundVarN(42)))
     simpleCheck(p1, Some(p2)) should be(false)
   }
 
   it should "test ETuple with same data order" in {
-    val p = ETupleN(Seq(GNilN(), ETupleN(GNilN())))
+    val p = ETupleN(Seq(NilN(), ETupleN(NilN())))
     simpleCheck(p) should be(true)
   }
 
   it should "test ETuple with different data order" in {
-    val p1 = ETupleN(Seq(GNilN(), ETupleN(GNilN())))
-    val p2 = ETupleN(Seq(ETupleN(GNilN()), GNilN()))
+    val p1 = ETupleN(Seq(NilN(), ETupleN(NilN())))
+    val p2 = ETupleN(Seq(ETupleN(NilN()), NilN()))
     simpleCheck(p1, Some(p2)) should be(false)
   }
 
@@ -272,7 +272,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test EMinusMinus" in {
-    val p = EMinusMinusN(EListN(GNilN()), EListN(GNilN()))
+    val p = EMinusMinusN(EListN(NilN()), EListN(NilN()))
     simpleCheck(p) should be(true)
   }
 
@@ -287,14 +287,14 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test EMethod" in {
-    val p = EMethodN("nth", EListN(GNilN()), GIntN(1))
+    val p = EMethodN("nth", EListN(NilN()), GIntN(1))
     simpleCheck(p) should be(true)
   }
 
   /** Connective */
   /** Other types */
   it should "test Bundle" in {
-    val p = BundleN(GNilN(), writeFlag = true, readFlag = true)
+    val p = BundleN(NilN(), writeFlag = true, readFlag = true)
     simpleCheck(p) should be(true)
   }
 

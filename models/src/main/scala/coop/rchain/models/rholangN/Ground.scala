@@ -2,9 +2,6 @@ package coop.rchain.models.rholangN
 
 import scodec.bits.ByteVector
 
-final class GNilN() extends GroundN
-object GNilN { def apply(): GNilN = new GNilN }
-
 final class GBoolN(val v: Boolean) extends GroundN
 object GBoolN { def apply(v: Boolean): GBoolN = new GBoolN(v) }
 
