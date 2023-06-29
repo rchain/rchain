@@ -195,7 +195,13 @@ private[ParManager] object Serialization {
           write(mCase.freeCount)
 
         /** Other types */
-        case _: SysAuthToken =>
+        case bundle: BundleN =>
+          write(BUNDLE)
+          write(bundle.body)
+          write(bundle.writeFlag)
+          write(bundle.readFlag)
+
+        case _: SysAuthTokenN =>
           write(SYS_AUTH_TOKEN)
 
         case _ => assert(assertion = false, "Not defined type")
@@ -476,8 +482,14 @@ private[ParManager] object Serialization {
       /** Bundle */
       /** Connective */
       /** Other types */
+      case BUNDLE =>
+        val body      = readPar()
+        val writeFlag = readBool()
+        val readFlag  = readBool()
+        BundleN(body, writeFlag, readFlag)
+
       case SYS_AUTH_TOKEN =>
-        SysAuthToken()
+        SysAuthTokenN()
 
       case _ =>
         assert(assertion = false, "Invalid tag for ParN deserialization")

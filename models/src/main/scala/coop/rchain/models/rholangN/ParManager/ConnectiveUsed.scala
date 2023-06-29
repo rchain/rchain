@@ -45,7 +45,8 @@ private[ParManager] object ConnectiveUsed {
     case mCase: MatchCaseN  => cUsed(mCase.source)
 
     /** Other types */
-    case _: SysAuthToken => false
+    case _: BundleN       => false // There are no situations when New gets into the matcher
+    case _: SysAuthTokenN => false
 
     case _ =>
       assert(assertion = false, "Not defined type")

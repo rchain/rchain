@@ -299,7 +299,15 @@ private[ParManager] object RhoHash {
       hs.calcHash
 
     /** Other types */
-    case _: SysAuthToken => Hashable(SYS_AUTH_TOKEN).calcHash
+    case bundle: BundleN =>
+      val bodySize = hSize(bundle.body) + hSize(bundle.writeFlag) + hSize(bundle.readFlag)
+      val hs       = Hashable(BUNDLE, bodySize)
+      hs.append(bundle.body)
+      hs.append(bundle.writeFlag)
+      hs.append(bundle.readFlag)
+      hs.calcHash
+
+    case _: SysAuthTokenN => Hashable(SYS_AUTH_TOKEN).calcHash
 
     case _ =>
       assert(assertion = false, "Not defined type")

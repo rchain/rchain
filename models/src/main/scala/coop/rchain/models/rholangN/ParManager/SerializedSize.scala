@@ -93,7 +93,6 @@ private[ParManager] object SerializedSize {
       totalSize(methodNameSize, targetSize, argumentsSize)
     case eMatches: EMatchesN => totalSize(sSize(eMatches.target), sSize(eMatches.pattern))
 
-    /** Bundle */
     /** Connective */
     /** Auxiliary types */
     case bind: ReceiveBindN =>
@@ -110,7 +109,13 @@ private[ParManager] object SerializedSize {
       totalSize(patternSize, sourceSize, freeCountSize)
 
     /** Other types */
-    case _: SysAuthToken => totalSize()
+    case bundle: BundleN =>
+      val bodySize      = sSize(bundle.body)
+      val writeFlagSize = sSize(bundle.writeFlag)
+      val readFlagSize  = sSize(bundle.readFlag)
+      totalSize(bodySize, writeFlagSize, readFlagSize)
+
+    case _: SysAuthTokenN => totalSize()
 
     case _ =>
       assert(assertion = false, "Not defined type")

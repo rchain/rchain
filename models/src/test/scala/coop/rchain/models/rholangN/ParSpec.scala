@@ -291,11 +291,15 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
-  /** Bundle */
   /** Connective */
   /** Other types */
+  it should "test Bundle" in {
+    val p = BundleN(GNilN(), writeFlag = true, readFlag = true)
+    simpleCheck(p) should be(true)
+  }
+
   it should "test SysAuthToken" in {
-    val p = SysAuthToken()
+    val p = SysAuthTokenN()
     simpleCheck(p) should be(true)
   }
 }

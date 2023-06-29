@@ -69,12 +69,6 @@ private[ParManager] object Constants {
   final val EMETHOD  = 0x5A.toByte
   final val EMATCHES = 0x5B.toByte
 
-  /** Bundle */
-  //    final val BUNDLE_EQUIV      = 0x60.toByte
-  //    final val BUNDLE_READ       = 0x61.toByte
-  //    final val BUNDLE_WRITE      = 0x62.toByte
-  //    final val BUNDLE_READ_WRITE = 0x63.toByte
-
   /** Connective */
   //    final val CONNECTIVE_NOT       = 0x71.toByte
   //    final val CONNECTIVE_AND       = 0x72.toByte
@@ -92,5 +86,6 @@ private[ParManager] object Constants {
   final val MATCH_CASE   = 0x81.toByte
 
   /** Other types */
-  final val SYS_AUTH_TOKEN = 0x90.toByte
+  final val BUNDLE         = 0x90.toByte
+  final val SYS_AUTH_TOKEN = 0x91.toByte
 }
