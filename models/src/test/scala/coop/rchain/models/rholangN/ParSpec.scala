@@ -322,6 +322,26 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
+  it should "test ConnNotN" in {
+    val p = ConnNotN(SendN(NilN(), NilN()))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ConnAndN" in {
+    val p = ConnAndN(WildcardN(), SendN(NilN(), NilN()))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ConnOrN" in {
+    val p = ConnOrN(WildcardN(), SendN(NilN(), NilN()))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ConnVarRefN" in {
+    val p = ConnVarRefN(0, 1)
+    simpleCheck(p) should be(true)
+  }
+
   /** Other types */
   it should "test Bundle" in {
     val p = BundleN(NilN(), writeFlag = true, readFlag = true)

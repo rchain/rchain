@@ -26,26 +26,28 @@ object ConnByteArrayN { def apply(): ConnByteArrayN = new ConnByteArrayN }
 
 /** The "~" (logical Not) for pattern matching.
   * the pattern ~p says "anything but p" */
-final class ConnNotBodyN(val p: ParN) extends ConnectiveFuncN
-object ConnNotBodyN { def apply(p: ParN): ConnNotBodyN = new ConnNotBodyN(p) }
+final class ConnNotN(val p: ParN) extends ConnectiveFuncN
+object ConnNotN { def apply(p: ParN): ConnNotN = new ConnNotN(p) }
 
 /** The "/\" (logical And) Conjunction for pattern matching. */
 // TODO: Consider a replacement `ps: Seq[ParN]` to `p1: ParN, p2: ParN`
-final class ConnAndBodyN(val ps: Seq[ParN]) extends ConnectiveFuncN
-object ConnAndBodyN {
-  def apply(ps: Seq[ParN]): ConnAndBodyN      = new ConnAndBodyN(ps)
-  def apply(p1: ParN, p2: ParN): ConnAndBodyN = new ConnAndBodyN(Seq(p1, p2))
+final class ConnAndN(val ps: Seq[ParN]) extends ConnectiveFuncN
+object ConnAndN {
+  def apply(ps: Seq[ParN]): ConnAndN      = new ConnAndN(ps)
+  def apply(p1: ParN, p2: ParN): ConnAndN = new ConnAndN(Seq(p1, p2))
 }
 
 /** The "\/" (logical Or) Disjunction for pattern matching. */
 // TODO: Consider a replacement `ps: Seq[ParN]` to `p1: ParN, p2: ParN`
-final class ConnOrBodyN(val ps: Seq[ParN]) extends ConnectiveFuncN
-object ConnOrBodyN {
-  def apply(ps: Seq[ParN]): ConnOrBodyN      = new ConnOrBodyN(ps)
-  def apply(p1: ParN, p2: ParN): ConnOrBodyN = new ConnOrBodyN(Seq(p1, p2))
+final class ConnOrN(val ps: Seq[ParN]) extends ConnectiveFuncN
+object ConnOrN {
+  def apply(ps: Seq[ParN]): ConnOrN      = new ConnOrN(ps)
+  def apply(p1: ParN, p2: ParN): ConnOrN = new ConnOrN(Seq(p1, p2))
 }
 
 /** The "=..." Binding for Bound variable in pattern matching.
   * E.g. for(@{=*x} <- @Nil) { Nil } */
-final class VarRefN(val index: Int, val depth: Int) extends ConnectiveVarN
-object VarRefN { def apply(index: Int, depth: Int): VarRefN = new VarRefN(index, depth) }
+final class ConnVarRefN(val index: Int, val depth: Int) extends ConnectiveVarN
+object ConnVarRefN {
+  def apply(index: Int, depth: Int): ConnVarRefN = new ConnVarRefN(index, depth)
+}

@@ -186,6 +186,23 @@ private[ParManager] object Serialization {
         case _: ConnUriN       => write(CONNECTIVE_URI)
         case _: ConnByteArrayN => write(CONNECTIVE_BYTEARRAY)
 
+        case connNot: ConnNotN =>
+          write(CONNECTIVE_NOT)
+          write(connNot.p)
+
+        case connAnd: ConnAndN =>
+          write(CONNECTIVE_AND)
+          write(connAnd.ps)
+
+        case connOr: ConnOrN =>
+          write(CONNECTIVE_OR)
+          write(connOr.ps)
+
+        case connVarRef: ConnVarRefN =>
+          write(CONNECTIVE_VARREF)
+          write(connVarRef.index)
+          write(connVarRef.depth)
+
         /** Auxiliary types */
         case bind: ReceiveBindN =>
           write(RECEIVE_BIND)
@@ -503,6 +520,23 @@ private[ParManager] object Serialization {
 
       case CONNECTIVE_BYTEARRAY =>
         ConnByteArrayN()
+
+      case CONNECTIVE_NOT =>
+        val p = readPar()
+        ConnNotN(p)
+
+      case CONNECTIVE_AND =>
+        val ps = readPars()
+        ConnAndN(ps)
+
+      case CONNECTIVE_OR =>
+        val ps = readPars()
+        ConnOrN(ps)
+
+      case CONNECTIVE_VARREF =>
+        val index = readInt()
+        val depth = readInt()
+        ConnVarRefN(index, depth)
 
       /** Other types */
       case BUNDLE =>

@@ -285,6 +285,31 @@ private[ParManager] object RhoHash {
     case _: ConnUriN       => Hashable(CONNECTIVE_URI).calcHash
     case _: ConnByteArrayN => Hashable(CONNECTIVE_BYTEARRAY).calcHash
 
+    case connNot: ConnNotN =>
+      val bodySize = hSize(connNot.p)
+      val hs       = Hashable(CONNECTIVE_NOT, bodySize)
+      hs.append(connNot.p)
+      hs.calcHash
+
+    case connAnd: ConnAndN =>
+      val bodySize = hSize(connAnd.ps)
+      val hs       = Hashable(CONNECTIVE_AND, bodySize)
+      hs.append(connAnd.ps)
+      hs.calcHash
+
+    case connOr: ConnOrN =>
+      val bodySize = hSize(connOr.ps)
+      val hs       = Hashable(CONNECTIVE_OR, bodySize)
+      hs.append(connOr.ps)
+      hs.calcHash
+
+    case connVarRef: ConnVarRefN =>
+      val bodySize = hSize(connVarRef.index) + hSize(connVarRef.depth)
+      val hs       = Hashable(CONNECTIVE_VARREF, bodySize)
+      hs.append(connVarRef.index)
+      hs.append(connVarRef.depth)
+      hs.calcHash
+
     /** Auxiliary types */
     case bind: ReceiveBindN =>
       val bodySize = hSize(bind.patterns) + hSize(bind.source) +

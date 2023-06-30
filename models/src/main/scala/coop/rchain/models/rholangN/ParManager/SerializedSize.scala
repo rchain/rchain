@@ -97,6 +97,12 @@ private[ParManager] object SerializedSize {
     /** Connective */
     case _: ConnectiveSTypeN => totalSize()
 
+    case connNot: ConnNotN => totalSize(sSize(connNot.p))
+    case connAnd: ConnAndN => totalSize(sSize(connAnd.ps))
+    case connOr: ConnOrN   => totalSize(sSize(connOr.ps))
+
+    case connVarRef: ConnVarRefN => totalSize(sSize(connVarRef.index), sSize(connVarRef.depth))
+
     /** Auxiliary types */
     case bind: ReceiveBindN =>
       val patternsSize  = sSize(bind.patterns)

@@ -41,6 +41,8 @@ private[ParManager] object ConnectiveUsed {
 
     /** Connective */
     case _: ConnectiveSTypeN => true
+    case _: ConnectiveFuncN  => true
+    case _: ConnectiveVarN   => false
 
     /** Auxiliary types */
     case bind: ReceiveBindN => cUsed(bind.source)

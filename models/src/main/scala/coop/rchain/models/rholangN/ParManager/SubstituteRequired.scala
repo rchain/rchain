@@ -39,6 +39,10 @@ private[ParManager] object SubstituteRequired {
 
     /** Connective */
     case _: ConnectiveSTypeN => false
+    case connNot: ConnNotN   => sReq(connNot.p)
+    case connAnd: ConnAndN   => sReq(connAnd.ps)
+    case connOr: ConnOrN     => sReq(connOr.ps)
+    case _: ConnVarRefN      => true
 
     /** Auxiliary types */
     case bind: ReceiveBindN => sReq(bind.patterns) || sReq(bind.source)
