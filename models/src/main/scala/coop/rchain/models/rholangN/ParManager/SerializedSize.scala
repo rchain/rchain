@@ -95,6 +95,8 @@ private[ParManager] object SerializedSize {
     case eMatches: EMatchesN => totalSize(sSize(eMatches.target), sSize(eMatches.pattern))
 
     /** Connective */
+    case _: ConnectiveSTypeN => totalSize()
+
     /** Auxiliary types */
     case bind: ReceiveBindN =>
       val patternsSize  = sSize(bind.patterns)

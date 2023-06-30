@@ -46,6 +46,11 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   /** Basic types */
+  it should "test Nil" in {
+    val p = NilN()
+    simpleCheck(p) should be(true)
+  }
+
   it should "test Send with same data order" in {
     val p = SendN(NilN(), Seq(NilN(), SendN(NilN(), NilN())), persistent = true)
     simpleCheck(p) should be(true)
@@ -78,11 +83,6 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   /** Ground types */
-  it should "test GNil" in {
-    val p = NilN()
-    simpleCheck(p) should be(true)
-  }
-
   it should "test GBool" in {
     val p = GBoolN(true)
     simpleCheck(p) should be(true)
@@ -292,6 +292,36 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   /** Connective */
+  it should "test ConnBool" in {
+    val p = ConnBoolN()
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ConnInt" in {
+    val p = ConnIntN()
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ConnBigInt" in {
+    val p = ConnBigIntN()
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ConnString" in {
+    val p = ConnStringN()
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ConnUri" in {
+    val p = ConnUriN()
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ConnByteArray" in {
+    val p = ConnByteArrayN()
+    simpleCheck(p) should be(true)
+  }
+
   /** Other types */
   it should "test Bundle" in {
     val p = BundleN(NilN(), writeFlag = true, readFlag = true)

@@ -37,8 +37,9 @@ private[ParManager] object SubstituteRequired {
     case eMethod: EMethodN   => sReq(eMethod.target) || sReq(eMethod.arguments)
     case eMatches: EMatchesN => sReq(eMatches.target) || sReq(eMatches.pattern)
 
-    /** Bundle */
     /** Connective */
+    case _: ConnectiveSTypeN => false
+
     /** Auxiliary types */
     case bind: ReceiveBindN => sReq(bind.patterns) || sReq(bind.source)
     case mCase: MatchCaseN  => sReq(mCase.pattern) || sReq(mCase.source)

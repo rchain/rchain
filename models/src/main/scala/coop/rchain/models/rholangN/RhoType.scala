@@ -45,14 +45,6 @@ object ParN {
 /** Basic rholang operations that can be executed in parallel*/
 trait BasicN extends ParN
 
-/** Rholang unforgeable names (stored in internal environment map) */
-trait UnforgeableN extends ParN {
-  val v: ByteVector
-}
-
-/** Other types that can't be categorized */
-trait OtherN extends ParN
-
 /** Expressions included in Rholang elements */
 sealed trait ExprN extends ParN
 
@@ -79,5 +71,28 @@ trait Operation2ParN extends OperationN {
   val p2: ParN
 }
 
-/** Method in Rholang */
+/** Other operations (e.g. method) */
 trait OperationOtherN extends OperationN
+
+/** Rholang unforgeable names (stored in internal environment map) */
+trait UnforgeableN extends ParN {
+  val v: ByteVector
+}
+
+/**
+  * Connectives (bindings) are used in patterns to combine several conditions together or
+  * to set a pattern with some specific Rholang type or variables.
+  * */
+trait ConnectiveN extends ParN
+
+/** Connectives for simple types */
+trait ConnectiveSTypeN extends ConnectiveN
+
+/** Connectives for truth-functional operators */
+trait ConnectiveFuncN extends ConnectiveN
+
+/** Connectives for variables */
+trait ConnectiveVarN extends ConnectiveN
+
+/** Other types that can't be categorized */
+trait OtherN extends ParN

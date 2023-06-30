@@ -51,8 +51,7 @@ private[ParManager] object Serialization {
       def write(p: RhoTypeN): Unit = p match {
 
         /** Basic types */
-        case _: NilN =>
-          write(NIL)
+        case _: NilN => write(NIL)
 
         case pProc: ParProcN =>
           write(PARPROC)
@@ -176,10 +175,17 @@ private[ParManager] object Serialization {
           write(eMethod.target)
           write(eMethod.arguments)
 
-        case eMatches: EMatchesN => write2ParOp(EMATCHES, eMatches.target, eMatches.pattern)
+        case eMatches: EMatchesN =>
+          write2ParOp(EMATCHES, eMatches.target, eMatches.pattern)
 
-        /** Bundle */
         /** Connective */
+        case _: ConnBoolN      => write(CONNECTIVE_BOOL)
+        case _: ConnIntN       => write(CONNECTIVE_INT)
+        case _: ConnBigIntN    => write(CONNECTIVE_BIG_INT)
+        case _: ConnStringN    => write(CONNECTIVE_STRING)
+        case _: ConnUriN       => write(CONNECTIVE_URI)
+        case _: ConnByteArrayN => write(CONNECTIVE_BYTEARRAY)
+
         /** Auxiliary types */
         case bind: ReceiveBindN =>
           write(RECEIVE_BIND)
@@ -307,7 +313,7 @@ private[ParManager] object Serialization {
         NewN(bindCount, p, uri)
 
       /** Ground types */
-      case GNIL =>
+      case NIL =>
         NilN()
 
       case GBOOL =>
@@ -479,8 +485,25 @@ private[ParManager] object Serialization {
         val pattern = readPar()
         EMatchesN(target, pattern)
 
-      /** Bundle */
       /** Connective */
+      case CONNECTIVE_BOOL =>
+        ConnBoolN()
+
+      case CONNECTIVE_INT =>
+        ConnIntN()
+
+      case CONNECTIVE_BIG_INT =>
+        ConnBigIntN()
+
+      case CONNECTIVE_STRING =>
+        ConnStringN()
+
+      case CONNECTIVE_URI =>
+        ConnUriN()
+
+      case CONNECTIVE_BYTEARRAY =>
+        ConnByteArrayN()
+
       /** Other types */
       case BUNDLE =>
         val body      = readPar()

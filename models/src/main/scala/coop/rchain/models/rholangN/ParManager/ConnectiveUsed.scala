@@ -39,8 +39,9 @@ private[ParManager] object ConnectiveUsed {
     case eMethod: EMethodN   => cUsed(eMethod.target) || cUsed(eMethod.arguments)
     case eMatches: EMatchesN => cUsed(eMatches.target)
 
-    /** Bundle */
     /** Connective */
+    case _: ConnectiveSTypeN => true
+
     /** Auxiliary types */
     case bind: ReceiveBindN => cUsed(bind.source)
     case mCase: MatchCaseN  => cUsed(mCase.source)

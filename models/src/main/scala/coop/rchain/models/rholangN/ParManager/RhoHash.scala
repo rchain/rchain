@@ -277,8 +277,14 @@ private[ParManager] object RhoHash {
       hs.append(eMatches.pattern)
       hs.calcHash
 
-    /** Bundle */
     /** Connective */
+    case _: ConnBoolN      => Hashable(CONNECTIVE_BOOL).calcHash
+    case _: ConnIntN       => Hashable(CONNECTIVE_INT).calcHash
+    case _: ConnBigIntN    => Hashable(CONNECTIVE_BIG_INT).calcHash
+    case _: ConnStringN    => Hashable(CONNECTIVE_STRING).calcHash
+    case _: ConnUriN       => Hashable(CONNECTIVE_URI).calcHash
+    case _: ConnByteArrayN => Hashable(CONNECTIVE_BYTEARRAY).calcHash
+
     /** Auxiliary types */
     case bind: ReceiveBindN =>
       val bodySize = hSize(bind.patterns) + hSize(bind.source) +

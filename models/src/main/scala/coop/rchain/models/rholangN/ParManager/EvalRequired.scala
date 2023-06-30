@@ -32,8 +32,9 @@ private[ParManager] object EvalRequired {
     /** Operations */
     case _: OperationN => true
 
-    /** Bundle */
     /** Connective */
+    case _: ConnectiveN => false
+
     /** Auxiliary types */
     case _: ReceiveBindN => true
     case _: MatchCaseN   => true

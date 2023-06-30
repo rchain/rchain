@@ -70,16 +70,16 @@ private[ParManager] object Constants {
   final val EMATCHES = 0x5B.toByte
 
   /** Connective */
-  //    final val CONNECTIVE_NOT       = 0x71.toByte
-  //    final val CONNECTIVE_AND       = 0x72.toByte
-  //    final val CONNECTIVE_OR        = 0x73.toByte
-  //    final val CONNECTIVE_VARREF    = 0x74.toByte
-  //    final val CONNECTIVE_BOOL      = 0x75.toByte
-  //    final val CONNECTIVE_INT       = 0x76.toByte
-  //    final val CONNECTIVE_STRING    = 0x77.toByte
-  //    final val CONNECTIVE_URI       = 0x78.toByte
-  //    final val CONNECTIVE_BYTEARRAY = 0x79.toByte
-  //    final val CONNECTIVE_BIG_INT   = 0x7A.toByte
+  final val CONNECTIVE_BOOL      = 0x70.toByte
+  final val CONNECTIVE_INT       = 0x71.toByte
+  final val CONNECTIVE_STRING    = 0x72.toByte
+  final val CONNECTIVE_URI       = 0x73.toByte
+  final val CONNECTIVE_BYTEARRAY = 0x74.toByte
+  final val CONNECTIVE_BIG_INT   = 0x75.toByte
+  final val CONNECTIVE_NOT       = 0x76.toByte
+  final val CONNECTIVE_AND       = 0x77.toByte
+  final val CONNECTIVE_OR        = 0x78.toByte
+  final val CONNECTIVE_VARREF    = 0x79.toByte
 
   /** Auxiliary types */
   final val RECEIVE_BIND = 0x80.toByte
