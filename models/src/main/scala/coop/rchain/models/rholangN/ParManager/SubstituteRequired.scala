@@ -22,6 +22,7 @@ private[ParManager] object SubstituteRequired {
     /** Collections */
     case eList: EListN   => sReq(eList.ps)
     case eTuple: ETupleN => sReq(eTuple.ps)
+    case eSet: ESetN     => sReq(eSet.sortedPs)
 
     /** Vars */
     case _: BoundVarN => true

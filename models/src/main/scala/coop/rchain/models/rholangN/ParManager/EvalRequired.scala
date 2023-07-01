@@ -22,6 +22,7 @@ private[ParManager] object EvalRequired {
     /** Collections */
     case eList: EListN   => eReq(eList.ps)
     case eTuple: ETupleN => eReq(eTuple.ps)
+    case eSet: ESetN     => eReq(eSet.sortedPs)
 
     /** Vars */
     case _: VarN => true

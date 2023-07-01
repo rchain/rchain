@@ -142,6 +142,17 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     } catch { case ex: AssertionError => ex shouldBe a[AssertionError] }
   }
 
+  it should "test ESet with same data order" in {
+    val p = ESetN(Seq(NilN(), ESetN()), Some(BoundVarN(42)))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test ESet with different data order" in {
+    val p1 = ESetN(Seq(NilN(), ESetN(NilN())))
+    val p2 = ESetN(Seq(ESetN(NilN()), NilN()))
+    simpleCheck(p1, Some(p2)) should be(true)
+  }
+
   /** Vars */
   it should "test BoundVar" in {
     val p = BoundVarN(42)

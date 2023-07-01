@@ -24,6 +24,7 @@ private[ParManager] object ConnectiveUsed {
     /** Collections */
     case eList: EListN   => cUsed(eList.ps) || cUsed(eList.remainder)
     case eTuple: ETupleN => cUsed(eTuple.ps)
+    case eSet: ESetN     => cUsed(eSet.sortedPs) || cUsed(eSet.remainder)
 
     /** Vars */
     case _: BoundVarN => false

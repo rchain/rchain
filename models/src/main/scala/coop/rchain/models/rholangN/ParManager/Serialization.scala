@@ -117,6 +117,11 @@ private[ParManager] object Serialization {
           write(ETUPLE)
           write(eTuple.ps)
 
+        case eSet: ESetN =>
+          write(ESET)
+          write(eSet.sortedPs)
+          write(eSet.remainder)
+
         /** Vars */
         case bVar: BoundVarN =>
           write(BOUND_VAR)
@@ -366,6 +371,11 @@ private[ParManager] object Serialization {
       case ETUPLE =>
         val ps = readPars()
         ETupleN(ps)
+
+      case ESET =>
+        val ps        = readPars()
+        val remainder = readVarOpt()
+        ESetN(ps, remainder)
 
       /** Vars */
       case BOUND_VAR =>

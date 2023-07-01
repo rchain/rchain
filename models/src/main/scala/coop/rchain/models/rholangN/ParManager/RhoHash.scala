@@ -199,6 +199,13 @@ private[ParManager] object RhoHash {
       hs.append(eTuple.ps)
       hs.calcHash
 
+    case eSet: ESetN =>
+      val bodySize = hSize(eSet.sortedPs) + hSize(eSet.remainder)
+      val hs       = Hashable(ELIST, bodySize)
+      hs.append(eSet.sortedPs)
+      hs.append(eSet.remainder)
+      hs.calcHash
+
     /** Vars */
     case bv: BoundVarN =>
       val hs = Hashable(BOUND_VAR, hSize(bv.idx))

@@ -75,6 +75,7 @@ private[ParManager] object SerializedSize {
     /** Collections */
     case list: EListN    => totalSize(sSize(list.ps), sSize(list.remainder))
     case eTuple: ETupleN => totalSize(sSize(eTuple.ps))
+    case eSet: ESetN     => totalSize(sSize(eSet.sortedPs), sSize(eSet.remainder))
 
     /** Vars */
     case v: BoundVarN => totalSize(sSize(v.idx))
