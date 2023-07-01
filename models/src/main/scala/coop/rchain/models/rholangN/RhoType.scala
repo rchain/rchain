@@ -36,7 +36,8 @@ trait AuxParN extends RhoTypeN
 
 /** Rholang element that can be processed in parallel, together with other elements */
 sealed trait ParN extends RhoTypeN {
-  def toBytes: ByteVector = parToBytes(this)
+  def toBytes: ByteVector      = parToBytes(this)
+  def compare(that: ParN): Int = comparePars(this, that)
 }
 object ParN {
   def fromBytes(bytes: ByteVector): ParN = parFromBytes(bytes)

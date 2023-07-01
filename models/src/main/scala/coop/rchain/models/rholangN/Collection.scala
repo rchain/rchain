@@ -33,25 +33,34 @@ object ETupleN {
   * @param remainder Remainder of a list elements. This var used in matching (pattern of a head/tail pair)
   */
 final class ESetN(private val ps: TreeSet[ParN], val remainder: Option[VarN]) extends CollectionN {
-  def +(elem: ParN): ESetN = ESetN(ps + elem, remainder)
-  def -(elem: ParN): ESetN = ESetN(ps - elem, remainder)
-
+  def +(elem: ParN): ESetN          = ESetN(ps + elem, remainder)
+  def -(elem: ParN): ESetN          = ESetN(ps - elem, remainder)
   def contains(elem: ParN): Boolean = ps.contains(elem)
-
-  def union(that: ESetN): ESetN = ESetN(ps.union(that.ps), None)
-
-  def sortedPs: Seq[ParN] = ps.toSeq
+  def union(that: ESetN): ESetN     = ESetN(ps.union(that.ps), None)
+  def sortedPs: Seq[ParN]           = ps.toSeq
 }
 object ESetN {
   private object ParOrdering extends Ordering[ParN] {
-    def compare(a: ParN, b: ParN): Int = a.rhoHash.bytes compare b.rhoHash.bytes
+    def compare(p1: ParN, p2: ParN): Int = p1.compare(p2)
   }
   def apply(ps: Seq[ParN] = Seq(), r: Option[VarN] = None): ESetN =
     new ESetN(TreeSet.from(ps)(ParOrdering), r)
-
-  def apply(p: ParN): ESetN = ESetN(Seq(p), None)
-
-  def empty: ESetN = ESetN()
-
+  def apply(p: ParN): ESetN                                            = ESetN(Seq(p), None)
+  def empty: ESetN                                                     = ESetN()
   private def apply(ps: TreeSet[ParN], remainder: Option[VarN]): ESetN = new ESetN(ps, remainder)
+}
+
+import scala.collection.immutable.TreeMap
+
+final class EMapN(private val map: TreeMap[ParN, ParN]) extends ExprN {
+  def sortedMap: Map[ParN, ParN] = map.toMap
+}
+
+object EMapN {
+  private object ParOrdering extends Ordering[ParN] {
+    def compare(a: ParN, b: ParN): Int = a.rhoHash.bytes compare b.rhoHash.bytes
+  }
+
+  def apply(map: Map[ParN, ParN] = Map()): EMapN =
+    new EMapN(TreeMap[ParN, ParN](map.toSeq: _*)(ParOrdering))
 }

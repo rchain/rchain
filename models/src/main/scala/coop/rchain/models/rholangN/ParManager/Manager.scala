@@ -24,6 +24,8 @@ object Manager {
     case _           => false
   }
 
+  def comparePars(p1: ParN, p2: ParN): Int = Sorting.comparePars(p1, p2)
+
   /** MetaData */
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash     = RhoHash.rhoHashFn(p)
   def serializedSizeFn(p: RhoTypeN): Int         = SerializedSize.serializedSizeFn(p)
