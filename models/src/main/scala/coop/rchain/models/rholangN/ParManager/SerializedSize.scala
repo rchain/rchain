@@ -19,7 +19,8 @@ private[ParManager] object SerializedSize {
   private def sSize(v: String): Int          = CodedOutputStream.computeStringSizeNoTag(v)
   private def sSize(v: ByteVector): Int      = sSize(v.toArray)
 
-  private def sSize(p: RhoTypeN): Int = p.serializedSize
+  private def sSize(p: RhoTypeN): Int              = p.serializedSize
+  private def sSize(kv: (RhoTypeN, RhoTypeN)): Int = kv._1.serializedSize + kv._2.serializedSize
 
   private def sSizeSeq[T](seq: Seq[T], f: T => Int): Int =
     sSize(seq.size) + seq.map(f).sum
@@ -27,6 +28,9 @@ private[ParManager] object SerializedSize {
   private def sSize(ps: Seq[RhoTypeN]): Int = sSizeSeq[RhoTypeN](ps, sSize)
 
   private def sSizeStrings(strings: Seq[String]): Int = sSizeSeq[String](strings, sSize)
+
+  private def sSizeKVPairs(strings: Seq[(RhoTypeN, RhoTypeN)]): Int =
+    sSizeSeq[(RhoTypeN, RhoTypeN)](strings, sSize)
 
   private def sSize(pOpt: Option[RhoTypeN]): Int =
     booleanSize + (if (pOpt.isDefined) pOpt.get.serializedSize else 0)
@@ -76,6 +80,7 @@ private[ParManager] object SerializedSize {
     case list: EListN    => totalSize(sSize(list.ps), sSize(list.remainder))
     case eTuple: ETupleN => totalSize(sSize(eTuple.ps))
     case eSet: ESetN     => totalSize(sSize(eSet.sortedPs), sSize(eSet.remainder))
+    case eMap: EMapN     => totalSize(sSizeKVPairs(eMap.sortedPs), sSize(eMap.remainder))
 
     /** Vars */
     case v: BoundVarN => totalSize(sSize(v.idx))

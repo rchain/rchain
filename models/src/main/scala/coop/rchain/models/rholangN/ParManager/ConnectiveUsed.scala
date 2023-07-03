@@ -3,8 +3,10 @@ package coop.rchain.models.rholangN.ParManager
 import coop.rchain.models.rholangN._
 
 private[ParManager] object ConnectiveUsed {
-  private def cUsed(p: RhoTypeN): Boolean       = p.connectiveUsed
-  private def cUsed(ps: Seq[RhoTypeN]): Boolean = ps.exists(cUsed)
+  private def cUsed(p: RhoTypeN): Boolean                               = p.connectiveUsed
+  private def cUsed(kv: (RhoTypeN, RhoTypeN)): Boolean                  = cUsed(kv._1) || cUsed(kv._2)
+  private def cUsed(ps: Seq[RhoTypeN]): Boolean                         = ps.exists(cUsed)
+  private def cUsedKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Boolean = kVPairs.exists(cUsed)
   private def cUsed(pOpt: Option[RhoTypeN]): Boolean =
     if (pOpt.isDefined) cUsed(pOpt.get) else false
 
@@ -25,6 +27,7 @@ private[ParManager] object ConnectiveUsed {
     case eList: EListN   => cUsed(eList.ps) || cUsed(eList.remainder)
     case eTuple: ETupleN => cUsed(eTuple.ps)
     case eSet: ESetN     => cUsed(eSet.sortedPs) || cUsed(eSet.remainder)
+    case eMap: EMapN     => cUsedKVPairs(eMap.sortedPs) || cUsed(eMap.remainder)
 
     /** Vars */
     case _: BoundVarN => false

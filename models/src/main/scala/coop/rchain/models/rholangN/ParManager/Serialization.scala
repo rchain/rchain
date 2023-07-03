@@ -29,6 +29,11 @@ private[ParManager] object Serialization {
           write(pOpt.get)
         } else write(false)
 
+      private def write(kv: (ParN, ParN)): Unit = {
+        write(kv._1)
+        write(kv._2)
+      }
+
       private def writeSeq[T](seq: Seq[T], f: T => Unit): Unit = {
         write(seq.size)
         seq.foreach(f)
@@ -36,6 +41,8 @@ private[ParManager] object Serialization {
 
       private def write(ps: Seq[RhoTypeN]): Unit           = writeSeq[RhoTypeN](ps, write)
       private def writeStrings(strings: Seq[String]): Unit = writeSeq[String](strings, write)
+      private def writeKVPairs(kVPairs: Seq[(ParN, ParN)]): Unit =
+        writeSeq[(ParN, ParN)](kVPairs, write)
 
       private def write1ParOp(tag: Byte, p: ParN): Unit = {
         write(tag)
@@ -121,6 +128,11 @@ private[ParManager] object Serialization {
           write(ESET)
           write(eSet.sortedPs)
           write(eSet.remainder)
+
+        case eMap: EMapN =>
+          write(EMAP)
+          writeKVPairs(eMap.sortedPs)
+          write(eMap.remainder)
 
         /** Vars */
         case bVar: BoundVarN =>
@@ -260,6 +272,7 @@ private[ParManager] object Serialization {
     }
 
     def readVarOpt(): Option[VarN] = if (readBool()) Some(readVar()) else None
+    def readKVPair(): (ParN, ParN) = (readPar(), readPar())
 
     def readLength(): Int = cis.readUInt32()
     def readSeq[T](f: () => T): Seq[T] = {
@@ -267,8 +280,9 @@ private[ParManager] object Serialization {
       (1 to count).map(_ => f())
     }
 
-    def readStrings(): Seq[String] = readSeq(readString _)
-    def readPars(): Seq[ParN]      = readSeq(readPar _)
+    def readStrings(): Seq[String]       = readSeq(readString _)
+    def readPars(): Seq[ParN]            = readSeq(readPar _)
+    def readKVPairs(): Seq[(ParN, ParN)] = readSeq(readKVPair _)
 
     /** Auxiliary types deserialization */
     def readReceiveBinds(): Seq[ReceiveBindN] = {
@@ -376,6 +390,11 @@ private[ParManager] object Serialization {
         val ps        = readPars()
         val remainder = readVarOpt()
         ESetN(ps, remainder)
+
+      case EMAP =>
+        val ps        = readKVPairs()
+        val remainder = readVarOpt()
+        EMapN(ps, remainder)
 
       /** Vars */
       case BOUND_VAR =>

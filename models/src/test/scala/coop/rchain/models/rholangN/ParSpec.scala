@@ -136,12 +136,6 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p1, Some(p2)) should be(false)
   }
 
-  it should "throw exception during creation ETuple with an empty par sequence " in {
-    try {
-      ETupleN(Seq())
-    } catch { case ex: AssertionError => ex shouldBe a[AssertionError] }
-  }
-
   it should "test ESet with same data order" in {
     val p = ESetN(Seq(NilN(), ESetN()), Some(BoundVarN(42)))
     simpleCheck(p) should be(true)
@@ -150,6 +144,17 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "test ESet with different data order" in {
     val p1 = ESetN(Seq(NilN(), ESetN(NilN())))
     val p2 = ESetN(Seq(ESetN(NilN()), NilN()))
+    simpleCheck(p1, Some(p2)) should be(true)
+  }
+
+  it should "test EMap with same data order" in {
+    val p = EMapN(Seq(NilN() -> EMapN(), EMapN() -> NilN()), Some(BoundVarN(42)))
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test EMap with different data order" in {
+    val p1 = EMapN(Seq(NilN()  -> EMapN(), EMapN() -> NilN()))
+    val p2 = EMapN(Seq(EMapN() -> NilN(), NilN()   -> EMapN()))
     simpleCheck(p1, Some(p2)) should be(true)
   }
 

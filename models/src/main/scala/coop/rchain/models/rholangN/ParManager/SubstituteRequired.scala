@@ -3,8 +3,11 @@ package coop.rchain.models.rholangN.ParManager
 import coop.rchain.models.rholangN._
 
 private[ParManager] object SubstituteRequired {
-  private def sReq(p: RhoTypeN): Boolean       = p.substituteRequired
-  private def sReq(ps: Seq[RhoTypeN]): Boolean = ps.exists(sReq)
+  private def sReq(p: RhoTypeN): Boolean = p.substituteRequired
+  private def sReq(kv: (RhoTypeN, RhoTypeN)): Boolean =
+    kv._1.substituteRequired || kv._2.substituteRequired
+  private def sReq(ps: Seq[RhoTypeN]): Boolean                         = ps.exists(sReq)
+  private def sReqKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Boolean = kVPairs.exists(sReq)
 
   def substituteRequiredFn(p: RhoTypeN): Boolean = p match {
 
@@ -23,6 +26,7 @@ private[ParManager] object SubstituteRequired {
     case eList: EListN   => sReq(eList.ps)
     case eTuple: ETupleN => sReq(eTuple.ps)
     case eSet: ESetN     => sReq(eSet.sortedPs)
+    case eMap: EMapN     => sReqKVPairs(eMap.sortedPs)
 
     /** Vars */
     case _: BoundVarN => true

@@ -41,10 +41,15 @@ private[ParManager] object RhoHash {
     def append(v: String): Unit     = append(stringToBytes(v))
     def append(v: ByteVector): Unit = append(v.toArray)
 
-    def append(p: RhoTypeN): Unit                 = append(p.rhoHash.bytes.toArray)
-    def appendStrings(strings: Seq[String]): Unit = strings.foreach(append)
-    def append(ps: Seq[RhoTypeN]): Unit           = ps.foreach(append)
-    def append(pOpt: Option[RhoTypeN]): Unit      = pOpt.foreach(append)
+    def append(p: RhoTypeN): Unit = append(p.rhoHash.bytes.toArray)
+    private def append(kv: (RhoTypeN, RhoTypeN)): Unit = {
+      append(kv._1)
+      append(kv._2)
+    }
+    def appendStrings(strings: Seq[String]): Unit               = strings.foreach(append)
+    def appendKVPairs(kvPairs: Seq[(RhoTypeN, RhoTypeN)]): Unit = kvPairs.foreach(append)
+    def append(ps: Seq[RhoTypeN]): Unit                         = ps.foreach(append)
+    def append(pOpt: Option[RhoTypeN]): Unit                    = pOpt.foreach(append)
 
     // Get the hash of the current array
     def calcHash: Blake2b256Hash = {
@@ -104,9 +109,12 @@ private[ParManager] object RhoHash {
     def hSize(v: ByteVector): Int      = hSize(v.toArray)
 
     def hSize(@unused p: RhoTypeN): Int        = hashSize
+    def hSize(kv: (RhoTypeN, RhoTypeN)): Int   = hSize(kv._1) + hSize(kv._2)
     def hSize(ps: Seq[RhoTypeN]): Int          = hSizeSeq[RhoTypeN](ps, hSize)
     def hSizeString(strings: Seq[String]): Int = hSizeSeq[String](strings, hSize)
-    def hSize(pOpt: Option[RhoTypeN]): Int     = if (pOpt.isDefined) hashSize else 0
+    def hSizeKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Int =
+      hSizeSeq[(RhoTypeN, RhoTypeN)](kVPairs, hSize)
+    def hSize(pOpt: Option[RhoTypeN]): Int = if (pOpt.isDefined) hashSize else 0
   }
 
   import Hashable._
@@ -204,6 +212,13 @@ private[ParManager] object RhoHash {
       val hs       = Hashable(ELIST, bodySize)
       hs.append(eSet.sortedPs)
       hs.append(eSet.remainder)
+      hs.calcHash
+
+    case eMap: EMapN =>
+      val bodySize = hSizeKVPairs(eMap.sortedPs) + hSize(eMap.remainder)
+      val hs       = Hashable(EMAP, bodySize)
+      hs.appendKVPairs(eMap.sortedPs)
+      hs.append(eMap.remainder)
       hs.calcHash
 
     /** Vars */
