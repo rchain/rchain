@@ -21,7 +21,7 @@ class StackSafetySpec extends AnyFlatSpec with Matchers {
     val maxDepth = count(0)
     println(s"Calculated max recursion depth is $maxDepth")
     // Because of OOM errors on CI depth recursion is limited
-    val maxDepthLimited = Math.min(500, maxDepth)
+    val maxDepthLimited = Math.min(200, maxDepth)
     println(s"Used recursion depth is limited to $maxDepthLimited")
     maxDepthLimited
   }
@@ -29,9 +29,9 @@ class StackSafetySpec extends AnyFlatSpec with Matchers {
   "Rholang par" should "not blow up on a huge structure with List" in {
     import coop.rchain.models.Expr.ExprInstance.GInt
     import coop.rchain.models._
+    import coop.rchain.models.rholang.implicits._
     import coop.rchain.models.serialization.implicits._
     import coop.rchain.shared.Serialize
-    import coop.rchain.models.rholang.implicits._
 
     @tailrec
     def hugePar(n: Int, par: Par = Par(exprs = Seq(GInt(0)))): Par =

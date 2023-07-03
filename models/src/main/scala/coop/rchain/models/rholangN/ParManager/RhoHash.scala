@@ -1,7 +1,6 @@
 package coop.rchain.models.rholangN.ParManager
 
 import coop.rchain.models.rholangN.ParManager.Constants._
-import coop.rchain.models.rholangN.ParManager.Sorting._
 import coop.rchain.models.rholangN._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
@@ -125,7 +124,7 @@ private[ParManager] object RhoHash {
 
     case pProc: ParProcN =>
       val hs = Hashable(PARPROC, hSize(pProc.ps))
-      hs.append(sortPars(pProc.ps))
+      hs.append(pProc.sortedPs)
       hs.calcHash
 
     case send: SendN =>
@@ -159,7 +158,7 @@ private[ParManager] object RhoHash {
       val hs       = Hashable(NEW, bodySize)
       hs.append(n.bindCount)
       hs.append(n.p)
-      hs.appendStrings(sortStrings(n.uri))
+      hs.appendStrings(n.sotedUri)
       hs.calcHash
 
     /** Ground types */

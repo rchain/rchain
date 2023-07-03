@@ -10,11 +10,13 @@ object NilN { def apply(): NilN = new NilN }
   * and one receive.
   */
 final class ParProcN(val ps: Seq[ParN]) extends BasicN {
+  def sortedPs: Seq[ParN]    = ParManager.Manager.sortPars(ps)
   def add(p: ParN): ParProcN = ParProcN(ps :+ p)
 }
 object ParProcN {
   def apply(ps: Seq[ParN] = Seq()): ParProcN = new ParProcN(ps)
   def apply(p: ParN): ParProcN               = apply(Seq(p))
+  def empty(): ParProcN                      = ParProcN()
 }
 
 /** *
@@ -131,7 +133,9 @@ object MatchCaseN {
   * @param uri List of names Rho built-in processes listening on channels (e.g. `rho:io:stdout`).
   *        For normalization, uri-referenced variables come at the end, and in lexicographical order.
   */
-final class NewN(val bindCount: Int, val p: ParN, val uri: Seq[String]) extends BasicN
+final class NewN(val bindCount: Int, val p: ParN, val uri: Seq[String]) extends BasicN {
+  def sotedUri: Seq[String] = ParManager.Manager.sortStrings(uri)
+}
 
 object NewN {
   def apply(bindCount: Int, p: ParN, uri: Seq[String] = Seq()): NewN = new NewN(bindCount, p, uri)

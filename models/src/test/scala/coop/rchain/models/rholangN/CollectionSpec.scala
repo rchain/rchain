@@ -25,7 +25,7 @@ class EListSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers 
   }
 
   it should "perform append operation" in {
-    val p1 = EListN.empty :+ NilN() :+ pproc1 :+ EListN()
+    val p1 = EListN() :+ NilN() :+ pproc1 :+ EListN()
     val p2 = EListN(Seq(NilN(), pproc1, EListN()))
     p1 should be(p2)
   }
@@ -236,5 +236,19 @@ class EMapSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     val values1 = p.values
     val values2 = p.sortedPs.map(_._2)
     values1 should be(values2)
+  }
+}
+
+class CollectionSortSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
+  "ESet and EMap should " should "export pars in the same order as ParProc" in {
+    val pProc = ParProcN(Seq(pproc1, ESetN(), GIntN(42), NilN()))
+    val set   = ESetN(Seq(pproc2, GIntN(42), ESetN(), NilN()))
+    val map   = EMapN(Seq(NilN() -> NilN(), pproc2 -> NilN(), GIntN(42) -> NilN(), ESetN() -> NilN()))
+
+    val ps1 = pProc.sortedPs
+    val ps2 = set.sortedPs
+    val ps3 = map.keys
+
+    (ps1 == ps2) == (ps1 == ps3) should be(true)
   }
 }

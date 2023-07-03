@@ -2,7 +2,6 @@ package coop.rchain.models.rholangN.ParManager
 
 import com.google.protobuf.{CodedInputStream, CodedOutputStream}
 import coop.rchain.models.rholangN.ParManager.Constants._
-import coop.rchain.models.rholangN.ParManager.Sorting._
 import coop.rchain.models.rholangN._
 import scodec.bits.ByteVector
 
@@ -62,7 +61,7 @@ private[ParManager] object Serialization {
 
         case pProc: ParProcN =>
           write(PARPROC)
-          write(sortPars(pProc.ps))
+          write(pProc.sortedPs)
 
         case send: SendN =>
           write(SEND)
@@ -87,7 +86,7 @@ private[ParManager] object Serialization {
           write(NEW)
           write(n.bindCount)
           write(n.p)
-          writeStrings(sortStrings(n.uri))
+          writeStrings(n.sotedUri)
 
         /** Ground types */
         case gBool: GBoolN =>
