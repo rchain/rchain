@@ -1,11 +1,11 @@
 package coop.rchain.models.rholangN
 
-import coop.rchain.models.rholangN.TestData._
+import coop.rchain.models.rholangN.CollectionSpecTestData._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-object TestData {
+object CollectionSpecTestData {
   // After sorting, these two elements will be the same
   val pproc1: ParProcN = ParProcN(Seq(GIntN(42), NilN()))
   val pproc2: ParProcN = ParProcN(Seq(NilN(), GIntN(42)))

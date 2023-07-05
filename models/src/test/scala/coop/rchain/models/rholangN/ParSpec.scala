@@ -38,17 +38,16 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   val bytesTest: Array[Byte] = Array.fill(sizeTest)(42)
   val strTest: String        = List.fill(sizeTest)("42").mkString
 
-  /** Par */
-  it should "test ParProc" in {
-    val p1 = ParProcN(Seq(NilN(), ParProcN()))
-    val p2 = ParProcN(Seq(ParProcN(), NilN()))
-    simpleCheck(p1, Some(p2)) should be(true)
-  }
-
   /** Basic types */
   it should "test Nil" in {
     val p = NilN()
     simpleCheck(p) should be(true)
+  }
+
+  it should "test ParProc" in {
+    val p1 = ParProcN(Seq(NilN(), ParProcN()))
+    val p2 = ParProcN(Seq(ParProcN(), NilN()))
+    simpleCheck(p1, Some(p2)) should be(true)
   }
 
   it should "test Send with same data order" in {
