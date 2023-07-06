@@ -173,22 +173,6 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
-  /** Unforgeable names */
-  it should "test UPrivate" in {
-    val p = UPrivateN(bytesTest)
-    simpleCheck(p) should be(true)
-  }
-
-  it should "test UDeployId" in {
-    val p = UDeployIdN(bytesTest)
-    simpleCheck(p) should be(true)
-  }
-
-  it should "test UDeployerId" in {
-    val p = UDeployerIdN(bytesTest)
-    simpleCheck(p) should be(true)
-  }
-
   /** Operations */
   it should "test ENeg" in {
     val p = ENegN(GIntN(42))
@@ -303,6 +287,22 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   it should "test EMethod" in {
     val p = EMethodN("nth", EListN(NilN()), GIntN(1))
+    simpleCheck(p) should be(true)
+  }
+
+  /** Unforgeable names */
+  it should "test UPrivate" in {
+    val p = UPrivateN(bytesTest)
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test UDeployId" in {
+    val p = UDeployIdN(bytesTest)
+    simpleCheck(p) should be(true)
+  }
+
+  it should "test UDeployerId" in {
+    val p = UDeployerIdN(bytesTest)
     simpleCheck(p) should be(true)
   }
 

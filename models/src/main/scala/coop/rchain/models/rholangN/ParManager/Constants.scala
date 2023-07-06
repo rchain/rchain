@@ -38,36 +38,36 @@ private[ParManager] object Constants {
   final val FREE_VAR  = 0x2B.toByte
   final val WILDCARD  = 0x2C.toByte
 
-  /** Unforgeable names */
-  final val UPRIVATE     = 0x30.toByte
-  final val UDEPLOY_ID   = 0x31.toByte
-  final val UDEPLOYER_ID = 0x32.toByte
-
   /** Operations */
-  final val ENEG = 0x40.toByte
-  final val ENOT = 0x41.toByte
+  final val ENEG = 0x30.toByte
+  final val ENOT = 0x31.toByte
 
-  final val EPLUS       = 0x42.toByte
-  final val EMINUS      = 0x43.toByte
-  final val EMULT       = 0x44.toByte
-  final val EDIV        = 0x45.toByte
-  final val EMOD        = 0x46.toByte
-  final val ELT         = 0x47.toByte
-  final val ELTE        = 0x48.toByte
-  final val EGT         = 0x49.toByte
-  final val EGTE        = 0x4A.toByte
-  final val EEQ         = 0x4B.toByte
-  final val ENEQ        = 0x4C.toByte
-  final val EAND        = 0x4D.toByte
-  final val ESHORTAND   = 0x4E.toByte
-  final val EOR         = 0x4F.toByte
-  final val ESHORTOR    = 0x50.toByte
-  final val EPLUSPLUS   = 0x51.toByte
-  final val EMINUSMINUS = 0x52.toByte
-  final val EPERCENT    = 0x53.toByte
+  final val EPLUS       = 0x32.toByte
+  final val EMINUS      = 0x33.toByte
+  final val EMULT       = 0x34.toByte
+  final val EDIV        = 0x35.toByte
+  final val EMOD        = 0x36.toByte
+  final val ELT         = 0x37.toByte
+  final val ELTE        = 0x38.toByte
+  final val EGT         = 0x39.toByte
+  final val EGTE        = 0x3A.toByte
+  final val EEQ         = 0x3B.toByte
+  final val ENEQ        = 0x3C.toByte
+  final val EAND        = 0x3D.toByte
+  final val ESHORTAND   = 0x3E.toByte
+  final val EOR         = 0x3F.toByte
+  final val ESHORTOR    = 0x40.toByte
+  final val EPLUSPLUS   = 0x41.toByte
+  final val EMINUSMINUS = 0x42.toByte
+  final val EPERCENT    = 0x43.toByte
 
-  final val EMETHOD  = 0x5A.toByte
-  final val EMATCHES = 0x5B.toByte
+  final val EMETHOD  = 0x4A.toByte
+  final val EMATCHES = 0x4B.toByte
+
+  /** Unforgeable names */
+  final val UPRIVATE     = 0x50.toByte
+  final val UDEPLOY_ID   = 0x51.toByte
+  final val UDEPLOYER_ID = 0x52.toByte
 
   /** Connective */
   final val CONNECTIVE_BOOL      = 0x70.toByte

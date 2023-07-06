@@ -145,15 +145,6 @@ private[ParManager] object Serialization {
         case _: WildcardN =>
           write(WILDCARD)
 
-        /** Unforgeable names */
-        case unf: UnforgeableN =>
-          unf match {
-            case _: UPrivateN    => write(UPRIVATE)
-            case _: UDeployIdN   => write(UDEPLOY_ID)
-            case _: UDeployerIdN => write(UDEPLOYER_ID)
-          }
-          write(unf.v)
-
         /** Operations */
         case op: Operation1ParN =>
           val tag = op match {
@@ -193,6 +184,15 @@ private[ParManager] object Serialization {
 
         case eMatches: EMatchesN =>
           write2ParOp(EMATCHES, eMatches.target, eMatches.pattern)
+
+        /** Unforgeable names */
+        case unf: UnforgeableN =>
+          unf match {
+            case _: UPrivateN    => write(UPRIVATE)
+            case _: UDeployIdN   => write(UDEPLOY_ID)
+            case _: UDeployerIdN => write(UDEPLOYER_ID)
+          }
+          write(unf.v)
 
         /** Connective */
         case _: ConnBoolN      => write(CONNECTIVE_BOOL)

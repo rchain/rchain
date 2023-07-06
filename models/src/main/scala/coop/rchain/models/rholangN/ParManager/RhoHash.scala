@@ -233,18 +233,6 @@ private[ParManager] object RhoHash {
 
     case _: WildcardN => Hashable(WILDCARD).calcHash
 
-    /** Unforgeable names */
-    case unf: UnforgeableN =>
-      val bodySize = hSize(unf.v)
-      val t = unf match {
-        case _: UPrivateN    => UPRIVATE
-        case _: UDeployIdN   => UDEPLOY_ID
-        case _: UDeployerIdN => UDEPLOYER_ID
-      }
-      val hs = Hashable(t, bodySize)
-      hs.append(unf.v)
-      hs.calcHash
-
     /** Operations */
     case op: Operation1ParN =>
       val tag = op match {
@@ -296,6 +284,18 @@ private[ParManager] object RhoHash {
       val hs       = Hashable(EMATCHES, bodySize)
       hs.append(eMatches.target)
       hs.append(eMatches.pattern)
+      hs.calcHash
+
+    /** Unforgeable names */
+    case unf: UnforgeableN =>
+      val bodySize = hSize(unf.v)
+      val t = unf match {
+        case _: UPrivateN    => UPRIVATE
+        case _: UDeployIdN   => UDEPLOY_ID
+        case _: UDeployerIdN => UDEPLOYER_ID
+      }
+      val hs = Hashable(t, bodySize)
+      hs.append(unf.v)
       hs.calcHash
 
     /** Connective */

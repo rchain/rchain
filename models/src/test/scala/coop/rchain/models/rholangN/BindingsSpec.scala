@@ -193,28 +193,6 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
     fromProto(p2) should be(p1)
   }
 
-  /** Unforgeable names */
-  it should "test UPrivate" in {
-    val p1: ParN = UPrivateN(bytesTest)
-    val p2: Par  = GPrivate(ByteString.copyFrom(bytesTest))
-    toProto(p1) should be(p2)
-    fromProto(p2) should be(p1)
-  }
-
-  it should "test UDeployId" in {
-    val p1: ParN = UDeployIdN(bytesTest)
-    val p2: Par  = GDeployId(ByteString.copyFrom(bytesTest))
-    toProto(p1) should be(p2)
-    fromProto(p2) should be(p1)
-  }
-
-  it should "test UDeployerId" in {
-    val p1: ParN = UDeployerIdN(bytesTest)
-    val p2: Par  = GDeployerId(ByteString.copyFrom(bytesTest))
-    toProto(p1) should be(p2)
-    fromProto(p2) should be(p1)
-  }
-
   /** Operations */
   it should "test ENeg" in {
     val p1: ParN = ENegN(GIntN(42))
@@ -366,6 +344,28 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   it should "test EMethod" in {
     val p1: ParN = EMethodN("nth", EListN(NilN()), GIntN(1))
     val p2: Par  = EMethod("nth", EList(Seq(Par())), Seq(GInt(1): Par))
+    toProto(p1) should be(p2)
+    fromProto(p2) should be(p1)
+  }
+
+  /** Unforgeable names */
+  it should "test UPrivate" in {
+    val p1: ParN = UPrivateN(bytesTest)
+    val p2: Par  = GPrivate(ByteString.copyFrom(bytesTest))
+    toProto(p1) should be(p2)
+    fromProto(p2) should be(p1)
+  }
+
+  it should "test UDeployId" in {
+    val p1: ParN = UDeployIdN(bytesTest)
+    val p2: Par  = GDeployId(ByteString.copyFrom(bytesTest))
+    toProto(p1) should be(p2)
+    fromProto(p2) should be(p1)
+  }
+
+  it should "test UDeployerId" in {
+    val p1: ParN = UDeployerIdN(bytesTest)
+    val p2: Par  = GDeployerId(ByteString.copyFrom(bytesTest))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }

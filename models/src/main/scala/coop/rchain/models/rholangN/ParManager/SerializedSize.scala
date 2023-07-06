@@ -87,9 +87,6 @@ private[ParManager] object SerializedSize {
     case v: FreeVarN  => totalSize(sSize(v.idx))
     case _: WildcardN => totalSize()
 
-    /** Unforgeable names */
-    case unf: UnforgeableN => totalSize(sSize(unf.v))
-
     /** Operations */
     case op: Operation1ParN => totalSize(sSize(op.p))
     case op: Operation2ParN => totalSize(sSize(op.p1), sSize(op.p2))
@@ -99,6 +96,9 @@ private[ParManager] object SerializedSize {
       val argumentsSize  = sSize(eMethod.arguments)
       totalSize(methodNameSize, targetSize, argumentsSize)
     case eMatches: EMatchesN => totalSize(sSize(eMatches.target), sSize(eMatches.pattern))
+
+    /** Unforgeable names */
+    case unf: UnforgeableN => totalSize(sSize(unf.v))
 
     /** Connective */
     case _: ConnectiveSTypeN => totalSize()

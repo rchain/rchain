@@ -33,14 +33,14 @@ private[ParManager] object SubstituteRequired {
     case _: FreeVarN  => false
     case _: WildcardN => false
 
-    /** Unforgeable names */
-    case _: UnforgeableN => false
-
     /** Operations */
     case op: Operation1ParN  => sReq(op.p)
     case op: Operation2ParN  => sReq(op.p1) || sReq(op.p2)
     case eMethod: EMethodN   => sReq(eMethod.target) || sReq(eMethod.arguments)
     case eMatches: EMatchesN => sReq(eMatches.target) || sReq(eMatches.pattern)
+
+    /** Unforgeable names */
+    case _: UnforgeableN => false
 
     /** Connective */
     case _: ConnectiveSTypeN => false

@@ -34,14 +34,14 @@ private[ParManager] object ConnectiveUsed {
     case _: FreeVarN  => true
     case _: WildcardN => true
 
-    /** Unforgeable names */
-    case _: UnforgeableN => false
-
     /** Operations */
     case op: Operation1ParN  => cUsed(op.p)
     case op: Operation2ParN  => cUsed(op.p1) || cUsed(op.p2)
     case eMethod: EMethodN   => cUsed(eMethod.target) || cUsed(eMethod.arguments)
     case eMatches: EMatchesN => cUsed(eMatches.target)
+
+    /** Unforgeable names */
+    case _: UnforgeableN => false
 
     /** Connective */
     case _: ConnectiveSTypeN => true

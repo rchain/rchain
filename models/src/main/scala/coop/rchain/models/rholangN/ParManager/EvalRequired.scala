@@ -30,11 +30,11 @@ private[ParManager] object EvalRequired {
     /** Vars */
     case _: VarN => true
 
-    /** Unforgeable names */
-    case _: UnforgeableN => false
-
     /** Operations */
     case _: OperationN => true
+
+    /** Unforgeable names */
+    case _: UnforgeableN => false
 
     /** Connective */
     case _: ConnectiveN => false
