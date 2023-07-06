@@ -24,9 +24,11 @@ object Manager {
     case _           => false
   }
 
-  def sortPars(ps: Seq[ParN]): Seq[ParN]             = Sorting.sortPars(ps)
-  def sortStrings(strings: Seq[String]): Seq[String] = Sorting.sortStrings(strings)
-  def comparePars(p1: ParN, p2: ParN): Int           = Sorting.comparePars(p1, p2)
+  def sortPars(ps: Seq[ParN]): Seq[ParN]       = Sorting.sortPars(ps)
+  def sortUris(uris: Seq[String]): Seq[String] = Sorting.sortUris(uris)
+  def sortInjections(injections: Map[String, ParN]): Seq[(String, ParN)] =
+    Sorting.sortInjections(injections)
+  def comparePars(p1: ParN, p2: ParN): Int = Sorting.comparePars(p1, p2)
 
   /** MetaData */
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash     = RhoHash.rhoHashFn(p)

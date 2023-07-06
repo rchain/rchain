@@ -45,10 +45,16 @@ private[ParManager] object RhoHash {
       append(kv._1)
       append(kv._2)
     }
+    private def appendInjection(injection: (String, RhoTypeN)): Unit = {
+      append(injection._1)
+      append(injection._2)
+    }
     def appendStrings(strings: Seq[String]): Unit               = strings.foreach(append)
     def appendKVPairs(kvPairs: Seq[(RhoTypeN, RhoTypeN)]): Unit = kvPairs.foreach(append)
-    def append(ps: Seq[RhoTypeN]): Unit                         = ps.foreach(append)
-    def append(pOpt: Option[RhoTypeN]): Unit                    = pOpt.foreach(append)
+    def appendInjections(injections: Seq[(String, RhoTypeN)]): Unit =
+      injections.foreach(appendInjection)
+    def append(ps: Seq[RhoTypeN]): Unit      = ps.foreach(append)
+    def append(pOpt: Option[RhoTypeN]): Unit = pOpt.foreach(append)
 
     // Get the hash of the current array
     def calcHash: Blake2b256Hash = {
@@ -98,7 +104,7 @@ private[ParManager] object RhoHash {
 
     private def hSizeSeq[T](seq: Seq[T], f: T => Int): Int = seq.map(f).sum
 
-    def hSize(bytes: Array[Byte]): Int = bytes.length
+    private def hSize(bytes: Array[Byte]): Int = bytes.length
 
     def hSize(@unused v: Boolean): Int = booleanSize
     def hSize(@unused v: Int): Int     = intSize
@@ -107,12 +113,16 @@ private[ParManager] object RhoHash {
     def hSize(v: String): Int          = stringToBytes(v).length
     def hSize(v: ByteVector): Int      = hSize(v.toArray)
 
-    def hSize(@unused p: RhoTypeN): Int        = hashSize
-    def hSize(kv: (RhoTypeN, RhoTypeN)): Int   = hSize(kv._1) + hSize(kv._2)
+    def hSize(@unused p: RhoTypeN): Int              = hashSize
+    private def hSize(kv: (RhoTypeN, RhoTypeN)): Int = hSize(kv._1) + hSize(kv._2)
+    private def hSizeInjection(injection: (String, RhoTypeN)): Int =
+      hSize(injection._1) + hSize(injection._2)
     def hSize(ps: Seq[RhoTypeN]): Int          = hSizeSeq[RhoTypeN](ps, hSize)
     def hSizeString(strings: Seq[String]): Int = hSizeSeq[String](strings, hSize)
     def hSizeKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Int =
       hSizeSeq[(RhoTypeN, RhoTypeN)](kVPairs, hSize)
+    def hSizeInjections(injections: Seq[(String, RhoTypeN)]): Int =
+      hSizeSeq[(String, RhoTypeN)](injections, hSizeInjection)
     def hSize(pOpt: Option[RhoTypeN]): Int = if (pOpt.isDefined) hashSize else 0
   }
 
@@ -154,11 +164,13 @@ private[ParManager] object RhoHash {
       hs.calcHash
 
     case n: NewN =>
-      val bodySize = hSize(n.bindCount) + hSize(n.p) + hSizeString(n.uri)
-      val hs       = Hashable(NEW, bodySize)
+      val bodySize = hSize(n.bindCount) + hSize(n.p) +
+        hSizeString(n.uri) + hSizeInjections(n.injections.toSeq)
+      val hs = Hashable(NEW, bodySize)
       hs.append(n.bindCount)
       hs.append(n.p)
-      hs.appendStrings(n.sotedUri)
+      hs.appendStrings(n.sortedUri)
+      hs.appendInjections(n.sortedInjections)
       hs.calcHash
 
     /** Ground types */

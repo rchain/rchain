@@ -127,6 +127,8 @@ private[rholangN] object BindingsFromProto {
   private def fromProto(varOpt: Option[Var]): Option[VarN] = varOpt.map(fromVar)
   private def fromProtoKVPairs(ps: Seq[(Par, Par)]): Seq[(ParN, ParN)] =
     ps.map(kv => (fromProto(kv._1), fromProto(kv._2)))
+  private def fromProtoInjections(ps: Seq[(String, Par)]): Seq[(String, ParN)] =
+    ps.map(kv => (kv._1, fromProto(kv._2)))
 
   /** Basic types */
   private def fromSend(x: Send): SendN = {
@@ -167,11 +169,11 @@ private[rholangN] object BindingsFromProto {
   }
 
   private def fromNew(x: New): NewN = {
-    val bindCount = x.bindCount
-    val p         = fromProto(x.p)
-    val uri       = x.uri
-//    val injections: Map[String, Par] = Map()
-    NewN(bindCount, p, uri)
+    val bindCount                       = x.bindCount
+    val p                               = fromProto(x.p)
+    val uri                             = x.uri
+    val injections: Seq[(String, ParN)] = fromProtoInjections(x.injections.toSeq)
+    NewN(bindCount, p, uri, injections)
   }
 
   /** Ground types */

@@ -98,6 +98,8 @@ private[rholangN] object BindingsToProto {
   private def toProto(varOpt: Option[VarN]): Option[Var] = varOpt.map(toVar)
   private def toProtoKVPairs(ps: Seq[(ParN, ParN)]): Seq[(Par, Par)] =
     ps.map(kv => (toProto(kv._1), toProto(kv._2)))
+  private def toProtoInjections(injections: Seq[(String, ParN)]): Seq[(String, Par)] =
+    injections.map(i => (i._1, toProto(i._2)))
 
   /** Basic types */
   private def toNil(@unused x: NilN): Par = Par()
@@ -154,7 +156,7 @@ private[rholangN] object BindingsToProto {
     val bindCount                    = x.bindCount
     val p                            = toProto(x.p)
     val uri                          = x.uri
-    val injections: Map[String, Par] = Map()
+    val injections: Map[String, Par] = Map.from(toProtoInjections(x.injections.toSeq))
     val locallyFree                  = BitSet()
     New(bindCount, p, uri, injections, locallyFree)
   }

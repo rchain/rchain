@@ -132,11 +132,33 @@ object MatchCaseN {
   *        up to level+count for the last used variable.
   * @param uri List of names Rho built-in processes listening on channels (e.g. `rho:io:stdout`).
   *        For normalization, uri-referenced variables come at the end, and in lexicographical order.
+  * @param injections List of injected uri-referenced variables (e.g. rho:rchain:deployId).
+  *        Should be sort by key in lexicographical order.
   */
-final class NewN(val bindCount: Int, val p: ParN, val uri: Seq[String]) extends BasicN {
-  def sotedUri: Seq[String] = ParManager.Manager.sortStrings(uri)
+final class NewN(
+    val bindCount: Int,
+    val p: ParN,
+    val uri: Seq[String],
+    val injections: Map[String, ParN]
+) extends BasicN {
+  def sortedUri: Seq[String]                = ParManager.Manager.sortUris(uri)
+  def sortedInjections: Seq[(String, ParN)] = ParManager.Manager.sortInjections(injections)
 }
 
 object NewN {
-  def apply(bindCount: Int, p: ParN, uri: Seq[String] = Seq()): NewN = new NewN(bindCount, p, uri)
+  def apply(
+      bindCount: Int,
+      p: ParN,
+      uri: Seq[String],
+      injections: Map[String, ParN]
+  ): NewN = new NewN(bindCount, p, uri, injections)
+
+  def apply(
+      bindCount: Int,
+      p: ParN,
+      uri: Seq[String],
+      injections: Seq[(String, ParN)]
+  ): NewN = new NewN(bindCount, p, uri, Map.from(injections))
+
+  def apply(bindCount: Int, p: ParN): NewN = new NewN(bindCount, p, Seq(), Map())
 }

@@ -75,9 +75,14 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
-  it should "test New" in {
-    val p1 = NewN(1, BoundVarN(0), Seq("rho:io:stdout", "rho:io:stderr"))
-    val p2 = NewN(1, BoundVarN(0), Seq("rho:io:stderr", "rho:io:stdout"))
+  it should "test New with different data order" in {
+    val inj1: Map[String, ParN] =
+      Map("rho:rchain:deployId" -> NilN(), "rho:rchain:deployerId" -> NilN())
+    val p1 = NewN(1, BoundVarN(0), Seq("rho:io:stdout", "rho:io:stderr"), inj1)
+
+    val inj2: Map[String, ParN] =
+      Map("rho:rchain:deployerId" -> NilN(), "rho:rchain:deployId" -> NilN())
+    val p2 = NewN(1, BoundVarN(0), Seq("rho:io:stderr", "rho:io:stdout"), inj2)
     simpleCheck(p1, Some(p2)) should be(true)
   }
 

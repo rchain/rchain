@@ -92,8 +92,11 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test New" in {
-    val p1: ParN = NewN(1, BoundVarN(0), Seq("4", "2", "3", "1"))
-    val p2: Par  = New(1, EVar(BoundVar(0)), Seq("4", "2", "3", "1"))
+    val uri      = Seq("4", "2", "3", "1")
+    val inj1     = Map("4" -> NilN(), "3" -> NilN())
+    val inj2     = Map("4" -> Par(), "3" -> Par())
+    val p1: ParN = NewN(1, BoundVarN(0), uri, inj1)
+    val p2: Par  = New(1, EVar(BoundVar(0)), uri, inj2)
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }

@@ -33,6 +33,11 @@ private[ParManager] object Serialization {
         write(kv._2)
       }
 
+      private def writeInjection(injection: (String, ParN)): Unit = {
+        write(injection._1)
+        write(injection._2)
+      }
+
       private def writeSeq[T](seq: Seq[T], f: T => Unit): Unit = {
         write(seq.size)
         seq.foreach(f)
@@ -42,6 +47,8 @@ private[ParManager] object Serialization {
       private def writeStrings(strings: Seq[String]): Unit = writeSeq[String](strings, write)
       private def writeKVPairs(kVPairs: Seq[(ParN, ParN)]): Unit =
         writeSeq[(ParN, ParN)](kVPairs, write)
+      private def writeInjections(injections: Seq[(String, ParN)]): Unit =
+        writeSeq[(String, ParN)](injections, writeInjection)
 
       private def write1ParOp(tag: Byte, p: ParN): Unit = {
         write(tag)
@@ -86,7 +93,8 @@ private[ParManager] object Serialization {
           write(NEW)
           write(n.bindCount)
           write(n.p)
-          writeStrings(n.sotedUri)
+          writeStrings(n.sortedUri)
+          writeInjections(n.sortedInjections)
 
         /** Ground types */
         case gBool: GBoolN =>
@@ -270,8 +278,9 @@ private[ParManager] object Serialization {
         WildcardN()
     }
 
-    def readVarOpt(): Option[VarN] = if (readBool()) Some(readVar()) else None
-    def readKVPair(): (ParN, ParN) = (readPar(), readPar())
+    def readVarOpt(): Option[VarN]      = if (readBool()) Some(readVar()) else None
+    def readKVPair(): (ParN, ParN)      = (readPar(), readPar())
+    def readInjection(): (String, ParN) = (readString(), readPar())
 
     def readLength(): Int = cis.readUInt32()
     def readSeq[T](f: () => T): Seq[T] = {
@@ -279,9 +288,10 @@ private[ParManager] object Serialization {
       (1 to count).map(_ => f())
     }
 
-    def readStrings(): Seq[String]       = readSeq(readString _)
-    def readPars(): Seq[ParN]            = readSeq(readPar _)
-    def readKVPairs(): Seq[(ParN, ParN)] = readSeq(readKVPair _)
+    def readStrings(): Seq[String]            = readSeq(readString _)
+    def readPars(): Seq[ParN]                 = readSeq(readPar _)
+    def readKVPairs(): Seq[(ParN, ParN)]      = readSeq(readKVPair _)
+    def readInjections(): Seq[(String, ParN)] = readSeq(readInjection _)
 
     /** Auxiliary types deserialization */
     def readReceiveBinds(): Seq[ReceiveBindN] = {
@@ -342,10 +352,11 @@ private[ParManager] object Serialization {
         MatchN(target, cases)
 
       case NEW =>
-        val bindCount = readInt()
-        val p         = readPar()
-        val uri       = readStrings()
-        NewN(bindCount, p, uri)
+        val bindCount  = readInt()
+        val p          = readPar()
+        val uri        = readStrings()
+        val injections = readInjections()
+        NewN(bindCount, p, uri, injections)
 
       /** Ground types */
       case NIL =>

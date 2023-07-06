@@ -21,6 +21,8 @@ private[ParManager] object SerializedSize {
 
   private def sSize(p: RhoTypeN): Int              = p.serializedSize
   private def sSize(kv: (RhoTypeN, RhoTypeN)): Int = kv._1.serializedSize + kv._2.serializedSize
+  private def sSizeInjection(injection: (String, RhoTypeN)): Int =
+    sSize(injection._1) + injection._2.serializedSize
 
   private def sSizeSeq[T](seq: Seq[T], f: T => Int): Int =
     sSize(seq.size) + seq.map(f).sum
@@ -31,6 +33,9 @@ private[ParManager] object SerializedSize {
 
   private def sSizeKVPairs(strings: Seq[(RhoTypeN, RhoTypeN)]): Int =
     sSizeSeq[(RhoTypeN, RhoTypeN)](strings, sSize)
+
+  private def sSizeInjections(injections: Seq[(String, RhoTypeN)]): Int =
+    sSizeSeq[(String, RhoTypeN)](injections, sSizeInjection)
 
   private def sSize(pOpt: Option[RhoTypeN]): Int =
     booleanSize + (if (pOpt.isDefined) pOpt.get.serializedSize else 0)
@@ -63,10 +68,11 @@ private[ParManager] object SerializedSize {
       totalSize(targetSize, casesSize)
 
     case n: NewN =>
-      val bindCountSize = sSize(n.bindCount)
-      val pSize         = sSize(n.p)
-      val uriSize       = sSizeStrings(n.uri)
-      totalSize(bindCountSize, pSize, uriSize)
+      val bindCountSize  = sSize(n.bindCount)
+      val pSize          = sSize(n.p)
+      val uriSize        = sSizeStrings(n.uri)
+      val injectionsSize = sSizeInjections(n.injections.toSeq)
+      totalSize(bindCountSize, pSize, uriSize, injectionsSize)
 
     /** Ground types */
     case gBool: GBoolN           => totalSize(sSize(gBool.v))
