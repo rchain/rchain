@@ -1,445 +1,453 @@
 package coop.rchain.models.rholangN
 
+import coop.rchain.models.Connective.ConnectiveInstance._
+import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.GUnforgeable.UnfInstance._
+import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
+import scalapb.GeneratedMessage
+
+import scala.annotation.unused
 
 private[rholangN] object BindingsFromProto {
 
-  def fromProto(p: Par): ParN = ???
-  /*
-  def fromProto(p: Par): ParN = p match {
+  def fromProto(p: Par): ParN = {
+    val terms: Seq[GeneratedMessage] =
+      Seq(p.sends, p.receives, p.news, p.exprs, p.matches, p.unforgeables, p.bundles, p.connectives)
+        .filter(_.nonEmpty)
+        .flatten
+    val ps: Seq[ParN] = terms.map(fromProtoMessage)
+    ps.size match {
+      case 0 => NilN()
+      case 1 => ps.head
+      case _ => ParProcN(ps)
+    }
+  }
+
+  private def fromProtoMessage(m: GeneratedMessage): ParN = m match {
 
     /** Basic types */
-    case x: NilN     => toNil(x)
-    case x: ParProcN => toParProc(x)
-    case x: SendN    => toSend(x)
-    case x: ReceiveN => toReceive(x)
-    case x: MatchN   => toMatch(x)
-    case x: NewN     => toNew(x)
+    case x: Send    => fromSend(x)
+    case x: Receive => fromReceive(x)
+    case x: Match   => fromMatch(x)
+    case x: New     => fromNew(x)
 
-    /** Ground types */
-    case x: GBoolN      => toGBool(x)
-    case x: GIntN       => toGInt(x)
-    case x: GBigIntN    => toGBigInt(x)
-    case x: GStringN    => toGString(x)
-    case x: GByteArrayN => toGByteArray(x)
-    case x: GUriN       => toGUri(x)
+    case e: Expr =>
+      e.exprInstance match {
 
-    /** Collections */
-    case x: EListN  => toEList(x)
-    case x: ETupleN => toETuple(x)
-    case x: ESetN   => toParSet(x)
-    case x: EMapN   => toParMap(x)
+        /** Ground types */
+        case x: GBool      => fromGBool(x)
+        case x: GInt       => fromGInt(x)
+        case x: GBigInt    => fromGBigInt(x)
+        case x: GString    => fromGString(x)
+        case x: GByteArray => fromGByteArray(x)
+        case x: GUri       => fromGUri(x)
 
-    /** Vars */
-    case x: BoundVarN => EVar(toBoundVar(x))
-    case x: FreeVarN  => EVar(toFreeVar(x))
-    case x: WildcardN => EVar(toWildcard(x))
+        /** Collections */
+        case x: EListBody  => fromEList(x.value)
+        case x: ETupleBody => fromETuple(x.value)
+        case x: ESetBody   => fromParSet(x.value)
+        case x: EMapBody   => fromParMap(x.value)
+
+        /** Vars */
+        case x: EVarBody =>
+          x.value.v.varInstance match {
+            case n: BoundVar => fromBoundVar(n)
+            case n: FreeVar  => fromFreeVar(n)
+            case n: Wildcard => fromWildcard(n)
+            case _ =>
+              assert(assertion = false, "Unknown type for Var conversion")
+              WildcardN()
+          }
+
+        /** Operations */
+        case x: ENegBody            => fromENeg(x.value)
+        case x: ENotBody            => fromENot(x.value)
+        case x: EPlusBody           => fromEPlus(x.value)
+        case x: EMinusBody          => fromEMinus(x.value)
+        case x: EMultBody           => fromEMult(x.value)
+        case x: EDivBody            => fromEDiv(x.value)
+        case x: EModBody            => fromEMod(x.value)
+        case x: ELtBody             => fromELt(x.value)
+        case x: ELteBody            => fromELte(x.value)
+        case x: EGtBody             => fromEGt(x.value)
+        case x: EGteBody            => fromEGte(x.value)
+        case x: EEqBody             => fromEEq(x.value)
+        case x: ENeqBody            => fromENeq(x.value)
+        case x: EAndBody            => fromEAnd(x.value)
+        case x: EShortAndBody       => fromEShortAnd(x.value)
+        case x: EOrBody             => fromEOr(x.value)
+        case x: EShortOrBody        => fromEShortOr(x.value)
+        case x: EPlusPlusBody       => fromEPlusPlus(x.value)
+        case x: EMinusMinusBody     => fromEMinusMinus(x.value)
+        case x: EPercentPercentBody => fromEPercentPercent(x.value)
+        case x: EMethodBody         => fromEMethod(x.value)
+        case x: EMatchesBody        => fromEMatches(x.value)
+
+        case _ =>
+          assert(assertion = false, "Unknown type for Expr conversion")
+          GBoolN(true)
+      }
 
     /** Unforgeable names */
-    case x: UPrivateN    => toPrivate(x)
-    case x: UDeployIdN   => toDeployId(x)
-    case x: UDeployerIdN => toDeployerId(x)
-
-    /** Operations */
-    case x: ENegN            => toENeg(x)
-    case x: ENotN            => toENot(x)
-    case x: EPlusN           => toEPlus(x)
-    case x: EMinusN          => toEMinus(x)
-    case x: EMultN           => toEMult(x)
-    case x: EDivN            => toEDiv(x)
-    case x: EModN            => toEMod(x)
-    case x: ELtN             => toELt(x)
-    case x: ELteN            => toELte(x)
-    case x: EGtN             => toEGt(x)
-    case x: EGteN            => toEGte(x)
-    case x: EEqN             => toEEq(x)
-    case x: ENeqN            => toENeq(x)
-    case x: EAndN            => toEAnd(x)
-    case x: EShortAndN       => toEShortAnd(x)
-    case x: EOrN             => toEOr(x)
-    case x: EShortOrN        => toEShortOr(x)
-    case x: EPlusPlusN       => toEPlusPlus(x)
-    case x: EMinusMinusN     => toEMinusMinus(x)
-    case x: EPercentPercentN => toEPercentPercent(x)
-    case x: EMethodN         => toEMethod(x)
-    case x: EMatchesN        => toEMatches(x)
+    case u: GUnforgeable =>
+      u.unfInstance match {
+        case x: GPrivateBody      => fromPrivate(x.value)
+        case x: GDeployIdBody     => fromDeployId(x.value)
+        case x: GDeployerIdBody   => fromDeployerId(x.value)
+        case x: GSysAuthTokenBody => fromGSysAuthToken(x.value)
+        case _ =>
+          assert(assertion = false, "Unknown type for GUnforgeable conversion")
+          UPrivateN(Array(0x04.toByte, 0x02.toByte))
+      }
 
     /** Connective */
-    case x: ConnBoolN      => Connective(toConnBool(x))
-    case x: ConnIntN       => Connective(toConnInt(x))
-    case x: ConnBigIntN    => Connective(toConnBigInt(x))
-    case x: ConnStringN    => Connective(toConnString(x))
-    case x: ConnUriN       => Connective(toConnUri(x))
-    case x: ConnByteArrayN => Connective(toConnByteArray(x))
-    case x: ConnNotN       => Connective(toConnNotBody(x))
-    case x: ConnAndN       => Connective(toConnAndBody(x))
-    case x: ConnOrN        => Connective(toConnOrBody(x))
-    case x: ConnVarRefN    => Connective(toVarRefBody(x))
+    case c: Connective =>
+      c.connectiveInstance match {
+        case x: ConnBool      => fromConnBool(x)
+        case x: ConnInt       => fromConnInt(x)
+        case x: ConnBigInt    => fromConnBigInt(x)
+        case x: ConnString    => fromConnString(x)
+        case x: ConnUri       => fromConnUri(x)
+        case x: ConnByteArray => fromConnByteArray(x)
+        case x: ConnNotBody   => fromConnNotBody(x)
+        case x: ConnAndBody   => fromConnAndBody(x)
+        case x: ConnOrBody    => fromConnOrBody(x)
+        case x: VarRefBody    => fromVarRefBody(x)
+        case _ =>
+          assert(assertion = false, "Unknown type for Connective conversion")
+          ConnBoolN()
+      }
 
     /** Other types */
-    case x: BundleN       => toBundle(x)
-    case x: SysAuthTokenN => toGSysAuthToken(x)
+    case x: Bundle => fromBundle(x)
   }
 
-  private def toProto(ps: Seq[ParN]): Seq[Par]           = ps.map(toProto)
-  private def toProto(varOpt: Option[VarN]): Option[Var] = varOpt.map(toVar)
-  private def toProtoKVPairs(ps: Seq[(ParN, ParN)]): Seq[(Par, Par)] =
-    ps.map(kv => (toProto(kv._1), toProto(kv._2)))
+  private def fromProto(ps: Seq[Par]): Seq[ParN]           = ps.map(fromProto)
+  private def fromProto(varOpt: Option[Var]): Option[VarN] = varOpt.map(fromVar)
+  private def fromProtoKVPairs(ps: Seq[(Par, Par)]): Seq[(ParN, ParN)] =
+    ps.map(kv => (fromProto(kv._1), fromProto(kv._2)))
 
   /** Basic types */
-  private def toNil(x: NilN): Par = Par()
-
-  private def toParProc(x: ParProcN): Par = {
-    val p = x.sortedPs.foldLeft(Par())((acc, pN) => acc ++ toProto(pN))
-    p.withConnectiveUsed(x.connectiveUsed)
+  private def fromSend(x: Send): SendN = {
+    val chan       = fromProto(x.chan)
+    val data       = fromProto(x.data)
+    val persistent = x.persistent
+    SendN(chan, data, persistent)
   }
 
-  private def toSend(x: SendN): Send = {
-    val chan           = toProto(x.chan)
-    val data           = toProto(x.data)
-    val persistent     = x.persistent
-    val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
-    Send(chan, data, persistent, locallyFree, connectiveUsed)
+  private def fromReceive(x: Receive): ReceiveN = {
+    val binds      = x.binds.map(fromReceiveBind)
+    val body       = fromProto(x.body)
+    val persistent = x.persistent
+    val peek       = x.peek
+    val bindCount  = x.bindCount
+    ReceiveN(binds, body, persistent, peek, bindCount)
   }
 
-  private def toReceive(x: ReceiveN): Receive = {
-    val binds          = x.binds.map(toReceiveBind)
-    val body           = toProto(x.body)
-    val persistent     = x.persistent
-    val peek           = x.peek
-    val bindCount      = x.bindCount
-    val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
-    Receive(binds, body, persistent, peek, bindCount, locallyFree, connectiveUsed)
-  }
-
-  private def toReceiveBind(x: ReceiveBindN): ReceiveBind = {
-    val patterns  = toProto(x.patterns)
-    val source    = toProto(x.source)
-    val remainder = toProto(x.remainder)
+  private def fromReceiveBind(x: ReceiveBind): ReceiveBindN = {
+    val patterns  = fromProto(x.patterns)
+    val source    = fromProto(x.source)
+    val remainder = fromProto(x.remainder)
     val freeCount = x.freeCount
-    ReceiveBind(patterns, source, remainder, freeCount)
+    ReceiveBindN(patterns, source, remainder, freeCount)
   }
 
-  private def toMatch(x: MatchN): Match = {
-    val target         = toProto(x.target)
-    val cases          = x.cases.map(toMatchCase)
-    val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
-    Match(target, cases, locallyFree, connectiveUsed)
+  private def fromMatch(x: Match): MatchN = {
+    val target = fromProto(x.target)
+    val cases  = x.cases.map(fromMatchCase)
+    MatchN(target, cases)
   }
 
-  private def toMatchCase(x: MatchCaseN): MatchCase = {
-    val pattern   = toProto(x.pattern)
-    val source    = toProto(x.source)
+  private def fromMatchCase(x: MatchCase): MatchCaseN = {
+    val pattern   = fromProto(x.pattern)
+    val source    = fromProto(x.source)
     val freeCount = x.freeCount
-    MatchCase(pattern, source, freeCount)
+    MatchCaseN(pattern, source, freeCount)
   }
 
-  private def toNew(x: NewN): New = {
-    val bindCount                    = x.bindCount
-    val p                            = toProto(x.p)
-    val uri                          = x.sotedUri
-    val injections: Map[String, Par] = Map()
-    val locallyFree                  = BitSet()
-    New(bindCount, p, uri, injections, locallyFree)
+  private def fromNew(x: New): NewN = {
+    val bindCount = x.bindCount
+    val p         = fromProto(x.p)
+    val uri       = x.uri
+//    val injections: Map[String, Par] = Map()
+    NewN(bindCount, p, uri)
   }
 
   /** Ground types */
-  private def toGBool(x: GBoolN): GBool = {
-    val v = x.v
-    GBool(v)
+  private def fromGBool(x: GBool): GBoolN = {
+    val v = x.value
+    GBoolN(v)
   }
 
-  private def toGInt(x: GIntN): GInt = {
-    val v = x.v
-    GInt(v)
+  private def fromGInt(x: GInt): GIntN = {
+    val v = x.value
+    GIntN(v)
   }
 
-  private def toGBigInt(x: GBigIntN): GBigInt = {
-    val v = x.v
-    GBigInt(v)
+  private def fromGBigInt(x: GBigInt): GBigIntN = {
+    val v = x.value
+    GBigIntN(v)
   }
 
-  private def toGString(x: GStringN): GString = {
-    val v = x.v
-    GString(v)
+  private def fromGString(x: GString): GStringN = {
+    val v = x.value
+    GStringN(v)
   }
 
-  private def toGByteArray(x: GByteArrayN): GByteArray = {
-    val v = ByteString.copyFrom(x.v.toArray)
-    GByteArray(v)
+  private def fromGByteArray(x: GByteArray): GByteArrayN = {
+    val v = x.value.toByteArray
+    GByteArrayN(v)
   }
 
-  private def toGUri(x: GUriN): GUri = {
-    val v = x.v
-    GUri(v)
+  private def fromGUri(x: GUri): GUriN = {
+    val v = x.value
+    GUriN(v)
   }
 
   /** Collections */
-  private def toEList(x: EListN): EList = {
-    val ps             = toProto(x.ps)
-    val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
-    val remainder      = toProto(x.remainder)
-    EList(ps, locallyFree, connectiveUsed, remainder)
+  private def fromEList(x: EList): EListN = {
+    val ps        = fromProto(x.ps)
+    val remainder = fromProto(x.remainder)
+    EListN(ps, remainder)
   }
 
-  private def toETuple(x: ETupleN): ETuple = {
-    val ps             = toProto(x.ps)
-    val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
-    ETuple(ps, locallyFree, connectiveUsed)
+  private def fromETuple(x: ETuple): ETupleN = {
+    val ps = fromProto(x.ps)
+    ETupleN(ps)
   }
 
-  private def toParSet(x: ESetN): ParSet = {
-    val ps             = toProto(x.sortedPs)
-    val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
-    val remainder      = toProto(x.remainder)
-    ParSet(ps, connectiveUsed, Sync[Eval].delay(locallyFree), remainder)
+  private def fromParSet(x: ParSet): ESetN = {
+    val ps        = fromProto(x.ps.sortedPars)
+    val remainder = fromProto(x.remainder)
+    ESetN(ps, remainder)
   }
 
-  private def toParMap(x: EMapN): ParMap = {
-    val ps             = toProtoKVPairs(x.sortedPs)
-    val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
-    val remainder      = toProto(x.remainder)
-    ParMap(ps, connectiveUsed, Sync[Eval].delay(locallyFree), remainder)
+  private def fromParMap(x: ParMap): EMapN = {
+    val ps        = fromProtoKVPairs(x.ps.sortedList)
+    val remainder = fromProto(x.remainder)
+    EMapN(ps, remainder)
   }
 
   /** Vars */
-  private def toBoundVar(x: BoundVarN): BoundVar = {
-    val idx = x.idx
-    BoundVar(idx)
+  private def fromBoundVar(x: BoundVar): BoundVarN = {
+    val idx = x.value
+    BoundVarN(idx)
   }
 
-  private def toFreeVar(x: FreeVarN): FreeVar = {
-    val idx = x.idx
-    FreeVar(idx)
+  private def fromFreeVar(x: FreeVar): FreeVarN = {
+    val idx = x.value
+    FreeVarN(idx)
   }
 
-  private def toWildcard(x: WildcardN): Wildcard =
-    Wildcard(WildcardMsg())
+  private def fromWildcard(@unused x: Wildcard): WildcardN =
+    WildcardN()
 
-  private def toVar(x: VarN): Var = x match {
-    case n: BoundVarN => toBoundVar(n)
-    case n: FreeVarN  => toFreeVar(n)
-    case n: WildcardN => toWildcard(n)
+  private def fromVar(x: Var): VarN = x.varInstance match {
+    case n: BoundVar => fromBoundVar(n)
+    case n: FreeVar  => fromFreeVar(n)
+    case n: Wildcard => fromWildcard(n)
     case _ =>
-      assert(assertion = false, "Invalid tag for Var conversion")
-      Wildcard(WildcardMsg())
+      assert(assertion = false, "Unknown type for Var conversion")
+      WildcardN()
   }
 
   /** Unforgeable names */
-  private def toPrivate(x: UPrivateN): GPrivate = {
-    val v = ByteString.copyFrom(x.v.toArray)
-    GPrivate(v)
+  private def fromPrivate(x: GPrivate): UPrivateN = {
+    val v = x.id.toByteArray
+    UPrivateN(v)
   }
 
-  private def toDeployId(x: UDeployIdN): GDeployId = {
-    val v = ByteString.copyFrom(x.v.toArray)
-    GDeployId(v)
+  private def fromDeployId(x: GDeployId): UDeployIdN = {
+    val v = x.sig.toByteArray
+    UDeployIdN(v)
   }
 
-  private def toDeployerId(x: UDeployerIdN): GDeployerId = {
-    val v = ByteString.copyFrom(x.v.toArray)
-    GDeployerId(v)
-  }
-
-  private def toUnforgeable(x: UnforgeableN): GUnforgeable = x match {
-    case n: UPrivateN    => toPrivate(n)
-    case n: UDeployIdN   => toDeployId(n)
-    case n: UDeployerIdN => toDeployerId(n)
-    case _ =>
-      assert(assertion = false, "Invalid tag for Var conversion")
-      GPrivate(ByteString.copyFromUtf8("42"))
+  private def fromDeployerId(x: GDeployerId): UDeployerIdN = {
+    val v = x.publicKey.toByteArray
+    UDeployerIdN(v)
   }
 
   /** Operations */
-  private def toENeg(x: ENegN): ENeg = {
-    val p = toProto(x.p)
-    ENeg(p)
+  private def fromENeg(x: ENeg): ENegN = {
+    val p = fromProto(x.p)
+    ENegN(p)
   }
 
-  private def toENot(x: ENotN): ENot = {
-    val p = toProto(x.p)
-    ENot(p)
+  private def fromENot(x: ENot): ENotN = {
+    val p = fromProto(x.p)
+    ENotN(p)
   }
 
-  private def toEPlus(x: EPlusN): EPlus = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EPlus(p1, p2)
+  private def fromEPlus(x: EPlus): EPlusN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EPlusN(p1, p2)
   }
 
-  private def toEMinus(x: EMinusN): EMinus = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EMinus(p1, p2)
+  private def fromEMinus(x: EMinus): EMinusN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EMinusN(p1, p2)
   }
 
-  private def toEMult(x: EMultN): EMult = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EMult(p1, p2)
+  private def fromEMult(x: EMult): EMultN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EMultN(p1, p2)
   }
 
-  private def toEDiv(x: EDivN): EDiv = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EDiv(p1, p2)
+  private def fromEDiv(x: EDiv): EDivN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EDivN(p1, p2)
   }
 
-  private def toEMod(x: EModN): EMod = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EMod(p1, p2)
+  private def fromEMod(x: EMod): EModN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EModN(p1, p2)
   }
 
-  private def toELt(x: ELtN): ELt = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    ELt(p1, p2)
+  private def fromELt(x: ELt): ELtN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    ELtN(p1, p2)
   }
 
-  private def toELte(x: ELteN): ELte = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    ELte(p1, p2)
+  private def fromELte(x: ELte): ELteN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    ELteN(p1, p2)
   }
 
-  private def toEGt(x: EGtN): EGt = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EGt(p1, p2)
+  private def fromEGt(x: EGt): EGtN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EGtN(p1, p2)
   }
 
-  private def toEGte(x: EGteN): EGte = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EGte(p1, p2)
+  private def fromEGte(x: EGte): EGteN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EGteN(p1, p2)
   }
 
-  private def toEEq(x: EEqN): EEq = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EEq(p1, p2)
+  private def fromEEq(x: EEq): EEqN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EEqN(p1, p2)
   }
 
-  private def toENeq(x: ENeqN): ENeq = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    ENeq(p1, p2)
+  private def fromENeq(x: ENeq): ENeqN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    ENeqN(p1, p2)
   }
 
-  private def toEAnd(x: EAndN): EAnd = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EAnd(p1, p2)
+  private def fromEAnd(x: EAnd): EAndN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EAndN(p1, p2)
   }
 
-  private def toEShortAnd(x: EShortAndN): EShortAnd = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EShortAnd(p1, p2)
+  private def fromEShortAnd(x: EShortAnd): EShortAndN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EShortAndN(p1, p2)
   }
 
-  private def toEOr(x: EOrN): EOr = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EOr(p1, p2)
+  private def fromEOr(x: EOr): EOrN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EOrN(p1, p2)
   }
 
-  private def toEShortOr(x: EShortOrN): EShortOr = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EShortOr(p1, p2)
+  private def fromEShortOr(x: EShortOr): EShortOrN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EShortOrN(p1, p2)
   }
 
-  private def toEPlusPlus(x: EPlusPlusN): EPlusPlus = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EPlusPlus(p1, p2)
+  private def fromEPlusPlus(x: EPlusPlus): EPlusPlusN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EPlusPlusN(p1, p2)
   }
 
-  private def toEMinusMinus(x: EMinusMinusN): EMinusMinus = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EMinusMinus(p1, p2)
+  private def fromEMinusMinus(x: EMinusMinus): EMinusMinusN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EMinusMinusN(p1, p2)
   }
 
-  private def toEPercentPercent(x: EPercentPercentN): EPercentPercent = {
-    val p1 = toProto(x.p1)
-    val p2 = toProto(x.p2)
-    EPercentPercent(p1, p2)
+  private def fromEPercentPercent(x: EPercentPercent): EPercentPercentN = {
+    val p1 = fromProto(x.p1)
+    val p2 = fromProto(x.p2)
+    EPercentPercentN(p1, p2)
   }
 
-  private def toEMethod(x: EMethodN): EMethod = {
-    val methodName     = x.methodName
-    val target         = toProto(x.target)
-    val arguments      = toProto(x.arguments)
-    val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
-    EMethod(methodName, target, arguments, locallyFree, connectiveUsed)
+  private def fromEMethod(x: EMethod): EMethodN = {
+    val methodName = x.methodName
+    val target     = fromProto(x.target)
+    val arguments  = fromProto(x.arguments)
+    EMethodN(methodName, target, arguments)
   }
 
-  private def toEMatches(x: EMatchesN): EMatches = {
-    val target  = toProto(x.target)
-    val pattern = toProto(x.pattern)
-    EMatches(target, pattern)
+  private def fromEMatches(x: EMatches): EMatchesN = {
+    val target  = fromProto(x.target)
+    val pattern = fromProto(x.pattern)
+    EMatchesN(target, pattern)
   }
 
   /** Connective */
-  private def toConnBool(x: ConnBoolN): ConnBool =
-    ConnBool(true)
+  private def fromConnBool(@unused x: ConnBool): ConnBoolN =
+    ConnBoolN()
 
-  private def toConnInt(x: ConnIntN): ConnInt =
-    ConnInt(true)
+  private def fromConnInt(@unused x: ConnInt): ConnIntN =
+    ConnIntN()
 
-  private def toConnBigInt(x: ConnBigIntN): ConnBigInt =
-    ConnBigInt(true)
+  private def fromConnBigInt(@unused x: ConnBigInt): ConnBigIntN =
+    ConnBigIntN()
 
-  private def toConnString(x: ConnStringN): ConnString =
-    ConnString(true)
+  private def fromConnString(@unused x: ConnString): ConnStringN =
+    ConnStringN()
 
-  private def toConnUri(x: ConnUriN): ConnUri =
-    ConnUri(true)
+  private def fromConnUri(@unused x: ConnUri): ConnUriN =
+    ConnUriN()
 
-  private def toConnByteArray(x: ConnByteArrayN): ConnByteArray =
-    ConnByteArray(true)
+  private def fromConnByteArray(@unused x: ConnByteArray): ConnByteArrayN =
+    ConnByteArrayN()
 
-  private def toConnNotBody(x: ConnNotN): ConnNotBody = {
-    val p = toProto(x.p)
-    ConnNotBody(p)
+  private def fromConnNotBody(x: ConnNotBody): ConnNotN = {
+    val p = fromProto(x.value)
+    ConnNotN(p)
   }
 
-  private def toConnAndBody(x: ConnAndN): ConnAndBody = {
-    val ps = ConnectiveBody(toProto(x.ps))
-    ConnAndBody(ps)
+  private def fromConnAndBody(x: ConnAndBody): ConnAndN = {
+    val ps = fromProto(x.value.ps)
+    ConnAndN(ps)
   }
 
-  private def toConnOrBody(x: ConnOrN): ConnOrBody = {
-    val ps = ConnectiveBody(toProto(x.ps))
-    ConnOrBody(ps)
+  private def fromConnOrBody(x: ConnOrBody): ConnOrN = {
+    val ps = fromProto(x.value.ps)
+    ConnOrN(ps)
   }
 
-  private def toVarRefBody(x: ConnVarRefN): VarRefBody = {
-    val index = x.index
-    val depth = x.depth
-    VarRefBody(VarRef(index, depth))
+  private def fromVarRefBody(x: VarRefBody): ConnVarRefN = {
+    val index = x.value.index
+    val depth = x.value.depth
+    ConnVarRefN(index, depth)
   }
 
   /** Other types */
-  private def toBundle(x: BundleN): Bundle = {
-    val body      = toProto(x.body)
+  private def fromBundle(x: Bundle): BundleN = {
+    val body      = fromProto(x.body)
     val writeFlag = x.writeFlag
     val readFlag  = x.readFlag
-    Bundle(body, writeFlag, readFlag)
+    BundleN(body, writeFlag, readFlag)
   }
 
-  private def toGSysAuthToken(x: SysAuthTokenN): GSysAuthToken =
-    GSysAuthToken()
- */
+  private def fromGSysAuthToken(@unused x: GSysAuthToken): SysAuthTokenN =
+    SysAuthTokenN()
 }
