@@ -30,6 +30,12 @@ object Manager {
     Sorting.sortInjections(injections)
   def comparePars(p1: ParN, p2: ParN): Int = Sorting.comparePars(p1, p2)
 
+  def addPar(p1: ParN, p2: ParN): ParN = p1 match {
+    case _: NilN         => p2
+    case pProc: ParProcN => pProc.addPar(p2)
+    case _               => ParProcN(Seq(p2, p1))
+  }
+
   /** MetaData */
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash     = RhoHash.rhoHashFn(p)
   def serializedSizeFn(p: RhoTypeN): Int         = SerializedSize.serializedSizeFn(p)

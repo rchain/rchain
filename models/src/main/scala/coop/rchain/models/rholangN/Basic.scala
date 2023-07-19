@@ -10,8 +10,8 @@ object NilN { def apply(): NilN = new NilN }
   * and one receive.
   */
 final class ParProcN(val ps: Seq[ParN]) extends BasicN {
-  def sortedPs: Seq[ParN]    = ParManager.Manager.sortPars(ps)
-  def add(p: ParN): ParProcN = ParProcN(ps :+ p)
+  def sortedPs: Seq[ParN]       = ParManager.Manager.sortPars(ps)
+  def addPar(p: ParN): ParProcN = ParProcN(ps :+ p)
 }
 object ParProcN {
   def apply(ps: Seq[ParN] = Seq()): ParProcN = new ParProcN(ps)
@@ -102,6 +102,9 @@ object ReceiveBindN {
 
   def apply(pattern: ParN, source: ParN, freeCount: Int): ReceiveBindN =
     apply(Seq(pattern), source, freeCount)
+
+  def apply(pattern: ParN, source: ParN): ReceiveBindN =
+    apply(Seq(pattern), source, 0)
 }
 
 /**
@@ -117,7 +120,7 @@ object MatchN {
 final class MatchCaseN(val pattern: ParN, val source: ParN, val freeCount: Int) extends AuxParN
 
 object MatchCaseN {
-  def apply(pattern: ParN, source: ParN, freeCount: Int): MatchCaseN =
+  def apply(pattern: ParN, source: ParN, freeCount: Int = 0): MatchCaseN =
     new MatchCaseN(pattern, source, freeCount)
 }
 

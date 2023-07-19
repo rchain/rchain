@@ -31,7 +31,7 @@ class ParBench {
 
     val seq = Seq.tabulate(n)(el)
     seq.foldLeft(ParProcN(Seq())) { (acc, p) =>
-      acc.add(p)
+      acc.addPar(p)
     }
   }
   val nestedSize: Int            = 500
