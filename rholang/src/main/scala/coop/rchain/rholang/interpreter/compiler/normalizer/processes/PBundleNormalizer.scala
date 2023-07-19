@@ -1,9 +1,12 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.{BundleOps, Par}
+import cats.syntax.all._
+import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{
   FreeContext,
@@ -12,14 +15,6 @@ import coop.rchain.rholang.interpreter.compiler.{
   SourcePosition
 }
 import coop.rchain.rholang.interpreter.errors.UnexpectedBundleContent
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
-  BundleEquiv,
-  BundleRead,
-  BundleReadWrite,
-  BundleWrite,
-  PBundle
-}
-import coop.rchain.models.Bundle
 
 object PBundleNormalizer {
   def normalize[F[_]: Sync](b: PBundle, input: ProcVisitInputs)(
@@ -50,16 +45,24 @@ object PBundleNormalizer {
       )
     }
 
-    import BundleOps._
+    def connectivesExistOnTop(p: ParN): Boolean =
+      p match {
+        case _: ConnectiveN  => true
+        case pProc: ParProcN => pProc.ps.exists(connectivesExistOnTop)
+        case _               => false
+      }
+
     for {
       targetResult <- normalizeMatch[F](b.proc_, input.copy(par = VectorPar()))
+      target       = fromProto(targetResult.par)
       outermostBundle = b.bundle_ match {
-        case _: BundleReadWrite => Bundle(targetResult.par, writeFlag = true, readFlag = true)
-        case _: BundleRead      => Bundle(targetResult.par, writeFlag = false, readFlag = true)
-        case _: BundleWrite     => Bundle(targetResult.par, writeFlag = true, readFlag = false)
-        case _: BundleEquiv     => Bundle(targetResult.par, writeFlag = false, readFlag = false)
+        case _: BundleReadWrite => BundleN(target, writeFlag = true, readFlag = true)
+        case _: BundleRead      => BundleN(target, writeFlag = false, readFlag = true)
+        case _: BundleWrite     => BundleN(target, writeFlag = true, readFlag = false)
+        case _: BundleEquiv     => BundleN(target, writeFlag = false, readFlag = false)
       }
-      res <- if (targetResult.par.connectives.nonEmpty) {
+
+      res <- if (connectivesExistOnTop(target)) {
               Sync[F].raiseError(
                 UnexpectedBundleContent(
                   s"Illegal top level connective in bundle at position: line: ${b.line_num}, column: ${b.col_num}."
@@ -68,11 +71,12 @@ object PBundleNormalizer {
             } else if (targetResult.freeMap.wildcards.nonEmpty || targetResult.freeMap.levelBindings.nonEmpty) {
               error(targetResult)
             } else {
-              val newBundle: Bundle = targetResult.par.singleBundle() match {
-                case Some(single) => outermostBundle.merge(single)
-                case None         => outermostBundle
+              val newBundle: BundleN = target match {
+                case b: BundleN => outermostBundle.merge(b)
+                case _          => outermostBundle
               }
-              ProcVisitOutputs(input.par.prepend(newBundle), input.freeMap).pure[F]
+              val outPar: ParN = fromProto(input.par).add(newBundle)
+              ProcVisitOutputs(toProto(outPar), input.freeMap).pure[F]
             }
     } yield res
   }
