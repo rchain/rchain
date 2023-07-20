@@ -1,35 +1,26 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.{Par, Receive, Var}
+import cats.syntax.all._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
-import coop.rchain.rholang.interpreter.compiler.{
-  FreeContext,
-  FreeMap,
-  NameVisitInputs,
-  NameVisitOutputs,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  ReceiveBindsSortMatcher,
-  VarSort
-}
-import coop.rchain.rholang.interpreter.errors.{
-  NormalizerError,
-  ReceiveOnSameChannelsError,
-  UnexpectedReuseOfNameContextFree
-}
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
+import coop.rchain.models.{Par, ReceiveBind}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
+import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
+import coop.rchain.rholang.interpreter.compiler._
 import coop.rchain.rholang.interpreter.compiler.normalizer.processes.Utils.failOnInvalidConnective
 import coop.rchain.rholang.interpreter.compiler.normalizer.{
   NameNormalizeMatcher,
   RemainderNormalizeMatcher
 }
+import coop.rchain.rholang.interpreter.errors.{
+  ReceiveOnSameChannelsError,
+  UnexpectedReuseOfNameContextFree
+}
 
-import scala.jdk.CollectionConverters._
-import scala.collection.immutable.{BitSet, Vector}
 import java.util.UUID
+import scala.jdk.CollectionConverters._
 
 object PInputNormalizer {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -142,30 +133,28 @@ object PInputNormalizer {
         // We split this into parts. First we process all the sources, then we process all the bindings.
         def processSources(
             sources: Vector[Name]
-        ): F[(Vector[Par], FreeMap[VarSort], BitSet, Boolean)] =
-          sources.foldM((Vector.empty[Par], input.freeMap, BitSet.empty, false)) {
-            case ((vectorPar, knownFree, locallyFree, connectiveUsed), name) =>
+        ): F[(Vector[ParN], FreeMap[VarSort])] =
+          sources.foldM((Vector.empty[ParN], input.freeMap)) {
+            case ((vectorPar, knownFree), name) =>
               NameNormalizeMatcher
                 .normalizeMatch[F](name, NameVisitInputs(input.boundMapChain, knownFree))
                 .map {
                   case NameVisitOutputs(par, knownFree) =>
                     (
-                      vectorPar :+ par,
-                      knownFree,
-                      locallyFree | ParLocallyFree.locallyFree(par, input.boundMapChain.depth),
-                      connectiveUsed || ParLocallyFree.connectiveUsed(par)
+                      vectorPar :+ fromProto(par),
+                      knownFree
                     )
                 }
           }
 
         def processPatterns(
             patterns: Vector[(Vector[Name], NameRemainder)]
-        ): F[Vector[(Vector[Par], Option[Var], FreeMap[VarSort], BitSet)]] =
+        ): F[Vector[(Vector[ParN], Option[VarN], FreeMap[VarSort])]] =
           patterns.traverse {
             case (names, nameRemainder) =>
               names
-                .foldM((Vector.empty[Par], FreeMap.empty[VarSort], BitSet.empty)) {
-                  case ((vectorPar, knownFree, locallyFree), name) =>
+                .foldM((Vector.empty[ParN], FreeMap.empty[VarSort])) {
+                  case ((vectorPar, knownFree), name) =>
                     NameNormalizeMatcher
                       .normalizeMatch[F](
                         name,
@@ -174,21 +163,15 @@ object PInputNormalizer {
                       case nameVisitOutputs @ NameVisitOutputs(par, knownFree) =>
                         failOnInvalidConnective(input, nameVisitOutputs)
                           .fold(
-                            _.raiseError[F, (Vector[Par], FreeMap[VarSort], BitSet)],
-                            _ =>
-                              (
-                                vectorPar :+ par,
-                                knownFree,
-                                locallyFree | ParLocallyFree
-                                  .locallyFree(par, input.boundMapChain.depth + 1)
-                              ).pure[F]
+                            _.raiseError[F, (Vector[ParN], FreeMap[VarSort])],
+                            _ => (vectorPar :+ fromProto(par), knownFree).pure[F]
                           )
                     }
                 } >>= {
-                case (vectorPar, knownFree, locallyFree) =>
+                case (vectorPar, knownFree) =>
                   RemainderNormalizeMatcher.normalizeMatchName(nameRemainder, knownFree).map {
                     case (optionalVar, knownFree) =>
-                      (vectorPar, optionalVar, knownFree, locallyFree)
+                      (vectorPar, fromProtoVarOpt(optionalVar), knownFree)
                   }
               }
           }
@@ -232,16 +215,26 @@ object PInputNormalizer {
 
         val (patterns, names) = consumes.unzip
 
+        def fromReceiveBind(x: ReceiveBind): ReceiveBindN = {
+          val patterns  = fromProto(x.patterns)
+          val source    = fromProto(x.source)
+          val remainder = fromProtoVarOpt(x.remainder)
+          val freeCount = x.freeCount
+          ReceiveBindN(patterns, source, remainder, freeCount)
+        }
+
         for {
-          processedSources                                                  <- processSources(names)
-          (sources, sourcesFree, sourcesLocallyFree, sourcesConnectiveUsed) = processedSources
-          processedPatterns                                                 <- processPatterns(patterns)
+          processedSources       <- processSources(names)
+          (sources, sourcesFree) = processedSources
+          processedPatterns      <- processPatterns(patterns)
           receiveBindsAndFreeMaps <- ReceiveBindsSortMatcher.preSortBinds[F, VarSort](
                                       processedPatterns.zip(sources).map {
-                                        case ((a, b, c, _), e) => (a, b, e, c)
+                                        case ((a, b, c), e) =>
+                                          (toProto(a), toProtoVarOpt(b), toProto(e), c)
                                       }
                                     )
-          (receiveBinds, receiveBindFreeMaps) = receiveBindsAndFreeMaps.unzip
+          unz                                 = receiveBindsAndFreeMaps.unzip
+          (receiveBinds, receiveBindFreeMaps) = (unz._1.map(fromReceiveBind), unz._2)
           channels                            = receiveBinds.map(_.source)
           hasSameChannels                     = channels.size > channels.toSet.size
           _ <- ReceiveOnSameChannelsError(p.line_num, p.col_num)
@@ -269,22 +262,10 @@ object PInputNormalizer {
                              )
         } yield {
           val bindCount = receiveBindsFreeMap.countNoWildcards
+          val receive =
+            ReceiveN(receiveBinds, fromProto(procVisitOutputs.par), persistent, peek, bindCount)
           ProcVisitOutputs(
-            input.par.prepend(
-              Receive(
-                receiveBinds,
-                procVisitOutputs.par,
-                persistent,
-                peek,
-                bindCount,
-                sourcesLocallyFree | processedPatterns
-                  .map(_._4)
-                  .fold(BitSet.empty)(_ | _) | procVisitOutputs.par.locallyFree
-                  .rangeFrom(bindCount)
-                  .map(_ - bindCount),
-                sourcesConnectiveUsed || procVisitOutputs.par.connectiveUsed
-              )
-            ),
+            toProto(fromProto(input.par).add(receive)),
             procVisitOutputs.freeMap
           )
         }

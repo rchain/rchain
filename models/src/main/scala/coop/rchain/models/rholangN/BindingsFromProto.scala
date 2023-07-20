@@ -245,7 +245,7 @@ private[rholangN] object BindingsFromProto {
   private def fromWildcard(@unused x: Wildcard): WildcardN =
     WildcardN()
 
-  private def fromVar(x: Var): VarN = x.varInstance match {
+  def fromVar(x: Var): VarN = x.varInstance match {
     case n: BoundVar => fromBoundVar(n)
     case n: FreeVar  => fromFreeVar(n)
     case n: Wildcard => fromWildcard(n)

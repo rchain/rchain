@@ -238,7 +238,7 @@ private[rholangN] object BindingsToProto {
   private def toWildcard(@unused x: WildcardN): Wildcard =
     Wildcard(WildcardMsg())
 
-  private def toVar(x: VarN): Var = x match {
+  def toVar(x: VarN): Var = x match {
     case n: BoundVarN => toBoundVar(n)
     case n: FreeVarN  => toFreeVar(n)
     case n: WildcardN => toWildcard(n)

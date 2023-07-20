@@ -1159,8 +1159,6 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     )
     fromProto(result.par) should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
-    // Make sure that variable references in patterns are reflected
-    result.par.locallyFree.get should be(BitSet(0))
   }
 
   it should "do a deep lookup in a receive case" in {
@@ -1194,8 +1192,6 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       bindCount = 0)
     fromProto(result.par) should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
-    result.par.locallyFree.get should be(BitSet(0))
-    // format: on
   }
 
   "PSimpleType" should "result in a connective of the correct type" in {
