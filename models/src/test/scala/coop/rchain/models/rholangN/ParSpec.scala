@@ -68,6 +68,14 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     simpleCheck(p) should be(true)
   }
 
+  it should "test Receive with different data order" in {
+    val bind1 = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), NilN(), Some(BoundVarN(42)), 2)
+    val bind2 = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), NilN(), Some(BoundVarN(42)), 2)
+    val p1    = ReceiveN(Seq(bind1, bind2), NilN(), persistent = true, peek = false, 4)
+    val p2    = ReceiveN(Seq(bind2, bind1), NilN(), persistent = true, peek = false, 4)
+    simpleCheck(p1, Some(p2)) should be(true)
+  }
+
   it should "test match with same data order" in {
     val case1 = MatchCaseN(FreeVarN(41), BoundVarN(42), 1)
     val case2 = MatchCaseN(WildcardN(), BoundVarN(42), 0)

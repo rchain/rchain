@@ -78,7 +78,7 @@ private[ParManager] object Serialization {
 
         case receive: ReceiveN =>
           write(RECEIVE)
-          write(receive.binds)
+          write(receive.sortedBinds)
           write(receive.body)
           write(receive.persistent)
           write(receive.peek)

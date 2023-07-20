@@ -51,8 +51,9 @@ final class ReceiveN(
     val persistent: Boolean,
     val peek: Boolean,
     val bindCount: Int
-) extends BasicN
-
+) extends BasicN {
+  def sortedBinds: Seq[ReceiveBindN] = ParManager.Manager.sortBinds(binds)
+}
 object ReceiveN {
   def apply(
       binds: Seq[ReceiveBindN],

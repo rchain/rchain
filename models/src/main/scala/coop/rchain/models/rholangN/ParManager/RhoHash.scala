@@ -149,7 +149,7 @@ private[ParManager] object RhoHash {
       val bodySize = hSize(receive.binds) + hSize(receive.body) +
         hSize(receive.persistent) + hSize(receive.peek) + hSize(receive.bindCount)
       val hs = Hashable(RECEIVE, bodySize)
-      hs.append(receive.binds)
+      hs.append(receive.sortedBinds)
       hs.append(receive.body)
       hs.append(receive.persistent)
       hs.append(receive.peek)
