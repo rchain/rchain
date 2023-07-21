@@ -20,8 +20,6 @@ import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.collection.immutable.BitSet
-
 class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   val inputs                                   = ProcVisitInputs(Par(), BoundMapChain.empty[VarSort], FreeMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty

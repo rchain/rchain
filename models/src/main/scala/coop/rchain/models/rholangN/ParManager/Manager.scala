@@ -26,7 +26,9 @@ object Manager {
 
   def sortPars(ps: Seq[ParN]): Seq[ParN]                  = Sorting.sortPars(ps)
   def sortBinds(bs: Seq[ReceiveBindN]): Seq[ReceiveBindN] = Sorting.sortBinds(bs)
-  def sortUris(uris: Seq[String]): Seq[String]            = Sorting.sortUris(uris)
+  def sortBindsWithT[T](bs: Seq[(ReceiveBindN, T)]): Seq[(ReceiveBindN, T)] =
+    Sorting.sortBindsWithT(bs)
+  def sortUris(uris: Seq[String]): Seq[String] = Sorting.sortUris(uris)
   def sortInjections(injections: Map[String, ParN]): Seq[(String, ParN)] =
     Sorting.sortInjections(injections)
   def comparePars(p1: ParN, p2: ParN): Int = Sorting.comparePars(p1, p2)
