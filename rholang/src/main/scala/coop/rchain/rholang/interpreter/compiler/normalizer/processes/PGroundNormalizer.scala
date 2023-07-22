@@ -1,11 +1,12 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
+import cats.syntax.all._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
+import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PGround
 import coop.rchain.rholang.interpreter.compiler.normalizer.GroundNormalizeMatcher
+import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
 
 object PGroundNormalizer {
   def normalize[F[_]: Sync](p: PGround, input: ProcVisitInputs): F[ProcVisitOutputs] =
@@ -14,7 +15,7 @@ object PGroundNormalizer {
       .map(
         expr =>
           ProcVisitOutputs(
-            input.par.prepend(expr, input.boundMapChain.depth),
+            toProto(fromProto(input.par).add(fromProto(expr))),
             input.freeMap
           )
       )

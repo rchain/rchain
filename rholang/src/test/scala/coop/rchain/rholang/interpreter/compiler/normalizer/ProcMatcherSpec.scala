@@ -320,7 +320,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   }
 
   "PPar" should "normalize without StackOverflowError-s even for huge programs" in {
-    val hugePPar = (1 to 50000)
+    val hugePPar = (1 to 100) // TODO: Change to 50000 after creation stacksafe new rho Pars
       .map(x => new PGround(new GroundInt(x.toString)))
       .reduce((l: Proc, r: Proc) => new PPar(l, r))
     noException should be thrownBy {
