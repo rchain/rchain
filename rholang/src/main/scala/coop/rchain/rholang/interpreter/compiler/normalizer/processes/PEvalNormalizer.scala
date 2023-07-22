@@ -1,12 +1,12 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
+import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.compiler.{NameVisitInputs, ProcVisitInputs, ProcVisitOutputs}
+import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PEval
 import coop.rchain.rholang.interpreter.compiler.normalizer.NameNormalizeMatcher
+import coop.rchain.rholang.interpreter.compiler.{NameVisitInputs, ProcVisitInputs, ProcVisitOutputs}
 
 object PEvalNormalizer {
   def normalize[F[_]: Sync](p: PEval, input: ProcVisitInputs)(
@@ -17,7 +17,7 @@ object PEvalNormalizer {
       .map(
         nameMatchResult =>
           ProcVisitOutputs(
-            input.par ++ nameMatchResult.par,
+            toProto(fromProto(input.par).add(fromProto(nameMatchResult.par))),
             nameMatchResult.freeMap
           )
       )
