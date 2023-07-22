@@ -46,7 +46,14 @@ object ConnOrN {
 }
 
 /** The "=..." Binding for Bound variable in pattern matching.
-  * E.g. for(@{=*x} <- @Nil) { Nil } */
+  * The purpose of VarRef is to provide a mechanism to bind variables to values or processes
+  * within pattern matching structures in Rholang, which is useful for controlling the flow of information
+  * and processes within a Rholang program.
+  * E.g.:
+  * match someProc { =x => x!(*someChannel) }
+  *  or
+  * for(@{=*x} <- someChannel) { x!(*someOtherChannel) }
+  */
 final class ConnVarRefN(val index: Int, val depth: Int) extends ConnectiveVarN
 object ConnVarRefN {
   def apply(index: Int, depth: Int): ConnVarRefN = new ConnVarRefN(index, depth)
