@@ -25,6 +25,26 @@ private[rholangN] object BindingsToProto {
     case x: MatchN   => toMatch(x)
     case x: NewN     => toNew(x)
 
+    /** Expressions */
+    case e: ExprN => toExpr(e)
+
+    /** Unforgeable names */
+    case u: UnforgeableN => toUnforgeable(u)
+
+    /** Connective */
+    case c: ConnectiveN => toConnective(c)
+
+    /** Other types */
+    case x: BundleN       => toBundle(x)
+    case x: SysAuthTokenN => toGSysAuthToken(x)
+
+    case _ =>
+      assert(assertion = false, "Unknown type for toProto conversation")
+      Par()
+  }
+
+  def toExpr(e: ExprN): Expr = e match {
+
     /** Ground types */
     case x: GBoolN      => toGBool(x)
     case x: GIntN       => toGInt(x)
@@ -40,14 +60,7 @@ private[rholangN] object BindingsToProto {
     case x: EMapN   => toParMap(x)
 
     /** Vars */
-    case x: BoundVarN => EVar(toBoundVar(x))
-    case x: FreeVarN  => EVar(toFreeVar(x))
-    case x: WildcardN => EVar(toWildcard(x))
-
-    /** Unforgeable names */
-    case x: UPrivateN    => toPrivate(x)
-    case x: UDeployIdN   => toDeployId(x)
-    case x: UDeployerIdN => toDeployerId(x)
+    case v: VarN => EVar(toVar(v))
 
     /** Operations */
     case x: ENegN            => toENeg(x)
@@ -73,7 +86,31 @@ private[rholangN] object BindingsToProto {
     case x: EMethodN         => toEMethod(x)
     case x: EMatchesN        => toEMatches(x)
 
-    /** Connective */
+    case _ =>
+      assert(assertion = false, "Unknown type for Expression conversation")
+      GBool(true)
+  }
+
+  def toVar(x: VarN): Var = x match {
+    case n: BoundVarN => toBoundVar(n)
+    case n: FreeVarN  => toFreeVar(n)
+    case n: WildcardN => toWildcard(n)
+    case _ =>
+      assert(assertion = false, "Unknown type for Var conversation")
+      Wildcard(WildcardMsg())
+  }
+
+  def toUnforgeable(u: UnforgeableN): GUnforgeable = u match {
+    case x: UPrivateN    => toPrivate(x)
+    case x: UDeployIdN   => toDeployId(x)
+    case x: UDeployerIdN => toDeployerId(x)
+    case _ =>
+      assert(assertion = false, "Unknown type for Unforgeable conversation")
+      val v = ByteString.copyFrom(Array[Byte]())
+      GPrivate(v)
+  }
+
+  def toConnective(c: ConnectiveN): Connective = c match {
     case x: ConnBoolN      => Connective(toConnBool(x))
     case x: ConnIntN       => Connective(toConnInt(x))
     case x: ConnBigIntN    => Connective(toConnBigInt(x))
@@ -84,14 +121,9 @@ private[rholangN] object BindingsToProto {
     case x: ConnAndN       => Connective(toConnAndBody(x))
     case x: ConnOrN        => Connective(toConnOrBody(x))
     case x: ConnVarRefN    => Connective(toVarRefBody(x))
-
-    /** Other types */
-    case x: BundleN       => toBundle(x)
-    case x: SysAuthTokenN => toGSysAuthToken(x)
-
     case _ =>
-      assert(assertion = false, "Unknown type for toProto conversation")
-      Par()
+      assert(assertion = false, "Unknown type for Connective conversation")
+      Connective(ConnBool(true))
   }
 
   private def toProto(ps: Seq[ParN]): Seq[Par]           = ps.map(toProto)
@@ -237,15 +269,6 @@ private[rholangN] object BindingsToProto {
 
   private def toWildcard(@unused x: WildcardN): Wildcard =
     Wildcard(WildcardMsg())
-
-  def toVar(x: VarN): Var = x match {
-    case n: BoundVarN => toBoundVar(n)
-    case n: FreeVarN  => toFreeVar(n)
-    case n: WildcardN => toWildcard(n)
-    case _ =>
-      assert(assertion = false, "Unknown type for Var conversation")
-      Wildcard(WildcardMsg())
-  }
 
   /** Unforgeable names */
   private def toPrivate(x: UPrivateN): GPrivate = {

@@ -32,95 +32,100 @@ private[rholangN] object BindingsFromProto {
     case x: Match   => fromMatch(x)
     case x: New     => fromNew(x)
 
-    case e: Expr =>
-      e.exprInstance match {
-
-        /** Ground types */
-        case x: GBool      => fromGBool(x)
-        case x: GInt       => fromGInt(x)
-        case x: GBigInt    => fromGBigInt(x)
-        case x: GString    => fromGString(x)
-        case x: GByteArray => fromGByteArray(x)
-        case x: GUri       => fromGUri(x)
-
-        /** Collections */
-        case x: EListBody  => fromEList(x.value)
-        case x: ETupleBody => fromETuple(x.value)
-        case x: ESetBody   => fromParSet(x.value)
-        case x: EMapBody   => fromParMap(x.value)
-
-        /** Vars */
-        case x: EVarBody =>
-          x.value.v.varInstance match {
-            case n: BoundVar => fromBoundVar(n)
-            case n: FreeVar  => fromFreeVar(n)
-            case n: Wildcard => fromWildcard(n)
-            case _ =>
-              assert(assertion = false, "Unknown type for Var conversion")
-              WildcardN()
-          }
-
-        /** Operations */
-        case x: ENegBody            => fromENeg(x.value)
-        case x: ENotBody            => fromENot(x.value)
-        case x: EPlusBody           => fromEPlus(x.value)
-        case x: EMinusBody          => fromEMinus(x.value)
-        case x: EMultBody           => fromEMult(x.value)
-        case x: EDivBody            => fromEDiv(x.value)
-        case x: EModBody            => fromEMod(x.value)
-        case x: ELtBody             => fromELt(x.value)
-        case x: ELteBody            => fromELte(x.value)
-        case x: EGtBody             => fromEGt(x.value)
-        case x: EGteBody            => fromEGte(x.value)
-        case x: EEqBody             => fromEEq(x.value)
-        case x: ENeqBody            => fromENeq(x.value)
-        case x: EAndBody            => fromEAnd(x.value)
-        case x: EShortAndBody       => fromEShortAnd(x.value)
-        case x: EOrBody             => fromEOr(x.value)
-        case x: EShortOrBody        => fromEShortOr(x.value)
-        case x: EPlusPlusBody       => fromEPlusPlus(x.value)
-        case x: EMinusMinusBody     => fromEMinusMinus(x.value)
-        case x: EPercentPercentBody => fromEPercentPercent(x.value)
-        case x: EMethodBody         => fromEMethod(x.value)
-        case x: EMatchesBody        => fromEMatches(x.value)
-
-        case _ =>
-          assert(assertion = false, "Unknown type for Expr conversion")
-          GBoolN(true)
-      }
+    /** Expressions */
+    case e: Expr => fromExpr(e)
 
     /** Unforgeable names */
-    case u: GUnforgeable =>
-      u.unfInstance match {
-        case x: GPrivateBody      => fromPrivate(x.value)
-        case x: GDeployIdBody     => fromDeployId(x.value)
-        case x: GDeployerIdBody   => fromDeployerId(x.value)
-        case x: GSysAuthTokenBody => fromGSysAuthToken(x.value)
-        case _ =>
-          assert(assertion = false, "Unknown type for GUnforgeable conversion")
-          UPrivateN(Array(0x04.toByte, 0x02.toByte))
-      }
+    case u: GUnforgeable => fromUnforgeable(u)
 
     /** Connective */
-    case c: Connective =>
-      c.connectiveInstance match {
-        case x: ConnBool      => fromConnBool(x)
-        case x: ConnInt       => fromConnInt(x)
-        case x: ConnBigInt    => fromConnBigInt(x)
-        case x: ConnString    => fromConnString(x)
-        case x: ConnUri       => fromConnUri(x)
-        case x: ConnByteArray => fromConnByteArray(x)
-        case x: ConnNotBody   => fromConnNotBody(x)
-        case x: ConnAndBody   => fromConnAndBody(x)
-        case x: ConnOrBody    => fromConnOrBody(x)
-        case x: VarRefBody    => fromVarRefBody(x)
-        case _ =>
-          assert(assertion = false, "Unknown type for Connective conversion")
-          ConnBoolN()
-      }
+    case c: Connective => fromConnective(c)
 
     /** Other types */
     case x: Bundle => fromBundle(x)
+  }
+
+  def fromExpr(e: Expr): ExprN = e.exprInstance match {
+
+    /** Ground types */
+    case x: GBool      => fromGBool(x)
+    case x: GInt       => fromGInt(x)
+    case x: GBigInt    => fromGBigInt(x)
+    case x: GString    => fromGString(x)
+    case x: GByteArray => fromGByteArray(x)
+    case x: GUri       => fromGUri(x)
+
+    /** Collections */
+    case x: EListBody  => fromEList(x.value)
+    case x: ETupleBody => fromETuple(x.value)
+    case x: ESetBody   => fromParSet(x.value)
+    case x: EMapBody   => fromParMap(x.value)
+
+    /** Vars */
+    case x: EVarBody => fromVar(x.value.v)
+
+    /** Operations */
+    case x: ENegBody            => fromENeg(x.value)
+    case x: ENotBody            => fromENot(x.value)
+    case x: EPlusBody           => fromEPlus(x.value)
+    case x: EMinusBody          => fromEMinus(x.value)
+    case x: EMultBody           => fromEMult(x.value)
+    case x: EDivBody            => fromEDiv(x.value)
+    case x: EModBody            => fromEMod(x.value)
+    case x: ELtBody             => fromELt(x.value)
+    case x: ELteBody            => fromELte(x.value)
+    case x: EGtBody             => fromEGt(x.value)
+    case x: EGteBody            => fromEGte(x.value)
+    case x: EEqBody             => fromEEq(x.value)
+    case x: ENeqBody            => fromENeq(x.value)
+    case x: EAndBody            => fromEAnd(x.value)
+    case x: EShortAndBody       => fromEShortAnd(x.value)
+    case x: EOrBody             => fromEOr(x.value)
+    case x: EShortOrBody        => fromEShortOr(x.value)
+    case x: EPlusPlusBody       => fromEPlusPlus(x.value)
+    case x: EMinusMinusBody     => fromEMinusMinus(x.value)
+    case x: EPercentPercentBody => fromEPercentPercent(x.value)
+    case x: EMethodBody         => fromEMethod(x.value)
+    case x: EMatchesBody        => fromEMatches(x.value)
+
+    case _ =>
+      assert(assertion = false, "Unknown type for Expr conversion")
+      GBoolN(true)
+  }
+
+  def fromVar(x: Var): VarN = x.varInstance match {
+    case n: BoundVar => fromBoundVar(n)
+    case n: FreeVar  => fromFreeVar(n)
+    case n: Wildcard => fromWildcard(n)
+    case _ =>
+      assert(assertion = false, "Unknown type for Var conversion")
+      WildcardN()
+  }
+
+  def fromUnforgeable(u: GUnforgeable): UnforgeableN =
+    u.unfInstance match {
+      case x: GPrivateBody    => fromPrivate(x.value)
+      case x: GDeployIdBody   => fromDeployId(x.value)
+      case x: GDeployerIdBody => fromDeployerId(x.value)
+      case _ =>
+        assert(assertion = false, "Unknown type for GUnforgeable conversion")
+        UPrivateN(Array(0x04.toByte, 0x02.toByte))
+    }
+
+  def fromConnective(c: Connective): ConnectiveN = c.connectiveInstance match {
+    case x: ConnBool      => fromConnBool(x)
+    case x: ConnInt       => fromConnInt(x)
+    case x: ConnBigInt    => fromConnBigInt(x)
+    case x: ConnString    => fromConnString(x)
+    case x: ConnUri       => fromConnUri(x)
+    case x: ConnByteArray => fromConnByteArray(x)
+    case x: ConnNotBody   => fromConnNotBody(x)
+    case x: ConnAndBody   => fromConnAndBody(x)
+    case x: ConnOrBody    => fromConnOrBody(x)
+    case x: VarRefBody    => fromVarRefBody(x)
+    case _ =>
+      assert(assertion = false, "Unknown type for Connective conversion")
+      ConnBoolN()
   }
 
   private def fromProto(ps: Seq[Par]): Seq[ParN]           = ps.map(fromProto)
@@ -244,15 +249,6 @@ private[rholangN] object BindingsFromProto {
 
   private def fromWildcard(@unused x: Wildcard): WildcardN =
     WildcardN()
-
-  def fromVar(x: Var): VarN = x.varInstance match {
-    case n: BoundVar => fromBoundVar(n)
-    case n: FreeVar  => fromFreeVar(n)
-    case n: Wildcard => fromWildcard(n)
-    case _ =>
-      assert(assertion = false, "Unknown type for Var conversion")
-      WildcardN()
-  }
 
   /** Unforgeable names */
   private def fromPrivate(x: GPrivate): UPrivateN = {
