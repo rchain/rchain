@@ -1,26 +1,18 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.{EList, Match, MatchCase, Par, Var}
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
-import coop.rchain.rholang.interpreter.compiler.{
-  FreeMap,
-  NameVisitInputs,
-  NameVisitOutputs,
-  ProcNormalizeMatcher,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  VarSort
-}
+import cats.syntax.all._
+import coop.rchain.models.Par
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
+import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.normalizer.{
   NameNormalizeMatcher,
   RemainderNormalizeMatcher
 }
+import coop.rchain.rholang.interpreter.compiler._
 
-import scala.collection.immutable.BitSet
 import java.util.UUID
 import scala.jdk.CollectionConverters._
 
@@ -129,27 +121,25 @@ object PLetNormalizer {
             knownFree: FreeMap[VarSort]
         ): F[ProcVisitOutputs] =
           listProc
-            .foldM((Vector.empty[Par], knownFree, BitSet.empty, false)) {
-              case ((vectorPar, knownFree, locallyFree, connectiveUsed), proc) =>
+            .foldM((Vector.empty[ParN], knownFree)) {
+              case ((vectorPar, knownFree), proc) =>
                 ProcNormalizeMatcher
                   .normalizeMatch[F](
                     proc,
-                    ProcVisitInputs(VectorPar(), input.boundMapChain, knownFree)
+                    ProcVisitInputs(toProto(NilN()), input.boundMapChain, knownFree)
                   )
                   .map {
                     case ProcVisitOutputs(par, updatedKnownFree) =>
                       (
-                        par +: vectorPar,
-                        updatedKnownFree,
-                        locallyFree | par.locallyFree,
-                        connectiveUsed | par.connectiveUsed
+                        fromProto(par) +: vectorPar,
+                        updatedKnownFree
                       )
                   }
             }
             .map {
-              case (vectorPar, knownFree, locallyFree, connectiveUsed) =>
+              case (vectorPar, knownFree) =>
                 ProcVisitOutputs(
-                  EList(vectorPar.reverse, locallyFree, connectiveUsed, none[Var]),
+                  toProto(EListN(vectorPar.reverse, none)),
                   knownFree
                 )
             }
@@ -163,8 +153,8 @@ object PLetNormalizer {
             .normalizeMatchName(nameRemainder, FreeMap.empty[VarSort]) >>= {
             case (optionalVar, remainderKnownFree) =>
               listName
-                .foldM((Vector.empty[Par], remainderKnownFree, BitSet.empty)) {
-                  case ((vectorPar, knownFree, locallyFree), name) =>
+                .foldM((Vector.empty[ParN], remainderKnownFree)) {
+                  case ((vectorPar, knownFree), name) =>
                     NameNormalizeMatcher
                       .normalizeMatch[F](
                         name,
@@ -173,19 +163,15 @@ object PLetNormalizer {
                       .map {
                         case NameVisitOutputs(par, updatedKnownFree) =>
                           (
-                            par +: vectorPar,
-                            updatedKnownFree,
-                            // Use input.env.depth + 1 because the pattern was evaluated w.r.t input.env.push,
-                            // and more generally because locally free variables become binders in the pattern position
-                            locallyFree | ParLocallyFree
-                              .locallyFree(par, input.boundMapChain.depth + 1)
+                            fromProto(par) +: vectorPar,
+                            updatedKnownFree
                           )
                       }
                 }
                 .map {
-                  case (vectorPar, knownFree, locallyFree) =>
+                  case (vectorPar, knownFree) =>
                     ProcVisitOutputs(
-                      EList(vectorPar.reverse, locallyFree, connectiveUsed = true, optionalVar),
+                      toProto(EListN(vectorPar.reverse, fromProtoVarOpt(optionalVar))),
                       knownFree
                     )
                 }
@@ -200,31 +186,24 @@ object PLetNormalizer {
                     normalizeMatch[F](
                       newContinuation,
                       ProcVisitInputs(
-                        VectorPar(),
+                        toProto(NilN()),
                         input.boundMapChain.absorbFree(patternKnownFree),
                         valueKnownFree
                       )
                     ).map {
                       case ProcVisitOutputs(continuationPar, continuationKnownFree) =>
-                        ProcVisitOutputs(
-                          input.par.prepend(
-                            Match(
-                              target = valueListPar,
-                              cases = Seq(
-                                MatchCase(
-                                  patternListPar,
-                                  continuationPar,
-                                  patternKnownFree.countNoWildcards
-                                )
-                              ),
-                              locallyFree = valueListPar.locallyFree | patternListPar.locallyFree | continuationPar.locallyFree
-                                .rangeFrom(patternKnownFree.countNoWildcards)
-                                .map(_ - patternKnownFree.countNoWildcards),
-                              connectiveUsed = valueListPar.connectiveUsed || continuationPar.connectiveUsed
+                        val inpPar = fromProto(input.par)
+                        val m = MatchN(
+                          target = fromProto(valueListPar),
+                          cases = Seq(
+                            MatchCaseN(
+                              fromProto(patternListPar),
+                              fromProto(continuationPar),
+                              patternKnownFree.countNoWildcards
                             )
-                          ),
-                          continuationKnownFree
+                          )
                         )
+                        ProcVisitOutputs(toProto(inpPar.add(m)), continuationKnownFree)
                     }
                 }
             }
