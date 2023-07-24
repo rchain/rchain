@@ -10,42 +10,36 @@ import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutpu
 
 import scala.jdk.CollectionConverters._
 import scala.collection.immutable.BitSet
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
 
 object PMethodNormalizer {
   def normalize[F[_]: Sync](p: PMethod, input: ProcVisitInputs)(
       implicit env: Map[String, Par]
   ): F[ProcVisitOutputs] =
     for {
-      targetResult <- normalizeMatch[F](p.proc_, input.copy(par = Par()))
-      target       = targetResult.par
+      targetResult <- normalizeMatch[F](p.proc_, input.copy(toProto(NilN())))
+      target       = fromProto(targetResult.par)
       initAcc = (
-        List[Par](),
-        ProcVisitInputs(Par(), input.boundMapChain, targetResult.freeMap),
-        BitSet(),
-        false
+        Seq[ParN](),
+        ProcVisitInputs(toProto(NilN()), input.boundMapChain, targetResult.freeMap)
       )
       argResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)((acc, e) => {
                      normalizeMatch[F](e, acc._2).map(
                        procMatchResult =>
                          (
-                           procMatchResult.par +: acc._1,
-                           ProcVisitInputs(Par(), input.boundMapChain, procMatchResult.freeMap),
-                           acc._3 | procMatchResult.par.locallyFree,
-                           acc._4 || procMatchResult.par.connectiveUsed
+                           fromProto(procMatchResult.par) +: acc._1,
+                           ProcVisitInputs(
+                             toProto(NilN()),
+                             input.boundMapChain,
+                             procMatchResult.freeMap
+                           )
                          )
                      )
                    })
-    } yield ProcVisitOutputs(
-      input.par.prepend(
-        EMethod(
-          p.var_,
-          targetResult.par,
-          argResults._1,
-          target.locallyFree | argResults._3,
-          target.connectiveUsed || argResults._4
-        ),
-        input.boundMapChain.depth
-      ),
-      argResults._2.freeMap
-    )
+    } yield {
+      val inpPar = fromProto(input.par)
+      val method = EMethodN(p.var_, target, argResults._1)
+      ProcVisitOutputs(toProto(inpPar.add(method)), argResults._2.freeMap)
+    }
 }
