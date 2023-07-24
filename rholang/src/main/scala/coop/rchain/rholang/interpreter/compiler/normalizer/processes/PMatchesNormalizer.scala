@@ -7,6 +7,8 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{FreeMap, ProcVisitInputs, ProcVisitOutputs}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PMatches
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
 
 object PMatchesNormalizer {
   def normalize[F[_]: Sync](p: PMatches, input: ProcVisitInputs)(
@@ -18,17 +20,19 @@ object PMatchesNormalizer {
     // "match target { pattern => true ; _ => false}
     // so free variables from pattern should not be visible at the top level
     for {
-      leftResult <- normalizeMatch[F](p.proc_1, input.copy(par = VectorPar()))
+      leftResult <- normalizeMatch[F](p.proc_1, input.copy(par = toProto(NilN())))
       rightResult <- normalizeMatch[F](
                       p.proc_2,
                       ProcVisitInputs(
-                        VectorPar(),
+                        toProto(NilN()),
                         input.boundMapChain.push,
                         FreeMap.empty
                       )
                     )
     } yield ProcVisitOutputs(
-      input.par.prepend(EMatches(leftResult.par, rightResult.par), input.boundMapChain.depth),
+      toProto(
+        fromProto(input.par).add(EMatchesN(fromProto(leftResult.par), fromProto(rightResult.par)))
+      ),
       leftResult.freeMap
     )
 }
