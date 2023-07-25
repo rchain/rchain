@@ -1,10 +1,11 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
-import coop.rchain.models.{Connective, Par}
-import coop.rchain.models.rholang.implicits._
+import cats.syntax.all._
+import coop.rchain.models.Par
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.PNegation
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{
   FreeMap,
@@ -12,7 +13,6 @@ import coop.rchain.rholang.interpreter.compiler.{
   ProcVisitOutputs,
   SourcePosition
 }
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.PNegation
 
 object PNegationNormalizer {
   def normalize[F[_]: Sync](p: PNegation, input: ProcVisitInputs)(
@@ -20,16 +20,16 @@ object PNegationNormalizer {
   ): F[ProcVisitOutputs] =
     normalizeMatch[F](
       p.proc_,
-      ProcVisitInputs(VectorPar(), input.boundMapChain, FreeMap.empty)
-    ).map(
-      bodyResult =>
-        ProcVisitOutputs(
-          input.par.prepend(Connective(ConnNotBody(bodyResult.par)), input.boundMapChain.depth),
-          input.freeMap
-            .addConnective(
-              ConnNotBody(bodyResult.par),
-              SourcePosition(p.line_num, p.col_num)
-            )
+      ProcVisitInputs(toProto(NilN()), input.boundMapChain, FreeMap.empty)
+    ).map { bodyResult =>
+      val inpPar = fromProto(input.par)
+      val conn   = ConnNotN(fromProto(bodyResult.par))
+      ProcVisitOutputs(
+        toProto(inpPar.add(conn)),
+        input.freeMap.addConnective(
+          toProtoConnective(conn).connectiveInstance,
+          SourcePosition(p.line_num, p.col_num)
         )
-    )
+      )
+    }
 }
