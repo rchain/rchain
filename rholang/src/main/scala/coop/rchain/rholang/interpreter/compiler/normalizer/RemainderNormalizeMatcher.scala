@@ -3,25 +3,11 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Var
-import coop.rchain.models.Var.VarInstance.{FreeVar, Wildcard}
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
-  NameRemainder,
-  NameRemainderEmpty,
-  NameRemainderVar,
-  ProcRemainder,
-  ProcRemainderEmpty,
-  ProcRemainderVar,
-  ProcVar,
-  ProcVarVar,
-  ProcVarWildcard
-}
-import coop.rchain.rholang.interpreter.compiler.{
-  FreeContext,
-  FreeMap,
-  ProcSort,
-  SourcePosition,
-  VarSort
-}
+import coop.rchain.models.Var.VarInstance.FreeVar
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn._
+import coop.rchain.rholang.interpreter.compiler._
 import coop.rchain.rholang.interpreter.errors.UnexpectedReuseOfProcContextFree
 
 object RemainderNormalizeMatcher {
@@ -32,7 +18,7 @@ object RemainderNormalizeMatcher {
     pv match {
       case pvw: ProcVarWildcard =>
         (
-          Option(Var(Wildcard(Var.WildcardMsg()))),
+          toProtoVarOpt(Option(WildcardN())),
           knownFree.addWildcard(SourcePosition(pvw.line_num, pvw.col_num))
         ).pure[F]
       case pvv: ProcVarVar =>
