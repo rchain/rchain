@@ -12,14 +12,13 @@ import coop.rchain.rholang.interpreter.errors.{
 }
 
 object PVarNormalizer {
-  def normalize[F[_]: Sync](p: PVar, input: ProcVisitInputs): F[ProcVisitOutputs] = {
-    val inpPar = fromProto(input.par)
+  def normalize[F[_]: Sync](p: PVar, input: ProcVisitInputs): F[ProcVisitOutputs] =
     p.procvar_ match {
       case pvv: ProcVarVar =>
         input.boundMapChain.get(pvv.var_) match {
           case Some(BoundContext(level, ProcSort, _)) =>
             ProcVisitOutputs(
-              toProto(inpPar.add(BoundVarN(level))),
+              toProto(input.par.add(BoundVarN(level))),
               input.freeMap
             ).pure[F]
           case Some(BoundContext(_, NameSort, sourcePosition)) =>
@@ -38,7 +37,7 @@ object PVarNormalizer {
                     (pvv.var_, ProcSort, SourcePosition(pvv.line_num, pvv.col_num))
                   )
                 ProcVisitOutputs(
-                  toProto(inpPar.add(FreeVarN(input.freeMap.nextLevel))),
+                  toProto(input.par.add(FreeVarN(input.freeMap.nextLevel))),
                   newBindingsPair
                 ).pure[F]
               case Some(FreeContext(_, _, firstSourcePosition)) =>
@@ -53,9 +52,8 @@ object PVarNormalizer {
         }
       case _: ProcVarWildcard =>
         ProcVisitOutputs(
-          toProto(inpPar.add(WildcardN())),
+          toProto(input.par.add(WildcardN())),
           input.freeMap.addWildcard(SourcePosition(p.line_num, p.col_num))
         ).pure[F]
     }
-  }
 }

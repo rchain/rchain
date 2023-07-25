@@ -22,18 +22,18 @@ object PDisjunctionNormalizer {
     for {
       leftResult <- normalizeMatch[F](
                      p.proc_1,
-                     ProcVisitInputs(VectorPar(), input.boundMapChain, FreeMap.empty)
+                     ProcVisitInputs(NilN(), input.boundMapChain, FreeMap.empty)
                    )
       rightResult <- normalizeMatch[F](
                       p.proc_2,
-                      ProcVisitInputs(VectorPar(), input.boundMapChain, FreeMap.empty)
+                      ProcVisitInputs(NilN(), input.boundMapChain, FreeMap.empty)
                     )
       lp               = fromProto(leftResult.par)
       rp               = fromProto(rightResult.par)
       resultConnective = ConnOrN(Seq(lp, rp))
 
     } yield ProcVisitOutputs(
-      toProto(fromProto(input.par).add(resultConnective)),
+      toProto(input.par.add(resultConnective)),
       input.freeMap
         .addConnective(
           toProtoConnective(resultConnective).connectiveInstance,

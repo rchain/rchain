@@ -61,10 +61,9 @@ object PContrNormalizer {
       boundCount = remainderResult._2.countNoWildcards
       bodyResult <- ProcNormalizeMatcher.normalizeMatch[F](
                      p.proc_,
-                     ProcVisitInputs(toProto(NilN()), newEnv, nameMatchResult.freeMap)
+                     ProcVisitInputs(NilN(), newEnv, nameMatchResult.freeMap)
                    )
     } yield {
-      val inpPar = fromProto(input.par)
       val newReceive = ReceiveN(
         ReceiveBindN(
           formalsResults._1.reverse,
@@ -78,7 +77,7 @@ object PContrNormalizer {
         bindCount = boundCount
       )
       ProcVisitOutputs(
-        toProto(inpPar.add(newReceive)),
+        toProto(input.par.add(newReceive)),
         bodyResult.freeMap
       )
     }

@@ -24,7 +24,7 @@ object PSendNormalizer {
                         )
       initAcc = (
         Seq[ParN](),
-        ProcVisitInputs(toProto(NilN()), input.boundMapChain, nameMatchResult.freeMap)
+        ProcVisitInputs(NilN(), input.boundMapChain, nameMatchResult.freeMap)
       )
       dataResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)(
                       (acc, e) => {
@@ -33,7 +33,7 @@ object PSendNormalizer {
                             (
                               fromProto(procMatchResult.par) +: acc._1,
                               ProcVisitInputs(
-                                VectorPar(),
+                                NilN(),
                                 input.boundMapChain,
                                 procMatchResult.freeMap
                               )
@@ -46,7 +46,7 @@ object PSendNormalizer {
         case _: SendMultiple => true
       }
       send = SendN(fromProto(nameMatchResult.par), dataResults._1, persistent)
-      par  = fromProto(input.par).add(send)
+      par  = input.par.add(send)
     } yield ProcVisitOutputs(
       toProto(par),
       dataResults._2.freeMap

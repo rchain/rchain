@@ -22,11 +22,8 @@ object PVarRefNormalizer {
           case ProcSort =>
             p.varrefkind_ match {
               case _: VarRefKindProc =>
-                val inpPar = fromProto(input.par)
-                ProcVisitOutputs(
-                  toProto(inpPar.add(ConnVarRefN(idx, depth))),
-                  input.freeMap
-                ).pure[F]
+                ProcVisitOutputs(toProto(input.par.add(ConnVarRefN(idx, depth))), input.freeMap)
+                  .pure[F]
               case _ =>
                 Sync[F].raiseError(
                   UnexpectedProcContext(
@@ -39,11 +36,8 @@ object PVarRefNormalizer {
           case NameSort =>
             p.varrefkind_ match {
               case _: VarRefKindName =>
-                val inpPar = fromProto(input.par)
-                ProcVisitOutputs(
-                  toProto(inpPar.add(ConnVarRefN(idx, depth))),
-                  input.freeMap
-                ).pure[F]
+                ProcVisitOutputs(toProto(input.par.add(ConnVarRefN(idx, depth))), input.freeMap)
+                  .pure[F]
               case _ =>
                 Sync[F].raiseError(
                   UnexpectedNameContext(

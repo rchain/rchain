@@ -23,7 +23,7 @@ object CollectionNormalizeMatcher {
       listproc
         .foldM(init) { (acc, proc) =>
           ProcNormalizeMatcher
-            .normalizeMatch[F](proc, ProcVisitInputs(toProto(NilN()), input.boundMapChain, acc._2))
+            .normalizeMatch[F](proc, ProcVisitInputs(NilN(), input.boundMapChain, acc._2))
             .map { result =>
               (fromProto(result.par) +: acc._1, result.freeMap)
             }
@@ -50,12 +50,12 @@ object CollectionNormalizeMatcher {
               for {
                 keyResult <- ProcNormalizeMatcher.normalizeMatch[F](
                               e.proc_1,
-                              ProcVisitInputs(toProto(NilN()), input.boundMapChain, acc._2)
+                              ProcVisitInputs(NilN(), input.boundMapChain, acc._2)
                             )
                 valResult <- ProcNormalizeMatcher.normalizeMatch[F](
                               e.proc_2,
                               ProcVisitInputs(
-                                toProto(NilN()),
+                                NilN(),
                                 input.boundMapChain,
                                 keyResult.freeMap
                               )

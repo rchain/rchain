@@ -20,8 +20,7 @@ object PCollectNormalizer {
       .normalizeMatch[F](p.collection_, CollectVisitInputs(input.boundMapChain, input.freeMap))
       .map {
         case collectResult =>
-          val inpPar = fromProto(input.par)
-          val expr   = fromProtoExpr(collectResult.expr)
-          ProcVisitOutputs(toProto(inpPar.add(expr)), collectResult.freeMap)
+          val expr = fromProtoExpr(collectResult.expr)
+          ProcVisitOutputs(toProto(input.par.add(expr)), collectResult.freeMap)
       }
 }

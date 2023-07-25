@@ -4,9 +4,11 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
-import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.compiler.normalizer.processes._
+import coop.rchain.rholang.interpreter.errors._
 
 sealed trait VarSort
 case object ProcSort extends VarSort
@@ -20,14 +22,16 @@ object ProcNormalizeMatcher {
   def normalizeMatch[F[_]: Sync](p: Proc, input: ProcVisitInputs)(
       implicit env: Map[String, Par]
   ): F[ProcVisitOutputs] = Sync[F].defer {
-    def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
-        implicit toExprInstance: T => Expr
+    def unaryExp(
+        subProc: Proc,
+        input: ProcVisitInputs,
+        constructor: ParN => ExprN
     ): F[ProcVisitOutputs] =
-      normalizeMatch[F](subProc, input.copy(par = VectorPar()))
+      normalizeMatch[F](subProc, input.copy(par = NilN()))
         .map(
           subResult =>
             ProcVisitOutputs(
-              input.par.prepend(constructor(subResult.par), input.boundMapChain.depth),
+              toProto(input.par.add(constructor(fromProto(subResult.par)))),
               subResult.freeMap
             )
         )
@@ -36,16 +40,16 @@ object ProcNormalizeMatcher {
         subProcLeft: Proc,
         subProcRight: Proc,
         input: ProcVisitInputs,
-        constructor: (Par, Par) => T
-    )(implicit toExprInstance: T => Expr): F[ProcVisitOutputs] =
+        constructor: (ParN, ParN) => ExprN
+    ): F[ProcVisitOutputs] =
       for {
-        leftResult <- normalizeMatch[F](subProcLeft, input.copy(par = VectorPar()))
+        leftResult <- normalizeMatch[F](subProcLeft, input.copy(par = NilN()))
         rightResult <- normalizeMatch[F](
                         subProcRight,
-                        input.copy(par = VectorPar(), freeMap = leftResult.freeMap)
+                        input.copy(par = NilN(), freeMap = leftResult.freeMap)
                       )
       } yield ProcVisitOutputs(
-        input.par.prepend(constructor(leftResult.par, rightResult.par), input.boundMapChain.depth),
+        toProto(input.par.add(constructor(fromProto(leftResult.par), fromProto(rightResult.par)))),
         rightResult.freeMap
       )
 
@@ -74,7 +78,7 @@ object ProcNormalizeMatcher {
       case p: PVarRef =>
         PVarRefNormalizer.normalize(p, input)
 
-      case _: PNil => ProcVisitOutputs(input.par, input.freeMap).pure[F]
+      case _: PNil => ProcVisitOutputs(toProto(input.par), input.freeMap).pure[F]
 
       case p: PEval =>
         PEvalNormalizer.normalize(p, input)
@@ -82,32 +86,31 @@ object ProcNormalizeMatcher {
       case p: PMethod =>
         PMethodNormalizer.normalize(p, input)
 
-      case p: PNot => unaryExp(p.proc_, input, ENot.apply)
-      case p: PNeg => unaryExp(p.proc_, input, ENeg.apply)
+      case p: PNot => unaryExp(p.proc_, input, ENotN.apply)
+      case p: PNeg => unaryExp(p.proc_, input, ENegN.apply)
 
-      case p: PMult           => binaryExp(p.proc_1, p.proc_2, input, EMult.apply)
-      case p: PDiv            => binaryExp(p.proc_1, p.proc_2, input, EDiv.apply)
-      case p: PMod            => binaryExp(p.proc_1, p.proc_2, input, EMod.apply)
-      case p: PPercentPercent => binaryExp(p.proc_1, p.proc_2, input, EPercentPercent.apply)
-      case p: PAdd            => binaryExp(p.proc_1, p.proc_2, input, EPlus.apply)
-      case p: PMinus          => binaryExp(p.proc_1, p.proc_2, input, EMinus.apply)
-      case p: PPlusPlus       => binaryExp(p.proc_1, p.proc_2, input, EPlusPlus.apply)
-      case p: PMinusMinus     => binaryExp(p.proc_1, p.proc_2, input, EMinusMinus.apply)
+      case p: PMult           => binaryExp(p.proc_1, p.proc_2, input, EMultN.apply)
+      case p: PDiv            => binaryExp(p.proc_1, p.proc_2, input, EDivN.apply)
+      case p: PMod            => binaryExp(p.proc_1, p.proc_2, input, EModN.apply)
+      case p: PPercentPercent => binaryExp(p.proc_1, p.proc_2, input, EPercentPercentN.apply)
+      case p: PAdd            => binaryExp(p.proc_1, p.proc_2, input, EPlusN.apply)
+      case p: PMinus          => binaryExp(p.proc_1, p.proc_2, input, EMinusN.apply)
+      case p: PPlusPlus       => binaryExp(p.proc_1, p.proc_2, input, EPlusPlusN.apply)
+      case p: PMinusMinus     => binaryExp(p.proc_1, p.proc_2, input, EMinusMinusN.apply)
 
-      case p: PLt  => binaryExp(p.proc_1, p.proc_2, input, ELt.apply)
-      case p: PLte => binaryExp(p.proc_1, p.proc_2, input, ELte.apply)
-      case p: PGt  => binaryExp(p.proc_1, p.proc_2, input, EGt.apply)
-      case p: PGte => binaryExp(p.proc_1, p.proc_2, input, EGte.apply)
+      case p: PLt  => binaryExp(p.proc_1, p.proc_2, input, ELtN.apply)
+      case p: PLte => binaryExp(p.proc_1, p.proc_2, input, ELteN.apply)
+      case p: PGt  => binaryExp(p.proc_1, p.proc_2, input, EGtN.apply)
+      case p: PGte => binaryExp(p.proc_1, p.proc_2, input, EGteN.apply)
 
-      case p: PEq  => binaryExp(p.proc_1, p.proc_2, input, EEq.apply)
-      case p: PNeq => binaryExp(p.proc_1, p.proc_2, input, ENeq.apply)
+      case p: PEq  => binaryExp(p.proc_1, p.proc_2, input, EEqN.apply)
+      case p: PNeq => binaryExp(p.proc_1, p.proc_2, input, ENeqN.apply)
 
-      case p: PAnd      => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
-      case p: POr       => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
-      case p: PShortAnd => binaryExp(p.proc_1, p.proc_2, input, EShortAnd.apply)
-      case p: PShortOr  => binaryExp(p.proc_1, p.proc_2, input, EShortOr.apply)
-      case p: PMatches =>
-        PMatchesNormalizer.normalize(p, input)
+      case p: PAnd      => binaryExp(p.proc_1, p.proc_2, input, EAndN.apply)
+      case p: POr       => binaryExp(p.proc_1, p.proc_2, input, EOrN.apply)
+      case p: PShortAnd => binaryExp(p.proc_1, p.proc_2, input, EShortAndN.apply)
+      case p: PShortOr  => binaryExp(p.proc_1, p.proc_2, input, EShortOrN.apply)
+      case p: PMatches  => PMatchesNormalizer.normalize(p, input)
 
       case p: PExprs =>
         normalizeMatch[F](p.proc_, input)
@@ -141,12 +144,12 @@ object ProcNormalizeMatcher {
 
       case p: PIf =>
         PIfNormalizer
-          .normalize(p.proc_1, p.proc_2, new PNil(), input.copy(par = VectorPar()))
-          .map(n => n.copy(par = n.par ++ input.par))
+          .normalize(p.proc_1, p.proc_2, new PNil(), input.copy(par = NilN()))
+          .map(n => n.copy(par = n.par ++ toProto(input.par)))
       case p: PIfElse =>
         PIfNormalizer
-          .normalize(p.proc_1, p.proc_2, p.proc_3, input.copy(par = VectorPar()))
-          .map(n => n.copy(par = n.par ++ input.par))
+          .normalize(p.proc_1, p.proc_2, p.proc_3, input.copy(par = NilN()))
+          .map(n => n.copy(par = n.par ++ toProto(input.par)))
 
       case _ =>
         Sync[F].raiseError(
@@ -165,7 +168,7 @@ object ProcNormalizeMatcher {
   * @param knownFree
   */
 final case class ProcVisitInputs(
-    par: Par,
+    par: ParN,
     boundMapChain: BoundMapChain[VarSort],
     freeMap: FreeMap[VarSort]
 )

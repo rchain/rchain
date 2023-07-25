@@ -126,7 +126,7 @@ object PLetNormalizer {
                 ProcNormalizeMatcher
                   .normalizeMatch[F](
                     proc,
-                    ProcVisitInputs(toProto(NilN()), input.boundMapChain, knownFree)
+                    ProcVisitInputs(NilN(), input.boundMapChain, knownFree)
                   )
                   .map {
                     case ProcVisitOutputs(par, updatedKnownFree) =>
@@ -186,13 +186,12 @@ object PLetNormalizer {
                     normalizeMatch[F](
                       newContinuation,
                       ProcVisitInputs(
-                        toProto(NilN()),
+                        NilN(),
                         input.boundMapChain.absorbFree(patternKnownFree),
                         valueKnownFree
                       )
                     ).map {
                       case ProcVisitOutputs(continuationPar, continuationKnownFree) =>
-                        val inpPar = fromProto(input.par)
                         val m = MatchN(
                           target = fromProto(valueListPar),
                           cases = Seq(
@@ -203,7 +202,7 @@ object PLetNormalizer {
                             )
                           )
                         )
-                        ProcVisitOutputs(toProto(inpPar.add(m)), continuationKnownFree)
+                        ProcVisitOutputs(toProto(input.par.add(m)), continuationKnownFree)
                     }
                 }
             }

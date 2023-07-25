@@ -21,14 +21,14 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ProcMatcherSpec extends AnyFlatSpec with Matchers {
-  val inputs                                   = ProcVisitInputs(Par(), BoundMapChain.empty[VarSort], FreeMap.empty[VarSort])
+  val inputs                                   = ProcVisitInputs(NilN(), BoundMapChain.empty[VarSort], FreeMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "PNil" should "Compile as no modification to the par object" in {
     val nil = new PNil()
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](nil, inputs).value
-    result.par should be(inputs.par)
+    fromProto(result.par) should be(inputs.par)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -853,7 +853,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val rightProc =
       new PIf(new PGround(new GroundBool(new BoolTrue())), new PGround(new GroundInt("10")))
 
-    val input  = inputs.copy(par = Par(exprs = Seq(GInt(7))))
+    val input  = inputs.copy(par = GIntN(7))
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](rightProc, input).value
 
     result.freeMap should be(inputs.freeMap)

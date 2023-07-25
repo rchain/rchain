@@ -54,7 +54,7 @@ object NameNormalizeMatcher {
         ProcNormalizeMatcher
           .normalizeMatch[F](
             n.proc_,
-            ProcVisitInputs(toProto(NilN()), input.boundMapChain, input.freeMap)
+            ProcVisitInputs(NilN(), input.boundMapChain, input.freeMap)
           )
           .map(
             procVisitResult => NameVisitOutputs(procVisitResult.par, procVisitResult.freeMap)

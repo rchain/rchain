@@ -53,7 +53,7 @@ object PBundleNormalizer {
       }
 
     for {
-      targetResult <- normalizeMatch[F](b.proc_, input.copy(par = VectorPar()))
+      targetResult <- normalizeMatch[F](b.proc_, input.copy(par = NilN()))
       target       = fromProto(targetResult.par)
       outermostBundle = b.bundle_ match {
         case _: BundleReadWrite => BundleN(target, writeFlag = true, readFlag = true)
@@ -75,7 +75,7 @@ object PBundleNormalizer {
                 case b: BundleN => outermostBundle.merge(b)
                 case _          => outermostBundle
               }
-              val outPar: ParN = fromProto(input.par).add(newBundle)
+              val outPar: ParN = input.par.add(newBundle)
               ProcVisitOutputs(toProto(outPar), input.freeMap).pure[F]
             }
     } yield res

@@ -43,15 +43,14 @@ object PNewNormalizer {
     val newEnv       = input.boundMapChain.put(newBindings.toList)
     val newCount     = newEnv.count - input.boundMapChain.count
 
-    normalizeMatch[F](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.freeMap)).map {
-      bodyResult =>
-        val resultNew = NewN(
-          bindCount = newCount,
-          p = fromProto(bodyResult.par),
-          uri = uris,
-          injections = env.map { case (s, par) => (s, fromProto(par)) }
-        )
-        ProcVisitOutputs(toProto(fromProto(input.par).add(resultNew)), bodyResult.freeMap)
+    normalizeMatch[F](p.proc_, ProcVisitInputs(NilN(), newEnv, input.freeMap)).map { bodyResult =>
+      val resultNew = NewN(
+        bindCount = newCount,
+        p = fromProto(bodyResult.par),
+        uri = uris,
+        injections = env.map { case (s, par) => (s, fromProto(par)) }
+      )
+      ProcVisitOutputs(toProto(input.par.add(resultNew)), bodyResult.freeMap)
     }
 
   }

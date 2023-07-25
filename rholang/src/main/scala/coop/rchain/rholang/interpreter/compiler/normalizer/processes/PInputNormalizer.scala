@@ -253,7 +253,7 @@ object PInputNormalizer {
           procVisitOutputs <- normalizeMatch[F](
                                p.proc_,
                                ProcVisitInputs(
-                                 VectorPar(),
+                                 NilN(),
                                  input.boundMapChain.absorbFree(receiveBindsFreeMap),
                                  sourcesFree
                                )
@@ -263,7 +263,7 @@ object PInputNormalizer {
           val receive =
             ReceiveN(receiveBinds, fromProto(procVisitOutputs.par), persistent, peek, bindCount)
           ProcVisitOutputs(
-            toProto(fromProto(input.par).add(receive)),
+            toProto(input.par.add(receive)),
             procVisitOutputs.freeMap
           )
         }

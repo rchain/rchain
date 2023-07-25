@@ -16,11 +16,11 @@ object PConjunctionNormalizer {
     for {
       leftResult <- normalizeMatch[F](
                      p.proc_1,
-                     ProcVisitInputs(toProto(NilN()), input.boundMapChain, input.freeMap)
+                     ProcVisitInputs(NilN(), input.boundMapChain, input.freeMap)
                    )
       rightResult <- normalizeMatch[F](
                       p.proc_2,
-                      ProcVisitInputs(toProto(NilN()), input.boundMapChain, leftResult.freeMap)
+                      ProcVisitInputs(NilN(), input.boundMapChain, leftResult.freeMap)
                     )
       lp = fromProto(leftResult.par)
       rp = fromProto(rightResult.par)
@@ -28,7 +28,7 @@ object PConjunctionNormalizer {
       resultConnective = ConnAndN(Seq(lp, rp))
 
     } yield ProcVisitOutputs(
-      toProto(fromProto(input.par).add(resultConnective)),
+      toProto(input.par.add(resultConnective)),
       rightResult.freeMap
         .addConnective(
           toProtoConnective(resultConnective).connectiveInstance,

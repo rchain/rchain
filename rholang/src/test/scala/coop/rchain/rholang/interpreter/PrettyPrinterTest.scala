@@ -30,6 +30,8 @@ import org.scalatest.matchers.should.Matchers
 import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
 
 class BoolPrinterSpec extends AnyFlatSpec with Matchers {
 
@@ -74,7 +76,7 @@ class GroundPrinterSpec extends AnyFlatSpec with Matchers {
 class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 
   val inputs = ProcVisitInputs(
-    Par(),
+    NilN(),
     BoundMapChain
       .empty[VarSort]
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
@@ -162,7 +164,7 @@ class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 }
 
 class ProcPrinterSpec extends AnyFlatSpec with Matchers {
-  val inputs                                   = ProcVisitInputs(Par(), BoundMapChain.empty, FreeMap.empty)
+  val inputs                                   = ProcVisitInputs(NilN(), BoundMapChain.empty, FreeMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "New" should "use 0-based indexing" in {

@@ -20,19 +20,17 @@ object PMatchesNormalizer {
     // "match target { pattern => true ; _ => false}
     // so free variables from pattern should not be visible at the top level
     for {
-      leftResult <- normalizeMatch[F](p.proc_1, input.copy(par = toProto(NilN())))
+      leftResult <- normalizeMatch[F](p.proc_1, input.copy(par = NilN()))
       rightResult <- normalizeMatch[F](
                       p.proc_2,
                       ProcVisitInputs(
-                        toProto(NilN()),
+                        NilN(),
                         input.boundMapChain.push,
                         FreeMap.empty
                       )
                     )
     } yield ProcVisitOutputs(
-      toProto(
-        fromProto(input.par).add(EMatchesN(fromProto(leftResult.par), fromProto(rightResult.par)))
-      ),
+      toProto(input.par.add(EMatchesN(fromProto(leftResult.par), fromProto(rightResult.par)))),
       leftResult.freeMap
     )
 }

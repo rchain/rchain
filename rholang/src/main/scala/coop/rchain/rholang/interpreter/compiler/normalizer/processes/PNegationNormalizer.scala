@@ -20,12 +20,11 @@ object PNegationNormalizer {
   ): F[ProcVisitOutputs] =
     normalizeMatch[F](
       p.proc_,
-      ProcVisitInputs(toProto(NilN()), input.boundMapChain, FreeMap.empty)
+      ProcVisitInputs(NilN(), input.boundMapChain, FreeMap.empty)
     ).map { bodyResult =>
-      val inpPar = fromProto(input.par)
-      val conn   = ConnNotN(fromProto(bodyResult.par))
+      val conn = ConnNotN(fromProto(bodyResult.par))
       ProcVisitOutputs(
-        toProto(inpPar.add(conn)),
+        toProto(input.par.add(conn)),
         input.freeMap.addConnective(
           toProtoConnective(conn).connectiveInstance,
           SourcePosition(p.line_num, p.col_num)

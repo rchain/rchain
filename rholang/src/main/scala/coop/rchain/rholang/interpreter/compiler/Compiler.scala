@@ -11,6 +11,8 @@ import coop.rchain.rholang.ast.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.interpreter.errors._
 
 import java.io.{Reader, StringReader}
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
 
 trait Compiler[F[_]] {
 
@@ -79,7 +81,7 @@ object Compiler {
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
-          ProcVisitInputs(VectorPar(), BoundMapChain.empty, FreeMap.empty)
+          ProcVisitInputs(NilN(), BoundMapChain.empty, FreeMap.empty)
         )
         .flatMap { normalizedTerm =>
           if (normalizedTerm.freeMap.count > 0) {
