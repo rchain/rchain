@@ -24,3 +24,10 @@ object UDeployerIdN {
   def apply(v: ByteVector): UDeployerIdN      = new UDeployerIdN(v)
   def apply(bytes: Array[Byte]): UDeployerIdN = new UDeployerIdN(ByteVector(bytes))
 }
+
+final class USysAuthTokenN(private val input: ByteVector) extends UnforgeableN {
+  override val v: ByteVector = input
+}
+object USysAuthTokenN { // TODO: Temporary solution for easier conversion from old types - change type in the future
+  def apply(): USysAuthTokenN = new USysAuthTokenN(ByteVector(Array[Byte]()))
+}

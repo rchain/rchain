@@ -44,8 +44,7 @@ private[ParManager] object EvalRequired {
     case _: MatchCaseN   => true
 
     /** Other types */
-    case bundle: BundleN  => eReq(bundle.body)
-    case _: SysAuthTokenN => false
+    case bundle: BundleN => eReq(bundle.body)
 
     case _ =>
       assert(assertion = false, "Not defined type")

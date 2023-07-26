@@ -196,9 +196,10 @@ private[ParManager] object Serialization {
         /** Unforgeable names */
         case unf: UnforgeableN =>
           unf match {
-            case _: UPrivateN    => write(UPRIVATE)
-            case _: UDeployIdN   => write(UDEPLOY_ID)
-            case _: UDeployerIdN => write(UDEPLOYER_ID)
+            case _: UPrivateN      => write(UPRIVATE)
+            case _: UDeployIdN     => write(UDEPLOY_ID)
+            case _: UDeployerIdN   => write(UDEPLOYER_ID)
+            case _: USysAuthTokenN => write(SYS_AUTH_TOKEN)
           }
           write(unf.v)
 
@@ -247,9 +248,6 @@ private[ParManager] object Serialization {
           write(bundle.body)
           write(bundle.writeFlag)
           write(bundle.readFlag)
-
-        case _: SysAuthTokenN =>
-          write(SYS_AUTH_TOKEN)
 
         case _ => assert(assertion = false, "Not defined type")
       }
@@ -431,6 +429,10 @@ private[ParManager] object Serialization {
         val v = readBytes()
         UDeployerIdN(v)
 
+      case SYS_AUTH_TOKEN =>
+        val _ = readBytes() // TODO: Temporary solution for easier conversion from old types - change type in the future
+        USysAuthTokenN()
+
       /** Operations */
       case ENEG =>
         val p = readPar()
@@ -583,9 +585,6 @@ private[ParManager] object Serialization {
         val writeFlag = readBool()
         val readFlag  = readBool()
         BundleN(body, writeFlag, readFlag)
-
-      case SYS_AUTH_TOKEN =>
-        SysAuthTokenN()
 
       case _ =>
         assert(assertion = false, "Invalid tag for ParN deserialization")

@@ -302,9 +302,10 @@ private[ParManager] object RhoHash {
     case unf: UnforgeableN =>
       val bodySize = hSize(unf.v)
       val t = unf match {
-        case _: UPrivateN    => UPRIVATE
-        case _: UDeployIdN   => UDEPLOY_ID
-        case _: UDeployerIdN => UDEPLOYER_ID
+        case _: UPrivateN      => UPRIVATE
+        case _: UDeployIdN     => UDEPLOY_ID
+        case _: UDeployerIdN   => UDEPLOYER_ID
+        case _: USysAuthTokenN => SYS_AUTH_TOKEN
       }
       val hs = Hashable(t, bodySize)
       hs.append(unf.v)
@@ -370,8 +371,6 @@ private[ParManager] object RhoHash {
       hs.append(bundle.writeFlag)
       hs.append(bundle.readFlag)
       hs.calcHash
-
-    case _: SysAuthTokenN => Hashable(SYS_AUTH_TOKEN).calcHash
 
     case _ =>
       assert(assertion = false, "Not defined type")

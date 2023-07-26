@@ -136,8 +136,6 @@ private[ParManager] object SerializedSize {
       val readFlagSize  = sSize(bundle.readFlag)
       totalSize(bodySize, writeFlagSize, readFlagSize)
 
-    case _: SysAuthTokenN => totalSize()
-
     case _ =>
       assert(assertion = false, "Not defined type")
       0

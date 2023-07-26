@@ -35,8 +35,7 @@ private[rholangN] object BindingsToProto {
     case c: ConnectiveN => toConnective(c)
 
     /** Other types */
-    case x: BundleN       => toBundle(x)
-    case x: SysAuthTokenN => toGSysAuthToken(x)
+    case x: BundleN => toBundle(x)
 
     case _ =>
       assert(assertion = false, "Unknown type for toProto conversation")
@@ -101,9 +100,10 @@ private[rholangN] object BindingsToProto {
   }
 
   def toUnforgeable(u: UnforgeableN): GUnforgeable = u match {
-    case x: UPrivateN    => toPrivate(x)
-    case x: UDeployIdN   => toDeployId(x)
-    case x: UDeployerIdN => toDeployerId(x)
+    case x: UPrivateN      => toPrivate(x)
+    case x: UDeployIdN     => toDeployId(x)
+    case x: UDeployerIdN   => toDeployerId(x)
+    case x: USysAuthTokenN => toGSysAuthToken(x)
     case _ =>
       assert(assertion = false, "Unknown type for Unforgeable conversation")
       val v = ByteString.copyFrom(Array[Byte]())
@@ -286,6 +286,9 @@ private[rholangN] object BindingsToProto {
     GDeployerId(v)
   }
 
+  private def toGSysAuthToken(@unused x: USysAuthTokenN): GSysAuthToken =
+    GSysAuthToken()
+
   /** Operations */
   private def toENeg(x: ENegN): ENeg = {
     val p = toProto(x.p)
@@ -467,7 +470,4 @@ private[rholangN] object BindingsToProto {
     val readFlag  = x.readFlag
     Bundle(body, writeFlag, readFlag)
   }
-
-  private def toGSysAuthToken(@unused x: SysAuthTokenN): GSysAuthToken =
-    GSysAuthToken()
 }

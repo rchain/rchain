@@ -457,7 +457,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test SysAuthToken" in {
-    val p1: ParN = SysAuthTokenN()
+    val p1: ParN = USysAuthTokenN()
     val p2: Par  = GSysAuthToken()
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)

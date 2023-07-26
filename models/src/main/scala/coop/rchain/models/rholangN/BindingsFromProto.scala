@@ -104,9 +104,10 @@ private[rholangN] object BindingsFromProto {
 
   def fromUnforgeable(u: GUnforgeable): UnforgeableN =
     u.unfInstance match {
-      case x: GPrivateBody    => fromPrivate(x.value)
-      case x: GDeployIdBody   => fromDeployId(x.value)
-      case x: GDeployerIdBody => fromDeployerId(x.value)
+      case x: GPrivateBody      => fromPrivate(x.value)
+      case x: GDeployIdBody     => fromDeployId(x.value)
+      case x: GDeployerIdBody   => fromDeployerId(x.value)
+      case x: GSysAuthTokenBody => fromGSysAuthToken(x.value)
       case _ =>
         assert(assertion = false, "Unknown type for GUnforgeable conversion")
         UPrivateN(Array(0x04.toByte, 0x02.toByte))
@@ -265,6 +266,8 @@ private[rholangN] object BindingsFromProto {
     val v = x.publicKey.toByteArray
     UDeployerIdN(v)
   }
+  private def fromGSysAuthToken(@unused x: GSysAuthToken): USysAuthTokenN =
+    USysAuthTokenN()
 
   /** Operations */
   private def fromENeg(x: ENeg): ENegN = {
@@ -445,7 +448,4 @@ private[rholangN] object BindingsFromProto {
     val readFlag  = x.readFlag
     BundleN(body, writeFlag, readFlag)
   }
-
-  private def fromGSysAuthToken(@unused x: GSysAuthToken): SysAuthTokenN =
-    SysAuthTokenN()
 }

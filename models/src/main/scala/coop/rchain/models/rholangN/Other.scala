@@ -20,6 +20,3 @@ object BundleN {
   def apply(body: ParN, writeFlag: Boolean, readFlag: Boolean): BundleN =
     new BundleN(body, writeFlag, readFlag)
 }
-
-final class SysAuthTokenN() extends OtherN
-object SysAuthTokenN { def apply(): SysAuthTokenN = new SysAuthTokenN }
