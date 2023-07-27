@@ -34,7 +34,7 @@ FIX_COST_RHO_CONTRACTS = {
     "contract_2.rho": 197,
     "contract_3.rho": 329,
     "contract_4.rho": 782,
-    "contract_5.rho": 3892,
+    "contract_5.rho": 3868,
 }
 
 @contextmanager

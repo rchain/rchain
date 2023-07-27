@@ -48,7 +48,7 @@ object StackSafetySpec extends Assertions {
     println(s"Calculated max recursion depth is $maxDepth")
 
     // Because of OOM errors on CI depth recursion is limited
-    val maxDepthLimited = Math.min(100, maxDepth)
+    val maxDepthLimited = Math.min(50, maxDepth)
     println(s"Used recursion depth is limited to $maxDepthLimited")
     maxDepthLimited
   }
