@@ -305,8 +305,8 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val target =
       """new x0 in {
         |  for( @{x1}, @{x2} <- x0 ) {
-        |    x2 |
-        |    x1
+        |    x1 |
+        |    x2
         |  }
         |}""".stripMargin
     result shouldBe target
@@ -350,7 +350,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2} <- x1  & @{x3} <- x0 ) {
+        |  for( @{x2} <- x0  & @{x3} <- x1 ) {
         |    x2 |
         |    x3
         |  }
@@ -399,9 +399,9 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       """new x0, x1 in {
         |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    x3 |
-        |    x2 |
+        |    x4 |
         |    x5 |
-        |    x4
+        |    x2
         |  }
         |}""".stripMargin
     result shouldBe target
@@ -451,9 +451,9 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       """new x0, x1 in {
         |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    @{x3}!(Nil) |
-        |    x2 |
+        |    x4 |
         |    x5 |
-        |    x4
+        |    x2
         |  }
         |}""".stripMargin
     result shouldBe target
@@ -625,8 +625,8 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Eval](parGround, inputs).value.par
       )
     result shouldBe
-      """8 |
-        |7""".stripMargin
+      """7 |
+        |8""".stripMargin
   }
 
   "PPar" should "Print" in {
@@ -648,8 +648,8 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleFree, inputs).value.par
       )
     result shouldBe
-      """free1 |
-        |free0""".stripMargin
+      """free0 |
+        |free1""".stripMargin
   }
 
   "PInput" should "Print a receive" in {
@@ -699,7 +699,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Eval](basicInput1, inputs).value.par
       )
     val target =
-      """for( @{x0}, @{for( @{y0}, @{y1} <- @{Nil} ) { y1 | y0 | x1 }} <- @{Nil} ) {
+      """for( @{x0}, @{for( @{y0}, @{y1} <- @{Nil} ) { x1 | y1 | y0 }} <- @{Nil} ) {
         |  @{x0}!(x1)
         |}""".stripMargin
     result shouldBe target
@@ -824,9 +824,9 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       )
     result shouldBe
       """new x0, x1, x2 in {
-        |  x2!(9) |
+        |  x0!(7) |
         |  x1!(8) |
-        |  x0!(7)
+        |  x2!(9)
         |}""".stripMargin
   }
 

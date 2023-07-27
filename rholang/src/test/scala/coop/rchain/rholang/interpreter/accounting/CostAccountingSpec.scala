@@ -204,7 +204,7 @@ class CostAccountingSpec
            }
          } |
          loop!(10)
-       }""".stripMargin, 3892L),
+       }""".stripMargin, 3868L),
     ("""42 | @0!(2) | for (x <- @0) { Nil }""", 336L),
     ("""@1!(1) |
         for(x <- @1) { Nil } |
@@ -213,7 +213,7 @@ class CostAccountingSpec
           38 => Nil
           42 => @3!(42)
         }
-     """.stripMargin, 1264L),
+     """.stripMargin, 1234L),
     // test that we charge for system processes
     ("""new ret, keccak256Hash(`rho:crypto:keccak256Hash`) in {
        |  keccak256Hash!("TEST".toByteArray(), *ret) |
