@@ -91,7 +91,7 @@ class RuntimeSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
       expectedHash = Blake2b256Hash.fromHex(
-        "6d3554378ae13ad233365c7adc4fd508a89638283064e60e3bbad95136e16659"
+        "10cce029738696f1e120a6bad4bdf3f18adca25ccf36133bd4916f607a6a50c0"
       )
       stateHash = checkpoint.root
     } yield expectedHash shouldEqual stateHash
