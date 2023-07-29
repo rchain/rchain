@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{NameDeclSimpl, NameDeclUrn, PNew}
@@ -46,11 +45,11 @@ object PNewNormalizer {
     normalizeMatch[F](p.proc_, ProcVisitInputs(NilN(), newEnv, input.freeMap)).map { bodyResult =>
       val resultNew = NewN(
         bindCount = newCount,
-        p = fromProto(bodyResult.par),
+        p = bodyResult.par,
         uri = uris,
         injections = env.map { case (s, par) => (s, fromProto(par)) }
       )
-      ProcVisitOutputs(toProto(input.par.add(resultNew)), bodyResult.freeMap)
+      ProcVisitOutputs(input.par.add(resultNew), bodyResult.freeMap)
     }
 
   }

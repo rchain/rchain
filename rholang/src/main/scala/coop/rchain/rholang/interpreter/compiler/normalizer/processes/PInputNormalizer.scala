@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.models.{Par, ReceiveBind}
@@ -261,9 +260,9 @@ object PInputNormalizer {
         } yield {
           val bindCount = receiveBindsFreeMap.countNoWildcards
           val receive =
-            ReceiveN(receiveBinds, fromProto(procVisitOutputs.par), persistent, peek, bindCount)
+            ReceiveN(receiveBinds, procVisitOutputs.par, persistent, peek, bindCount)
           ProcVisitOutputs(
-            toProto(input.par.add(receive)),
+            input.par.add(receive),
             procVisitOutputs.freeMap
           )
         }

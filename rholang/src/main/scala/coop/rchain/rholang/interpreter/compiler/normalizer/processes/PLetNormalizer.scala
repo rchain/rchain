@@ -7,11 +7,11 @@ import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
+import coop.rchain.rholang.interpreter.compiler._
 import coop.rchain.rholang.interpreter.compiler.normalizer.{
   NameNormalizeMatcher,
   RemainderNormalizeMatcher
 }
-import coop.rchain.rholang.interpreter.compiler._
 
 import java.util.UUID
 import scala.jdk.CollectionConverters._
@@ -131,7 +131,7 @@ object PLetNormalizer {
                   .map {
                     case ProcVisitOutputs(par, updatedKnownFree) =>
                       (
-                        fromProto(par) +: vectorPar,
+                        par +: vectorPar,
                         updatedKnownFree
                       )
                   }
@@ -139,7 +139,7 @@ object PLetNormalizer {
             .map {
               case (vectorPar, knownFree) =>
                 ProcVisitOutputs(
-                  toProto(EListN(vectorPar.reverse, none)),
+                  EListN(vectorPar.reverse, none),
                   knownFree
                 )
             }
@@ -171,7 +171,7 @@ object PLetNormalizer {
                 .map {
                   case (vectorPar, knownFree) =>
                     ProcVisitOutputs(
-                      toProto(EListN(vectorPar.reverse, fromProtoVarOpt(optionalVar))),
+                      EListN(vectorPar.reverse, fromProtoVarOpt(optionalVar)),
                       knownFree
                     )
                 }
@@ -193,16 +193,16 @@ object PLetNormalizer {
                     ).map {
                       case ProcVisitOutputs(continuationPar, continuationKnownFree) =>
                         val m = MatchN(
-                          target = fromProto(valueListPar),
+                          target = valueListPar,
                           cases = Seq(
                             MatchCaseN(
-                              fromProto(patternListPar),
-                              fromProto(continuationPar),
+                              patternListPar,
+                              continuationPar,
                               patternKnownFree.countNoWildcards
                             )
                           )
                         )
-                        ProcVisitOutputs(toProto(input.par.add(m)), continuationKnownFree)
+                        ProcVisitOutputs(input.par.add(m), continuationKnownFree)
                     }
                 }
             }

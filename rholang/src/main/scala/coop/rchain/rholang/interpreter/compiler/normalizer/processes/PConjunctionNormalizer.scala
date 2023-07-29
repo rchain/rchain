@@ -22,13 +22,13 @@ object PConjunctionNormalizer {
                       p.proc_2,
                       ProcVisitInputs(NilN(), input.boundMapChain, leftResult.freeMap)
                     )
-      lp = fromProto(leftResult.par)
-      rp = fromProto(rightResult.par)
+      lp = leftResult.par
+      rp = rightResult.par
 
       resultConnective = ConnAndN(Seq(lp, rp))
 
     } yield ProcVisitOutputs(
-      toProto(input.par.add(resultConnective)),
+      input.par.add(resultConnective),
       rightResult.freeMap
         .addConnective(
           toProtoConnective(resultConnective).connectiveInstance,

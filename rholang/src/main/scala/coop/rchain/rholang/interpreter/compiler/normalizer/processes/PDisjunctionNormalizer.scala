@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PDisjunction
@@ -28,12 +27,12 @@ object PDisjunctionNormalizer {
                       p.proc_2,
                       ProcVisitInputs(NilN(), input.boundMapChain, FreeMap.empty)
                     )
-      lp               = fromProto(leftResult.par)
-      rp               = fromProto(rightResult.par)
+      lp               = leftResult.par
+      rp               = rightResult.par
       resultConnective = ConnOrN(Seq(lp, rp))
 
     } yield ProcVisitOutputs(
-      toProto(input.par.add(resultConnective)),
+      input.par.add(resultConnective),
       input.freeMap
         .addConnective(
           toProtoConnective(resultConnective).connectiveInstance,

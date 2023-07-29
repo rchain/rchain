@@ -4,15 +4,14 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
+import coop.rchain.models.rholangN.Bindings._
+import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.ast.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.interpreter.errors._
 
 import java.io.{Reader, StringReader}
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
 
 trait Compiler[F[_]] {
 
@@ -114,7 +113,7 @@ object Compiler {
                 TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString(", "))
               )
             }
-          } else normalizedTerm.par.pure[F]
+          } else toProto(normalizedTerm.par).pure[F]
         }
 
     /**

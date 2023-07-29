@@ -2,16 +2,13 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{EMethod, Par}
+import coop.rchain.models.Par
+import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PMethod
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.immutable.BitSet
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
 
 object PMethodNormalizer {
   def normalize[F[_]: Sync](p: PMethod, input: ProcVisitInputs)(
@@ -19,7 +16,7 @@ object PMethodNormalizer {
   ): F[ProcVisitOutputs] =
     for {
       targetResult <- normalizeMatch[F](p.proc_, input.copy(NilN()))
-      target       = fromProto(targetResult.par)
+      target       = targetResult.par
       initAcc = (
         Seq[ParN](),
         ProcVisitInputs(NilN(), input.boundMapChain, targetResult.freeMap)
@@ -28,7 +25,7 @@ object PMethodNormalizer {
                      normalizeMatch[F](e, acc._2).map(
                        procMatchResult =>
                          (
-                           fromProto(procMatchResult.par) +: acc._1,
+                           procMatchResult.par +: acc._1,
                            ProcVisitInputs(
                              NilN(),
                              input.boundMapChain,
@@ -39,6 +36,6 @@ object PMethodNormalizer {
                    })
     } yield {
       val method = EMethodN(p.var_, target, argResults._1)
-      ProcVisitOutputs(toProto(input.par.add(method)), argResults._2.freeMap)
+      ProcVisitOutputs(input.par.add(method), argResults._2.freeMap)
     }
 }

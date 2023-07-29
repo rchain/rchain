@@ -25,7 +25,7 @@ object CollectionNormalizeMatcher {
           ProcNormalizeMatcher
             .normalizeMatch[F](proc, ProcVisitInputs(NilN(), input.boundMapChain, acc._2))
             .map { result =>
-              (fromProto(result.par) +: acc._1, result.freeMap)
+              (result.par +: acc._1, result.freeMap)
             }
         }
         .map {
@@ -61,7 +61,7 @@ object CollectionNormalizeMatcher {
                               )
                             )
               } yield (
-                Seq((fromProto(keyResult.par), fromProto(valResult.par))) ++ acc._1,
+                Seq((keyResult.par, valResult.par)) ++ acc._1,
                 valResult.freeMap
               )
           }

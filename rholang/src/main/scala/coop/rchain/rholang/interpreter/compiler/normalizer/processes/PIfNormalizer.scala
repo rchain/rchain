@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
@@ -29,12 +28,12 @@ object PIfNormalizer {
                         ProcVisitInputs(NilN(), input.boundMapChain, trueCaseBody.freeMap)
                       )
       desugaredIf = MatchN(
-        fromProto(targetResult.par),
+        targetResult.par,
         Seq(
-          MatchCaseN(GBoolN(true), fromProto(trueCaseBody.par)),
-          MatchCaseN(GBoolN(false), fromProto(falseCaseBody.par))
+          MatchCaseN(GBoolN(true), trueCaseBody.par),
+          MatchCaseN(GBoolN(false), falseCaseBody.par)
         )
       )
-    } yield ProcVisitOutputs(toProto(input.par.add(desugaredIf)), falseCaseBody.freeMap)
+    } yield ProcVisitOutputs(input.par.add(desugaredIf), falseCaseBody.freeMap)
 
 }

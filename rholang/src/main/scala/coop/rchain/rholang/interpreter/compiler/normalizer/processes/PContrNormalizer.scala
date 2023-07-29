@@ -71,13 +71,13 @@ object PContrNormalizer {
           fromProtoVarOpt(remainderResult._1),
           boundCount
         ),
-        body = fromProto(bodyResult.par),
+        body = bodyResult.par,
         persistent = true,
         peek = false,
         bindCount = boundCount
       )
       ProcVisitOutputs(
-        toProto(input.par.add(newReceive)),
+        input.par.add(newReceive),
         bodyResult.freeMap
       )
     }

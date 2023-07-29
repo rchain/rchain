@@ -50,16 +50,14 @@ object NameNormalizeMatcher {
           }
         }
 
-      case n: NameQuote => {
+      case n: NameQuote =>
         ProcNormalizeMatcher
-          .normalizeMatch[F](
-            n.proc_,
-            ProcVisitInputs(NilN(), input.boundMapChain, input.freeMap)
-          )
+          .normalizeMatch[F](n.proc_, ProcVisitInputs(NilN(), input.boundMapChain, input.freeMap))
           .map(
-            procVisitResult => NameVisitOutputs(procVisitResult.par, procVisitResult.freeMap)
+            procVisitResult =>
+              NameVisitOutputs(toProto(procVisitResult.par), procVisitResult.freeMap)
           )
-      }
+
     }
 
 }

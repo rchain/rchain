@@ -3,8 +3,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
@@ -54,7 +52,7 @@ object PBundleNormalizer {
 
     for {
       targetResult <- normalizeMatch[F](b.proc_, input.copy(par = NilN()))
-      target       = fromProto(targetResult.par)
+      target       = targetResult.par
       outermostBundle = b.bundle_ match {
         case _: BundleReadWrite => BundleN(target, writeFlag = true, readFlag = true)
         case _: BundleRead      => BundleN(target, writeFlag = false, readFlag = true)
@@ -76,7 +74,7 @@ object PBundleNormalizer {
                 case _          => outermostBundle
               }
               val outPar: ParN = input.par.add(newBundle)
-              ProcVisitOutputs(toProto(outPar), input.freeMap).pure[F]
+              ProcVisitOutputs(outPar, input.freeMap).pure[F]
             }
     } yield res
   }

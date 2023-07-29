@@ -28,7 +28,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val nil = new PNil()
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](nil, inputs).value
-    fromProto(result.par) should be(inputs.par)
+    result.par should be(inputs.par)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -38,12 +38,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pvar, boundInputs).value
-    fromProto(result.par) should be(BoundVarN(0))
+    result.par should be(BoundVarN(0))
     result.freeMap should be(inputs.freeMap)
   }
   "PVar" should "Compile as FreeVar if it's not in env" in {
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pvar, inputs).value
-    fromProto(result.par) should be(FreeVarN(0))
+    result.par should be(FreeVarN(0))
     result.freeMap shouldEqual
       (inputs.freeMap.put(("x", ProcSort, SourcePosition(0, 0))))
   }
@@ -70,7 +70,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pEval, boundInputs).value
-    fromProto(result.par) should be(BoundVarN(0))
+    result.par should be(BoundVarN(0))
     result.freeMap should be(inputs.freeMap)
   }
   "PEval" should "Collapse a quote" in {
@@ -81,7 +81,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pEval, boundInputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       ParProcN(Seq(BoundVarN(0), BoundVarN(0)))
     )
     result.freeMap should be(inputs.freeMap)
@@ -91,7 +91,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val pNot = new PNot(new PGround(new GroundBool(new BoolFalse())))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pNot, inputs).value
-    fromProto(result.par) should be(ENotN(GBoolN(false)))
+    result.par should be(ENotN(GBoolN(false)))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -101,7 +101,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pNeg, boundInputs).value
-    fromProto(result.par) should be(ENegN(BoundVarN(0)))
+    result.par should be(ENegN(BoundVarN(0)))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -111,7 +111,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMult, boundInputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       EMultN(BoundVarN(0), FreeVarN(0))
     )
     result.freeMap should be(inputs.freeMap.put(("y", ProcSort, SourcePosition(0, 0))))
@@ -121,7 +121,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val pDiv = new PDiv(new PGround(new GroundInt("7")), new PGround(new GroundInt("2")))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pDiv, inputs).value
-    fromProto(result.par) should be(EDivN(GIntN(7), GIntN(2)))
+    result.par should be(EDivN(GIntN(7), GIntN(2)))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -139,7 +139,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
         new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
       )
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pPercentPercent, inputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       EPercentPercentN(
         GStringN("Hi ${name}"),
         EMapN(Seq((GStringN("name"), GStringN("Alice"))))
@@ -157,7 +157,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       )
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pAdd, boundInputs).value
-    fromProto(result.par) should be(EPlusN(BoundVarN(1), BoundVarN(0)))
+    result.par should be(EPlusN(BoundVarN(1), BoundVarN(0)))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -178,7 +178,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     )
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMinus, boundInputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       EMinusN(BoundVarN(2), EMultN(BoundVarN(1), BoundVarN(0)))
     )
     result.freeMap should be(inputs.freeMap)
@@ -190,7 +190,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       new PGround(new GroundString("\"def\""))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pPlusPlus, inputs).value
-    fromProto(result.par) should be(EPlusPlusN(GStringN("abc"), GStringN("def")))
+    result.par should be(EPlusPlusN(GStringN("abc"), GStringN("def")))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -200,7 +200,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       new PGround(new GroundString("\"def\""))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMinusMinus, inputs).value
-    fromProto(result.par) should be(EMinusMinusN(GStringN("abc"), GStringN("def")))
+    result.par should be(EMinusMinusN(GStringN("abc"), GStringN("def")))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -211,7 +211,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val pSend = new PSend(new NameQuote(new PNil()), new SendSingle(), sentData)
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pSend, inputs).value
-    fromProto(result.par) should be(SendN(NilN(), Seq(GIntN(7), GIntN(8))))
+    result.par should be(SendN(NilN(), Seq(GIntN(7), GIntN(8))))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -224,7 +224,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pSend, boundInputs).value
-    fromProto(result.par) should be(SendN(BoundVarN(0), Seq(GIntN(7), GIntN(8))))
+    result.par should be(SendN(BoundVarN(0), Seq(GIntN(7), GIntN(8))))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -286,7 +286,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(new PGround(new GroundInt("7")), new PGround(new GroundInt("8")))
     val result    = ProcNormalizeMatcher.normalizeMatch[Eval](parGround, inputs).value
-    fromProto(result.par) should be(ParProcN(Seq(GIntN(8), GIntN(7))))
+    result.par should be(ParProcN(Seq(GIntN(8), GIntN(7))))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -296,7 +296,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleBound, boundInputs).value
-    fromProto(result.par) should be(ParProcN(Seq(BoundVarN(0), BoundVarN(0))))
+    result.par should be(ParProcN(Seq(BoundVarN(0), BoundVarN(0))))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -311,7 +311,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val parDoubleFree = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleFree, inputs).value
-    fromProto(result.par) should be(ParProcN(Seq(FreeVarN(1), FreeVarN(0))))
+    result.par should be(ParProcN(Seq(FreeVarN(1), FreeVarN(0))))
     result.freeMap should be(
       inputs.freeMap.put(
         List(("x", ProcSort, SourcePosition(0, 0)), ("y", ProcSort, SourcePosition(0, 0)))
@@ -353,7 +353,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("add", NameSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pBasicContr, boundInputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       ReceiveN(
         Seq(ReceiveBindN(Seq(FreeVarN(0), FreeVarN(1), FreeVarN(2)), BoundVarN(0), freeCount = 3)),
         SendN(BoundVarN(2), EPlusN(BoundVarN(1), BoundVarN(0))),
@@ -390,7 +390,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     )
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pBasicContr, boundInputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       ReceiveN(
         Seq(ReceiveBindN(Seq(FreeVarN(0), GIntN(5)), BoundVarN(0), freeCount = 1)),
         SendN(BoundVarN(0), GIntN(5)),
@@ -427,7 +427,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val bindCount  = 2
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       ReceiveN(
         Seq(ReceiveBindN(Seq(FreeVarN(0), FreeVarN(1)), NilN(), freeCount = 2)),
         SendN(BoundVarN(1), BoundVarN(0)),
@@ -443,7 +443,10 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     (for {
       basicInput <- Compiler[Eval].sourceToAST("""for ( x, y <<- @Nil ) { x!(*y) }""")
       result     <- ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs)
-    } yield result.par.receives.head.peek shouldBe true).value
+    } yield result.par match {
+      case r: ReceiveN => r.peek shouldBe true
+      case _           => assert(false, "result.par did not match ReceiveN")
+    }).value
   }
 
   "PInput" should "Handle a more complicated receive" in {
@@ -486,7 +489,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val bindCount = 4
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pInput, inputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       ReceiveN(
         List(
           ReceiveBindN(Seq(FreeVarN(0), FreeVarN(1)), NilN(), freeCount = 2),
@@ -533,7 +536,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
         bindCount
       )
 
-    fromProto(result.par) should be(expected)
+    result.par should be(expected)
   }
 
   "PInput" should "Fail if a free variable is used in 2 different receives" in {
@@ -680,7 +683,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     )
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pNew, inputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       NewN(
         bindCount = 3,
         ParProcN(
@@ -731,7 +734,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     )
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pNew, inputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       NewN(
         bindCount = 5,
         p = ParProcN(
@@ -798,7 +801,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
           )
         )
       )
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -827,8 +830,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
         MatchCaseN(WildcardN(), NilN())
       )
     )
-    fromProto(result.par) should be(expectedResult)
-    result.par.matches.head.cases.head.freeCount should be(1)
+    result.par should be(expectedResult)
   }
 
   "PIf" should "Desugar to match with true/false cases" in {
@@ -840,7 +842,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val basicInput = new PIf(condition, body)
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       MatchN(
         GBoolN(true),
         Seq(MatchCaseN(GBoolN(true), SendN(NilN(), GIntN(47))), MatchCaseN(GBoolN(false), NilN()))
@@ -857,7 +859,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](rightProc, input).value
 
     result.freeMap should be(inputs.freeMap)
-    fromProto(result.par) should be(
+    result.par should be(
       ParProcN(
         Seq(
           MatchN(
@@ -892,7 +894,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val basicInput = new PIfElse(condition, pNewIf, pNewElse)
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       MatchN(
         EEqN(GIntN(47), GIntN(47)),
         Seq(
@@ -974,7 +976,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
         bindCount
       )
 
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -990,7 +992,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMethod, boundInputs).value
       val expectedResult =
         EMethodN(methodName, BoundVarN(0), GIntN(0))
-      fromProto(result.par) === expectedResult && result.freeMap === inputs.freeMap
+      result.par === expectedResult && result.freeMap === inputs.freeMap
     }
     methods.forall(m => test(m))
 
@@ -1002,7 +1004,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     val result         = ProcNormalizeMatcher.normalizeMatch[Eval](pbundle, boundInputs).value
     val expectedResult = BundleN(BoundVarN(0), writeFlag = true, readFlag = true)
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -1072,7 +1074,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
           .normalizeMatch[Eval](p = newBundle(proc)(readOnly, writeOnly), input = boundInputs)
           .value
 
-        assert(fromProto(result.par) === expectedResults(writeOnly, readOnly))
+        assert(result.par === expectedResults(writeOnly, readOnly))
         assert(result.freeMap === inputs.freeMap)
       }
 
@@ -1093,7 +1095,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val result =
       ProcNormalizeMatcher.normalizeMatch[Eval](nestedBundle, input = boundInputs).value
 
-    assert(fromProto(result.par) === expectedResults)
+    assert(result.par === expectedResults)
     assert(result.freeMap === boundInputs.freeMap)
   }
 
@@ -1103,7 +1105,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val result         = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
     val expectedResult = ConnNotN(FreeVarN(0))
 
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap.levelBindings should be(inputs.freeMap.levelBindings)
     result.freeMap.nextLevel should be(inputs.freeMap.nextLevel)
   }
@@ -1114,7 +1116,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val result         = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
     val expectedResult = ConnAndN(Seq(FreeVarN(0), FreeVarN(1)))
 
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
 
     val expectedFree = inputs.freeMap.put(
       List(("x", ProcSort, SourcePosition(0, 0)), ("y", ProcSort, SourcePosition(0, 0)))
@@ -1130,7 +1132,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val result         = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
     val expectedResult = ConnOrN(FreeVarN(0), FreeVarN(0))
 
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap.levelBindings should be(inputs.freeMap.levelBindings)
     result.freeMap.nextLevel should be(inputs.freeMap.nextLevel)
   }
@@ -1155,7 +1157,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
         )
       )
     )
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -1188,7 +1190,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       ReceiveBindN(ConnVarRefN(0, 1), NilN()),
       body = NilN(),
       bindCount = 0)
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -1207,12 +1209,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val resultUri       = ProcNormalizeMatcher.normalizeMatch[Eval](procUri, inputs).value
     val resultByteArray = ProcNormalizeMatcher.normalizeMatch[Eval](procByteArray, inputs).value
 
-    fromProto(resultBool.par) should be(ConnBoolN())
-    fromProto(resultInt.par) should be(ConnIntN())
-    fromProto(resultBigInt.par) should be(ConnBigIntN())
-    fromProto(resultString.par) should be(ConnStringN())
-    fromProto(resultUri.par) should be(ConnUriN())
-    fromProto(resultByteArray.par) should be(ConnByteArrayN())
+    resultBool.par should be(ConnBoolN())
+    resultInt.par should be(ConnIntN())
+    resultBigInt.par should be(ConnBigIntN())
+    resultString.par should be(ConnStringN())
+    resultUri.par should be(ConnUriN())
+    resultByteArray.par should be(ConnByteArrayN())
   }
 
   "1 matches _" should "normalize correctly" in {
@@ -1222,7 +1224,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val expectedPar = EMatchesN(GIntN(1), WildcardN())
 
-    fromProto(result.par) shouldBe expectedPar
+    result.par shouldBe expectedPar
     result.par.connectiveUsed should be(false)
   }
 
@@ -1233,7 +1235,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val expectedPar = EMatchesN(GIntN(1), GIntN(2))
 
-    fromProto(result.par) shouldBe expectedPar
+    result.par shouldBe expectedPar
     result.par.connectiveUsed should be(false)
   }
 
@@ -1244,7 +1246,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val expectedPar = EMatchesN(GIntN(1), ConnNotN(GIntN(1)))
 
-    fromProto(result.par) shouldBe expectedPar
+    result.par shouldBe expectedPar
     result.par.connectiveUsed should be(false)
   }
 
@@ -1255,7 +1257,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val expectedPar = EMatchesN(ConnNotN(GIntN(1)), GIntN(1))
 
-    fromProto(result.par) shouldBe expectedPar
+    result.par shouldBe expectedPar
     result.par.connectiveUsed should be(true)
   }
 

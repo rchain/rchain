@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PVar, ProcVarVar, ProcVarWildcard}
 import coop.rchain.rholang.interpreter.compiler._
@@ -18,7 +17,7 @@ object PVarNormalizer {
         input.boundMapChain.get(pvv.var_) match {
           case Some(BoundContext(level, ProcSort, _)) =>
             ProcVisitOutputs(
-              toProto(input.par.add(BoundVarN(level))),
+              input.par.add(BoundVarN(level)),
               input.freeMap
             ).pure[F]
           case Some(BoundContext(_, NameSort, sourcePosition)) =>
@@ -37,7 +36,7 @@ object PVarNormalizer {
                     (pvv.var_, ProcSort, SourcePosition(pvv.line_num, pvv.col_num))
                   )
                 ProcVisitOutputs(
-                  toProto(input.par.add(FreeVarN(input.freeMap.nextLevel))),
+                  input.par.add(FreeVarN(input.freeMap.nextLevel)),
                   newBindingsPair
                 ).pure[F]
               case Some(FreeContext(_, _, firstSourcePosition)) =>
@@ -52,7 +51,7 @@ object PVarNormalizer {
         }
       case _: ProcVarWildcard =>
         ProcVisitOutputs(
-          toProto(input.par.add(WildcardN())),
+          input.par.add(WildcardN()),
           input.freeMap.addWildcard(SourcePosition(p.line_num, p.col_num))
         ).pure[F]
     }

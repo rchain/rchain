@@ -3,8 +3,6 @@ package coop.rchain.rholang.interpreter.compiler
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models._
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.compiler.normalizer.processes._
@@ -31,7 +29,7 @@ object ProcNormalizeMatcher {
         .map(
           subResult =>
             ProcVisitOutputs(
-              toProto(input.par.add(constructor(fromProto(subResult.par)))),
+              input.par.add(constructor(subResult.par)),
               subResult.freeMap
             )
         )
@@ -49,7 +47,7 @@ object ProcNormalizeMatcher {
                         input.copy(par = NilN(), freeMap = leftResult.freeMap)
                       )
       } yield ProcVisitOutputs(
-        toProto(input.par.add(constructor(fromProto(leftResult.par), fromProto(rightResult.par)))),
+        input.par.add(constructor(leftResult.par, rightResult.par)),
         rightResult.freeMap
       )
 
@@ -78,7 +76,7 @@ object ProcNormalizeMatcher {
       case p: PVarRef =>
         PVarRefNormalizer.normalize(p, input)
 
-      case _: PNil => ProcVisitOutputs(toProto(input.par), input.freeMap).pure[F]
+      case _: PNil => ProcVisitOutputs(input.par, input.freeMap).pure[F]
 
       case p: PEval =>
         PEvalNormalizer.normalize(p, input)
@@ -145,11 +143,11 @@ object ProcNormalizeMatcher {
       case p: PIf =>
         PIfNormalizer
           .normalize(p.proc_1, p.proc_2, new PNil(), input.copy(par = NilN()))
-          .map(n => n.copy(par = n.par ++ toProto(input.par)))
+          .map(n => n.copy(par = n.par.add(input.par)))
       case p: PIfElse =>
         PIfNormalizer
           .normalize(p.proc_1, p.proc_2, p.proc_3, input.copy(par = NilN()))
-          .map(n => n.copy(par = n.par ++ toProto(input.par)))
+          .map(n => n.copy(par = n.par.add(input.par)))
 
       case _ =>
         Sync[F].raiseError(
@@ -173,7 +171,7 @@ final case class ProcVisitInputs(
     freeMap: FreeMap[VarSort]
 )
 // Returns the update Par and an updated map of free variables.
-final case class ProcVisitOutputs(par: Par, freeMap: FreeMap[VarSort])
+final case class ProcVisitOutputs(par: ParN, freeMap: FreeMap[VarSort])
 
 final case class NameVisitInputs(boundMapChain: BoundMapChain[VarSort], freeMap: FreeMap[VarSort])
 final case class NameVisitOutputs(par: Par, freeMap: FreeMap[VarSort])

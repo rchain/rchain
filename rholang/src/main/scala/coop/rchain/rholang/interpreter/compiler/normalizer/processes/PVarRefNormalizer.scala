@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PVarRef, VarRefKindName, VarRefKindProc}
 import coop.rchain.rholang.interpreter.compiler._
@@ -22,7 +21,7 @@ object PVarRefNormalizer {
           case ProcSort =>
             p.varrefkind_ match {
               case _: VarRefKindProc =>
-                ProcVisitOutputs(toProto(input.par.add(ConnVarRefN(idx, depth))), input.freeMap)
+                ProcVisitOutputs(input.par.add(ConnVarRefN(idx, depth)), input.freeMap)
                   .pure[F]
               case _ =>
                 Sync[F].raiseError(
@@ -36,7 +35,7 @@ object PVarRefNormalizer {
           case NameSort =>
             p.varrefkind_ match {
               case _: VarRefKindName =>
-                ProcVisitOutputs(toProto(input.par.add(ConnVarRefN(idx, depth))), input.freeMap)
+                ProcVisitOutputs(input.par.add(ConnVarRefN(idx, depth)), input.freeMap)
                   .pure[F]
               case _ =>
                 Sync[F].raiseError(

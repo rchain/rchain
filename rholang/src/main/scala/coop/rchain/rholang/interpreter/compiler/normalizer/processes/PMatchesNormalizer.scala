@@ -1,14 +1,12 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.{EMatches, Par}
-import coop.rchain.models.rholang.implicits._
+import cats.syntax.all._
+import coop.rchain.models.Par
+import coop.rchain.models.rholangN._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.PMatches
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{FreeMap, ProcVisitInputs, ProcVisitOutputs}
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.PMatches
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
 
 object PMatchesNormalizer {
   def normalize[F[_]: Sync](p: PMatches, input: ProcVisitInputs)(
@@ -30,7 +28,7 @@ object PMatchesNormalizer {
                       )
                     )
     } yield ProcVisitOutputs(
-      toProto(input.par.add(EMatchesN(fromProto(leftResult.par), fromProto(rightResult.par)))),
+      input.par.add(EMatchesN(leftResult.par, rightResult.par)),
       leftResult.freeMap
     )
 }

@@ -34,7 +34,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
     val list = new PCollect(new CollectList(listData, new ProcRemainderEmpty()))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](list, inputs).value
-    fromProto(result.par) should be(EListN(Seq(BoundVarN(1), BoundVarN(0), GIntN(7))))
+    result.par should be(EListN(Seq(BoundVarN(1), BoundVarN(0), GIntN(7))))
     result.freeMap should be(inputs.freeMap)
   }
   "List" should "sort the insides of their elements" in {
@@ -71,7 +71,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
       new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](tuple, inputs).value
-    fromProto(result.par) should be(ETupleN(Seq(FreeVarN(0), FreeVarN(1))))
+    result.par should be(ETupleN(Seq(FreeVarN(0), FreeVarN(1))))
     result.freeMap should be(
       inputs.freeMap.put(
         List(("Q", ProcSort, SourcePosition(0, 0)), ("y", NameSort, SourcePosition(0, 0)))
@@ -102,7 +102,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](set, inputs).value
 
-    fromProto(result.par) should be(
+    result.par should be(
       ESetN(
         Seq(EPlusN(BoundVarN(1), FreeVarN(1)), GIntN(7), GIntN(8).add(FreeVarN(2))),
         Some(FreeVarN(0))
@@ -130,7 +130,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
     val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("Z"))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](map, inputs).value
-    fromProto(result.par) should be(
+    result.par should be(
       EMapN(Seq(GIntN(7) -> GStringN("Seven"), BoundVarN(1) -> FreeVarN(1)), Some(FreeVarN(0)))
     )
     val newBindings = List(

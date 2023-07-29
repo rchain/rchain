@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PSend, SendMultiple, SendSingle}
@@ -31,7 +30,7 @@ object PSendNormalizer {
                         normalizeMatch[F](e, acc._2).map(
                           procMatchResult =>
                             (
-                              fromProto(procMatchResult.par) +: acc._1,
+                              procMatchResult.par +: acc._1,
                               ProcVisitInputs(
                                 NilN(),
                                 input.boundMapChain,
@@ -48,7 +47,7 @@ object PSendNormalizer {
       send = SendN(fromProto(nameMatchResult.par), dataResults._1, persistent)
       par  = input.par.add(send)
     } yield ProcVisitOutputs(
-      toProto(par),
+      par,
       dataResults._2.freeMap
     )
 }

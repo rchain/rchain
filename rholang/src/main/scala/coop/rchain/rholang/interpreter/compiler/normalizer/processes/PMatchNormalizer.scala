@@ -4,7 +4,6 @@ import cats.Applicative
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Case, CaseImpl, PMatch, Proc}
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
@@ -50,8 +49,8 @@ object PMatchNormalizer {
                                                )
                             } yield (
                               MatchCaseN(
-                                fromProto(patternResult.par),
-                                fromProto(caseBodyResult.par),
+                                patternResult.par,
+                                caseBodyResult.par,
                                 boundCount
                               ) +: acc._1,
                               caseBodyResult.freeMap
@@ -60,8 +59,8 @@ object PMatchNormalizer {
                         }
                     )
     } yield {
-      val m = MatchN(fromProto(targetResult.par), casesResult._1.reverse)
-      ProcVisitOutputs(toProto(input.par.add(m)), casesResult._2)
+      val m = MatchN(targetResult.par, casesResult._1.reverse)
+      ProcVisitOutputs(input.par.add(m), casesResult._2)
     }
   }
 }
