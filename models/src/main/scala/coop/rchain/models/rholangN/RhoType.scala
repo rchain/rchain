@@ -38,10 +38,16 @@ trait AuxParN extends RhoTypeN
 sealed trait ParN extends RhoTypeN {
   def toBytes: ByteVector      = parToBytes(this)
   def compare(that: ParN): Int = comparePars(this, that)
-  def add(that: ParN): ParN    = addPar(this, that)
+  def add(that: ParN): ParN    = combinePars(this, that)
 }
 object ParN {
   def fromBytes(bytes: ByteVector): ParN = parFromBytes(bytes)
+
+  /**
+    * Create a flatten parallel Par (ParProc) from par sequence.
+    * See [[flattedPProc]] for more information.
+    */
+  def makeParProc(ps: Seq[ParN]): ParN = flattedPProc(ps)
 }
 
 /** Basic rholang operations that can be executed in parallel*/

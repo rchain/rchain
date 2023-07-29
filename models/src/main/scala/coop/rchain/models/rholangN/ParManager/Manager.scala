@@ -33,11 +33,36 @@ object Manager {
     Sorting.sortInjections(injections)
   def comparePars(p1: ParN, p2: ParN): Int = Sorting.comparePars(p1, p2)
 
-  def addPar(p1: ParN, p2: ParN): ParN = p1 match {
-    case _: NilN         => p2
-    case pProc: ParProcN => pProc.addPar(p2)
-    case _               => ParProcN(Seq(p2, p1))
+  private def flatPs(ps: Seq[ParN]): Seq[ParN] =
+    ps.flatMap {
+      case _: NilN     => Seq()
+      case x: ParProcN => flatPs(x.ps)
+      case p           => Seq(p)
+    }
+
+  private def makePProc(ps: Seq[ParN]): ParN = ps.length match {
+    case 0 => NilN()
+    case 1 => ps.head
+    case _ => ParProcN(ps)
   }
+
+  /**
+    * Create a flatten parallel Par (ParProc) from par sequence
+    * Flatting is the process of transforming ParProc(P, Q, ...):
+    * - empty data:  ParProc()  -> Nil
+    * - single data: ParProc(P) -> P
+    * - nil data:    ParProc(P, Q, Nil) -> ParProc(P, Q)
+    * - nested data  ParProc(ParProc(P,Q), ParProc(L,K)) -> ParProc(P, Q, L, K)
+    * @param ps initial par sequence to be executed in parallel
+    * @return
+    */
+  def flattedPProc(ps: Seq[ParN]): ParN = makePProc(flatPs(ps))
+
+  /**
+    * Create a flatten parallel Par (ParProc) from two Pars.
+    * See [[flattedPProc]] for more information.
+    */
+  def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash     = RhoHash.rhoHashFn(p)
