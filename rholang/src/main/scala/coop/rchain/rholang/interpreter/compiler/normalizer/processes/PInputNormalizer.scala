@@ -2,10 +2,10 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
+import coop.rchain.models.{Par, ReceiveBind}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler._
@@ -49,6 +49,7 @@ object PInputNormalizer {
                       case _: SimpleSource => false
                       case _               => true
                     }
+
                 }
               case _ => false
             }
@@ -122,6 +123,7 @@ object PInputNormalizer {
                   input
                 )
             }
+
         }
       } else {
 
@@ -204,22 +206,33 @@ object PInputNormalizer {
                     case pbi: PeekBindImpl =>
                       ((pbi.listname_.asScala.toVector, pbi.nameremainder_), pbi.name_)
                   }, false, true)
+
               }
+
           }
 
         val (patterns, names) = consumes.unzip
+
+        def fromReceiveBind(x: ReceiveBind): ReceiveBindN = {
+          val patterns  = fromProto(x.patterns)
+          val source    = fromProto(x.source)
+          val remainder = fromProtoVarOpt(x.remainder)
+          val freeCount = x.freeCount
+          ReceiveBindN(patterns, source, remainder, freeCount)
+        }
+
         for {
           processedSources       <- processSources(names)
           (sources, sourcesFree) = processedSources
           processedPatterns      <- processPatterns(patterns)
-          bindsAndFreeMaps = processedPatterns.zip(sources).map {
-            case ((ptns: Seq[ParN], rmndr: Option[VarN], knownFree: FreeMap[VarSort]), ch: ParN) =>
-              val freeCount = knownFree.countNoWildcards
-              (ReceiveBindN(ptns, ch, rmndr, freeCount), knownFree)
-          }
-          sortedBindsAndFreeMaps              = ParManager.Manager.sortBindsWithT(bindsAndFreeMaps)
-          unz                                 = sortedBindsAndFreeMaps.unzip
-          (receiveBinds, receiveBindFreeMaps) = (unz._1, unz._2)
+          receiveBindsAndFreeMaps <- ReceiveBindsSortMatcher.preSortBinds[F, VarSort](
+                                      processedPatterns.zip(sources).map {
+                                        case ((a, b, c), e) =>
+                                          (toProto(a), toProtoVarOpt(b), toProto(e), c)
+                                      }
+                                    )
+          unz                                 = receiveBindsAndFreeMaps.unzip
+          (receiveBinds, receiveBindFreeMaps) = (unz._1.map(fromReceiveBind), unz._2)
           channels                            = receiveBinds.map(_.source)
           hasSameChannels                     = channels.size > channels.toSet.size
           _ <- ReceiveOnSameChannelsError(p.line_num, p.col_num)
