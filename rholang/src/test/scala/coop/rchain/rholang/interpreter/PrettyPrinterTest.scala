@@ -350,9 +350,9 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2} <- x0  & @{x3} <- x1 ) {
-        |    x2 |
-        |    x3
+        |  for( @{x2} <- x1  & @{x3} <- x0 ) {
+        |    x3 |
+        |    x2
         |  }
         |}""".stripMargin
     result shouldBe target
@@ -699,7 +699,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Eval](basicInput1, inputs).value.par
       )
     val target =
-      """for( @{x0}, @{for( @{y0}, @{y1} <- @{Nil} ) { x1 | y1 | y0 }} <- @{Nil} ) {
+      """for( @{x0}, @{for( @{y0}, @{y1} <- @{Nil} ) { x1 | y0 | y1 }} <- @{Nil} ) {
         |  @{x0}!(x1)
         |}""".stripMargin
     result shouldBe target
@@ -971,7 +971,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val result = PrettyPrinter().buildString(
       ProcNormalizeMatcher.normalizeMatch[Eval](input, inputs).value.par
     )
-    result shouldBe """for( @{match x0 | x1 { 47 => { Nil } }} <- @{Nil} ) {
+    result shouldBe """for( @{match x1 | x0 { 47 => { Nil } }} <- @{Nil} ) {
                       |  Nil
                       |}""".stripMargin
   }
