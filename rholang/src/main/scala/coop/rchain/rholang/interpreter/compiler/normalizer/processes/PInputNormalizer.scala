@@ -140,7 +140,7 @@ object PInputNormalizer {
                 .map {
                   case NameVisitOutputs(par, knownFree) =>
                     (
-                      vectorPar :+ fromProto(par),
+                      vectorPar :+ par,
                       knownFree
                     )
                 }
@@ -163,14 +163,14 @@ object PInputNormalizer {
                         failOnInvalidConnective(input, nameVisitOutputs)
                           .fold(
                             _.raiseError[F, (Vector[ParN], FreeMap[VarSort])],
-                            _ => (vectorPar :+ fromProto(par), knownFree).pure[F]
+                            _ => (vectorPar :+ par, knownFree).pure[F]
                           )
                     }
                 } >>= {
                 case (vectorPar, knownFree) =>
                   RemainderNormalizeMatcher.normalizeMatchName(nameRemainder, knownFree).map {
                     case (optionalVar, knownFree) =>
-                      (vectorPar, fromProtoVarOpt(optionalVar), knownFree)
+                      (vectorPar, optionalVar, knownFree)
                   }
               }
           }

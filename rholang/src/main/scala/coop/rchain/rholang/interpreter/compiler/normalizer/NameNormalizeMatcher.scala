@@ -20,11 +20,11 @@ object NameNormalizeMatcher {
       case wc: NameWildcard =>
         val wildcardBindResult =
           input.freeMap.addWildcard(SourcePosition(wc.line_num, wc.col_num))
-        NameVisitOutputs(toProto(WildcardN()), wildcardBindResult).pure[F]
+        NameVisitOutputs(WildcardN(), wildcardBindResult).pure[F]
       case n: NameVar =>
         input.boundMapChain.get(n.var_) match {
           case Some(BoundContext(level, NameSort, _)) => {
-            NameVisitOutputs(toProto(BoundVarN(level)), input.freeMap).pure[F]
+            NameVisitOutputs(BoundVarN(level), input.freeMap).pure[F]
           }
           case Some(BoundContext(_, ProcSort, sourcePosition)) => {
             Sync[F].raiseError(
@@ -36,7 +36,7 @@ object NameNormalizeMatcher {
               case None =>
                 val newBindingsPair =
                   input.freeMap.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
-                NameVisitOutputs(toProto(FreeVarN(input.freeMap.nextLevel)), newBindingsPair)
+                NameVisitOutputs(FreeVarN(input.freeMap.nextLevel), newBindingsPair)
                   .pure[F]
               case Some(FreeContext(_, _, sourcePosition)) =>
                 Sync[F].raiseError(
@@ -54,8 +54,7 @@ object NameNormalizeMatcher {
         ProcNormalizeMatcher
           .normalizeMatch[F](n.proc_, ProcVisitInputs(NilN(), input.boundMapChain, input.freeMap))
           .map(
-            procVisitResult =>
-              NameVisitOutputs(toProto(procVisitResult.par), procVisitResult.freeMap)
+            procVisitResult => NameVisitOutputs(procVisitResult.par, procVisitResult.freeMap)
           )
 
     }

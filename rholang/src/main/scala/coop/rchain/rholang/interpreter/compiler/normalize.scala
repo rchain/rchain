@@ -174,7 +174,7 @@ final case class ProcVisitInputs(
 final case class ProcVisitOutputs(par: ParN, freeMap: FreeMap[VarSort])
 
 final case class NameVisitInputs(boundMapChain: BoundMapChain[VarSort], freeMap: FreeMap[VarSort])
-final case class NameVisitOutputs(par: Par, freeMap: FreeMap[VarSort])
+final case class NameVisitOutputs(par: ParN, freeMap: FreeMap[VarSort])
 
 final case class CollectVisitInputs(
     boundMapChain: BoundMapChain[VarSort],

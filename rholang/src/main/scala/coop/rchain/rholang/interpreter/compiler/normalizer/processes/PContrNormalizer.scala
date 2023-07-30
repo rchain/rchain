@@ -49,7 +49,7 @@ object PContrNormalizer {
                              .map(
                                result =>
                                  (
-                                   fromProto(result.par) +: acc._1,
+                                   result.par +: acc._1,
                                    result.freeMap
                                  )
                              )
@@ -67,8 +67,8 @@ object PContrNormalizer {
       val newReceive = ReceiveN(
         ReceiveBindN(
           formalsResults._1.reverse,
-          fromProto(nameMatchResult.par),
-          fromProtoVarOpt(remainderResult._1),
+          nameMatchResult.par,
+          remainderResult._1,
           boundCount
         ),
         body = bodyResult.par,

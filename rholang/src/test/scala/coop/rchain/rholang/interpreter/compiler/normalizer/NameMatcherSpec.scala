@@ -19,7 +19,7 @@ class NameMatcherSpec extends AnyFlatSpec with Matchers {
     val nw             = new NameWildcard()
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nw, inputs).value
     val expectedResult = WildcardN()
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap.count shouldEqual 1
   }
 
@@ -31,13 +31,13 @@ class NameMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nvar, boundInputs).value
     val expectedResult = BoundVarN(0)
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
   "NameVar" should "Compile as FreeVar if it's not in env" in {
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nvar, inputs).value
     val expectedResult = FreeVarN(0)
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap shouldEqual
       (inputs.freeMap.put(("x", NameSort, SourcePosition(0, 0))))
   }
@@ -66,14 +66,14 @@ class NameMatcherSpec extends AnyFlatSpec with Matchers {
     val nqvar          = new NameQuote(new PVar(new ProcVarVar("x")))
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nqvar, boundInputs).value
     val expectedResult = BoundVarN(0)
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 
   "NameQuote" should "return a free use if the quoted proc has a free var" in {
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nqvar, inputs).value
     val expectedResult = FreeVarN(0)
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap.put(("x", ProcSort, SourcePosition(0, 0))))
   }
 
@@ -81,7 +81,7 @@ class NameMatcherSpec extends AnyFlatSpec with Matchers {
     val nqground       = new NameQuote(new PGround(new GroundInt("7")))
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nqground, inputs).value
     val expectedResult = GIntN(7)
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -91,7 +91,7 @@ class NameMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nqeval, boundInputs).value
     val expectedResult = BoundVarN(0)
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -101,7 +101,7 @@ class NameMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nqeval, boundInputs).value
     val expectedResult = BoundVarN(0).add(BoundVarN(0))
-    fromProto(result.par) should be(expectedResult)
+    result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
 }

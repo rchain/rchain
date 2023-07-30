@@ -163,7 +163,7 @@ object PLetNormalizer {
                       .map {
                         case NameVisitOutputs(par, updatedKnownFree) =>
                           (
-                            fromProto(par) +: vectorPar,
+                            par +: vectorPar,
                             updatedKnownFree
                           )
                       }
@@ -171,7 +171,7 @@ object PLetNormalizer {
                 .map {
                   case (vectorPar, knownFree) =>
                     ProcVisitOutputs(
-                      EListN(vectorPar.reverse, fromProtoVarOpt(optionalVar)),
+                      EListN(vectorPar.reverse, optionalVar),
                       knownFree
                     )
                 }

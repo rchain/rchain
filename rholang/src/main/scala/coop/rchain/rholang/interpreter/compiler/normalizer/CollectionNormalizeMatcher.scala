@@ -81,8 +81,8 @@ object CollectionNormalizeMatcher {
           .normalizeMatchProc[F](cl.procremainder_, input.freeMap)
           .flatMap {
             case (optionalRemainder, knownFree) =>
-              val constructor: Option[Var] => Seq[ParN] => ExprN =
-                optionalRemainder => ps => EListN(ps, fromProtoVarOpt(optionalRemainder))
+              val constructor: Option[VarN] => Seq[ParN] => ExprN =
+                optionalRemainder => ps => EListN(ps, optionalRemainder)
               foldMatch(knownFree, cl.listproc_.asScala.toList, constructor(optionalRemainder))
           }
 
@@ -98,8 +98,8 @@ object CollectionNormalizeMatcher {
           .normalizeMatchProc[F](cs.procremainder_, input.freeMap)
           .flatMap {
             case (optionalRemainder, knownFree) =>
-              val constructor: Option[Var] => Seq[ParN] => ExprN =
-                optionalRemainder => pars => ESetN(pars, fromProtoVarOpt(optionalRemainder))
+              val constructor: Option[VarN] => Seq[ParN] => ExprN =
+                optionalRemainder => pars => ESetN(pars, optionalRemainder)
               foldMatch(knownFree, cs.listproc_.asScala.toList, constructor(optionalRemainder))
           }
 
@@ -108,7 +108,11 @@ object CollectionNormalizeMatcher {
           .normalizeMatchProc[F](cm.procremainder_, input.freeMap)
           .flatMap {
             case (optionalRemainder, knownFree) =>
-              foldMatchMap(knownFree, optionalRemainder, cm.listkeyvaluepair_.asScala.toList)
+              foldMatchMap(
+                knownFree,
+                toProtoVarOpt(optionalRemainder),
+                cm.listkeyvaluepair_.asScala.toList
+              )
           }
 
     }

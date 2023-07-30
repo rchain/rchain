@@ -44,7 +44,7 @@ object PSendNormalizer {
         case _: SendSingle   => false
         case _: SendMultiple => true
       }
-      send = SendN(fromProto(nameMatchResult.par), dataResults._1, persistent)
+      send = SendN(nameMatchResult.par, dataResults._1, persistent)
       par  = input.par.add(send)
     } yield ProcVisitOutputs(
       par,
