@@ -180,4 +180,4 @@ final case class CollectVisitInputs(
     boundMapChain: BoundMapChain[VarSort],
     freeMap: FreeMap[VarSort]
 )
-final case class CollectVisitOutputs(expr: Expr, freeMap: FreeMap[VarSort])
+final case class CollectVisitOutputs(expr: ExprN, freeMap: FreeMap[VarSort])

@@ -31,7 +31,7 @@ object CollectionNormalizeMatcher {
         .map {
           case (ps, resultKnownFree) =>
             CollectVisitOutputs(
-              toProtoExpr(constructor(ps.reverse)),
+              constructor(ps.reverse),
               resultKnownFree
             )
         }
@@ -69,7 +69,7 @@ object CollectionNormalizeMatcher {
         .map { folded =>
           val resultKnownFree = folded._2
           CollectVisitOutputs(
-            toProtoExpr(EMapN(folded._1.reverse, fromProtoVarOpt(remainder))),
+            EMapN(folded._1.reverse, fromProtoVarOpt(remainder)),
             resultKnownFree
           )
         }

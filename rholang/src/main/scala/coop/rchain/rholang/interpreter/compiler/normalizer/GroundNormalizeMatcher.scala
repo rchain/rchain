@@ -10,15 +10,10 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.errors.NormalizerError
 
 object GroundNormalizeMatcher {
-  private def fromGBool(x: GBool): GBoolN = {
-    val v = x.value
-    GBoolN(v)
-  }
-
   def normalizeMatch[F[_]: Sync](g: Ground): F[Expr] = {
     val ground: F[ExprN] = g match {
       case gb: GroundBool =>
-        Sync[F].pure(fromGBool(BoolNormalizeMatcher.normalizeMatch(gb.boolliteral_)))
+        Sync[F].pure(BoolNormalizeMatcher.normalizeMatch(gb.boolliteral_))
       case gi: GroundInt =>
         Sync[F]
           .delay(gi.longliteral_.toLong)
