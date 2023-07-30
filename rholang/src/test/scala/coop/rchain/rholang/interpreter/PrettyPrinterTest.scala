@@ -307,8 +307,8 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val target =
       """new x0 in {
         |  for( @{x1}, @{x2} <- x0 ) {
-        |    x1 |
-        |    x2
+        |    x2 |
+        |    x1
         |  }
         |}""".stripMargin
     result shouldBe target
@@ -353,8 +353,8 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val target =
       """new x0, x1 in {
         |  for( @{x2} <- x1  & @{x3} <- x0 ) {
-        |    x3 |
-        |    x2
+        |    x2 |
+        |    x3
         |  }
         |}""".stripMargin
     result shouldBe target
@@ -401,9 +401,9 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       """new x0, x1 in {
         |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    x3 |
-        |    x4 |
+        |    x2 |
         |    x5 |
-        |    x2
+        |    x4
         |  }
         |}""".stripMargin
     result shouldBe target
@@ -453,9 +453,9 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       """new x0, x1 in {
         |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    @{x3}!(Nil) |
-        |    x4 |
+        |    x2 |
         |    x5 |
-        |    x2
+        |    x4
         |  }
         |}""".stripMargin
     result shouldBe target
@@ -627,8 +627,8 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Eval](parGround, inputs).value.par
       )
     result shouldBe
-      """7 |
-        |8""".stripMargin
+      """8 |
+        |7""".stripMargin
   }
 
   "PPar" should "Print" in {
@@ -650,8 +650,8 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleFree, inputs).value.par
       )
     result shouldBe
-      """free0 |
-        |free1""".stripMargin
+      """free1 |
+        |free0""".stripMargin
   }
 
   "PInput" should "Print a receive" in {
@@ -826,9 +826,9 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
       )
     result shouldBe
       """new x0, x1, x2 in {
-        |  x0!(7) |
+        |  x2!(9) |
         |  x1!(8) |
-        |  x2!(9)
+        |  x0!(7)
         |}""".stripMargin
   }
 
