@@ -15,7 +15,7 @@ object PGroundNormalizer {
       .map(
         expr =>
           ProcVisitOutputs(
-            input.par.add(fromProto(expr)),
+            input.par.combine(fromProto(expr)),
             input.freeMap
           )
       )

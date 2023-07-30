@@ -100,7 +100,7 @@ class NameMatcherSpec extends AnyFlatSpec with Matchers {
     val boundInputs =
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nqeval, boundInputs).value
-    val expectedResult = BoundVarN(0).add(BoundVarN(0))
+    val expectedResult = BoundVarN(0).combine(BoundVarN(0))
     result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }

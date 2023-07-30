@@ -28,7 +28,7 @@ object PMatchesNormalizer {
                       )
                     )
     } yield ProcVisitOutputs(
-      input.par.add(EMatchesN(leftResult.par, rightResult.par)),
+      input.par.combine(EMatchesN(leftResult.par, rightResult.par)),
       leftResult.freeMap
     )
 }

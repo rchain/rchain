@@ -17,7 +17,7 @@ object PVarNormalizer {
         input.boundMapChain.get(pvv.var_) match {
           case Some(BoundContext(level, ProcSort, _)) =>
             ProcVisitOutputs(
-              input.par.add(BoundVarN(level)),
+              input.par.combine(BoundVarN(level)),
               input.freeMap
             ).pure[F]
           case Some(BoundContext(_, NameSort, sourcePosition)) =>
@@ -36,7 +36,7 @@ object PVarNormalizer {
                     (pvv.var_, ProcSort, SourcePosition(pvv.line_num, pvv.col_num))
                   )
                 ProcVisitOutputs(
-                  input.par.add(FreeVarN(input.freeMap.nextLevel)),
+                  input.par.combine(FreeVarN(input.freeMap.nextLevel)),
                   newBindingsPair
                 ).pure[F]
               case Some(FreeContext(_, _, firstSourcePosition)) =>
@@ -51,7 +51,7 @@ object PVarNormalizer {
         }
       case _: ProcVarWildcard =>
         ProcVisitOutputs(
-          input.par.add(WildcardN()),
+          input.par.combine(WildcardN()),
           input.freeMap.addWildcard(SourcePosition(p.line_num, p.col_num))
         ).pure[F]
     }

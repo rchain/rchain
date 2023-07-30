@@ -21,6 +21,6 @@ object PCollectNormalizer {
       .map {
         case collectResult =>
           val expr = fromProtoExpr(collectResult.expr)
-          ProcVisitOutputs(input.par.add(expr), collectResult.freeMap)
+          ProcVisitOutputs(input.par.combine(expr), collectResult.freeMap)
       }
 }

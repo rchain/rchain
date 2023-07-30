@@ -22,7 +22,7 @@ class ParBench {
     val elSize     = 33
     def el(i: Int) = EListN(Seq.fill(elSize)(GIntN(i.toLong)))
     val seq        = Seq.tabulate(n)(el)
-    ParProcN(seq)
+    ParN.makeParProc(seq)
   }
 
   final def appendTest(n: Int): ParN = {
@@ -30,8 +30,8 @@ class ParBench {
     def el(i: Int) = EListN(Seq.fill(elSize)(GIntN(i.toLong)))
 
     val seq = Seq.tabulate(n)(el)
-    seq.foldLeft(ParProcN(Seq())) { (acc, p) =>
-      acc.addPar(p)
+    seq.foldLeft(NilN(): ParN) { (acc, p) =>
+      acc.combine(p)
     }
   }
   val nestedSize: Int            = 500
@@ -149,7 +149,7 @@ class ParBench {
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcAdd(): Unit = {
     val _ = parProc match {
-      case proc: ParProcN => proc.add(GIntN(0))
+      case proc: ParProcN => proc.combine(GIntN(0))
       case _              => assert(false)
     }
   }

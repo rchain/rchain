@@ -21,7 +21,7 @@ object PVarRefNormalizer {
           case ProcSort =>
             p.varrefkind_ match {
               case _: VarRefKindProc =>
-                ProcVisitOutputs(input.par.add(ConnVarRefN(idx, depth)), input.freeMap)
+                ProcVisitOutputs(input.par.combine(ConnVarRefN(idx, depth)), input.freeMap)
                   .pure[F]
               case _ =>
                 Sync[F].raiseError(
@@ -35,7 +35,7 @@ object PVarRefNormalizer {
           case NameSort =>
             p.varrefkind_ match {
               case _: VarRefKindName =>
-                ProcVisitOutputs(input.par.add(ConnVarRefN(idx, depth)), input.freeMap)
+                ProcVisitOutputs(input.par.combine(ConnVarRefN(idx, depth)), input.freeMap)
                   .pure[F]
               case _ =>
                 Sync[F].raiseError(

@@ -28,7 +28,7 @@ object PConjunctionNormalizer {
       resultConnective = ConnAndN(Seq(lp, rp))
 
     } yield ProcVisitOutputs(
-      input.par.add(resultConnective),
+      input.par.combine(resultConnective),
       rightResult.freeMap
         .addConnective(
           toProtoConnective(resultConnective).connectiveInstance,

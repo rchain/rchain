@@ -77,7 +77,7 @@ object PContrNormalizer {
         bindCount = boundCount
       )
       ProcVisitOutputs(
-        input.par.add(newReceive),
+        input.par.combine(newReceive),
         bodyResult.freeMap
       )
     }

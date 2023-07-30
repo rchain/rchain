@@ -73,7 +73,7 @@ object PBundleNormalizer {
                 case b: BundleN => outermostBundle.merge(b)
                 case _          => outermostBundle
               }
-              val outPar: ParN = input.par.add(newBundle)
+              val outPar: ParN = input.par.combine(newBundle)
               ProcVisitOutputs(outPar, input.freeMap).pure[F]
             }
     } yield res

@@ -36,6 +36,6 @@ object PMethodNormalizer {
                    })
     } yield {
       val method = EMethodN(p.var_, target, argResults._1)
-      ProcVisitOutputs(input.par.add(method), argResults._2.freeMap)
+      ProcVisitOutputs(input.par.combine(method), argResults._2.freeMap)
     }
 }

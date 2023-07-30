@@ -32,7 +32,7 @@ object PDisjunctionNormalizer {
       resultConnective = ConnOrN(Seq(lp, rp))
 
     } yield ProcVisitOutputs(
-      input.par.add(resultConnective),
+      input.par.combine(resultConnective),
       input.freeMap
         .addConnective(
           toProtoConnective(resultConnective).connectiveInstance,

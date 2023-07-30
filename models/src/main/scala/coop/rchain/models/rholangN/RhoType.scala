@@ -38,7 +38,9 @@ trait AuxParN extends RhoTypeN
 sealed trait ParN extends RhoTypeN {
   def toBytes: ByteVector      = parToBytes(this)
   def compare(that: ParN): Int = comparePars(this, that)
-  def add(that: ParN): ParN    = combinePars(this, that)
+
+  /** Combine two pars for their parallel execution */
+  def combine(that: ParN): ParN = combinePars(this, that)
 }
 object ParN {
   def fromBytes(bytes: ByteVector): ParN = parFromBytes(bytes)

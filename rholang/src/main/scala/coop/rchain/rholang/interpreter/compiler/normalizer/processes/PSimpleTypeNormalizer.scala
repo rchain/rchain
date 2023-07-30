@@ -10,16 +10,16 @@ object PSimpleTypeNormalizer {
   def normalize[F[_]: Sync](p: PSimpleType, input: ProcVisitInputs): F[ProcVisitOutputs] =
     p.simpletype_ match {
       case _: SimpleTypeBool =>
-        ProcVisitOutputs(input.par.add(ConnBoolN()), input.freeMap).pure[F]
+        ProcVisitOutputs(input.par.combine(ConnBoolN()), input.freeMap).pure[F]
       case _: SimpleTypeInt =>
-        ProcVisitOutputs(input.par.add(ConnIntN()), input.freeMap).pure[F]
+        ProcVisitOutputs(input.par.combine(ConnIntN()), input.freeMap).pure[F]
       case _: SimpleTypeBigInt =>
-        ProcVisitOutputs(input.par.add(ConnBigIntN()), input.freeMap).pure[F]
+        ProcVisitOutputs(input.par.combine(ConnBigIntN()), input.freeMap).pure[F]
       case _: SimpleTypeString =>
-        ProcVisitOutputs(input.par.add(ConnStringN()), input.freeMap).pure[F]
+        ProcVisitOutputs(input.par.combine(ConnStringN()), input.freeMap).pure[F]
       case _: SimpleTypeUri =>
-        ProcVisitOutputs(input.par.add(ConnUriN()), input.freeMap).pure[F]
+        ProcVisitOutputs(input.par.combine(ConnUriN()), input.freeMap).pure[F]
       case _: SimpleTypeByteArray =>
-        ProcVisitOutputs(input.par.add(ConnByteArrayN()), input.freeMap).pure[F]
+        ProcVisitOutputs(input.par.combine(ConnByteArrayN()), input.freeMap).pure[F]
     }
 }

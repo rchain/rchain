@@ -10,8 +10,7 @@ object NilN { def apply(): NilN = new NilN }
   * and one receive.
   */
 final class ParProcN(val ps: Seq[ParN]) extends BasicN {
-  def sortedPs: Seq[ParN]       = ParManager.Manager.sortPars(ps)
-  def addPar(p: ParN): ParProcN = ParProcN(ps :+ p)
+  def sortedPs: Seq[ParN] = ParManager.Manager.sortPars(ps)
 }
 object ParProcN { def apply(ps: Seq[ParN]): ParProcN = new ParProcN(ps) }
 
