@@ -1,11 +1,10 @@
 package coop.rchain.rholang.interpreter.compiler
 
 import cats.effect.Sync
-import coop.rchain.models.rholang.sorter.ReceiveSortMatcher.sortBind
-import coop.rchain.models.{Par, ReceiveBind, Var}
 import cats.syntax.all._
+import coop.rchain.models.rholang.sorter.ReceiveSortMatcher.sortBind
 import coop.rchain.models.rholang.sorter._
-import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.{Par, ReceiveBind, Var}
 
 object ReceiveBindsSortMatcher {
   // Used during normalize to presort the binds.

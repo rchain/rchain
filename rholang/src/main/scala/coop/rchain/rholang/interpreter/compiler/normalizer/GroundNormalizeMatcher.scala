@@ -2,15 +2,13 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.Expr
-import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.errors.NormalizerError
 
 object GroundNormalizeMatcher {
-  def normalizeMatch[F[_]: Sync](g: Ground): F[Expr] = {
+  def normalizeMatch[F[_]: Sync](g: Ground): F[ExprN] = {
     val ground: F[ExprN] = g match {
       case gb: GroundBool =>
         Sync[F].pure(BoolNormalizeMatcher.normalizeMatch(gb.boolliteral_))
@@ -27,7 +25,7 @@ object GroundNormalizeMatcher {
       case gs: GroundString => Sync[F].pure(GStringN(stripString(gs.stringliteral_)))
       case gu: GroundUri    => Sync[F].pure(GUriN(stripUri(gu.uriliteral_)))
     }
-    ground.map(toProtoExpr)
+    ground
   }
   // This is necessary to remove the backticks. We don't use a regular
   // expression because they're always there.

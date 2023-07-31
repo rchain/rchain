@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.compiler
 
-import coop.rchain.models.Connective.ConnectiveInstance
+import coop.rchain.models.rholangN._
 
 /**
   * A structure to keep track of free variables using de Bruijn levels (0 based).
@@ -15,7 +15,7 @@ final case class FreeMap[T](
     nextLevel: Int,
     levelBindings: Map[String, FreeContext[T]],
     wildcards: List[SourcePosition],
-    connectives: List[(ConnectiveInstance, SourcePosition)]
+    connectives: List[(ConnectiveN, SourcePosition)]
 ) {
 
   def get(name: String): Option[FreeContext[T]] = levelBindings.get(name)
@@ -62,7 +62,7 @@ final case class FreeMap[T](
     FreeMap(nextLevel, levelBindings, wildcards :+ sourcePosition, connectives)
 
   def addConnective(
-      connective: ConnectiveInstance,
+      connective: ConnectiveN,
       sourcePosition: SourcePosition
   ): FreeMap[T] =
     FreeMap(

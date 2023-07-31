@@ -31,7 +31,7 @@ object PConjunctionNormalizer {
       input.par.combine(resultConnective),
       rightResult.freeMap
         .addConnective(
-          toProtoConnective(resultConnective).connectiveInstance,
+          resultConnective,
           SourcePosition(p.line_num, p.col_num)
         )
     )

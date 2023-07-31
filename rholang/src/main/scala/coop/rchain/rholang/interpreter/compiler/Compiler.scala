@@ -92,12 +92,12 @@ object Compiler {
                 TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString(", "))
               )
             } else if (normalizedTerm.freeMap.connectives.nonEmpty) {
-              def connectiveInstanceToString(conn: ConnectiveInstance): String =
-                if (conn.isConnAndBody) "/\\ (conjunction)"
-                else if (conn.isConnOrBody) "\\/ (disjunction)"
-                else if (conn.isConnNotBody) "~ (negation)"
-                else conn.toString
-
+              def connectiveInstanceToString(conn: ConnectiveN): String = conn match {
+                case _: ConnAndN => "/\\ (conjunction)"
+                case _: ConnOrN  => "\\/ (disjunction)"
+                case _: ConnNotN => "~ (negation)"
+                case x           => x.toString
+              }
               val connectives = normalizedTerm.freeMap.connectives
                 .map {
                   case (connType, sourcePosition) =>

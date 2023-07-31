@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholangN.Bindings._
 import coop.rchain.models.rholangN._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PNegation
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
@@ -26,7 +25,7 @@ object PNegationNormalizer {
       ProcVisitOutputs(
         input.par.combine(conn),
         input.freeMap.addConnective(
-          toProtoConnective(conn).connectiveInstance,
+          conn,
           SourcePosition(p.line_num, p.col_num)
         )
       )
