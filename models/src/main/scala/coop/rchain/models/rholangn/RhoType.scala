@@ -1,6 +1,6 @@
 package coop.rchain.models.rholangn
 
-import coop.rchain.models.rholangn.ParManager.Manager._
+import coop.rchain.models.rholangn.parmanager.Manager._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
 
@@ -24,7 +24,7 @@ sealed trait RhoTypeN {
   /** True if the element or at least one of the nested elements can be substitute in Reducer */
   lazy val substituteRequired: Boolean = substituteRequiredFn(this)
 
-  override def equals(x: Any): Boolean = ParManager.Manager.equals(this, x)
+  override def equals(x: Any): Boolean = parmanager.Manager.equals(this, x)
 }
 
 /* TODO: In the future, it is necessary to append the classification.

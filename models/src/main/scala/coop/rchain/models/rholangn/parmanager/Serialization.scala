@@ -1,13 +1,13 @@
-package coop.rchain.models.rholangn.ParManager
+package coop.rchain.models.rholangn.parmanager
 
 import com.google.protobuf.{CodedInputStream, CodedOutputStream}
-import coop.rchain.models.rholangn.ParManager.Constants._
+import coop.rchain.models.rholangn.parmanager.Constants._
 import coop.rchain.models.rholangn._
 import scodec.bits.ByteVector
 
 import java.io.{InputStream, OutputStream}
 
-private[ParManager] object Serialization {
+private[parmanager] object Serialization {
   def serialize(par: ParN, output: OutputStream): Unit = {
     val cos = CodedOutputStream.newInstance(output)
 

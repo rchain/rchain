@@ -10,7 +10,7 @@ object NilN { def apply(): NilN = new NilN }
   * and one receive.
   */
 final class ParProcN(val ps: Seq[ParN]) extends BasicN {
-  def sortedPs: Seq[ParN] = ParManager.Manager.sortPars(ps)
+  def sortedPs: Seq[ParN] = parmanager.Manager.sortPars(ps)
 }
 object ParProcN { def apply(ps: Seq[ParN]): ParProcN = new ParProcN(ps) }
 
@@ -47,7 +47,7 @@ final class ReceiveN(
     val peek: Boolean,
     val bindCount: Int
 ) extends BasicN {
-  def sortedBinds: Seq[ReceiveBindN] = ParManager.Manager.sortBinds(binds)
+  def sortedBinds: Seq[ReceiveBindN] = parmanager.Manager.sortBinds(binds)
 }
 object ReceiveN {
   def apply(
@@ -140,8 +140,8 @@ final class NewN(
     val uri: Seq[String],
     val injections: Map[String, ParN]
 ) extends BasicN {
-  def sortedUri: Seq[String]                = ParManager.Manager.sortUris(uri)
-  def sortedInjections: Seq[(String, ParN)] = ParManager.Manager.sortInjections(injections)
+  def sortedUri: Seq[String]                = parmanager.Manager.sortUris(uri)
+  def sortedInjections: Seq[(String, ParN)] = parmanager.Manager.sortInjections(injections)
 }
 
 object NewN {

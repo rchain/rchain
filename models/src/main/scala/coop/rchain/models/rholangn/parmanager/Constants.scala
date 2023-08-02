@@ -1,8 +1,8 @@
-package coop.rchain.models.rholangn.ParManager
+package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.rspace.hashing.Blake2b256Hash
 
-private[ParManager] object Constants {
+private[parmanager] object Constants {
   final val intSize     = 4
   final val longSize    = 8
   final val booleanSize = 1

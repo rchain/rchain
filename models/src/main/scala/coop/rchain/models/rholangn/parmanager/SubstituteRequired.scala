@@ -1,8 +1,8 @@
-package coop.rchain.models.rholangn.ParManager
+package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
 
-private[ParManager] object SubstituteRequired {
+private[parmanager] object SubstituteRequired {
   private def sReq(p: RhoTypeN): Boolean = p.substituteRequired
   private def sReq(kv: (RhoTypeN, RhoTypeN)): Boolean =
     kv._1.substituteRequired || kv._2.substituteRequired

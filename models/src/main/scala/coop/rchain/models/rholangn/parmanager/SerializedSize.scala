@@ -1,4 +1,4 @@
-package coop.rchain.models.rholangn.ParManager
+package coop.rchain.models.rholangn.parmanager
 
 import com.google.protobuf.CodedOutputStream
 import coop.rchain.models.rholangn._
@@ -6,7 +6,7 @@ import scodec.bits.ByteVector
 
 import scala.annotation.unused
 
-private[ParManager] object SerializedSize {
+private[parmanager] object SerializedSize {
 
   import Constants._
 

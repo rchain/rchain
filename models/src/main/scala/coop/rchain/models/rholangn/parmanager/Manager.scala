@@ -1,4 +1,4 @@
-package coop.rchain.models.rholangn.ParManager
+package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
 import coop.rchain.rspace.hashing.Blake2b256Hash

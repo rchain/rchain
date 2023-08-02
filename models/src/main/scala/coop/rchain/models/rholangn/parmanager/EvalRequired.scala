@@ -1,8 +1,8 @@
-package coop.rchain.models.rholangn.ParManager
+package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
 
-private[ParManager] object EvalRequired {
+private[parmanager] object EvalRequired {
   private def eReq(p: RhoTypeN): Boolean                               = p.evalRequired
   private def eReq(kv: (RhoTypeN, RhoTypeN)): Boolean                  = eReq(kv._1) || eReq(kv._2)
   private def eReq(ps: Seq[RhoTypeN]): Boolean                         = ps.exists(eReq)

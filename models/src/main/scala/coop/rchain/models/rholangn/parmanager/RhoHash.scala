@@ -1,6 +1,6 @@
-package coop.rchain.models.rholangn.ParManager
+package coop.rchain.models.rholangn.parmanager
 
-import coop.rchain.models.rholangn.ParManager.Constants._
+import coop.rchain.models.rholangn.parmanager.Constants._
 import coop.rchain.models.rholangn._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import scodec.bits.ByteVector
@@ -8,7 +8,7 @@ import scodec.bits.ByteVector
 import java.util.concurrent.atomic.AtomicInteger
 import scala.annotation.unused
 
-private[ParManager] object RhoHash {
+private[parmanager] object RhoHash {
 
   private class Hashable(val tag: Byte, val bodySize: Int) {
     import Hashable._

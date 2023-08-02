@@ -1,8 +1,8 @@
-package coop.rchain.models.rholangn.ParManager
+package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
 
-private[ParManager] object ConnectiveUsed {
+private[parmanager] object ConnectiveUsed {
   private def cUsed(p: RhoTypeN): Boolean                               = p.connectiveUsed
   private def cUsed(kv: (RhoTypeN, RhoTypeN)): Boolean                  = cUsed(kv._1) || cUsed(kv._2)
   private def cUsed(ps: Seq[RhoTypeN]): Boolean                         = ps.exists(cUsed)
