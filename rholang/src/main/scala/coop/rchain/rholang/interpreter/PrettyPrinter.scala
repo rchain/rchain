@@ -18,8 +18,8 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{
 }
 import coop.rchain.shared.{Base16, Printer}
 import cats.Eval
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0)

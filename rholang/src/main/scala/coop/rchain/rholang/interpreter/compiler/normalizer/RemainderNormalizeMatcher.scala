@@ -4,8 +4,8 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Var
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.compiler._
 import coop.rchain.rholang.interpreter.errors.UnexpectedReuseOfProcContextFree

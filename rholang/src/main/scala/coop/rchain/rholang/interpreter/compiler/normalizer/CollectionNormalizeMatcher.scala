@@ -2,8 +2,8 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 import coop.rchain.models.{Par, Var}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{KeyValuePair => AbsynKeyValuePair, _}
 import coop.rchain.rholang.interpreter.compiler._

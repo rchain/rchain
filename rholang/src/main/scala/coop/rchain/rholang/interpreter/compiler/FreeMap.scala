@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.compiler
 
-import coop.rchain.models.rholangN._
+import coop.rchain.models.rholangn._
 
 /**
   * A structure to keep track of free variables using de Bruijn levels (0 based).

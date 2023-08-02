@@ -3,8 +3,8 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Name, NameQuote, NameVar, NameWildcard}
 import coop.rchain.rholang.interpreter.compiler._
 import coop.rchain.rholang.interpreter.errors.{

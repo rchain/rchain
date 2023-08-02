@@ -5,8 +5,8 @@ import cats.syntax.all._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.ast.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.interpreter.errors._

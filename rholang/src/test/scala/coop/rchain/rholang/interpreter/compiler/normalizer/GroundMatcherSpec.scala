@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import cats.Eval
 import coop.rchain.catscontrib.effect.implicits.sEval
-import coop.rchain.models.rholangN._
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

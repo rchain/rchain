@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.io.StringReader
 
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.interpreter.compiler.{
   BoundMapChain,
@@ -30,8 +30,8 @@ import org.scalatest.matchers.should.Matchers
 import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
-import coop.rchain.models.rholangN.Bindings._
-import coop.rchain.models.rholangN._
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 
 class BoolPrinterSpec extends AnyFlatSpec with Matchers {
 
