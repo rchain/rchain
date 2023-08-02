@@ -45,8 +45,8 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test ParProc" in {
-    val p1 = ParProcN(Seq(NilN(), ParProcN()))
-    val p2 = ParProcN(Seq(ParProcN(), NilN()))
+    val p1 = ParProcN(Seq(NilN(), ParProcN(Seq(NilN()))))
+    val p2 = ParProcN(Seq(ParProcN(Seq(NilN())), NilN()))
     simpleCheck(p1, Some(p2)) should be(true)
   }
 

@@ -13,11 +13,7 @@ final class ParProcN(val ps: Seq[ParN]) extends BasicN {
   def sortedPs: Seq[ParN]       = ParManager.Manager.sortPars(ps)
   def addPar(p: ParN): ParProcN = ParProcN(ps :+ p)
 }
-object ParProcN {
-  def apply(ps: Seq[ParN] = Seq()): ParProcN = new ParProcN(ps)
-  def apply(p: ParN): ParProcN               = apply(Seq(p))
-  def empty(): ParProcN                      = ParProcN()
-}
+object ParProcN { def apply(ps: Seq[ParN]): ParProcN = new ParProcN(ps) }
 
 /** *
   * A send is written `chan!(data)` or `chan!!(data)` for a persistent send.
