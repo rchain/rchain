@@ -133,14 +133,14 @@ private[rholangn] object BindingsFromProto {
     ps.map(kv => (kv._1, fromProto(kv._2)))
 
   /** Basic types */
-  private def fromSend(x: Send): SendN = {
+  def fromSend(x: Send): SendN = {
     val chan       = fromProto(x.chan)
     val data       = fromProto(x.data)
     val persistent = x.persistent
     SendN(chan, data, persistent)
   }
 
-  private def fromReceive(x: Receive): ReceiveN = {
+  def fromReceive(x: Receive): ReceiveN = {
     val binds      = x.binds.map(fromReceiveBind)
     val body       = fromProto(x.body)
     val persistent = x.persistent
@@ -157,7 +157,7 @@ private[rholangn] object BindingsFromProto {
     ReceiveBindN(patterns, source, remainder, freeCount)
   }
 
-  private def fromMatch(x: Match): MatchN = {
+  def fromMatch(x: Match): MatchN = {
     val target = fromProto(x.target)
     val cases  = x.cases.map(fromMatchCase)
     MatchN(target, cases)
@@ -170,7 +170,7 @@ private[rholangn] object BindingsFromProto {
     MatchCaseN(pattern, source, freeCount)
   }
 
-  private def fromNew(x: New): NewN = {
+  def fromNew(x: New): NewN = {
     val bindCount                       = x.bindCount
     val p                               = fromProto(x.p)
     val uri                             = x.uri

@@ -135,7 +135,7 @@ private[rholangn] object BindingsToProto {
     p.withConnectiveUsed(x.connectiveUsed)
   }
 
-  private def toSend(x: SendN): Send = {
+  def toSend(x: SendN): Send = {
     val chan           = toProto(x.chan)
     val data           = toProto(x.data)
     val persistent     = x.persistent
@@ -144,7 +144,7 @@ private[rholangn] object BindingsToProto {
     Send(chan, data, persistent, locallyFree, connectiveUsed)
   }
 
-  private def toReceive(x: ReceiveN): Receive = {
+  def toReceive(x: ReceiveN): Receive = {
     val binds          = x.binds.map(toReceiveBind)
     val body           = toProto(x.body)
     val persistent     = x.persistent
@@ -163,7 +163,7 @@ private[rholangn] object BindingsToProto {
     ReceiveBind(patterns, source, remainder, freeCount)
   }
 
-  private def toMatch(x: MatchN): Match = {
+  def toMatch(x: MatchN): Match = {
     val target         = toProto(x.target)
     val cases          = x.cases.map(toMatchCase)
     val locallyFree    = BitSet()
@@ -178,7 +178,7 @@ private[rholangn] object BindingsToProto {
     MatchCase(pattern, source, freeCount)
   }
 
-  private def toNew(x: NewN): New = {
+  def toNew(x: NewN): New = {
     val bindCount                    = x.bindCount
     val p                            = toProto(x.p)
     val uri                          = x.uri
