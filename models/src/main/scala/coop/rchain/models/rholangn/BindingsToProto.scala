@@ -15,6 +15,7 @@ import scala.annotation.unused
 import scala.collection.immutable.BitSet
 
 private[rholangn] object BindingsToProto {
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toProto(p: ParN): Par = p match {
 
     /** Basic types */
@@ -37,11 +38,10 @@ private[rholangn] object BindingsToProto {
     /** Other types */
     case x: BundleN => toBundle(x)
 
-    case _ =>
-      assert(assertion = false, "Unknown type for toProto conversation")
-      Par()
+    case _ => throw new Exception("Unknown type for toProto conversation")
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toExpr(e: ExprN): Expr = e match {
 
     /** Ground types */
@@ -85,31 +85,27 @@ private[rholangn] object BindingsToProto {
     case x: EMethodN         => toEMethod(x)
     case x: EMatchesN        => toEMatches(x)
 
-    case _ =>
-      assert(assertion = false, "Unknown type for Expression conversation")
-      GBool(true)
+    case _ => throw new Exception("Unknown type for Expression conversation")
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toVar(x: VarN): Var = x match {
     case n: BoundVarN => toBoundVar(n)
     case n: FreeVarN  => toFreeVar(n)
     case n: WildcardN => toWildcard(n)
-    case _ =>
-      assert(assertion = false, "Unknown type for Var conversation")
-      Wildcard(WildcardMsg())
+    case _            => throw new Exception("Unknown type for Var conversation")
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toUnforgeable(u: UnforgeableN): GUnforgeable = u match {
     case x: UPrivateN      => toPrivate(x)
     case x: UDeployIdN     => toDeployId(x)
     case x: UDeployerIdN   => toDeployerId(x)
     case x: USysAuthTokenN => toGSysAuthToken(x)
-    case _ =>
-      assert(assertion = false, "Unknown type for Unforgeable conversation")
-      val v = ByteString.copyFrom(Array[Byte]())
-      GPrivate(v)
+    case _                 => throw new Exception("Unknown type for Unforgeable conversation")
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toConnective(c: ConnectiveN): Connective = c match {
     case x: ConnBoolN      => Connective(toConnBool(x))
     case x: ConnIntN       => Connective(toConnInt(x))
@@ -121,9 +117,7 @@ private[rholangn] object BindingsToProto {
     case x: ConnAndN       => Connective(toConnAndBody(x))
     case x: ConnOrN        => Connective(toConnOrBody(x))
     case x: ConnVarRefN    => Connective(toVarRefBody(x))
-    case _ =>
-      assert(assertion = false, "Unknown type for Connective conversation")
-      Connective(ConnBool(true))
+    case _                 => throw new Exception("Unknown type for Connective conversation")
   }
 
   private def toProto(ps: Seq[ParN]): Seq[Par]           = ps.map(toProto)

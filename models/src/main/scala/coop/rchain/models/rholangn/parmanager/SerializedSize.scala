@@ -40,6 +40,7 @@ private[parmanager] object SerializedSize {
 
   private def totalSize(sizes: Int*): Int = tagSize + sizes.sum
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def serializedSizeFn(p: RhoTypeN): Int = p match {
 
     /** Basic types */
@@ -134,8 +135,6 @@ private[parmanager] object SerializedSize {
       val readFlagSize  = sSize(bundle.readFlag)
       totalSize(bodySize, writeFlagSize, readFlagSize)
 
-    case _ =>
-      assert(assertion = false, "Not defined type")
-      0
+    case _ => throw new Exception("Not defined type")
   }
 }

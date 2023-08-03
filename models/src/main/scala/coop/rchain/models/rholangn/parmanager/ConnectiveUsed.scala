@@ -10,6 +10,7 @@ private[parmanager] object ConnectiveUsed {
   private def cUsed(pOpt: Option[RhoTypeN]): Boolean =
     if (pOpt.isDefined) cUsed(pOpt.get) else false
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def connectiveUsedFn(p: RhoTypeN): Boolean = p match {
 
     /** Basic types */
@@ -55,8 +56,6 @@ private[parmanager] object ConnectiveUsed {
     /** Other types */
     case _: BundleN => false // There are no situations when New gets into the matcher
 
-    case _ =>
-      assert(assertion = false, "Not defined type")
-      false
+    case _ => throw new Exception("Not defined type")
   }
 }

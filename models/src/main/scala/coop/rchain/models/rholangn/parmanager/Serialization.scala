@@ -59,6 +59,7 @@ private[parmanager] object Serialization {
         write(p2)
       }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def write(p: RhoTypeN): Unit = p match {
 
         /** Basic types */
@@ -247,7 +248,7 @@ private[parmanager] object Serialization {
           write(bundle.writeFlag)
           write(bundle.readFlag)
 
-        case _ => assert(assertion = false, "Not defined type")
+        case _ => throw new Exception("Not defined type")
       }
     }
 
@@ -267,11 +268,10 @@ private[parmanager] object Serialization {
     def readLong(): Long     = cis.readInt64()
     def readString(): String = cis.readString()
 
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def readVar(): VarN = readPar() match {
       case v: VarN => v
-      case _ =>
-        assert(assertion = false, "Value must be Var")
-        WildcardN()
+      case _       => throw new Exception("Value must be Var")
     }
 
     def readVarOpt(): Option[VarN]      = if (readBool()) Some(readVar()) else None
@@ -291,6 +291,7 @@ private[parmanager] object Serialization {
 
     /** Auxiliary types deserialization */
     def readReceiveBinds(): Seq[ReceiveBindN] = {
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def matchReceiveBind(tag: Byte): ReceiveBindN = tag match {
         case RECEIVE_BIND =>
           val patterns  = readPars()
@@ -298,29 +299,27 @@ private[parmanager] object Serialization {
           val remainder = readVarOpt()
           val freeCount = readInt()
           ReceiveBindN(patterns, source, remainder, freeCount)
-        case _ =>
-          assert(assertion = false, "Invalid tag for ReceiveBindN deserialization")
-          ReceiveBindN(Seq(), NilN(), None, 0)
+        case _ => throw new Exception("Invalid tag for ReceiveBindN deserialization")
       }
       def readReceiveBind() = readTagAndMatch(matchReceiveBind)
       readSeq(readReceiveBind _)
     }
 
     def readMatchCases(): Seq[MatchCaseN] = {
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def matchMCase(tag: Byte): MatchCaseN = tag match {
         case MATCH_CASE =>
           val pattern   = readPar()
           val source    = readPar()
           val freeCount = readInt()
           MatchCaseN(pattern, source, freeCount)
-        case _ =>
-          assert(assertion = false, "Invalid tag for ReceiveBindN deserialization")
-          MatchCaseN(NilN(), NilN(), 0)
+        case _ => throw new Exception("Invalid tag for matchMCase deserialization")
       }
       def readMatchCase() = readTagAndMatch(matchMCase)
       readSeq(readMatchCase _)
     }
 
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def matchPar(tag: Byte): ParN = tag match {
 
       /** Basic types */
@@ -584,9 +583,7 @@ private[parmanager] object Serialization {
         val readFlag  = readBool()
         BundleN(body, writeFlag, readFlag)
 
-      case _ =>
-        assert(assertion = false, "Invalid tag for ParN deserialization")
-        NilN()
+      case _ => throw new Exception("Invalid tag for ParN deserialization")
     }
 
     def readTagAndMatch[T](f: Byte => T): T = f(readTag())

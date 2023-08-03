@@ -8,6 +8,7 @@ private[parmanager] object EvalRequired {
   private def eReq(ps: Seq[RhoTypeN]): Boolean                         = ps.exists(eReq)
   private def eReqKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Boolean = kVPairs.exists(eReq)
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def evalRequiredFn(p: RhoTypeN): Boolean = p match {
 
     /** Basic types */
@@ -46,8 +47,6 @@ private[parmanager] object EvalRequired {
     /** Other types */
     case bundle: BundleN => eReq(bundle.body)
 
-    case _ =>
-      assert(assertion = false, "Not defined type")
-      false
+    case _ => throw new Exception("Not defined type")
   }
 }

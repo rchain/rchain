@@ -123,6 +123,7 @@ private[parmanager] object RhoHash {
   }
 
   import Hashable._
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
 
     /** Basic types */
@@ -368,8 +369,6 @@ private[parmanager] object RhoHash {
       hs.append(bundle.readFlag)
       hs.calcHash
 
-    case _ =>
-      assert(assertion = false, "Not defined type")
-      Blake2b256Hash.fromByteArray(Array())
+    case _ => throw new Exception("Not defined type")
   }
 }

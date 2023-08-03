@@ -45,6 +45,7 @@ private[rholangn] object BindingsFromProto {
     case x: Bundle => fromBundle(x)
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def fromExpr(e: Expr): ExprN = e.exprInstance match {
 
     /** Ground types */
@@ -88,31 +89,28 @@ private[rholangn] object BindingsFromProto {
     case x: EMethodBody         => fromEMethod(x.value)
     case x: EMatchesBody        => fromEMatches(x.value)
 
-    case _ =>
-      assert(assertion = false, "Unknown type for Expr conversion")
-      GBoolN(true)
+    case _ => throw new Exception("Unknown type for Expr conversion")
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def fromVar(x: Var): VarN = x.varInstance match {
     case n: BoundVar => fromBoundVar(n)
     case n: FreeVar  => fromFreeVar(n)
     case n: Wildcard => fromWildcard(n)
-    case _ =>
-      assert(assertion = false, "Unknown type for Var conversion")
-      WildcardN()
+    case _           => throw new Exception("Unknown type for Var conversion")
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def fromUnforgeable(u: GUnforgeable): UnforgeableN =
     u.unfInstance match {
       case x: GPrivateBody      => fromPrivate(x.value)
       case x: GDeployIdBody     => fromDeployId(x.value)
       case x: GDeployerIdBody   => fromDeployerId(x.value)
       case x: GSysAuthTokenBody => fromGSysAuthToken(x.value)
-      case _ =>
-        assert(assertion = false, "Unknown type for GUnforgeable conversion")
-        UPrivateN(Array(0x04.toByte, 0x02.toByte))
+      case _                    => throw new Exception("Unknown type for GUnforgeable conversion")
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def fromConnective(c: Connective): ConnectiveN = c.connectiveInstance match {
     case x: ConnBool      => fromConnBool(x)
     case x: ConnInt       => fromConnInt(x)
@@ -124,9 +122,7 @@ private[rholangn] object BindingsFromProto {
     case x: ConnAndBody   => fromConnAndBody(x)
     case x: ConnOrBody    => fromConnOrBody(x)
     case x: VarRefBody    => fromVarRefBody(x)
-    case _ =>
-      assert(assertion = false, "Unknown type for Connective conversion")
-      ConnBoolN()
+    case _                => throw new Exception("Unknown type for Connective conversion")
   }
 
   private def fromProto(ps: Seq[Par]): Seq[ParN]           = ps.map(fromProto)

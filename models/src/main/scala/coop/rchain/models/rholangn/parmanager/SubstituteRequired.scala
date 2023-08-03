@@ -9,6 +9,7 @@ private[parmanager] object SubstituteRequired {
   private def sReq(ps: Seq[RhoTypeN]): Boolean                         = ps.exists(sReq)
   private def sReqKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Boolean = kVPairs.exists(sReq)
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def substituteRequiredFn(p: RhoTypeN): Boolean = p match {
 
     /** Basic types */
@@ -56,8 +57,6 @@ private[parmanager] object SubstituteRequired {
     /** Other types */
     case bundle: BundleN => sReq(bundle.body)
 
-    case _ =>
-      assert(assertion = false, "Not defined type")
-      false
+    case _ => throw new Exception("Not defined type")
   }
 }
