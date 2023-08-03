@@ -96,7 +96,7 @@ private[rholangn] object BindingsFromProto {
   def fromVar(x: Var): VarN = x.varInstance match {
     case n: BoundVar => fromBoundVar(n)
     case n: FreeVar  => fromFreeVar(n)
-    case n: Wildcard => fromWildcard(n)
+    case _: Wildcard => WildcardN
     case _           => throw new Exception("Unknown type for Var conversion")
   }
 
@@ -112,12 +112,12 @@ private[rholangn] object BindingsFromProto {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def fromConnective(c: Connective): ConnectiveN = c.connectiveInstance match {
-    case x: ConnBool      => fromConnBool(x)
-    case x: ConnInt       => fromConnInt(x)
-    case x: ConnBigInt    => fromConnBigInt(x)
-    case x: ConnString    => fromConnString(x)
-    case x: ConnUri       => fromConnUri(x)
-    case x: ConnByteArray => fromConnByteArray(x)
+    case _: ConnBool      => ConnBoolN
+    case _: ConnInt       => ConnIntN
+    case _: ConnBigInt    => ConnBigIntN
+    case _: ConnString    => ConnStringN
+    case _: ConnUri       => ConnUriN
+    case _: ConnByteArray => ConnByteArrayN
     case x: ConnNotBody   => fromConnNotBody(x)
     case x: ConnAndBody   => fromConnAndBody(x)
     case x: ConnOrBody    => fromConnOrBody(x)
@@ -243,8 +243,6 @@ private[rholangn] object BindingsFromProto {
     val idx = x.value
     FreeVarN(idx)
   }
-
-  private def fromWildcard(@unused x: Wildcard) = WildcardN
 
   /** Unforgeable names */
   private def fromPrivate(x: GPrivate): UPrivateN = {
@@ -397,13 +395,6 @@ private[rholangn] object BindingsFromProto {
   }
 
   /** Connective */
-  private def fromConnBool(@unused x: ConnBool)                                = ConnBoolN
-  private def fromConnInt(@unused x: ConnInt)                                  = ConnIntN
-  private def fromConnBigInt(@unused x: ConnBigInt)                            = ConnBigIntN
-  private def fromConnString(@unused x: ConnString)                            = ConnStringN
-  private def fromConnUri(@unused x: ConnUri)                                  = ConnUriN
-  private def fromConnByteArray(@unused x: ConnByteArray): ConnByteArrayN.type = ConnByteArrayN
-
   private def fromConnNotBody(x: ConnNotBody): ConnNotN = {
     val p = fromProto(x.value)
     ConnNotN(p)

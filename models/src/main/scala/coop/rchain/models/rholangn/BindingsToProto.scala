@@ -92,7 +92,7 @@ private[rholangn] object BindingsToProto {
   def toVar(x: VarN): Var = x match {
     case n: BoundVarN      => toBoundVar(n)
     case n: FreeVarN       => toFreeVar(n)
-    case n: WildcardN.type => toWildcard(n)
+    case _: WildcardN.type => Wildcard(WildcardMsg())
     case _                 => throw new Exception("Unknown type for Var conversation")
   }
 
@@ -107,12 +107,12 @@ private[rholangn] object BindingsToProto {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toConnective(c: ConnectiveN): Connective = c match {
-    case x: ConnBoolN.type      => Connective(toConnBool(x))
-    case x: ConnIntN.type       => Connective(toConnInt(x))
-    case x: ConnBigIntN.type    => Connective(toConnBigInt(x))
-    case x: ConnStringN.type    => Connective(toConnString(x))
-    case x: ConnUriN.type       => Connective(toConnUri(x))
-    case x: ConnByteArrayN.type => Connective(toConnByteArray(x))
+    case _: ConnBoolN.type      => Connective(ConnBool(true))
+    case _: ConnIntN.type       => Connective(ConnInt(true))
+    case _: ConnBigIntN.type    => Connective(ConnBigInt(true))
+    case _: ConnStringN.type    => Connective(ConnString(true))
+    case _: ConnUriN.type       => Connective(ConnUri(true))
+    case _: ConnByteArrayN.type => Connective(ConnByteArray(true))
     case x: ConnNotN            => Connective(toConnNotBody(x))
     case x: ConnAndN            => Connective(toConnAndBody(x))
     case x: ConnOrN             => Connective(toConnOrBody(x))
@@ -209,7 +209,7 @@ private[rholangn] object BindingsToProto {
   }
 
   private def toGByteArray(x: GByteArrayN): GByteArray = {
-    val v = ByteString.copyFrom(x.v.toArray)
+    val v = ByteString.copyFrom(x.v)
     GByteArray(v)
   }
 
@@ -261,22 +261,19 @@ private[rholangn] object BindingsToProto {
     FreeVar(idx)
   }
 
-  private def toWildcard(@unused x: WildcardN.type): Wildcard =
-    Wildcard(WildcardMsg())
-
   /** Unforgeable names */
   private def toPrivate(x: UPrivateN): GPrivate = {
-    val v = ByteString.copyFrom(x.v.toArray)
+    val v = ByteString.copyFrom(x.v)
     GPrivate(v)
   }
 
   private def toDeployId(x: UDeployIdN): GDeployId = {
-    val v = ByteString.copyFrom(x.v.toArray)
+    val v = ByteString.copyFrom(x.v)
     GDeployId(v)
   }
 
   private def toDeployerId(x: UDeployerIdN): GDeployerId = {
-    val v = ByteString.copyFrom(x.v.toArray)
+    val v = ByteString.copyFrom(x.v)
     GDeployerId(v)
   }
 
@@ -418,24 +415,6 @@ private[rholangn] object BindingsToProto {
   }
 
   /** Connective */
-  private def toConnBool(@unused x: ConnBoolN.type): ConnBool =
-    ConnBool(true)
-
-  private def toConnInt(@unused x: ConnIntN.type): ConnInt =
-    ConnInt(true)
-
-  private def toConnBigInt(@unused x: ConnBigIntN.type): ConnBigInt =
-    ConnBigInt(true)
-
-  private def toConnString(@unused x: ConnStringN.type): ConnString =
-    ConnString(true)
-
-  private def toConnUri(@unused x: ConnUriN.type): ConnUri =
-    ConnUri(true)
-
-  private def toConnByteArray(@unused x: ConnByteArrayN.type): ConnByteArray =
-    ConnByteArray(true)
-
   private def toConnNotBody(x: ConnNotN): ConnNotBody = {
     val p = toProto(x.p)
     ConnNotBody(p)
