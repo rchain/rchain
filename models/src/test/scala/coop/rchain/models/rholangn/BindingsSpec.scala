@@ -82,7 +82,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
 
   it should "test Match" in {
     val case11   = MatchCaseN(FreeVarN(41), BoundVarN(42), 1)
-    val case12   = MatchCaseN(WildcardN(), BoundVarN(42), 0)
+    val case12   = MatchCaseN(WildcardN, BoundVarN(42), 0)
     val p1: ParN = MatchN(NilN(), Seq(case11, case12))
     val case21   = MatchCase(EVar(FreeVar(41)), EVar(BoundVar(42)), 1)
     val case22   = MatchCase(EVar(Wildcard(WildcardMsg())), EVar(BoundVar(42)))
@@ -190,7 +190,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test Wildcard" in {
-    val p1: ParN = WildcardN()
+    val p1: ParN = WildcardN
     val p2: Par  = EVar(Wildcard(WildcardMsg()))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
@@ -375,42 +375,42 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
 
   /** Connective */
   it should "test ConnBool" in {
-    val p1: ParN = ConnBoolN()
+    val p1: ParN = ConnBoolN
     val p2: Par  = Connective(ConnBool(true))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test ConnInt" in {
-    val p1: ParN = ConnIntN()
+    val p1: ParN = ConnIntN
     val p2: Par  = Connective(ConnInt(true))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test ConnBigInt" in {
-    val p1: ParN = ConnBigIntN()
+    val p1: ParN = ConnBigIntN
     val p2: Par  = Connective(ConnBigInt(true))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test ConnString" in {
-    val p1: ParN = ConnStringN()
+    val p1: ParN = ConnStringN
     val p2: Par  = Connective(ConnString(true))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test ConnUri" in {
-    val p1: ParN = ConnUriN()
+    val p1: ParN = ConnUriN
     val p2: Par  = Connective(ConnUri(true))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test ConnByteArray" in {
-    val p1: ParN = ConnByteArrayN()
+    val p1: ParN = ConnByteArrayN
     val p2: Par  = Connective(ConnByteArray(true))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
@@ -424,7 +424,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test ConnAndN" in {
-    val p1: ParN = ConnAndN(WildcardN(), SendN(NilN(), NilN()))
+    val p1: ParN = ConnAndN(WildcardN, SendN(NilN(), NilN()))
     val p2: Par = Connective(
       ConnAndBody(ConnectiveBody(Seq(EVar(Wildcard(WildcardMsg())), Send(Par(), Seq(Par())))))
     )
@@ -433,7 +433,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test ConnOrN" in {
-    val p1: ParN = ConnOrN(WildcardN(), SendN(NilN(), NilN()))
+    val p1: ParN = ConnOrN(WildcardN, SendN(NilN(), NilN()))
     val p2: Par = Connective(
       ConnOrBody(ConnectiveBody(Seq(EVar(Wildcard(WildcardMsg())), Send(Par(), Seq(Par())))))
     )

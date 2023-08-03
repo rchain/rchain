@@ -78,7 +78,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   it should "test match with same data order" in {
     val case1 = MatchCaseN(FreeVarN(41), BoundVarN(42), 1)
-    val case2 = MatchCaseN(WildcardN(), BoundVarN(42))
+    val case2 = MatchCaseN(WildcardN, BoundVarN(42))
     val p     = MatchN(NilN(), Seq(case1, case2))
     simpleCheck(p) should be(true)
   }
@@ -182,7 +182,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test Wildcard" in {
-    val p = WildcardN()
+    val p = WildcardN
     simpleCheck(p) should be(true)
   }
 
@@ -321,32 +321,32 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   /** Connective */
   it should "test ConnBool" in {
-    val p = ConnBoolN()
+    val p = ConnBoolN
     simpleCheck(p) should be(true)
   }
 
   it should "test ConnInt" in {
-    val p = ConnIntN()
+    val p = ConnIntN
     simpleCheck(p) should be(true)
   }
 
   it should "test ConnBigInt" in {
-    val p = ConnBigIntN()
+    val p = ConnBigIntN
     simpleCheck(p) should be(true)
   }
 
   it should "test ConnString" in {
-    val p = ConnStringN()
+    val p = ConnStringN
     simpleCheck(p) should be(true)
   }
 
   it should "test ConnUri" in {
-    val p = ConnUriN()
+    val p = ConnUriN
     simpleCheck(p) should be(true)
   }
 
   it should "test ConnByteArray" in {
-    val p = ConnByteArrayN()
+    val p = ConnByteArrayN
     simpleCheck(p) should be(true)
   }
 
@@ -356,12 +356,12 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test ConnAndN" in {
-    val p = ConnAndN(WildcardN(), SendN(NilN(), NilN()))
+    val p = ConnAndN(WildcardN, SendN(NilN(), NilN()))
     simpleCheck(p) should be(true)
   }
 
   it should "test ConnOrN" in {
-    val p = ConnOrN(WildcardN(), SendN(NilN(), NilN()))
+    val p = ConnOrN(WildcardN, SendN(NilN(), NilN()))
     simpleCheck(p) should be(true)
   }
 

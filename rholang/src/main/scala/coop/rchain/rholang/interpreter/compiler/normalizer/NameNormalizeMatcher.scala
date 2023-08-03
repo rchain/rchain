@@ -20,7 +20,7 @@ object NameNormalizeMatcher {
       case wc: NameWildcard =>
         val wildcardBindResult =
           input.freeMap.addWildcard(SourcePosition(wc.line_num, wc.col_num))
-        NameVisitOutputs(WildcardN(), wildcardBindResult).pure[F]
+        NameVisitOutputs(WildcardN, wildcardBindResult).pure[F]
       case n: NameVar =>
         input.boundMapChain.get(n.var_) match {
           case Some(BoundContext(level, NameSort, _)) => {

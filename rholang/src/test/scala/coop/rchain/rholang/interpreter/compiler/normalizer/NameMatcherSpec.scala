@@ -18,7 +18,7 @@ class NameMatcherSpec extends AnyFlatSpec with Matchers {
   "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw             = new NameWildcard()
     val result         = NameNormalizeMatcher.normalizeMatch[Eval](nw, inputs).value
-    val expectedResult = WildcardN()
+    val expectedResult = WildcardN
     result.par should be(expectedResult)
     result.freeMap.count shouldEqual 1
   }

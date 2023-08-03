@@ -51,7 +51,7 @@ object PVarNormalizer {
         }
       case _: ProcVarWildcard =>
         ProcVisitOutputs(
-          input.par.combine(WildcardN()),
+          input.par.combine(WildcardN),
           input.freeMap.addWildcard(SourcePosition(p.line_num, p.col_num))
         ).pure[F]
     }

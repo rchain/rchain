@@ -1,28 +1,22 @@
 package coop.rchain.models.rholangn
 
 /** Connective for type Bool in pattern */
-final class ConnBoolN() extends ConnectiveSTypeN
-object ConnBoolN { def apply(): ConnBoolN = new ConnBoolN }
+object ConnBoolN extends ConnectiveSTypeN
 
 /** Connective for type Int in pattern */
-final class ConnIntN() extends ConnectiveSTypeN
-object ConnIntN { def apply(): ConnIntN = new ConnIntN }
+object ConnIntN extends ConnectiveSTypeN
 
 /** Connective for type BigInt in pattern */
-final class ConnBigIntN() extends ConnectiveSTypeN
-object ConnBigIntN { def apply(): ConnBigIntN = new ConnBigIntN }
+object ConnBigIntN extends ConnectiveSTypeN
 
 /** Connective for type String in pattern */
-final class ConnStringN() extends ConnectiveSTypeN
-object ConnStringN { def apply(): ConnStringN = new ConnStringN }
+object ConnStringN extends ConnectiveSTypeN
 
 /** Connective for type Uri in pattern */
-final class ConnUriN() extends ConnectiveSTypeN
-object ConnUriN { def apply(): ConnUriN = new ConnUriN }
+object ConnUriN extends ConnectiveSTypeN
 
 /** Connective for type ByteArray in pattern */
-final class ConnByteArrayN() extends ConnectiveSTypeN
-object ConnByteArrayN { def apply(): ConnByteArrayN = new ConnByteArrayN }
+object ConnByteArrayN extends ConnectiveSTypeN
 
 /** The "~" (logical Not) for pattern matching.
   * the pattern ~p says "anything but p" */

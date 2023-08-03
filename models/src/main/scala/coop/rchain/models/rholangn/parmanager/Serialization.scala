@@ -149,7 +149,7 @@ private[parmanager] object Serialization {
           write(FREE_VAR)
           write(fVar.idx)
 
-        case _: WildcardN =>
+        case _: WildcardN.type =>
           write(WILDCARD)
 
         /** Operations */
@@ -203,12 +203,12 @@ private[parmanager] object Serialization {
           write(unf.v)
 
         /** Connective */
-        case _: ConnBoolN      => write(CONNECTIVE_BOOL)
-        case _: ConnIntN       => write(CONNECTIVE_INT)
-        case _: ConnBigIntN    => write(CONNECTIVE_BIG_INT)
-        case _: ConnStringN    => write(CONNECTIVE_STRING)
-        case _: ConnUriN       => write(CONNECTIVE_URI)
-        case _: ConnByteArrayN => write(CONNECTIVE_BYTEARRAY)
+        case _: ConnBoolN.type      => write(CONNECTIVE_BOOL)
+        case _: ConnIntN.type       => write(CONNECTIVE_INT)
+        case _: ConnBigIntN.type    => write(CONNECTIVE_BIG_INT)
+        case _: ConnStringN.type    => write(CONNECTIVE_STRING)
+        case _: ConnUriN.type       => write(CONNECTIVE_URI)
+        case _: ConnByteArrayN.type => write(CONNECTIVE_BYTEARRAY)
 
         case connNot: ConnNotN =>
           write(CONNECTIVE_NOT)
@@ -410,8 +410,7 @@ private[parmanager] object Serialization {
         val v = readInt()
         FreeVarN(v)
 
-      case WILDCARD =>
-        WildcardN()
+      case WILDCARD => WildcardN
 
       /** Unforgeable names */
       case UPRIVATE =>
@@ -541,23 +540,12 @@ private[parmanager] object Serialization {
         EMatchesN(target, pattern)
 
       /** Connective */
-      case CONNECTIVE_BOOL =>
-        ConnBoolN()
-
-      case CONNECTIVE_INT =>
-        ConnIntN()
-
-      case CONNECTIVE_BIG_INT =>
-        ConnBigIntN()
-
-      case CONNECTIVE_STRING =>
-        ConnStringN()
-
-      case CONNECTIVE_URI =>
-        ConnUriN()
-
-      case CONNECTIVE_BYTEARRAY =>
-        ConnByteArrayN()
+      case CONNECTIVE_BOOL      => ConnBoolN
+      case CONNECTIVE_INT       => ConnIntN
+      case CONNECTIVE_BIG_INT   => ConnBigIntN
+      case CONNECTIVE_STRING    => ConnStringN
+      case CONNECTIVE_URI       => ConnUriN
+      case CONNECTIVE_BYTEARRAY => ConnByteArrayN
 
       case CONNECTIVE_NOT =>
         val p = readPar()

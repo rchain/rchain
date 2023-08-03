@@ -240,7 +240,7 @@ private[parmanager] object RhoHash {
       hs.append(fv.idx)
       hs.calcHash
 
-    case _: WildcardN => Hashable(WILDCARD).calcHash
+    case _: WildcardN.type => Hashable(WILDCARD).calcHash
 
     /** Operations */
     case op: Operation1ParN =>
@@ -309,12 +309,12 @@ private[parmanager] object RhoHash {
       hs.calcHash
 
     /** Connective */
-    case _: ConnBoolN      => Hashable(CONNECTIVE_BOOL).calcHash
-    case _: ConnIntN       => Hashable(CONNECTIVE_INT).calcHash
-    case _: ConnBigIntN    => Hashable(CONNECTIVE_BIG_INT).calcHash
-    case _: ConnStringN    => Hashable(CONNECTIVE_STRING).calcHash
-    case _: ConnUriN       => Hashable(CONNECTIVE_URI).calcHash
-    case _: ConnByteArrayN => Hashable(CONNECTIVE_BYTEARRAY).calcHash
+    case _: ConnBoolN.type      => Hashable(CONNECTIVE_BOOL).calcHash
+    case _: ConnIntN.type       => Hashable(CONNECTIVE_INT).calcHash
+    case _: ConnBigIntN.type    => Hashable(CONNECTIVE_BIG_INT).calcHash
+    case _: ConnStringN.type    => Hashable(CONNECTIVE_STRING).calcHash
+    case _: ConnUriN.type       => Hashable(CONNECTIVE_URI).calcHash
+    case _: ConnByteArrayN.type => Hashable(CONNECTIVE_BYTEARRAY).calcHash
 
     case connNot: ConnNotN =>
       val bodySize = hSize(connNot.p)

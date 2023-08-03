@@ -823,11 +823,11 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       BoundVarN(0),
       Seq(
         MatchCaseN(
-          EListN(Seq(FreeVarN(0), WildcardN())),
+          EListN(Seq(FreeVarN(0), WildcardN)),
           NilN(),
           freeCount = 1
         ),
-        MatchCaseN(WildcardN(), NilN())
+        MatchCaseN(WildcardN, NilN())
       )
     )
     result.par should be(expectedResult)
@@ -1209,12 +1209,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val resultUri       = ProcNormalizeMatcher.normalizeMatch[Eval](procUri, inputs).value
     val resultByteArray = ProcNormalizeMatcher.normalizeMatch[Eval](procByteArray, inputs).value
 
-    resultBool.par should be(ConnBoolN())
-    resultInt.par should be(ConnIntN())
-    resultBigInt.par should be(ConnBigIntN())
-    resultString.par should be(ConnStringN())
-    resultUri.par should be(ConnUriN())
-    resultByteArray.par should be(ConnByteArrayN())
+    resultBool.par should be(ConnBoolN)
+    resultInt.par should be(ConnIntN)
+    resultBigInt.par should be(ConnBigIntN)
+    resultString.par should be(ConnStringN)
+    resultUri.par should be(ConnUriN)
+    resultByteArray.par should be(ConnByteArrayN)
   }
 
   "1 matches _" should "normalize correctly" in {
@@ -1222,7 +1222,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMatches, inputs).value
 
-    val expectedPar = EMatchesN(GIntN(1), WildcardN())
+    val expectedPar = EMatchesN(GIntN(1), WildcardN)
 
     result.par shouldBe expectedPar
     result.par.connectiveUsed should be(false)

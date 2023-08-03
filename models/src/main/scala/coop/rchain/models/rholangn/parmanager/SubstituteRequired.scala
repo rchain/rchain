@@ -30,9 +30,9 @@ private[parmanager] object SubstituteRequired {
     case eMap: EMapN     => sReqKVPairs(eMap.sortedPs)
 
     /** Vars */
-    case _: BoundVarN => true
-    case _: FreeVarN  => false
-    case _: WildcardN => false
+    case _: BoundVarN      => true
+    case _: FreeVarN       => false
+    case _: WildcardN.type => false
 
     /** Operations */
     case op: Operation1ParN  => sReq(op.p)

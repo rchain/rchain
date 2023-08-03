@@ -18,7 +18,7 @@ object RemainderNormalizeMatcher {
     pv match {
       case pvw: ProcVarWildcard =>
         (
-          Option(WildcardN(): VarN),
+          Option(WildcardN: VarN),
           knownFree.addWildcard(SourcePosition(pvw.line_num, pvw.col_num))
         ).pure[F]
       case pvv: ProcVarVar =>

@@ -88,9 +88,9 @@ private[parmanager] object SerializedSize {
     case eMap: EMapN     => totalSize(sSizeKVPairs(eMap.sortedPs), sSize(eMap.remainder))
 
     /** Vars */
-    case v: BoundVarN => totalSize(sSize(v.idx))
-    case v: FreeVarN  => totalSize(sSize(v.idx))
-    case _: WildcardN => totalSize()
+    case v: BoundVarN      => totalSize(sSize(v.idx))
+    case v: FreeVarN       => totalSize(sSize(v.idx))
+    case _: WildcardN.type => totalSize()
 
     /** Operations */
     case op: Operation1ParN => totalSize(sSize(op.p))

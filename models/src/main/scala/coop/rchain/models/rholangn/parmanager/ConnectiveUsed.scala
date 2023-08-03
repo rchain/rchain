@@ -31,9 +31,9 @@ private[parmanager] object ConnectiveUsed {
     case eMap: EMapN     => cUsedKVPairs(eMap.sortedPs) || cUsed(eMap.remainder)
 
     /** Vars */
-    case _: BoundVarN => false
-    case _: FreeVarN  => true
-    case _: WildcardN => true
+    case _: BoundVarN      => false
+    case _: FreeVarN       => true
+    case _: WildcardN.type => true
 
     /** Operations */
     case op: Operation1ParN  => cUsed(op.p)

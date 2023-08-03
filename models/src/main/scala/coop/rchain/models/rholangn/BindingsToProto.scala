@@ -90,10 +90,10 @@ private[rholangn] object BindingsToProto {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toVar(x: VarN): Var = x match {
-    case n: BoundVarN => toBoundVar(n)
-    case n: FreeVarN  => toFreeVar(n)
-    case n: WildcardN => toWildcard(n)
-    case _            => throw new Exception("Unknown type for Var conversation")
+    case n: BoundVarN      => toBoundVar(n)
+    case n: FreeVarN       => toFreeVar(n)
+    case n: WildcardN.type => toWildcard(n)
+    case _                 => throw new Exception("Unknown type for Var conversation")
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -107,17 +107,17 @@ private[rholangn] object BindingsToProto {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def toConnective(c: ConnectiveN): Connective = c match {
-    case x: ConnBoolN      => Connective(toConnBool(x))
-    case x: ConnIntN       => Connective(toConnInt(x))
-    case x: ConnBigIntN    => Connective(toConnBigInt(x))
-    case x: ConnStringN    => Connective(toConnString(x))
-    case x: ConnUriN       => Connective(toConnUri(x))
-    case x: ConnByteArrayN => Connective(toConnByteArray(x))
-    case x: ConnNotN       => Connective(toConnNotBody(x))
-    case x: ConnAndN       => Connective(toConnAndBody(x))
-    case x: ConnOrN        => Connective(toConnOrBody(x))
-    case x: ConnVarRefN    => Connective(toVarRefBody(x))
-    case _                 => throw new Exception("Unknown type for Connective conversation")
+    case x: ConnBoolN.type      => Connective(toConnBool(x))
+    case x: ConnIntN.type       => Connective(toConnInt(x))
+    case x: ConnBigIntN.type    => Connective(toConnBigInt(x))
+    case x: ConnStringN.type    => Connective(toConnString(x))
+    case x: ConnUriN.type       => Connective(toConnUri(x))
+    case x: ConnByteArrayN.type => Connective(toConnByteArray(x))
+    case x: ConnNotN            => Connective(toConnNotBody(x))
+    case x: ConnAndN            => Connective(toConnAndBody(x))
+    case x: ConnOrN             => Connective(toConnOrBody(x))
+    case x: ConnVarRefN         => Connective(toVarRefBody(x))
+    case _                      => throw new Exception("Unknown type for Connective conversation")
   }
 
   private def toProto(ps: Seq[ParN]): Seq[Par]           = ps.map(toProto)
@@ -261,7 +261,7 @@ private[rholangn] object BindingsToProto {
     FreeVar(idx)
   }
 
-  private def toWildcard(@unused x: WildcardN): Wildcard =
+  private def toWildcard(@unused x: WildcardN.type): Wildcard =
     Wildcard(WildcardMsg())
 
   /** Unforgeable names */
@@ -418,22 +418,22 @@ private[rholangn] object BindingsToProto {
   }
 
   /** Connective */
-  private def toConnBool(@unused x: ConnBoolN): ConnBool =
+  private def toConnBool(@unused x: ConnBoolN.type): ConnBool =
     ConnBool(true)
 
-  private def toConnInt(@unused x: ConnIntN): ConnInt =
+  private def toConnInt(@unused x: ConnIntN.type): ConnInt =
     ConnInt(true)
 
-  private def toConnBigInt(@unused x: ConnBigIntN): ConnBigInt =
+  private def toConnBigInt(@unused x: ConnBigIntN.type): ConnBigInt =
     ConnBigInt(true)
 
-  private def toConnString(@unused x: ConnStringN): ConnString =
+  private def toConnString(@unused x: ConnStringN.type): ConnString =
     ConnString(true)
 
-  private def toConnUri(@unused x: ConnUriN): ConnUri =
+  private def toConnUri(@unused x: ConnUriN.type): ConnUri =
     ConnUri(true)
 
-  private def toConnByteArray(@unused x: ConnByteArrayN): ConnByteArray =
+  private def toConnByteArray(@unused x: ConnByteArrayN.type): ConnByteArray =
     ConnByteArray(true)
 
   private def toConnNotBody(x: ConnNotN): ConnNotBody = {

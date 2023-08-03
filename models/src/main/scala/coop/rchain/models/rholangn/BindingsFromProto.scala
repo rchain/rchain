@@ -244,8 +244,7 @@ private[rholangn] object BindingsFromProto {
     FreeVarN(idx)
   }
 
-  private def fromWildcard(@unused x: Wildcard): WildcardN =
-    WildcardN()
+  private def fromWildcard(@unused x: Wildcard) = WildcardN
 
   /** Unforgeable names */
   private def fromPrivate(x: GPrivate): UPrivateN = {
@@ -398,23 +397,12 @@ private[rholangn] object BindingsFromProto {
   }
 
   /** Connective */
-  private def fromConnBool(@unused x: ConnBool): ConnBoolN =
-    ConnBoolN()
-
-  private def fromConnInt(@unused x: ConnInt): ConnIntN =
-    ConnIntN()
-
-  private def fromConnBigInt(@unused x: ConnBigInt): ConnBigIntN =
-    ConnBigIntN()
-
-  private def fromConnString(@unused x: ConnString): ConnStringN =
-    ConnStringN()
-
-  private def fromConnUri(@unused x: ConnUri): ConnUriN =
-    ConnUriN()
-
-  private def fromConnByteArray(@unused x: ConnByteArray): ConnByteArrayN =
-    ConnByteArrayN()
+  private def fromConnBool(@unused x: ConnBool)                                = ConnBoolN
+  private def fromConnInt(@unused x: ConnInt)                                  = ConnIntN
+  private def fromConnBigInt(@unused x: ConnBigInt)                            = ConnBigIntN
+  private def fromConnString(@unused x: ConnString)                            = ConnStringN
+  private def fromConnUri(@unused x: ConnUri)                                  = ConnUriN
+  private def fromConnByteArray(@unused x: ConnByteArray): ConnByteArrayN.type = ConnByteArrayN
 
   private def fromConnNotBody(x: ConnNotBody): ConnNotN = {
     val p = fromProto(x.value)
