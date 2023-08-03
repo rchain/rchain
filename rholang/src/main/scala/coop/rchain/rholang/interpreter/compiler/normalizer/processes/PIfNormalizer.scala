@@ -21,11 +21,11 @@ object PIfNormalizer {
       targetResult <- normalizeMatch[F](valueProc, input)
       trueCaseBody <- normalizeMatch[F](
                        trueBodyProc,
-                       ProcVisitInputs(NilN(), input.boundMapChain, targetResult.freeMap)
+                       ProcVisitInputs(NilN, input.boundMapChain, targetResult.freeMap)
                      )
       falseCaseBody <- normalizeMatch[F](
                         falseBodyProc,
-                        ProcVisitInputs(NilN(), input.boundMapChain, trueCaseBody.freeMap)
+                        ProcVisitInputs(NilN, input.boundMapChain, trueCaseBody.freeMap)
                       )
       desugaredIf = MatchN(
         targetResult.par,

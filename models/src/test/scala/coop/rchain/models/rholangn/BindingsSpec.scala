@@ -21,7 +21,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
 
   /** Basic types */
   it should "test Nil" in {
-    val p1: ParN = NilN()
+    val p1: ParN = NilN
     val p2: Par  = Par()
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
@@ -61,16 +61,16 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test Send" in {
-    val p1: ParN = SendN(NilN(), Seq(NilN(), SendN(NilN(), NilN())), persistent = true)
+    val p1: ParN = SendN(NilN, Seq(NilN, SendN(NilN, NilN)), persistent = true)
     val p2: Par  = Send(Par(), Seq(Par(), Send(Par(), Seq(Par()))), persistent = true)
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test Receive" in {
-    val bind11   = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), NilN(), Some(BoundVarN(42)), 2)
-    val bind12   = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), NilN(), Some(BoundVarN(42)), 2)
-    val p1: ParN = ReceiveN(Seq(bind11, bind12), NilN(), persistent = true, peek = false, 4)
+    val bind11   = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), NilN, Some(BoundVarN(42)), 2)
+    val bind12   = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), NilN, Some(BoundVarN(42)), 2)
+    val p1: ParN = ReceiveN(Seq(bind11, bind12), NilN, persistent = true, peek = false, 4)
     val bind21 =
       ReceiveBind(Seq(EVar(FreeVar(41)), EVar(FreeVar(42))), Par(), Some(BoundVar(42)), 2)
     val bind22 =
@@ -83,7 +83,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   it should "test Match" in {
     val case11   = MatchCaseN(FreeVarN(41), BoundVarN(42), 1)
     val case12   = MatchCaseN(WildcardN, BoundVarN(42), 0)
-    val p1: ParN = MatchN(NilN(), Seq(case11, case12))
+    val p1: ParN = MatchN(NilN, Seq(case11, case12))
     val case21   = MatchCase(EVar(FreeVar(41)), EVar(BoundVar(42)), 1)
     val case22   = MatchCase(EVar(Wildcard(WildcardMsg())), EVar(BoundVar(42)))
     val p2: Par  = Match(Par(), Seq(case21, case22))
@@ -93,7 +93,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
 
   it should "test New" in {
     val uri      = Seq("4", "2", "3", "1")
-    val inj1     = Map("4" -> NilN(), "3" -> NilN())
+    val inj1     = Map("4" -> NilN, "3" -> NilN)
     val inj2     = Map("4" -> Par(), "3" -> Par())
     val p1: ParN = NewN(1, BoundVarN(0), uri, inj1)
     val p2: Par  = New(1, EVar(BoundVar(0)), uri, inj2)
@@ -146,28 +146,28 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
 
   /** Collections */
   it should "test EList" in {
-    val p1: ParN = EListN(Seq(NilN(), EListN()), Some(BoundVarN(42)))
+    val p1: ParN = EListN(Seq(NilN, EListN()), Some(BoundVarN(42)))
     val p2: Par  = EList(Seq(Par(), EList()), BitSet(), connectiveUsed = false, Some(BoundVar(42)))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test ETuple" in {
-    val p1: ParN = ETupleN(Seq(NilN(), ETupleN(NilN())))
+    val p1: ParN = ETupleN(Seq(NilN, ETupleN(NilN)))
     val p2: Par  = ETuple(Seq(Par(), ETuple(Seq(Par()))))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test ESet" in {
-    val p1: ParN = ESetN(Seq(NilN(), ESetN()))
+    val p1: ParN = ESetN(Seq(NilN, ESetN()))
     val p2: Par  = ParSet(Seq(Par(), ParSet(Seq())))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test EMap" in {
-    val p1: ParN      = EMapN(Seq(NilN() -> EMapN(), EMapN() -> NilN()))
+    val p1: ParN      = EMapN(Seq(NilN -> EMapN(), EMapN() -> NilN))
     val emptyMap: Par = ParMap(Seq())
     val p2: Par       = ParMap(Seq(Par() -> emptyMap, emptyMap -> Par()))
     toProto(p1) should be(p2)
@@ -324,7 +324,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test EMinusMinus" in {
-    val p1: ParN = EMinusMinusN(EListN(NilN()), EListN(NilN()))
+    val p1: ParN = EMinusMinusN(EListN(NilN), EListN(NilN))
     val p2: Par  = EMinusMinus(EList(Seq(Par())), EList(Seq(Par())))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
@@ -345,7 +345,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test EMethod" in {
-    val p1: ParN = EMethodN("nth", EListN(NilN()), GIntN(1))
+    val p1: ParN = EMethodN("nth", EListN(NilN), GIntN(1))
     val p2: Par  = EMethod("nth", EList(Seq(Par())), Seq(GInt(1): Par))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
@@ -417,14 +417,14 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test ConnNotN" in {
-    val p1: ParN = ConnNotN(SendN(NilN(), NilN()))
+    val p1: ParN = ConnNotN(SendN(NilN, NilN))
     val p2: Par  = Connective(ConnNotBody(Send(Par(), Seq(Par()))))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)
   }
 
   it should "test ConnAndN" in {
-    val p1: ParN = ConnAndN(WildcardN, SendN(NilN(), NilN()))
+    val p1: ParN = ConnAndN(WildcardN, SendN(NilN, NilN))
     val p2: Par = Connective(
       ConnAndBody(ConnectiveBody(Seq(EVar(Wildcard(WildcardMsg())), Send(Par(), Seq(Par())))))
     )
@@ -433,7 +433,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test ConnOrN" in {
-    val p1: ParN = ConnOrN(WildcardN, SendN(NilN(), NilN()))
+    val p1: ParN = ConnOrN(WildcardN, SendN(NilN, NilN))
     val p2: Par = Connective(
       ConnOrBody(ConnectiveBody(Seq(EVar(Wildcard(WildcardMsg())), Send(Par(), Seq(Par())))))
     )
@@ -450,7 +450,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
 
   /** Other types */
   it should "test Bundle" in {
-    val p1: ParN = BundleN(NilN(), writeFlag = true, readFlag = true)
+    val p1: ParN = BundleN(NilN, writeFlag = true, readFlag = true)
     val p2: Par  = Bundle(Par(), writeFlag = true, readFlag = true)
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)

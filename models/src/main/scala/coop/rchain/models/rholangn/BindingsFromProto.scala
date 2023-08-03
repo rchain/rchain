@@ -18,7 +18,7 @@ private[rholangn] object BindingsFromProto {
         .flatten
     val ps: Seq[ParN] = terms.map(fromProtoMessage)
     ps.size match {
-      case 0 => NilN()
+      case 0 => NilN
       case 1 => ps.head
       case _ => ParProcN(ps)
     }

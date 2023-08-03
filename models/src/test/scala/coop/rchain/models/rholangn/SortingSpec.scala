@@ -6,11 +6,11 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class SortingSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "test sorting for receive binds" in {
-    val bind1    = ReceiveBindN(Seq(FreeVarN(41)), NilN(), Some(BoundVarN(42)), 1)
-    val bind2    = ReceiveBindN(Seq(FreeVarN(42)), NilN(), Some(BoundVarN(42)), 1)
-    val bind3    = ReceiveBindN(Seq(FreeVarN(43)), NilN(), Some(BoundVarN(42)), 1)
-    val bind4    = ReceiveBindN(Seq(FreeVarN(44)), NilN(), Some(BoundVarN(42)), 1)
-    val bind5    = ReceiveBindN(Seq(FreeVarN(45)), NilN(), Some(BoundVarN(42)), 1)
+    val bind1    = ReceiveBindN(Seq(FreeVarN(41)), NilN, Some(BoundVarN(42)), 1)
+    val bind2    = ReceiveBindN(Seq(FreeVarN(42)), NilN, Some(BoundVarN(42)), 1)
+    val bind3    = ReceiveBindN(Seq(FreeVarN(43)), NilN, Some(BoundVarN(42)), 1)
+    val bind4    = ReceiveBindN(Seq(FreeVarN(44)), NilN, Some(BoundVarN(42)), 1)
+    val bind5    = ReceiveBindN(Seq(FreeVarN(45)), NilN, Some(BoundVarN(42)), 1)
     val unsorted = Seq(bind1, bind2, bind3, bind4, bind5)
     val sorted   = parmanager.Manager.sortBinds(unsorted)
     val expected = Seq(bind1, bind4, bind5, bind3, bind2)

@@ -18,11 +18,11 @@ object PMatchesNormalizer {
     // "match target { pattern => true ; _ => false}
     // so free variables from pattern should not be visible at the top level
     for {
-      leftResult <- normalizeMatch[F](p.proc_1, input.copy(par = NilN()))
+      leftResult <- normalizeMatch[F](p.proc_1, input.copy(par = NilN))
       rightResult <- normalizeMatch[F](
                       p.proc_2,
                       ProcVisitInputs(
-                        NilN(),
+                        NilN,
                         input.boundMapChain.push,
                         FreeMap.empty
                       )

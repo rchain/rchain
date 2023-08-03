@@ -127,7 +127,7 @@ private[parmanager] object RhoHash {
   def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
 
     /** Basic types */
-    case _: NilN => Hashable(NIL).calcHash
+    case _: NilN.type => Hashable(NIL).calcHash
 
     case pProc: ParProcN =>
       val hs = Hashable(PARPROC, hSize(pProc.ps))

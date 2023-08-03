@@ -15,11 +15,11 @@ object PMethodNormalizer {
       implicit env: Map[String, Par]
   ): F[ProcVisitOutputs] =
     for {
-      targetResult <- normalizeMatch[F](p.proc_, input.copy(NilN()))
+      targetResult <- normalizeMatch[F](p.proc_, input.copy(NilN))
       target       = targetResult.par
       initAcc = (
         Seq[ParN](),
-        ProcVisitInputs(NilN(), input.boundMapChain, targetResult.freeMap)
+        ProcVisitInputs(NilN, input.boundMapChain, targetResult.freeMap)
       )
       argResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)((acc, e) => {
                      normalizeMatch[F](e, acc._2).map(
@@ -27,7 +27,7 @@ object PMethodNormalizer {
                          (
                            procMatchResult.par +: acc._1,
                            ProcVisitInputs(
-                             NilN(),
+                             NilN,
                              input.boundMapChain,
                              procMatchResult.freeMap
                            )

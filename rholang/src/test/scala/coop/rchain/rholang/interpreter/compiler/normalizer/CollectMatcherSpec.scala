@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 
 class CollectMatcherSpec extends AnyFlatSpec with Matchers {
   val inputs = ProcVisitInputs(
-    NilN(),
+    NilN,
     BoundMapChain
       .empty[VarSort]
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),

@@ -60,7 +60,7 @@ object PContrNormalizer {
       boundCount = remainderResult._2.countNoWildcards
       bodyResult <- ProcNormalizeMatcher.normalizeMatch[F](
                      p.proc_,
-                     ProcVisitInputs(NilN(), newEnv, nameMatchResult.freeMap)
+                     ProcVisitInputs(NilN, newEnv, nameMatchResult.freeMap)
                    )
     } yield {
       val newReceive = ReceiveN(

@@ -20,11 +20,11 @@ object PDisjunctionNormalizer {
     for {
       leftResult <- normalizeMatch[F](
                      p.proc_1,
-                     ProcVisitInputs(NilN(), input.boundMapChain, FreeMap.empty)
+                     ProcVisitInputs(NilN, input.boundMapChain, FreeMap.empty)
                    )
       rightResult <- normalizeMatch[F](
                       p.proc_2,
-                      ProcVisitInputs(NilN(), input.boundMapChain, FreeMap.empty)
+                      ProcVisitInputs(NilN, input.boundMapChain, FreeMap.empty)
                     )
       lp               = leftResult.par
       rp               = rightResult.par

@@ -63,7 +63,7 @@ private[parmanager] object Serialization {
       def write(p: RhoTypeN): Unit = p match {
 
         /** Basic types */
-        case _: NilN => write(NIL)
+        case _: NilN.type => write(NIL)
 
         case pProc: ParProcN =>
           write(PARPROC)
@@ -354,8 +354,7 @@ private[parmanager] object Serialization {
         NewN(bindCount, p, uri, injections)
 
       /** Ground types */
-      case NIL =>
-        NilN()
+      case NIL => NilN
 
       case GBOOL =>
         val v = readBool()

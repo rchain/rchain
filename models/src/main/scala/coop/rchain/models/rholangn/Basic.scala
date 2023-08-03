@@ -1,7 +1,6 @@
 package coop.rchain.models.rholangn
 
-final class NilN() extends BasicN
-object NilN { def apply(): NilN = new NilN }
+object NilN extends BasicN
 
 /** *
   * Rholang process

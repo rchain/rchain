@@ -30,7 +30,7 @@ class ParBench {
     def el(i: Int) = EListN(Seq.fill(elSize)(GIntN(i.toLong)))
 
     val seq = Seq.tabulate(n)(el)
-    seq.foldLeft(NilN(): ParN) { (acc, p) =>
+    seq.foldLeft(NilN: ParN) { (acc, p) =>
       acc.combine(p)
     }
   }

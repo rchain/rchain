@@ -34,13 +34,13 @@ object Manager {
 
   private def flatPs(ps: Seq[ParN]): Seq[ParN] =
     ps.flatMap {
-      case _: NilN     => Seq()
-      case x: ParProcN => flatPs(x.ps)
-      case p           => Seq(p)
+      case _: NilN.type => Seq()
+      case x: ParProcN  => flatPs(x.ps)
+      case p            => Seq(p)
     }
 
   private def makePProc(ps: Seq[ParN]): ParN = ps.length match {
-    case 0 => NilN()
+    case 0 => NilN
     case 1 => ps.head
     case _ => ParProcN(ps)
   }

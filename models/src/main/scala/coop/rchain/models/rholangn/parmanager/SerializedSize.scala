@@ -44,7 +44,7 @@ private[parmanager] object SerializedSize {
   def serializedSizeFn(p: RhoTypeN): Int = p match {
 
     /** Basic types */
-    case _: NilN => totalSize()
+    case _: NilN.type => totalSize()
 
     case pProc: ParProcN =>
       val psSize = sSize(pProc.ps)

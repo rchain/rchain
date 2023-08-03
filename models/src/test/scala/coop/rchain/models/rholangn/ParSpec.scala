@@ -40,56 +40,56 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   /** Basic types */
   it should "test Nil" in {
-    val p = NilN()
+    val p = NilN
     simpleCheck(p) should be(true)
   }
 
   it should "test ParProc" in {
-    val p1 = ParProcN(Seq(NilN(), ParProcN(Seq(NilN()))))
-    val p2 = ParProcN(Seq(ParProcN(Seq(NilN())), NilN()))
+    val p1 = ParProcN(Seq(NilN, ParProcN(Seq(NilN))))
+    val p2 = ParProcN(Seq(ParProcN(Seq(NilN)), NilN))
     simpleCheck(p1, Some(p2)) should be(true)
   }
 
   it should "test Send with same data order" in {
-    val p = SendN(NilN(), Seq(NilN(), SendN(NilN(), NilN())), persistent = true)
+    val p = SendN(NilN, Seq(NilN, SendN(NilN, NilN)), persistent = true)
     simpleCheck(p) should be(true)
   }
 
   it should "test Send with different data order" in {
-    val p1 = SendN(NilN(), Seq(NilN(), SendN(NilN(), NilN())), persistent = true)
-    val p2 = SendN(NilN(), Seq(SendN(NilN(), NilN()), NilN()), persistent = true)
+    val p1 = SendN(NilN, Seq(NilN, SendN(NilN, NilN)), persistent = true)
+    val p2 = SendN(NilN, Seq(SendN(NilN, NilN), NilN), persistent = true)
     simpleCheck(p1, Some(p2)) should be(false)
   }
 
   it should "test Receive with same data order" in {
-    val bind1 = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), NilN(), Some(BoundVarN(42)), 2)
-    val bind2 = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), NilN(), Some(BoundVarN(42)), 2)
-    val p     = ReceiveN(Seq(bind1, bind2), NilN(), persistent = true, peek = false, 4)
+    val bind1 = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), NilN, Some(BoundVarN(42)), 2)
+    val bind2 = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), NilN, Some(BoundVarN(42)), 2)
+    val p     = ReceiveN(Seq(bind1, bind2), NilN, persistent = true, peek = false, 4)
     simpleCheck(p) should be(true)
   }
 
   it should "test Receive with different data order" in {
-    val bind1 = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), NilN(), Some(BoundVarN(42)), 2)
-    val bind2 = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), NilN(), Some(BoundVarN(42)), 2)
-    val p1    = ReceiveN(Seq(bind1, bind2), NilN(), persistent = true, peek = false, 4)
-    val p2    = ReceiveN(Seq(bind2, bind1), NilN(), persistent = true, peek = false, 4)
+    val bind1 = ReceiveBindN(Seq(FreeVarN(41), FreeVarN(42)), NilN, Some(BoundVarN(42)), 2)
+    val bind2 = ReceiveBindN(Seq(FreeVarN(42), FreeVarN(41)), NilN, Some(BoundVarN(42)), 2)
+    val p1    = ReceiveN(Seq(bind1, bind2), NilN, persistent = true, peek = false, 4)
+    val p2    = ReceiveN(Seq(bind2, bind1), NilN, persistent = true, peek = false, 4)
     simpleCheck(p1, Some(p2)) should be(true)
   }
 
   it should "test match with same data order" in {
     val case1 = MatchCaseN(FreeVarN(41), BoundVarN(42), 1)
     val case2 = MatchCaseN(WildcardN, BoundVarN(42))
-    val p     = MatchN(NilN(), Seq(case1, case2))
+    val p     = MatchN(NilN, Seq(case1, case2))
     simpleCheck(p) should be(true)
   }
 
   it should "test New with different data order" in {
     val inj1: Map[String, ParN] =
-      Map("rho:rchain:deployId" -> NilN(), "rho:rchain:deployerId" -> NilN())
+      Map("rho:rchain:deployId" -> NilN, "rho:rchain:deployerId" -> NilN)
     val p1 = NewN(1, BoundVarN(0), Seq("rho:io:stdout", "rho:io:stderr"), inj1)
 
     val inj2: Map[String, ParN] =
-      Map("rho:rchain:deployerId" -> NilN(), "rho:rchain:deployId" -> NilN())
+      Map("rho:rchain:deployerId" -> NilN, "rho:rchain:deployId" -> NilN)
     val p2 = NewN(1, BoundVarN(0), Seq("rho:io:stderr", "rho:io:stdout"), inj2)
     simpleCheck(p1, Some(p2)) should be(true)
   }
@@ -127,46 +127,46 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   /** Collections */
   it should "test EList with same data order" in {
-    val p = EListN(Seq(NilN(), EListN()), Some(BoundVarN(42)))
+    val p = EListN(Seq(NilN, EListN()), Some(BoundVarN(42)))
     simpleCheck(p) should be(true)
   }
 
   it should "test EList with different data order" in {
-    val p1 = EListN(Seq(NilN(), EListN()), Some(BoundVarN(42)))
-    val p2 = EListN(Seq(EListN(), NilN()), Some(BoundVarN(42)))
+    val p1 = EListN(Seq(NilN, EListN()), Some(BoundVarN(42)))
+    val p2 = EListN(Seq(EListN(), NilN), Some(BoundVarN(42)))
     simpleCheck(p1, Some(p2)) should be(false)
   }
 
   it should "test ETuple with same data order" in {
-    val p = ETupleN(Seq(NilN(), ETupleN(NilN())))
+    val p = ETupleN(Seq(NilN, ETupleN(NilN)))
     simpleCheck(p) should be(true)
   }
 
   it should "test ETuple with different data order" in {
-    val p1 = ETupleN(Seq(NilN(), ETupleN(NilN())))
-    val p2 = ETupleN(Seq(ETupleN(NilN()), NilN()))
+    val p1 = ETupleN(Seq(NilN, ETupleN(NilN)))
+    val p2 = ETupleN(Seq(ETupleN(NilN), NilN))
     simpleCheck(p1, Some(p2)) should be(false)
   }
 
   it should "test ESet with same data order" in {
-    val p = ESetN(Seq(NilN(), ESetN()), Some(BoundVarN(42)))
+    val p = ESetN(Seq(NilN, ESetN()), Some(BoundVarN(42)))
     simpleCheck(p) should be(true)
   }
 
   it should "test ESet with different data order" in {
-    val p1 = ESetN(Seq(NilN(), ESetN(NilN())))
-    val p2 = ESetN(Seq(ESetN(NilN()), NilN()))
+    val p1 = ESetN(Seq(NilN, ESetN(NilN)))
+    val p2 = ESetN(Seq(ESetN(NilN), NilN))
     simpleCheck(p1, Some(p2)) should be(true)
   }
 
   it should "test EMap with same data order" in {
-    val p = EMapN(Seq(NilN() -> EMapN(), EMapN() -> NilN()), Some(BoundVarN(42)))
+    val p = EMapN(Seq(NilN -> EMapN(), EMapN() -> NilN), Some(BoundVarN(42)))
     simpleCheck(p) should be(true)
   }
 
   it should "test EMap with different data order" in {
-    val p1 = EMapN(Seq(NilN()  -> EMapN(), EMapN() -> NilN()))
-    val p2 = EMapN(Seq(EMapN() -> NilN(), NilN()   -> EMapN()))
+    val p1 = EMapN(Seq(NilN    -> EMapN(), EMapN() -> NilN))
+    val p2 = EMapN(Seq(EMapN() -> NilN, NilN       -> EMapN()))
     simpleCheck(p1, Some(p2)) should be(true)
   }
 
@@ -284,7 +284,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test EMinusMinus" in {
-    val p = EMinusMinusN(EListN(NilN()), EListN(NilN()))
+    val p = EMinusMinusN(EListN(NilN), EListN(NilN))
     simpleCheck(p) should be(true)
   }
 
@@ -299,7 +299,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test EMethod" in {
-    val p = EMethodN("nth", EListN(NilN()), GIntN(1))
+    val p = EMethodN("nth", EListN(NilN), GIntN(1))
     simpleCheck(p) should be(true)
   }
 
@@ -351,17 +351,17 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test ConnNotN" in {
-    val p = ConnNotN(SendN(NilN(), NilN()))
+    val p = ConnNotN(SendN(NilN, NilN))
     simpleCheck(p) should be(true)
   }
 
   it should "test ConnAndN" in {
-    val p = ConnAndN(WildcardN, SendN(NilN(), NilN()))
+    val p = ConnAndN(WildcardN, SendN(NilN, NilN))
     simpleCheck(p) should be(true)
   }
 
   it should "test ConnOrN" in {
-    val p = ConnOrN(WildcardN, SendN(NilN(), NilN()))
+    val p = ConnOrN(WildcardN, SendN(NilN, NilN))
     simpleCheck(p) should be(true)
   }
 
@@ -372,7 +372,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   /** Other types */
   it should "test Bundle" in {
-    val p = BundleN(NilN(), writeFlag = true, readFlag = true)
+    val p = BundleN(NilN, writeFlag = true, readFlag = true)
     simpleCheck(p) should be(true)
   }
 

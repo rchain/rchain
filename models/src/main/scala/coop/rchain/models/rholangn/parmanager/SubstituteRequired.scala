@@ -13,7 +13,7 @@ private[parmanager] object SubstituteRequired {
   def substituteRequiredFn(p: RhoTypeN): Boolean = p match {
 
     /** Basic types */
-    case _: NilN           => false
+    case _: NilN.type      => false
     case pProc: ParProcN   => sReq(pProc.ps)
     case send: SendN       => sReq(send.chan) || sReq(send.data)
     case receive: ReceiveN => sReq(receive.binds) || sReq(receive.body)

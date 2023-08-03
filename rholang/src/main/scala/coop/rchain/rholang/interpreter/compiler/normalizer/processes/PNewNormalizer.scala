@@ -42,7 +42,7 @@ object PNewNormalizer {
     val newEnv       = input.boundMapChain.put(newBindings.toList)
     val newCount     = newEnv.count - input.boundMapChain.count
 
-    normalizeMatch[F](p.proc_, ProcVisitInputs(NilN(), newEnv, input.freeMap)).map { bodyResult =>
+    normalizeMatch[F](p.proc_, ProcVisitInputs(NilN, newEnv, input.freeMap)).map { bodyResult =>
       val resultNew = NewN(
         bindCount = newCount,
         p = bodyResult.par,

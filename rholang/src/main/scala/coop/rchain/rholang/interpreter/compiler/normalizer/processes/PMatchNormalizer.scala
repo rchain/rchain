@@ -24,7 +24,7 @@ object PMatchNormalizer {
     }
 
     for {
-      targetResult <- normalizeMatch[F](p.proc_, input.copy(par = NilN()))
+      targetResult <- normalizeMatch[F](p.proc_, input.copy(par = NilN))
       cases        <- p.listcase_.asScala.toList.traverse(liftCase)
 
       initAcc = (Seq[MatchCaseN](), targetResult.freeMap)
@@ -36,7 +36,7 @@ object PMatchNormalizer {
                               patternResult <- normalizeMatch[F](
                                                 pattern,
                                                 ProcVisitInputs(
-                                                  NilN(),
+                                                  NilN,
                                                   input.boundMapChain.push,
                                                   FreeMap.empty
                                                 )
@@ -45,7 +45,7 @@ object PMatchNormalizer {
                               boundCount = patternResult.freeMap.countNoWildcards
                               caseBodyResult <- normalizeMatch[F](
                                                  caseBody,
-                                                 ProcVisitInputs(NilN(), caseEnv, acc._2)
+                                                 ProcVisitInputs(NilN, caseEnv, acc._2)
                                                )
                             } yield (
                               MatchCaseN(

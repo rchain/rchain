@@ -16,11 +16,11 @@ object PConjunctionNormalizer {
     for {
       leftResult <- normalizeMatch[F](
                      p.proc_1,
-                     ProcVisitInputs(NilN(), input.boundMapChain, input.freeMap)
+                     ProcVisitInputs(NilN, input.boundMapChain, input.freeMap)
                    )
       rightResult <- normalizeMatch[F](
                       p.proc_2,
-                      ProcVisitInputs(NilN(), input.boundMapChain, leftResult.freeMap)
+                      ProcVisitInputs(NilN, input.boundMapChain, leftResult.freeMap)
                     )
       lp = leftResult.par
       rp = rightResult.par

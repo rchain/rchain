@@ -252,7 +252,7 @@ object PInputNormalizer {
           procVisitOutputs <- normalizeMatch[F](
                                p.proc_,
                                ProcVisitInputs(
-                                 NilN(),
+                                 NilN,
                                  input.boundMapChain.absorbFree(receiveBindsFreeMap),
                                  sourcesFree
                                )

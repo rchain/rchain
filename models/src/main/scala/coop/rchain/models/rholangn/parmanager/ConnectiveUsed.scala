@@ -14,7 +14,7 @@ private[parmanager] object ConnectiveUsed {
   def connectiveUsedFn(p: RhoTypeN): Boolean = p match {
 
     /** Basic types */
-    case _: NilN           => false
+    case _: NilN.type      => false
     case pProc: ParProcN   => cUsed(pProc.ps)
     case send: SendN       => cUsed(send.chan) || cUsed(send.data)
     case receive: ReceiveN => cUsed(receive.binds) || cUsed(receive.body)

@@ -51,7 +51,7 @@ object PBundleNormalizer {
       }
 
     for {
-      targetResult <- normalizeMatch[F](b.proc_, input.copy(par = NilN()))
+      targetResult <- normalizeMatch[F](b.proc_, input.copy(par = NilN))
       target       = targetResult.par
       outermostBundle = b.bundle_ match {
         case _: BundleReadWrite => BundleN(target, writeFlag = true, readFlag = true)

@@ -80,7 +80,7 @@ object Compiler {
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
-          ProcVisitInputs(NilN(), BoundMapChain.empty, FreeMap.empty)
+          ProcVisitInputs(NilN, BoundMapChain.empty, FreeMap.empty)
         )
         .flatMap { normalizedTerm =>
           if (normalizedTerm.freeMap.count > 0) {

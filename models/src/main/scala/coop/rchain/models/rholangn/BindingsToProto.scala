@@ -19,12 +19,12 @@ private[rholangn] object BindingsToProto {
   def toProto(p: ParN): Par = p match {
 
     /** Basic types */
-    case x: NilN     => toNil(x)
-    case x: ParProcN => toParProc(x)
-    case x: SendN    => toSend(x)
-    case x: ReceiveN => toReceive(x)
-    case x: MatchN   => toMatch(x)
-    case x: NewN     => toNew(x)
+    case x: NilN.type => Par()
+    case x: ParProcN  => toParProc(x)
+    case x: SendN     => toSend(x)
+    case x: ReceiveN  => toReceive(x)
+    case x: MatchN    => toMatch(x)
+    case x: NewN      => toNew(x)
 
     /** Expressions */
     case e: ExprN => toExpr(e)
@@ -128,8 +128,6 @@ private[rholangn] object BindingsToProto {
     injections.map(i => (i._1, toProto(i._2)))
 
   /** Basic types */
-  private def toNil(@unused x: NilN): Par = Par()
-
   private def toParProc(x: ParProcN): Par = {
     val p = x.ps.foldLeft(Par())((acc, pN) => acc ++ toProto(pN))
     p.withConnectiveUsed(x.connectiveUsed)

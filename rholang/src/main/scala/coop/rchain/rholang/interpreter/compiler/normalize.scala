@@ -25,7 +25,7 @@ object ProcNormalizeMatcher {
         input: ProcVisitInputs,
         constructor: ParN => ExprN
     ): F[ProcVisitOutputs] =
-      normalizeMatch[F](subProc, input.copy(par = NilN()))
+      normalizeMatch[F](subProc, input.copy(par = NilN))
         .map(
           subResult =>
             ProcVisitOutputs(
@@ -41,10 +41,10 @@ object ProcNormalizeMatcher {
         constructor: (ParN, ParN) => ExprN
     ): F[ProcVisitOutputs] =
       for {
-        leftResult <- normalizeMatch[F](subProcLeft, input.copy(par = NilN()))
+        leftResult <- normalizeMatch[F](subProcLeft, input.copy(par = NilN))
         rightResult <- normalizeMatch[F](
                         subProcRight,
-                        input.copy(par = NilN(), freeMap = leftResult.freeMap)
+                        input.copy(par = NilN, freeMap = leftResult.freeMap)
                       )
       } yield ProcVisitOutputs(
         input.par.combine(constructor(leftResult.par, rightResult.par)),
@@ -142,11 +142,11 @@ object ProcNormalizeMatcher {
 
       case p: PIf =>
         PIfNormalizer
-          .normalize(p.proc_1, p.proc_2, new PNil(), input.copy(par = NilN()))
+          .normalize(p.proc_1, p.proc_2, new PNil(), input.copy(par = NilN))
           .map(n => n.copy(par = n.par.combine(input.par)))
       case p: PIfElse =>
         PIfNormalizer
-          .normalize(p.proc_1, p.proc_2, p.proc_3, input.copy(par = NilN()))
+          .normalize(p.proc_1, p.proc_2, p.proc_3, input.copy(par = NilN))
           .map(n => n.copy(par = n.par.combine(input.par)))
 
       case _ =>
