@@ -2,20 +2,19 @@ package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import scodec.bits.ByteVector
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
 object Manager {
 
-  def parToBytes(p: ParN): ByteVector = {
+  def parToBytes(p: ParN): Array[Byte] = {
     val baos = new ByteArrayOutputStream(p.serializedSize)
     Serialization.serialize(p, baos)
-    ByteVector(baos.toByteArray)
+    baos.toByteArray
   }
 
-  def parFromBytes(bv: ByteVector): ParN = {
-    val bais = new ByteArrayInputStream(bv.toArray)
+  def parFromBytes(bv: Array[Byte]): ParN = {
+    val bais = new ByteArrayInputStream(bv)
     Serialization.deserialize(bais)
   }
 

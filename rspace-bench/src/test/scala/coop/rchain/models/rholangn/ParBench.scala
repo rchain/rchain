@@ -34,15 +34,15 @@ class ParBench {
       acc.combine(p)
     }
   }
-  val nestedSize: Int            = 500
-  var nestedPar: ParN            = _
-  var nestedAnotherPar: ParN     = _
-  var nestedParSData: ByteVector = _
+  val nestedSize: Int             = 500
+  var nestedPar: ParN             = _
+  var nestedAnotherPar: ParN      = _
+  var nestedParSData: Array[Byte] = _
 
-  val parProcSize: Int         = 500
-  var parProc: ParN            = _
-  var parProcAnother: ParN     = _
-  var parProcSData: ByteVector = _
+  val parProcSize: Int          = 500
+  var parProc: ParN             = _
+  var parProcAnother: ParN      = _
+  var parProcSData: Array[Byte] = _
 
   @Setup(Level.Iteration)
   def setup(): Unit = {

@@ -1,9 +1,8 @@
 package coop.rchain.models.rholangn.parmanager
 
 import com.google.protobuf.{CodedInputStream, CodedOutputStream}
-import coop.rchain.models.rholangn.parmanager.Constants._
 import coop.rchain.models.rholangn._
-import scodec.bits.ByteVector
+import coop.rchain.models.rholangn.parmanager.Constants._
 
 import java.io.{InputStream, OutputStream}
 
@@ -14,13 +13,12 @@ private[parmanager] object Serialization {
     object Serializer {
       private def write(x: Array[Byte]): Unit = cos.writeByteArrayNoTag(x)
 
-      private def write(x: Byte): Unit       = cos.writeRawByte(x)
-      private def write(x: Boolean): Unit    = cos.writeBoolNoTag(x)
-      private def write(x: Int): Unit        = cos.writeInt32NoTag(x)
-      private def write(x: BigInt): Unit     = write(x.toByteArray)
-      private def write(x: Long): Unit       = cos.writeInt64NoTag(x)
-      private def write(x: String): Unit     = cos.writeStringNoTag(x)
-      private def write(x: ByteVector): Unit = write(x.toArray)
+      private def write(x: Byte): Unit    = cos.writeRawByte(x)
+      private def write(x: Boolean): Unit = cos.writeBoolNoTag(x)
+      private def write(x: Int): Unit     = cos.writeInt32NoTag(x)
+      private def write(x: BigInt): Unit  = write(x.toByteArray)
+      private def write(x: Long): Unit    = cos.writeInt64NoTag(x)
+      private def write(x: String): Unit  = cos.writeStringNoTag(x)
 
       private def write(pOpt: Option[RhoTypeN]): Unit =
         if (pOpt.isDefined) {

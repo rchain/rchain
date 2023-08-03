@@ -1,7 +1,5 @@
 package coop.rchain.models.rholangn
 
-import scodec.bits.ByteVector
-
 final class GBoolN(val v: Boolean) extends GroundN
 object GBoolN { def apply(v: Boolean): GBoolN = new GBoolN(v) }
 
@@ -14,10 +12,9 @@ object GBigIntN { def apply(v: BigInt): GBigIntN = new GBigIntN(v) }
 final class GStringN(val v: String) extends GroundN
 object GStringN { def apply(v: String): GStringN = new GStringN(v) }
 
-final class GByteArrayN(val v: ByteVector) extends GroundN
+final class GByteArrayN(val v: Array[Byte]) extends GroundN
 object GByteArrayN {
-  def apply(v: ByteVector): GByteArrayN      = new GByteArrayN(v)
-  def apply(bytes: Array[Byte]): GByteArrayN = new GByteArrayN(ByteVector(bytes))
+  def apply(bytes: Array[Byte]): GByteArrayN = new GByteArrayN(bytes)
 }
 
 final class GUriN(val v: String) extends GroundN

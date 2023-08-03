@@ -25,7 +25,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
       val p2     = p2Opt.get
       val bytes2 = p2.toBytes
       (p1.rhoHash == p2.rhoHash) &&
-      (bytes1 == bytes2) &&
+      (bytes1 sameElements bytes2) &&
       (p1.connectiveUsed == p2.connectiveUsed) &&
       (p1.evalRequired == p2.evalRequired) &&
       (p1.substituteRequired == p2.substituteRequired)
@@ -78,7 +78,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
 
   it should "test match with same data order" in {
     val case1 = MatchCaseN(FreeVarN(41), BoundVarN(42), 1)
-    val case2 = MatchCaseN(WildcardN(), BoundVarN(42), 0)
+    val case2 = MatchCaseN(WildcardN(), BoundVarN(42))
     val p     = MatchN(NilN(), Seq(case1, case2))
     simpleCheck(p) should be(true)
   }

@@ -2,7 +2,6 @@ package coop.rchain.models.rholangn.parmanager
 
 import com.google.protobuf.CodedOutputStream
 import coop.rchain.models.rholangn._
-import scodec.bits.ByteVector
 
 import scala.annotation.unused
 
@@ -17,7 +16,6 @@ private[parmanager] object SerializedSize {
   private def sSize(v: Long): Int            = CodedOutputStream.computeInt64SizeNoTag(v)
   private def sSize(v: BigInt): Int          = sSize(v.toByteArray)
   private def sSize(v: String): Int          = CodedOutputStream.computeStringSizeNoTag(v)
-  private def sSize(v: ByteVector): Int      = sSize(v.toArray)
 
   private def sSize(p: RhoTypeN): Int              = p.serializedSize
   private def sSize(kv: (RhoTypeN, RhoTypeN)): Int = kv._1.serializedSize + kv._2.serializedSize

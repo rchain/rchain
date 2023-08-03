@@ -2,7 +2,6 @@ package coop.rchain.models.rholangn
 
 import coop.rchain.models.rholangn.parmanager.Manager._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import scodec.bits.ByteVector
 
 /** Base trait for Rholang elements in the Reducer */
 sealed trait RhoTypeN {
@@ -36,14 +35,14 @@ trait AuxParN extends RhoTypeN
 
 /** Rholang element that can be processed in parallel, together with other elements */
 sealed trait ParN extends RhoTypeN {
-  def toBytes: ByteVector      = parToBytes(this)
+  def toBytes: Array[Byte]     = parToBytes(this)
   def compare(that: ParN): Int = comparePars(this, that)
 
   /** Combine two pars for their parallel execution */
   def combine(that: ParN): ParN = combinePars(this, that)
 }
 object ParN {
-  def fromBytes(bytes: ByteVector): ParN = parFromBytes(bytes)
+  def fromBytes(bytes: Array[Byte]): ParN = parFromBytes(bytes)
 
   /**
     * Create a flatten parallel Par (ParProc) from par sequence.
@@ -86,7 +85,7 @@ trait OperationOtherN extends OperationN
 
 /** Rholang unforgeable names (stored in internal environment map) */
 trait UnforgeableN extends ParN {
-  val v: ByteVector
+  val v: Array[Byte]
 }
 
 /**

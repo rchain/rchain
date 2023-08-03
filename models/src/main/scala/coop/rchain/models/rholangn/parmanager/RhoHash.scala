@@ -1,9 +1,8 @@
 package coop.rchain.models.rholangn.parmanager
 
-import coop.rchain.models.rholangn.parmanager.Constants._
 import coop.rchain.models.rholangn._
+import coop.rchain.models.rholangn.parmanager.Constants._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import scodec.bits.ByteVector
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.annotation.unused
@@ -25,7 +24,7 @@ private[parmanager] object RhoHash {
       assert(currentPos + 1 <= arrSize, "Array size exceeded")
       arr(currentPos) = b
     }
-    private def append(bytes: Array[Byte]): Unit = {
+    def append(bytes: Array[Byte]): Unit = {
       val bytesLength = bytes.length
       val currentPos  = pos.getAndAdd(bytesLength)
       assert(currentPos + bytesLength <= arrSize, "Array size exceeded")
@@ -36,9 +35,8 @@ private[parmanager] object RhoHash {
     def append(v: Int): Unit     = append(intToBytes(v))
     def append(v: Long): Unit    = append(longToBytes(v))
 
-    def append(v: BigInt): Unit     = append(v.toByteArray)
-    def append(v: String): Unit     = append(stringToBytes(v))
-    def append(v: ByteVector): Unit = append(v.toArray)
+    def append(v: BigInt): Unit = append(v.toByteArray)
+    def append(v: String): Unit = append(stringToBytes(v))
 
     def append(p: RhoTypeN): Unit = append(p.rhoHash.bytes.toArray)
     private def append(kv: (RhoTypeN, RhoTypeN)): Unit = {
@@ -104,14 +102,12 @@ private[parmanager] object RhoHash {
 
     private def hSizeSeq[T](seq: Seq[T], f: T => Int): Int = seq.map(f).sum
 
-    private def hSize(bytes: Array[Byte]): Int = bytes.length
-
     def hSize(@unused v: Boolean): Int = booleanSize
     def hSize(@unused v: Int): Int     = intSize
     def hSize(@unused v: Long): Int    = longSize
     def hSize(v: BigInt): Int          = hSize(v.toByteArray)
     def hSize(v: String): Int          = stringToBytes(v).length
-    def hSize(v: ByteVector): Int      = hSize(v.toArray)
+    def hSize(bytes: Array[Byte]): Int = bytes.length
 
     def hSize(@unused p: RhoTypeN): Int              = hashSize
     private def hSize(kv: (RhoTypeN, RhoTypeN)): Int = hSize(kv._1) + hSize(kv._2)
