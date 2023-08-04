@@ -69,7 +69,7 @@ class StackSafetySpec extends AnyFlatSpec with Matchers {
       val sData   = par.toBytes
       val decoded = ParN.fromBytes(sData)
       assert(par == decoded)
-      assert(par.rhoHash == anotherPar.rhoHash)
+      assert(par.rhoHash sameElements anotherPar.rhoHash)
       assert(par.serializedSize == anotherPar.serializedSize)
       assert(par == anotherPar)
       par == anotherPar

@@ -2,7 +2,7 @@ package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
 import coop.rchain.models.rholangn.parmanager.Constants._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import org.bouncycastle.crypto.digests.Blake2bDigest
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.annotation.unused
@@ -38,7 +38,7 @@ private[parmanager] object RhoHash {
     def append(v: BigInt): Unit = append(v.toByteArray)
     def append(v: String): Unit = append(stringToBytes(v))
 
-    def append(p: RhoTypeN): Unit = append(p.rhoHash.bytes.toArray)
+    def append(p: RhoTypeN): Unit = append(p.rhoHash)
     private def append(kv: (RhoTypeN, RhoTypeN)): Unit = {
       append(kv._1)
       append(kv._2)
@@ -55,12 +55,12 @@ private[parmanager] object RhoHash {
     def append(pOpt: Option[RhoTypeN]): Unit = pOpt.foreach(append)
 
     // Get the hash of the current array
-    def calcHash: Blake2b256Hash = {
+    def calcHash: Array[Byte] = {
       val curSize = pos.get()
 
       if (curSize <= hashSize) {
         if (curSize == hashSize) {
-          Blake2b256Hash.fromByteArray(arr)
+          arr
         } else {
           val newBytes     = new Array[Byte](hashSize)
           val dataStartPos = hashSize - curSize
@@ -69,11 +69,20 @@ private[parmanager] object RhoHash {
             if (i < dataStartPos) newBytes(i) = 0x00.toByte // fill empty place with 0x00.toByte
             else newBytes(i) = arr(i - dataStartPos)
           }
-          Blake2b256Hash.fromByteArray(newBytes)
+          newBytes
         }
       } else {
-        val hashData = arr.slice(0, curSize)
-        Blake2b256Hash.create(hashData)
+        val hashData   = arr.slice(0, curSize)
+        val hashLength = 32
+
+        def hash(input: Array[Byte]): Array[Byte] = {
+          val digestFn = new Blake2bDigest(256)
+          digestFn.update(input, 0, input.length)
+          val res = new Array[Byte](hashLength)
+          digestFn.doFinal(res, 0)
+          res
+        }
+        hash(hashData)
       }
     }
   }
@@ -124,7 +133,7 @@ private[parmanager] object RhoHash {
 
   import Hashable._
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def rhoHashFn(p: RhoTypeN): Blake2b256Hash = p match {
+  def rhoHashFn(p: RhoTypeN): Array[Byte] = p match {
 
     /** Basic types */
     case _: NilN.type => Hashable(NIL).calcHash

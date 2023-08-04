@@ -24,7 +24,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     val res2: Boolean = if (p2Opt.isDefined) {
       val p2     = p2Opt.get
       val bytes2 = p2.toBytes
-      (p1.rhoHash == p2.rhoHash) &&
+      (p1.rhoHash sameElements p2.rhoHash) &&
       (bytes1 sameElements bytes2) &&
       (p1.connectiveUsed == p2.connectiveUsed) &&
       (p1.evalRequired == p2.evalRequired) &&

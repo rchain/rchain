@@ -1,13 +1,12 @@
 package coop.rchain.models.rholangn
 
 import coop.rchain.models.rholangn.parmanager.Manager._
-import coop.rchain.rspace.hashing.Blake2b256Hash
 
 /** Base trait for Rholang elements in the Reducer */
 sealed trait RhoTypeN {
 
   /** Cryptographic hash code of the element */
-  lazy val rhoHash: Blake2b256Hash = rhoHashFn(this)
+  lazy val rhoHash: Array[Byte] = rhoHashFn(this)
 
   /** Element size after serialization (in bytes) */
   lazy val serializedSize: Int = serializedSizeFn(this)

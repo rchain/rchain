@@ -1,7 +1,6 @@
 package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
-import coop.rchain.rspace.hashing.Blake2b256Hash
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
@@ -19,7 +18,7 @@ object Manager {
   }
 
   def equals(self: RhoTypeN, other: Any): Boolean = other match {
-    case x: RhoTypeN => x.rhoHash == self.rhoHash
+    case x: RhoTypeN => x.rhoHash sameElements self.rhoHash
     case _           => false
   }
 
@@ -64,10 +63,9 @@ object Manager {
   def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
-  def rhoHashFn(p: RhoTypeN): Blake2b256Hash     = RhoHash.rhoHashFn(p)
+  def rhoHashFn(p: RhoTypeN)                     = RhoHash.rhoHashFn(p)
   def serializedSizeFn(p: RhoTypeN): Int         = SerializedSize.serializedSizeFn(p)
   def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
   def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
   def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)
-
 }
