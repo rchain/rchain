@@ -75,6 +75,7 @@ private[parmanager] object RhoHash {
         val hashData   = arr.slice(0, curSize)
         val hashLength = 32
 
+        @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
         def hash(input: Array[Byte]): Array[Byte] = {
           val digestFn = new Blake2bDigest(256)
           digestFn.update(input, 0, input.length)

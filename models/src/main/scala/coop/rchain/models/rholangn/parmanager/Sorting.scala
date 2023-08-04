@@ -4,6 +4,7 @@ import coop.rchain.models.rholangn._
 
 import scala.math.Ordered.orderingToOrdered
 
+@SuppressWarnings(Array("org.wartremover.warts.Return", "org.wartremover.warts.Var"))
 private[parmanager] object Sorting {
   implicit val o = new math.Ordering[Array[Byte]] {
     def compare(a: Array[Byte], b: Array[Byte]): Int =
