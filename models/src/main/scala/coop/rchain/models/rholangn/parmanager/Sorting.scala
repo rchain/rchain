@@ -2,29 +2,12 @@ package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
 
+import java.util
 import scala.math.Ordered.orderingToOrdered
 
-@SuppressWarnings(Array("org.wartremover.warts.Return", "org.wartremover.warts.Var"))
 private[parmanager] object Sorting {
-  implicit val o = new math.Ordering[Array[Byte]] {
-    def compare(a: Array[Byte], b: Array[Byte]): Int =
-      if (a eq null) {
-        if (b eq null) 0
-        else -1
-      } else if (b eq null) 1
-      else {
-        val L = math.min(a.length, b.length)
-        var i = 0
-        while (i < L) {
-          if (a(i) < b(i)) return -1
-          else if (b(i) < a(i)) return 1
-          i += 1
-        }
-        if (L < b.length) -1
-        else if (L < a.length) 1
-        else 0
-      }
-  }
+  implicit val o: Ordering[Array[Byte]] = (a: Array[Byte], b: Array[Byte]) =>
+    util.Arrays.compare(a, b)
 
   def sortPars(ps: Seq[ParN]): Seq[ParN] = ps.sorted(Ordering.by((p: ParN) => p.rhoHash))
   def sortBinds(bs: Seq[ReceiveBindN]): Seq[ReceiveBindN] =
