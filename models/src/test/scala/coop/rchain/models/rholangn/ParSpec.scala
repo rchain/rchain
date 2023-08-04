@@ -15,7 +15,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     // Serialization and hashing testing
     val bytes1        = p1.toBytes
     val recover1      = ParN.fromBytes(bytes1)
-    val res1: Boolean = p1.rhoHash == recover1.rhoHash
+    val res1: Boolean = p1.rhoHash sameElements recover1.rhoHash
 
     // Testing possibility of calculating the rest of the metadata (without checking correctness)
     val _ = p1.connectiveUsed || p1.evalRequired || p1.substituteRequired

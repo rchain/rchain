@@ -13,7 +13,7 @@ class SortingSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
     val bind5    = ReceiveBindN(Seq(FreeVarN(45)), NilN, Some(BoundVarN(42)), 1)
     val unsorted = Seq(bind1, bind2, bind3, bind4, bind5)
     val sorted   = parmanager.Manager.sortBinds(unsorted)
-    val expected = Seq(bind1, bind4, bind5, bind3, bind2)
+    val expected = Seq(bind3, bind2, bind1, bind4, bind5)
     sorted should be(expected)
 
     val bind1WithT    = (bind1, 1)
@@ -23,7 +23,7 @@ class SortingSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
     val bind5WithT    = (bind5, 5)
     val unsortedWithT = Seq(bind1WithT, bind2WithT, bind3WithT, bind4WithT, bind5WithT)
     val sortedWithT   = parmanager.Manager.sortBindsWithT(unsortedWithT)
-    val expectedWithT = Seq(bind1WithT, bind4WithT, bind5WithT, bind3WithT, bind2WithT)
+    val expectedWithT = Seq(bind3WithT, bind2WithT, bind1WithT, bind4WithT, bind5WithT)
     sortedWithT should be(expectedWithT)
   }
 }
