@@ -42,7 +42,7 @@ object CollectionNormalizeMatcher {
         remainder: Option[Var],
         listProc: List[AbsynKeyValuePair]
     ): F[CollectVisitOutputs] = {
-      val init = (Seq[(ParN, ParN)](), knownFree)
+      val init = (Vector[(ParN, ParN)](), knownFree)
       listProc
         .foldM(init) { (acc, e) =>
           e match {

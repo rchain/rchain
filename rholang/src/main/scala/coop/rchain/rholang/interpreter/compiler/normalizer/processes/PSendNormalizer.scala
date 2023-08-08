@@ -22,7 +22,7 @@ object PSendNormalizer {
                           NameVisitInputs(input.boundMapChain, input.freeMap)
                         )
       initAcc = (
-        Seq[ParN](),
+        Vector[ParN](),
         ProcVisitInputs(NilN, input.boundMapChain, nameMatchResult.freeMap)
       )
       dataResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)(

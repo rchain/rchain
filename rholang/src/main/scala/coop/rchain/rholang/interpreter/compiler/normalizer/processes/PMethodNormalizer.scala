@@ -18,7 +18,7 @@ object PMethodNormalizer {
       targetResult <- normalizeMatch[F](p.proc_, input.copy(NilN))
       target       = targetResult.par
       initAcc = (
-        Seq[ParN](),
+        Vector[ParN](),
         ProcVisitInputs(NilN, input.boundMapChain, targetResult.freeMap)
       )
       argResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)((acc, e) => {

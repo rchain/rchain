@@ -27,7 +27,7 @@ object PMatchNormalizer {
       targetResult <- normalizeMatch[F](p.proc_, input.copy(par = NilN))
       cases        <- p.listcase_.asScala.toList.traverse(liftCase)
 
-      initAcc = (Seq[MatchCaseN](), targetResult.freeMap)
+      initAcc = (Vector[MatchCaseN](), targetResult.freeMap)
       casesResult <- cases.foldM(initAcc)(
                       (acc, caseImpl) =>
                         caseImpl match {
