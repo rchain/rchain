@@ -36,7 +36,7 @@ private[parmanager] object SerializedSize {
     sSizeSeq[(String, RhoTypeN)](injections, sSizeInjection)
 
   private def sSize(pOpt: Option[RhoTypeN]): Int =
-    booleanSize + (if (pOpt.isDefined) pOpt.get.serializedSize else 0)
+    booleanSize + pOpt.map(_.serializedSize).getOrElse(0)
 
   private def totalSize(sizes: Int*): Int = tagSize + sizes.sum
 
