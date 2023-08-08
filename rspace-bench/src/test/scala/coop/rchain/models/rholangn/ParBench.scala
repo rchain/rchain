@@ -31,7 +31,7 @@ class ParBench {
 
     val seq = Seq.tabulate(n)(el)
     seq.foldLeft(NilN: ParN) { (acc, p) =>
-      acc.combine(p)
+      ParN.combine(acc, p)
     }
   }
   val nestedSize: Int             = 500
@@ -48,11 +48,11 @@ class ParBench {
   def setup(): Unit = {
     nestedPar = createNestedPar(nestedSize)
     nestedAnotherPar = createNestedPar(nestedSize)
-    nestedParSData = nestedPar.toBytes
+    nestedParSData = ParN.toBytes(nestedPar)
 
     parProc = createParProc(parProcSize)
     parProcAnother = createParProc(parProcSize)
-    parProcSData = parProc.toBytes
+    parProcSData = ParN.toBytes(parProc)
   }
 
   @Benchmark
@@ -66,7 +66,7 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedSerialization(): Unit = {
-    val _ = nestedPar.toBytes
+    val _ = ParN.toBytes(nestedPar)
   }
 
   @Benchmark
@@ -114,7 +114,7 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcSerialization(): Unit = {
-    val _ = parProc.toBytes
+    val _ = ParN.toBytes(parProc)
   }
 
   @Benchmark
@@ -149,7 +149,7 @@ class ParBench {
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcAdd(): Unit = {
     val _ = parProc match {
-      case proc: ParProcN => proc.combine(GIntN(0))
+      case proc: ParProcN => ParN.combine(proc, GIntN(0))
       case _              => assert(false)
     }
   }

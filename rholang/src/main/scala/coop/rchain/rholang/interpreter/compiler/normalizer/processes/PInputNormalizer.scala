@@ -262,7 +262,7 @@ object PInputNormalizer {
           val receive =
             ReceiveN(receiveBinds, procVisitOutputs.par, persistent, peek, bindCount)
           ProcVisitOutputs(
-            input.par.combine(receive),
+            ParN.combine(input.par, receive),
             procVisitOutputs.freeMap
           )
         }

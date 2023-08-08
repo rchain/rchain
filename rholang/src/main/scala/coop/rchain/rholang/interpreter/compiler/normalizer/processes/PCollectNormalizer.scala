@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn.ParN
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PCollect
 import coop.rchain.rholang.interpreter.compiler.normalizer.CollectionNormalizeMatcher
 import coop.rchain.rholang.interpreter.compiler.{
@@ -18,9 +18,8 @@ object PCollectNormalizer {
   ): F[ProcVisitOutputs] =
     CollectionNormalizeMatcher
       .normalizeMatch[F](p.collection_, CollectVisitInputs(input.boundMapChain, input.freeMap))
-      .map {
-        case collectResult =>
-          val expr = collectResult.expr
-          ProcVisitOutputs(input.par.combine(expr), collectResult.freeMap)
+      .map { collectResult =>
+        val expr = collectResult.expr
+        ProcVisitOutputs(ParN.combine(input.par, expr), collectResult.freeMap)
       }
 }

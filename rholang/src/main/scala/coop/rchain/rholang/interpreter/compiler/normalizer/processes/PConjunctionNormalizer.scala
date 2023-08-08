@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
-import coop.rchain.models.rholangn.Bindings._
 import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PConjunction
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
@@ -28,7 +27,7 @@ object PConjunctionNormalizer {
       resultConnective = ConnAndN(Seq(lp, rp))
 
     } yield ProcVisitOutputs(
-      input.par.combine(resultConnective),
+      ParN.combine(input.par, resultConnective),
       rightResult.freeMap
         .addConnective(
           resultConnective,

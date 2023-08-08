@@ -23,7 +23,7 @@ object PNegationNormalizer {
     ).map { bodyResult =>
       val conn = ConnNotN(bodyResult.par)
       ProcVisitOutputs(
-        input.par.combine(conn),
+        ParN.combine(input.par, conn),
         input.freeMap.addConnective(
           conn,
           SourcePosition(p.line_num, p.col_num)

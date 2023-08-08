@@ -29,7 +29,7 @@ object ProcNormalizeMatcher {
         .map(
           subResult =>
             ProcVisitOutputs(
-              input.par.combine(constructor(subResult.par)),
+              ParN.combine(input.par, constructor(subResult.par)),
               subResult.freeMap
             )
         )
@@ -47,7 +47,7 @@ object ProcNormalizeMatcher {
                         input.copy(par = NilN, freeMap = leftResult.freeMap)
                       )
       } yield ProcVisitOutputs(
-        input.par.combine(constructor(leftResult.par, rightResult.par)),
+        ParN.combine(input.par, constructor(leftResult.par, rightResult.par)),
         rightResult.freeMap
       )
 
@@ -143,11 +143,11 @@ object ProcNormalizeMatcher {
       case p: PIf =>
         PIfNormalizer
           .normalize(p.proc_1, p.proc_2, new PNil(), input.copy(par = NilN))
-          .map(n => n.copy(par = n.par.combine(input.par)))
+          .map(n => n.copy(par = ParN.combine(n.par, input.par)))
       case p: PIfElse =>
         PIfNormalizer
           .normalize(p.proc_1, p.proc_2, p.proc_3, input.copy(par = NilN))
-          .map(n => n.copy(par = n.par.combine(input.par)))
+          .map(n => n.copy(par = ParN.combine(n.par, input.par)))
 
       case _ =>
         Sync[F].raiseError(

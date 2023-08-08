@@ -66,7 +66,7 @@ class StackSafetySpec extends AnyFlatSpec with Matchers {
     val par                    = hugePar(maxRecursionDepth)
     val anotherPar             = hugePar(maxRecursionDepth)
     noException shouldBe thrownBy {
-      val sData   = par.toBytes
+      val sData   = ParN.toBytes(par)
       val decoded = ParN.fromBytes(sData)
       assert(par == decoded)
       assert(par.rhoHash sameElements anotherPar.rhoHash)

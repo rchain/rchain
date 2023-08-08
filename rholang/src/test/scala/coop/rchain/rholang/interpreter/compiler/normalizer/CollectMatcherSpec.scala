@@ -104,7 +104,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
 
     result.par should be(
       ESetN(
-        Seq(EPlusN(BoundVarN(1), FreeVarN(1)), GIntN(7), GIntN(8).combine(FreeVarN(2))),
+        Seq(EPlusN(BoundVarN(1), FreeVarN(1)), GIntN(7), ParN.combine(GIntN(8), FreeVarN(2))),
         Some(FreeVarN(0))
       )
     )
