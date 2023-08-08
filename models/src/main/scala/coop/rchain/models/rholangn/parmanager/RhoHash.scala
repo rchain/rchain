@@ -19,16 +19,17 @@ private[parmanager] object RhoHash {
     arr(0) = tag // Fill the first element of arr with the tag
 
     /** Appending methods */
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     private def append(b: Byte): Unit = {
       val currentPos = pos.getAndIncrement()
-      assert(currentPos + 1 <= arrSize, "Array size exceeded")
-      arr(currentPos) = b
+      if (currentPos + 1 > arrSize) throw new Exception("Array size exceeded")
+      else arr(currentPos) = b
     }
     def append(bytes: Array[Byte]): Unit = {
       val bytesLength = bytes.length
       val currentPos  = pos.getAndAdd(bytesLength)
-      assert(currentPos + bytesLength <= arrSize, "Array size exceeded")
-      Array.copy(bytes, 0, arr, currentPos, bytesLength)
+      if (currentPos + bytesLength > arrSize) throw new Exception("Array size exceeded")
+      else Array.copy(bytes, 0, arr, currentPos, bytesLength)
     }
 
     def append(v: Boolean): Unit = append(booleanToByte(v))

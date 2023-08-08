@@ -26,10 +26,10 @@ object EListN {
   */
 final class ETupleN private (val ps: Seq[ParN]) extends CollectionN
 object ETupleN {
-  def apply(ps: Seq[ParN]): ETupleN = {
-    assert(ps.nonEmpty, "Cannot create ETuple with an empty par sequence")
-    new ETupleN(ps)
-  }
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def apply(ps: Seq[ParN]): ETupleN =
+    if (ps.isEmpty) throw new Exception("Cannot create ETuple with an empty par sequence")
+    else new ETupleN(ps)
   def apply(p: ParN): ETupleN = apply(Seq(p))
 }
 
