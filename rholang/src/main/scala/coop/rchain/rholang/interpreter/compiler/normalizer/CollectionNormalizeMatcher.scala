@@ -69,7 +69,7 @@ object CollectionNormalizeMatcher {
         .map { folded =>
           val resultKnownFree = folded._2
           CollectVisitOutputs(
-            EMapN(folded._1.reverse, fromProtoVarOpt(remainder)),
+            EMapN(folded._1.reverse, remainder.map(fromProtoVarOpt)),
             resultKnownFree
           )
         }
@@ -110,7 +110,7 @@ object CollectionNormalizeMatcher {
             case (optionalRemainder, knownFree) =>
               foldMatchMap(
                 knownFree,
-                toProtoVarOpt(optionalRemainder),
+                optionalRemainder.map(toProtoVarOpt),
                 cm.listkeyvaluepair_.asScala.toList
               )
           }

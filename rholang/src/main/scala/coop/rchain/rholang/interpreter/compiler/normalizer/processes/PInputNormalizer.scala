@@ -215,7 +215,7 @@ object PInputNormalizer {
         def fromReceiveBind(x: ReceiveBind): ReceiveBindN = {
           val patterns  = fromProto(x.patterns)
           val source    = fromProto(x.source)
-          val remainder = fromProtoVarOpt(x.remainder)
+          val remainder = x.remainder.map(fromProtoVarOpt)
           val freeCount = x.freeCount
           ReceiveBindN(patterns, source, remainder, freeCount)
         }
@@ -227,7 +227,7 @@ object PInputNormalizer {
           receiveBindsAndFreeMaps <- ReceiveBindsSortMatcher.preSortBinds[F, VarSort](
                                       processedPatterns.zip(sources).map {
                                         case ((a, b, c), e) =>
-                                          (toProto(a), toProtoVarOpt(b), toProto(e), c)
+                                          (toProto(a), b.map(toProtoVarOpt), toProto(e), c)
                                       }
                                     )
           unz                                 = receiveBindsAndFreeMaps.unzip

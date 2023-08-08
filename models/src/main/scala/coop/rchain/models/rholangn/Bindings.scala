@@ -5,7 +5,7 @@ import coop.rchain.models._
 object Bindings {
   def toProto(p: ParN): Par                             = BindingsToProto.toProto(p)
   def toProto(ps: Seq[ParN]): Seq[Par]                  = ps.map(toProto)
-  def toProtoVarOpt(pOpt: Option[VarN]): Option[Var]    = pOpt.map(BindingsToProto.toVar)
+  def toProtoVarOpt(p: VarN): Var                       = BindingsToProto.toVar(p)
   def toProtoExpr(e: ExprN): Expr                       = BindingsToProto.toExpr(e)
   def toProtoVar(v: VarN): Var                          = BindingsToProto.toVar(v)
   def toProtoUnforgeable(u: UnforgeableN): GUnforgeable = BindingsToProto.toUnforgeable(u)
@@ -17,7 +17,7 @@ object Bindings {
 
   def fromProto(p: Par): ParN                             = BindingsFromProto.fromProto(p)
   def fromProto(ps: Seq[Par]): Seq[ParN]                  = ps.map(fromProto)
-  def fromProtoVarOpt(pOpt: Option[Var]): Option[VarN]    = pOpt.map(BindingsFromProto.fromVar)
+  def fromProtoVarOpt(p: Var): VarN                       = BindingsFromProto.fromVar(p)
   def fromProtoExpr(e: Expr): ExprN                       = BindingsFromProto.fromExpr(e)
   def fromProtoVar(v: Var): VarN                          = BindingsFromProto.fromVar(v)
   def fromProtoUnforgeable(u: GUnforgeable): UnforgeableN = BindingsFromProto.fromUnforgeable(u)
