@@ -13,9 +13,9 @@ private[parmanager] object Sorting {
   def sortBinds(bs: Seq[ReceiveBindN]): Seq[ReceiveBindN] =
     bs.sorted(Ordering.by((b: ReceiveBindN) => b.rhoHash))
   def sortBindsWithT[T](bs: Seq[(ReceiveBindN, T)]): Seq[(ReceiveBindN, T)] =
-    bs.sortBy(_._1.rhoHash)
+    bs.sortBy { case (receiveBind, _) => receiveBind.rhoHash }
   def sortUris(uris: Seq[String]): Seq[String] = uris.sorted
   def sortInjections(injections: Map[String, ParN]): Seq[(String, ParN)] =
-    injections.toSeq.sortBy(_._1)
+    injections.toSeq.sortBy { case (str, _) => str }
   def comparePars(p1: ParN, p2: ParN): Int = p1.rhoHash compare p2.rhoHash
 }

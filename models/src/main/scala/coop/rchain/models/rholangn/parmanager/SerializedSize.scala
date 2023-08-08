@@ -19,8 +19,9 @@ private[parmanager] object SerializedSize {
 
   private def sSize(p: RhoTypeN): Int              = p.serializedSize
   private def sSize(kv: (RhoTypeN, RhoTypeN)): Int = kv._1.serializedSize + kv._2.serializedSize
-  private def sSizeInjection(injection: (String, RhoTypeN)): Int =
-    sSize(injection._1) + injection._2.serializedSize
+  private def sSizeInjection(injection: (String, RhoTypeN)): Int = injection match {
+    case (str, p) => sSize(str) + p.serializedSize
+  }
 
   private def sSizeSeq[T](seq: Seq[T], f: T => Int): Int =
     sSize(seq.size) + seq.map(f).sum
