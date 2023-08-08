@@ -129,9 +129,9 @@ private[rholangn] object BindingsFromProto {
   private def fromProto(ps: Seq[Par]): Seq[ParN]           = ps.map(fromProto)
   private def fromProto(varOpt: Option[Var]): Option[VarN] = varOpt.map(fromVar)
   private def fromProtoKVPairs(ps: Seq[(Par, Par)]): Seq[(ParN, ParN)] =
-    ps.map(kv => (fromProto(kv._1), fromProto(kv._2)))
+    ps.map { case (k, v) => (fromProto(k), fromProto(v)) }
   private def fromProtoInjections(ps: Seq[(String, Par)]): Seq[(String, ParN)] =
-    ps.map(kv => (kv._1, fromProto(kv._2)))
+    ps.map { case (str, p) => (str, fromProto(p)) }
 
   /** Basic types */
   def fromSend(x: Send): SendN = {
