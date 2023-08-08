@@ -55,12 +55,9 @@ final class ESetN(private val ps: TreeSet[ParN], val remainder: Option[VarN]) ex
   def contains(elem: ParN): Boolean = ps.contains(elem)
 }
 object ESetN {
-  private object ParOrdering extends Ordering[ParN] {
-    def compare(p1: ParN, p2: ParN): Int = p1.compare(p2)
-  }
-  def apply(): ESetN = new ESetN(TreeSet.empty(ParOrdering), None)
+  def apply(): ESetN = new ESetN(TreeSet.empty(ParN.ordering), None)
   def apply(ps: Seq[ParN], r: Option[VarN] = None): ESetN =
-    new ESetN(TreeSet.from(ps)(ParOrdering), r)
+    new ESetN(TreeSet.from(ps)(ParN.ordering), r)
   def apply(p: ParN): ESetN                                            = ESetN(Seq(p), None)
   def empty: ESetN                                                     = ESetN()
   private def apply(ps: TreeSet[ParN], remainder: Option[VarN]): ESetN = new ESetN(ps, remainder)
@@ -94,16 +91,12 @@ final class EMapN(private val ps: TreeMap[ParN, ParN], val remainder: Option[Var
 }
 
 object EMapN {
-  private object ParOrdering extends Ordering[ParN] {
-    def compare(p1: ParN, p2: ParN): Int = p1.compare(p2)
-  }
-
   def apply(ps: Seq[(ParN, ParN)], r: Option[VarN]): EMapN =
-    new EMapN(TreeMap.from(ps)(ParOrdering), r)
+    new EMapN(TreeMap.from(ps)(ParN.ordering), r)
   def apply(ps: Seq[(ParN, ParN)]): EMapN = apply(ps, None)
 
   def apply(ps: Map[ParN, ParN], r: Option[VarN]): EMapN =
-    new EMapN(TreeMap.from(ps)(ParOrdering), r)
+    new EMapN(TreeMap.from(ps)(ParN.ordering), r)
   def apply(ps: Map[ParN, ParN]): EMapN = apply(ps, None)
 
   def apply(): EMapN = apply(Seq())

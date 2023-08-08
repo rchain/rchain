@@ -48,6 +48,8 @@ object ParN {
     * See [[flattedPProc]] for more information.
     */
   def makeParProc(ps: Seq[ParN]): ParN = flattedPProc(ps)
+
+  val ordering: Ordering[ParN] = (p1: ParN, p2: ParN) => p1.compare(p2)
 }
 
 /** Basic rholang operations that can be executed in parallel*/
