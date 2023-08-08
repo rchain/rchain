@@ -5,7 +5,8 @@ import scala.collection.immutable.{TreeMap, TreeSet}
 /**
   * Ordered collection of 0 or more processes.
   * @param ps The sequence of any Rholang processes
-  * @param remainder Remainder of a list elements. This var used in matching (pattern of a head/tail pair)
+  * @param remainder gives support to use ... in the list construction and deconstruction e.g. [1, 2, 3 ... rest].
+  *                  It's defined as optional variable.
   */
 final class EListN(val ps: Seq[ParN], val remainder: Option[VarN]) extends CollectionN {
   def :+(elem: ParN): EListN       = EListN(ps :+ elem, remainder)
@@ -36,7 +37,8 @@ object ETupleN {
 /**
   * A Rholang set is an unordered collection of 0 or more processes.
   * @param ps The sequence of any Rholang processes
-  * @param remainder Remainder of a list elements. This var used in matching (pattern of a head/tail pair)
+  * @param remainder gives support to use ... in the set construction and deconstruction e.g. Set(1, 2, 3 ... rest).
+  *                  It's defined as optional variable.
   */
 final class ESetN(private val ps: TreeSet[ParN], val remainder: Option[VarN]) extends CollectionN {
   def sortedPs: Seq[ParN] = ps.toSeq
@@ -67,7 +69,8 @@ object ESetN {
 /**
   * A Rholang map is an unordered collection of 0 or more key-value pairs; both keys and values are processes.
   * @param ps The sequence of any Rholang processes (that form key-value pairs)
-  * @param remainder Remainder of a list elements. This var used in matching (pattern of a head/tail pair)
+  * @param remainder gives support to use ... in the set construction and deconstruction e.g. {"a":1, "b":2 ... rest}.
+  *                  It's defined as optional variable.
   */
 final class EMapN(private val ps: TreeMap[ParN, ParN], val remainder: Option[VarN])
     extends CollectionN {
