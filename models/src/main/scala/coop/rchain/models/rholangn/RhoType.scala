@@ -34,8 +34,6 @@ trait AuxParN extends RhoTypeN
 
 /** Rholang element that can be processed in parallel, together with other elements */
 sealed trait ParN extends RhoTypeN {
-  def toBytes: Array[Byte]     = parToBytes(this)
-  def compare(that: ParN): Int = comparePars(this, that)
 
   /** Combine two pars for their parallel execution */
   def combine(that: ParN): ParN = combinePars(this, that)
@@ -48,8 +46,9 @@ object ParN {
     * See [[flattedPProc]] for more information.
     */
   def makeParProc(ps: Seq[ParN]): ParN = flattedPProc(ps)
-
-  val ordering: Ordering[ParN] = (p1: ParN, p2: ParN) => p1.compare(p2)
+  def toBytes(p: ParN): Array[Byte]    = parToBytes(p)
+  def compare(p1: ParN, p2: ParN): Int = comparePars(p1, p2)
+  val ordering: Ordering[ParN]         = (p1: ParN, p2: ParN) => compare(p1, p2)
 }
 
 /** Basic rholang operations that can be executed in parallel*/
