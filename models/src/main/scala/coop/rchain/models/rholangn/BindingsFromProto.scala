@@ -12,11 +12,12 @@ import scala.annotation.unused
 private[rholangn] object BindingsFromProto {
 
   def fromProto(p: Par): ParN = {
-    val terms: Seq[GeneratedMessage] =
+    val ps =
       Seq(p.sends, p.receives, p.news, p.exprs, p.matches, p.unforgeables, p.bundles, p.connectives)
         .filter(_.nonEmpty)
         .flatten
-    val ps: Seq[ParN] = terms.map(fromProtoMessage)
+        .map(fromProtoMessage)
+        .toList
     ps.size match {
       case 0 => NilN
       case 1 => ps.head
