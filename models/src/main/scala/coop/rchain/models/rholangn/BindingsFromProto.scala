@@ -17,11 +17,10 @@ private[rholangn] object BindingsFromProto {
         .filter(_.nonEmpty)
         .flatten
         .map(fromProtoMessage)
-        .toList
-    ps.size match {
-      case 0 => NilN
-      case 1 => ps.head
-      case _ => ParProcN(ps)
+    ps match {
+      case Nil      => NilN
+      case p :: Nil => p
+      case _        => ParProcN(ps)
     }
   }
 

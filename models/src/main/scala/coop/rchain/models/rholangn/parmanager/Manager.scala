@@ -38,10 +38,10 @@ object Manager {
       case p            => Seq(p)
     }
 
-  private def makePProc(ps: Seq[ParN]): ParN = ps.length match {
-    case 0 => NilN
-    case 1 => ps.head
-    case _ => ParProcN(ps)
+  private def makePProc(ps: Seq[ParN]): ParN = ps match {
+    case Nil      => NilN
+    case p :: Nil => p
+    case _        => ParProcN(ps)
   }
 
   /**
@@ -63,7 +63,7 @@ object Manager {
   def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
-  def rhoHashFn(p: RhoTypeN)                     = RhoHash.rhoHashFn(p)
+  def rhoHashFn(p: RhoTypeN): Array[Byte]        = RhoHash.rhoHashFn(p)
   def serializedSizeFn(p: RhoTypeN): Int         = SerializedSize.serializedSizeFn(p)
   def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
   def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
