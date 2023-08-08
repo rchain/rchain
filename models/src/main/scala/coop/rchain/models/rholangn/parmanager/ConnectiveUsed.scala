@@ -7,8 +7,6 @@ private[parmanager] object ConnectiveUsed {
   private def cUsed(kv: (RhoTypeN, RhoTypeN)): Boolean                  = cUsed(kv._1) || cUsed(kv._2)
   private def cUsed(ps: Seq[RhoTypeN]): Boolean                         = ps.exists(cUsed)
   private def cUsedKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Boolean = kVPairs.exists(cUsed)
-  private def cUsed(pOpt: Option[RhoTypeN]): Boolean =
-    if (pOpt.isDefined) cUsed(pOpt.get) else false
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def connectiveUsedFn(p: RhoTypeN): Boolean = p match {
@@ -25,10 +23,10 @@ private[parmanager] object ConnectiveUsed {
     case _: GroundN => false
 
     /** Collections */
-    case eList: EListN   => cUsed(eList.ps) || cUsed(eList.remainder)
+    case eList: EListN   => cUsed(eList.ps) || eList.remainder.exists(cUsed)
     case eTuple: ETupleN => cUsed(eTuple.ps)
-    case eSet: ESetN     => cUsed(eSet.sortedPs) || cUsed(eSet.remainder)
-    case eMap: EMapN     => cUsedKVPairs(eMap.sortedPs) || cUsed(eMap.remainder)
+    case eSet: ESetN     => cUsed(eSet.sortedPs) || eSet.remainder.exists(cUsed)
+    case eMap: EMapN     => cUsedKVPairs(eMap.sortedPs) || eMap.remainder.exists(cUsed)
 
     /** Vars */
     case _: BoundVarN      => false
