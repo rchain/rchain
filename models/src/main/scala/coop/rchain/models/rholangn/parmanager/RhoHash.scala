@@ -25,6 +25,7 @@ private[parmanager] object RhoHash {
       if (currentPos + 1 > arrSize) throw new Exception("Array size exceeded")
       else arr(currentPos) = b
     }
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def append(bytes: Array[Byte]): Unit = {
       val bytesLength = bytes.length
       val currentPos  = pos.getAndAdd(bytesLength)
