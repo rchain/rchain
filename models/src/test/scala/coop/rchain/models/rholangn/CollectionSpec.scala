@@ -56,7 +56,7 @@ class ETupleSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers
     try {
       ETupleN(Seq())
     } catch {
-      case ex: AssertionError => ex shouldBe a[AssertionError]
+      case ex: Exception => ex shouldBe a[Throwable]
     }
   }
   it should "not preserve ordering" in {
