@@ -80,7 +80,7 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedSerializedSize(): Unit = {
-    val _ = nestedPar.serializedSize
+    val _ = nestedPar.serializedSize.value
   }
 
   @Benchmark
@@ -127,7 +127,7 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcSerializedSize(): Unit = {
-    val _ = parProc.serializedSize
+    val _ = parProc.serializedSize.value
   }
 
   @Benchmark

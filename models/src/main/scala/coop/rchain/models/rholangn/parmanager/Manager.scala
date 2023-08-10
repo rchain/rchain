@@ -1,5 +1,6 @@
 package coop.rchain.models.rholangn.parmanager
 
+import cats.Eval
 import coop.rchain.models.rholangn._
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
@@ -7,8 +8,8 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 object Manager {
 
   def parToBytes(p: ParN): Array[Byte] = {
-    val baos = new ByteArrayOutputStream(p.serializedSize)
-    Serialization.serialize(p, baos)
+    val baos = new ByteArrayOutputStream(SerializedSize.sSize(p).value)
+    Serialization.serialize(p, baos).value
     baos.toByteArray
   }
 
@@ -64,7 +65,7 @@ object Manager {
 
   /** MetaData */
   def rhoHashFn(p: RhoTypeN): Array[Byte]        = RhoHash.rhoHashFn(p)
-  def serializedSizeFn(p: RhoTypeN): Int         = SerializedSize.serializedSizeFn(p)
+  def serializedSizeFn(p: RhoTypeN): Eval[Int]   = SerializedSize.sSize(p)
   def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
   def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
   def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)
