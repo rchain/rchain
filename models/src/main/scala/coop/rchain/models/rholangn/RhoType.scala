@@ -10,7 +10,7 @@ sealed trait RhoTypeN {
   lazy val rhoHash: Array[Byte] = rhoHashFn(this)
 
   /** Element size after serialization (in bytes) */
-  lazy val serializedSize: Eval[Int] = serializedSizeFn(this)
+  val serializedSize: Eval[Int] = serializedSizeFn(this)
 
   /** True if the element or at least one of the nested elements non-concrete.
     * Such element cannot be viewed as if it were a term.*/

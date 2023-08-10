@@ -14,6 +14,7 @@ private[parmanager] object SerializedSize {
   // Terminal expressions
   private def sSize(bytes: Array[Byte]): Eval[Int] =
     Eval.later(CodedOutputStream.computeByteArraySizeNoTag(bytes))
+
   private def sSize(@unused v: Boolean): Eval[Int] = Eval.now(booleanSize)
   private def sSize(v: Int): Eval[Int]             = Eval.later(CodedOutputStream.computeInt32SizeNoTag(v))
   private def sSize(v: Long): Eval[Int]            = Eval.later(CodedOutputStream.computeInt64SizeNoTag(v))
@@ -24,12 +25,12 @@ private[parmanager] object SerializedSize {
   private def sSizeSeq[T](seq: Seq[T], f: T => Eval[Int]): Eval[Int] =
     (sSize(seq.size), Eval.defer(seq.traverse(f).map(_.sum))).mapN(_ + _)
 
+  private def sSize(ps: Seq[RhoTypeN]): Eval[Int] = sSizeSeq[RhoTypeN](ps, _.serializedSize)
+
   private def sSize(kv: (RhoTypeN, RhoTypeN)): Eval[Int] =
     kv.bimap(sSize, sSize).mapN(_ + _)
   private def sSizeInjection(injection: (String, RhoTypeN)): Eval[Int] =
     injection.bimap(sSize, sSize).mapN(_ + _)
-
-  private def sSize(ps: Seq[RhoTypeN]): Eval[Int] = sSizeSeq[RhoTypeN](ps, sSize)
 
   private def sSizeStrings(strings: Seq[String]): Eval[Int] = sSizeSeq[String](strings, sSize)
 
@@ -50,8 +51,7 @@ private[parmanager] object SerializedSize {
     /** Basic types */
     case _: NilN.type => Eval.now(totalSize())
 
-    case pProc: ParProcN =>
-      sSize(pProc.ps).map(totalSize(_))
+    case pProc: ParProcN => sSize(pProc.ps).map(totalSize(_))
 
     case send: SendN => {
       (sSize(send.chan), sSize(send.data), sSize(send.persistent)).mapN(totalSize(_, _, _))
