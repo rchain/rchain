@@ -9,6 +9,8 @@ import coop.rchain.models.rholangn.parmanager.Constants._
 import java.io.{InputStream, OutputStream}
 
 private[parmanager] object Serialization {
+
+  // TODO: Properly handle errors with return type (remove throw)
   def serialize(par: ParN, output: OutputStream): Eval[Unit] = {
     val cos = CodedOutputStream.newInstance(output)
 
@@ -213,7 +215,7 @@ private[parmanager] object Serialization {
               write(bundle.writeFlag) *>
               write(bundle.readFlag)
 
-          case _ => throw new Exception("Not defined type")
+          case unknownType => throw new Exception(s"Unknown type `$unknownType`")
         }
       }
     }
@@ -221,6 +223,7 @@ private[parmanager] object Serialization {
     Serializer.write(par) <* Eval.always(cos.flush())
   }
 
+  // TODO: Properly handle errors with return type (remove throw)
   def deserialize(input: InputStream): Eval[ParN] = {
     val cis = CodedInputStream.newInstance(input)
 
@@ -241,7 +244,7 @@ private[parmanager] object Serialization {
     def readVar: Eval[VarN] =
       readPar.map {
         case v: VarN => v
-        case _       => throw new Exception("Value must be Var")
+        case p       => throw new Exception(s"Value must be Var, found `$p`")
       }
 
     def readVarOpt: Eval[Option[VarN]] =
@@ -255,34 +258,27 @@ private[parmanager] object Serialization {
     def readKVPairs: Eval[Seq[(ParN, ParN)]]      = readSeq(readKVPair)
     def readInjections: Eval[Seq[(String, ParN)]] = readSeq(readInjection)
 
-    /** Auxiliary types deserialization */
-    def readReceiveBinds: Eval[Seq[ReceiveBindN]] = {
-      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-      def matchReceiveBind(tag: Byte): Eval[ReceiveBindN] = tag match {
-        case RECEIVE_BIND =>
-          for {
-            patterns  <- readPars
-            source    <- readPar
-            remainder <- readVarOpt
-            freeCount <- readInt
-          } yield ReceiveBindN(patterns, source, remainder, freeCount)
-        case _ => throw new Exception("Invalid tag for ReceiveBindN deserialization")
-      }
-      readSeq(readTag >>= matchReceiveBind)
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    def readReceiveBind(tag: Byte): Eval[ReceiveBindN] = tag match {
+      case RECEIVE_BIND =>
+        for {
+          patterns  <- readPars
+          source    <- readPar
+          remainder <- readVarOpt
+          freeCount <- readInt
+        } yield ReceiveBindN(patterns, source, remainder, freeCount)
+      case _ => throw new Exception(s"Invalid tag `$tag` for ReceiveBindN deserialization")
     }
 
-    def readMatchCases: Eval[Seq[MatchCaseN]] = {
-      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-      def matchMCase(tag: Byte): Eval[MatchCaseN] = tag match {
-        case MATCH_CASE =>
-          for {
-            pattern   <- readPar
-            source    <- readPar
-            freeCount <- readInt
-          } yield MatchCaseN(pattern, source, freeCount)
-        case _ => throw new Exception("Invalid tag for matchMCase deserialization")
-      }
-      readSeq(readTag >>= matchMCase)
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    def readMatchMCase(tag: Byte): Eval[MatchCaseN] = tag match {
+      case MATCH_CASE =>
+        for {
+          pattern   <- readPar
+          source    <- readPar
+          freeCount <- readInt
+        } yield MatchCaseN(pattern, source, freeCount)
+      case _ => throw new Exception(s"Invalid tag `$tag` for matchMCase deserialization")
     }
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -301,7 +297,7 @@ private[parmanager] object Serialization {
 
       case RECEIVE =>
         for {
-          binds      <- readReceiveBinds
+          binds      <- readSeq(readTag >>= readReceiveBind)
           body       <- readPar
           persistent <- readBool
           peek       <- readBool
@@ -311,7 +307,7 @@ private[parmanager] object Serialization {
       case MATCH =>
         for {
           target <- readPar
-          cases  <- readMatchCases
+          cases  <- readSeq(readTag >>= readMatchMCase)
         } yield MatchN(target, cases)
 
       case NEW =>
