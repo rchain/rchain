@@ -270,8 +270,7 @@ private[parmanager] object Serialization {
           } yield ReceiveBindN(patterns, source, remainder, freeCount)
         case _ => throw new Exception("Invalid tag for ReceiveBindN deserialization")
       }
-      def readReceiveBind = readTagAndMatch(matchReceiveBind)
-      readSeq(readReceiveBind)
+      readSeq(readTag >>= matchReceiveBind)
     }
 
     def readMatchCases: Eval[Seq[MatchCaseN]] = {
@@ -285,8 +284,7 @@ private[parmanager] object Serialization {
           } yield MatchCaseN(pattern, source, freeCount)
         case _ => throw new Exception("Invalid tag for matchMCase deserialization")
       }
-      def readMatchCase = readTagAndMatch(matchMCase)
-      readSeq(readMatchCase)
+      readSeq(readTag >>= matchMCase)
     }
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -486,8 +484,7 @@ private[parmanager] object Serialization {
       case _ => throw new Exception(s"Invalid tag `$tag` for ParN deserialization")
     }
 
-    def readTagAndMatch[T](f: Byte => Eval[T]): Eval[T] = readTag.flatMap(f)
-    def readPar: Eval[ParN]                             = readTagAndMatch(matchPar)
+    def readPar: Eval[ParN] = readTag >>= matchPar
 
     readPar
   }
