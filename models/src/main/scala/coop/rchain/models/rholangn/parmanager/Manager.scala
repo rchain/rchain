@@ -4,19 +4,24 @@ import cats.Eval
 import coop.rchain.models.rholangn._
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import scala.util.Using
 
 object Manager {
 
-  def parToBytes(p: ParN): Array[Byte] = {
-    val baos = new ByteArrayOutputStream(SerializedSize.sSize(p).value)
-    Serialization.serialize(p, baos).value
-    baos.toByteArray
-  }
+  // TODO: Properly handle errors
+  @SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
+  def parToBytes(p: ParN): Array[Byte] =
+    Using(new ByteArrayOutputStream(SerializedSize.sSize(p).value)) { baos =>
+      Serialization.serialize(p, baos).value
+      baos.toByteArray
+    }.get
 
-  def parFromBytes(bv: Array[Byte]): ParN = {
-    val bais = new ByteArrayInputStream(bv)
-    Serialization.deserialize(bais)
-  }
+  // TODO: Properly handle errors
+  @SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
+  def parFromBytes(bv: Array[Byte]): ParN =
+    Using(new ByteArrayInputStream(bv)) { bais =>
+      Serialization.deserialize(bais).value
+    }.get
 
   def equals(self: RhoTypeN, other: Any): Boolean = other match {
     case x: RhoTypeN => x.rhoHash sameElements self.rhoHash

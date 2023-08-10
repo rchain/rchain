@@ -14,12 +14,12 @@ private[parmanager] object Serialization {
 
     object Serializer {
       // Terminal expressions
-      private def write(x: Array[Byte]): Eval[Unit] = Eval.later(cos.writeByteArrayNoTag(x))
-      private def write(x: Byte): Eval[Unit]        = Eval.later(cos.writeRawByte(x))
-      private def write(x: Boolean): Eval[Unit]     = Eval.later(cos.writeBoolNoTag(x))
-      private def write(x: Int): Eval[Unit]         = Eval.later(cos.writeInt32NoTag(x))
-      private def write(x: Long): Eval[Unit]        = Eval.later(cos.writeInt64NoTag(x))
-      private def write(x: String): Eval[Unit]      = Eval.later(cos.writeStringNoTag(x))
+      private def write(x: Array[Byte]): Eval[Unit] = Eval.now(cos.writeByteArrayNoTag(x))
+      private def write(x: Byte): Eval[Unit]        = Eval.now(cos.writeRawByte(x))
+      private def write(x: Boolean): Eval[Unit]     = Eval.now(cos.writeBoolNoTag(x))
+      private def write(x: Int): Eval[Unit]         = Eval.now(cos.writeInt32NoTag(x))
+      private def write(x: Long): Eval[Unit]        = Eval.now(cos.writeInt64NoTag(x))
+      private def write(x: String): Eval[Unit]      = Eval.now(cos.writeStringNoTag(x))
       private def write(x: BigInt): Eval[Unit]      = write(x.toByteArray)
 
       // Recursive traversal of children elements, defer to prevent stackoverflow (force heap objects)
@@ -221,326 +221,274 @@ private[parmanager] object Serialization {
     Serializer.write(par) <* Eval.now(cos.flush())
   }
 
-  def deserialize(input: InputStream): ParN = {
+  def deserialize(input: InputStream): Eval[ParN] = {
     val cis = CodedInputStream.newInstance(input)
 
-    def readBytes(): Array[Byte] = cis.readByteArray()
+    // Terminal expressions
+    def readBytes: Eval[Array[Byte]] = Eval.now(cis.readByteArray())
+    def readTag: Eval[Byte]          = Eval.now(cis.readRawByte)
+    def readBool: Eval[Boolean]      = Eval.now(cis.readBool)
+    def readInt: Eval[Int]           = Eval.now(cis.readInt32)
+    def readLong: Eval[Long]         = Eval.now(cis.readInt64)
+    def readString: Eval[String]     = Eval.now(cis.readString)
+    def readBigInt: Eval[BigInt]     = readBytes.map(BigInt(_))
 
-    def readTag(): Byte      = cis.readRawByte()
-    def readBool(): Boolean  = cis.readBool()
-    def readInt(): Int       = cis.readInt32()
-    def readBigInt(): BigInt = BigInt(readBytes())
-    def readLong(): Long     = cis.readInt64()
-    def readString(): String = cis.readString()
+    // Read a sequence, flatMap prevents stackoverflow (force heap objects)
+    def readSeq[T](f: () => Eval[T]): Eval[Seq[T]] =
+      readLength.flatMap(count => Seq.range(1, count).map(_ => f()).sequence)
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-    def readVar(): VarN = readPar() match {
-      case v: VarN => v
-      case _       => throw new Exception("Value must be Var")
-    }
+    def readVar: Eval[VarN] =
+      readPar.map {
+        case v: VarN => v
+        case _       => throw new Exception("Value must be Var")
+      }
 
-    def readVarOpt(): Option[VarN]      = if (readBool()) Some(readVar()) else None
-    def readKVPair(): (ParN, ParN)      = (readPar(), readPar())
-    def readInjection(): (String, ParN) = (readString(), readPar())
+    def readVarOpt: Eval[Option[VarN]] =
+      readBool.flatMap(x => if (x) readVar.map(Some(_)) else Eval.now(none))
 
-    def readLength(): Int = cis.readUInt32()
-    def readSeq[T](f: () => T): Seq[T] = {
-      val count = readLength()
-      (1 to count).map(_ => f())
-    }
+    def readKVPair: Eval[(ParN, ParN)]      = (readPar, readPar).mapN((_, _))
+    def readInjection: Eval[(String, ParN)] = (readString, readPar).mapN((_, _))
 
-    def readStrings(): Seq[String]            = readSeq(readString _)
-    def readPars(): Seq[ParN]                 = readSeq(readPar _)
-    def readKVPairs(): Seq[(ParN, ParN)]      = readSeq(readKVPair _)
-    def readInjections(): Seq[(String, ParN)] = readSeq(readInjection _)
+    def readLength: Eval[Int] = Eval.later(cis.readUInt32())
+
+    def readStrings: Eval[Seq[String]]            = readSeq(() => readString)
+    def readPars: Eval[Seq[ParN]]                 = readSeq(() => readPar)
+    def readKVPairs: Eval[Seq[(ParN, ParN)]]      = readSeq(() => readKVPair)
+    def readInjections: Eval[Seq[(String, ParN)]] = readSeq(() => readInjection)
 
     /** Auxiliary types deserialization */
-    def readReceiveBinds(): Seq[ReceiveBindN] = {
+    def readReceiveBinds: Eval[Seq[ReceiveBindN]] = {
       @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-      def matchReceiveBind(tag: Byte): ReceiveBindN = tag match {
+      def matchReceiveBind(tag: Byte): Eval[ReceiveBindN] = tag match {
         case RECEIVE_BIND =>
-          val patterns  = readPars()
-          val source    = readPar()
-          val remainder = readVarOpt()
-          val freeCount = readInt()
-          ReceiveBindN(patterns, source, remainder, freeCount)
+          for {
+            patterns  <- readPars
+            source    <- readPar
+            remainder <- readVarOpt
+            freeCount <- readInt
+          } yield ReceiveBindN(patterns, source, remainder, freeCount)
         case _ => throw new Exception("Invalid tag for ReceiveBindN deserialization")
       }
-      def readReceiveBind() = readTagAndMatch(matchReceiveBind)
-      readSeq(readReceiveBind _)
+      def readReceiveBind = readTagAndMatch(matchReceiveBind)
+      readSeq(() => readReceiveBind)
     }
 
-    def readMatchCases(): Seq[MatchCaseN] = {
+    def readMatchCases: Eval[Seq[MatchCaseN]] = {
       @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-      def matchMCase(tag: Byte): MatchCaseN = tag match {
+      def matchMCase(tag: Byte): Eval[MatchCaseN] = tag match {
         case MATCH_CASE =>
-          val pattern   = readPar()
-          val source    = readPar()
-          val freeCount = readInt()
-          MatchCaseN(pattern, source, freeCount)
+          for {
+            pattern   <- readPar
+            source    <- readPar
+            freeCount <- readInt
+          } yield MatchCaseN(pattern, source, freeCount)
         case _ => throw new Exception("Invalid tag for matchMCase deserialization")
       }
-      def readMatchCase() = readTagAndMatch(matchMCase)
-      readSeq(readMatchCase _)
+      def readMatchCase = readTagAndMatch(matchMCase)
+      readSeq(() => readMatchCase)
     }
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-    def matchPar(tag: Byte): ParN = tag match {
+    def matchPar(tag: Byte): Eval[ParN] = tag match {
 
       /** Basic types */
       case PARPROC =>
-        val ps = readPars()
-        ParProcN(ps)
+        readPars.map(ParProcN(_))
 
       case SEND =>
-        val chan       = readPar()
-        val dataSeq    = readPars()
-        val persistent = readBool()
-        SendN(chan, dataSeq, persistent)
+        for {
+          chan       <- readPar
+          dataSeq    <- readPars
+          persistent <- readBool
+        } yield SendN(chan, dataSeq, persistent)
 
       case RECEIVE =>
-        val binds      = readReceiveBinds()
-        val body       = readPar()
-        val persistent = readBool()
-        val peek       = readBool()
-        val bindCount  = readInt()
-        ReceiveN(binds, body, persistent, peek, bindCount)
+        for {
+          binds      <- readReceiveBinds
+          body       <- readPar
+          persistent <- readBool
+          peek       <- readBool
+          bindCount  <- readInt
+        } yield ReceiveN(binds, body, persistent, peek, bindCount)
 
       case MATCH =>
-        val target = readPar()
-        val cases  = readMatchCases()
-        MatchN(target, cases)
+        for {
+          target <- readPar
+          cases  <- readMatchCases
+        } yield MatchN(target, cases)
 
       case NEW =>
-        val bindCount  = readInt()
-        val p          = readPar()
-        val uri        = readStrings()
-        val injections = readInjections()
-        NewN(bindCount, p, uri, injections)
+        for {
+          bindCount  <- readInt
+          p          <- readPar
+          uri        <- readStrings
+          injections <- readInjections
+        } yield NewN(bindCount, p, uri, injections)
 
       /** Ground types */
-      case NIL => NilN
+      case NIL => Eval.now(NilN)
 
       case GBOOL =>
-        val v = readBool()
-        GBoolN(v)
+        readBool.map(GBoolN(_))
 
       case GINT =>
-        val v = readLong()
-        GIntN(v)
+        readLong.map(GIntN(_))
 
       case GBIG_INT =>
-        val v = readBigInt()
-        GBigIntN(v)
+        readBigInt.map(GBigIntN(_))
 
       case GSTRING =>
-        val v = readString()
-        GStringN(v)
+        readString.map(GStringN(_))
 
       case GBYTE_ARRAY =>
-        val v = readBytes()
-        GByteArrayN(v)
+        readBytes.map(GByteArrayN(_))
 
       case GURI =>
-        val v = readString()
-        GUriN(v)
+        readString.map(GUriN(_))
 
       /** Collections */
       case ELIST =>
-        val ps        = readPars()
-        val remainder = readVarOpt()
-        EListN(ps, remainder)
+        for {
+          ps        <- readPars
+          remainder <- readVarOpt
+        } yield EListN(ps, remainder)
 
       case ETUPLE =>
-        val ps = readPars()
-        ETupleN(ps)
+        readPars.map(ETupleN(_))
 
       case ESET =>
-        val ps        = readPars()
-        val remainder = readVarOpt()
-        ESetN(ps, remainder)
+        for {
+          ps        <- readPars
+          remainder <- readVarOpt
+        } yield ESetN(ps, remainder)
 
       case EMAP =>
-        val ps        = readKVPairs()
-        val remainder = readVarOpt()
-        EMapN(ps, remainder)
+        for {
+          ps        <- readKVPairs
+          remainder <- readVarOpt
+        } yield EMapN(ps, remainder)
 
       /** Vars */
       case BOUND_VAR =>
-        val v = readInt()
-        BoundVarN(v)
+        readInt.map(BoundVarN(_))
 
       case FREE_VAR =>
-        val v = readInt()
-        FreeVarN(v)
+        readInt.map(FreeVarN(_))
 
-      case WILDCARD => WildcardN
+      case WILDCARD => Eval.now(WildcardN)
 
       /** Unforgeable names */
       case UPRIVATE =>
-        val v = readBytes()
-        UPrivateN(v)
+        readBytes.map(UPrivateN(_))
 
       case UDEPLOY_ID =>
-        val v = readBytes()
-        UDeployIdN(v)
+        readBytes.map(UDeployIdN(_))
 
       case UDEPLOYER_ID =>
-        val v = readBytes()
-        UDeployerIdN(v)
+        readBytes.map(UDeployerIdN(_))
 
+      // TODO: Temporary solution for easier conversion from old types - change type in the future
       case SYS_AUTH_TOKEN =>
-        val _ = readBytes() // TODO: Temporary solution for easier conversion from old types - change type in the future
-        USysAuthTokenN()
+        readBytes.as(USysAuthTokenN())
 
       /** Operations */
       case ENEG =>
-        val p = readPar()
-        ENegN(p)
+        readPar.map(ENegN(_))
 
       case ENOT =>
-        val p = readPar()
-        ENotN(p)
+        readPar.map(ENotN(_))
 
       case EPLUS =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EPlusN(p1, p2)
+        (readPar, readPar).mapN(EPlusN(_, _))
 
       case EMINUS =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EMinusN(p1, p2)
+        (readPar, readPar).mapN(EMinusN(_, _))
 
       case EMULT =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EMultN(p1, p2)
+        (readPar, readPar).mapN(EMultN(_, _))
 
       case EDIV =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EDivN(p1, p2)
+        (readPar, readPar).mapN(EDivN(_, _))
 
       case EMOD =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EModN(p1, p2)
+        (readPar, readPar).mapN(EModN(_, _))
 
       case ELT =>
-        val p1 = readPar()
-        val p2 = readPar()
-        ELtN(p1, p2)
+        (readPar, readPar).mapN(ELtN(_, _))
 
       case ELTE =>
-        val p1 = readPar()
-        val p2 = readPar()
-        ELteN(p1, p2)
+        (readPar, readPar).mapN(ELteN(_, _))
 
       case EGT =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EGtN(p1, p2)
+        (readPar, readPar).mapN(EGtN(_, _))
 
       case EGTE =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EGteN(p1, p2)
+        (readPar, readPar).mapN(EGteN(_, _))
 
       case EEQ =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EEqN(p1, p2)
+        (readPar, readPar).mapN(EEqN(_, _))
 
       case ENEQ =>
-        val p1 = readPar()
-        val p2 = readPar()
-        ENeqN(p1, p2)
+        (readPar, readPar).mapN(ENeqN(_, _))
 
       case EAND =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EAndN(p1, p2)
+        (readPar, readPar).mapN(EAndN(_, _))
 
       case ESHORTAND =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EShortAndN(p1, p2)
+        (readPar, readPar).mapN(EShortAndN(_, _))
 
       case EOR =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EOrN(p1, p2)
+        (readPar, readPar).mapN(EOrN(_, _))
 
       case ESHORTOR =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EShortOrN(p1, p2)
+        (readPar, readPar).mapN(EShortOrN(_, _))
 
       case EPLUSPLUS =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EPlusPlusN(p1, p2)
+        (readPar, readPar).mapN(EPlusPlusN(_, _))
 
       case EMINUSMINUS =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EMinusMinusN(p1, p2)
+        (readPar, readPar).mapN(EMinusMinusN(_, _))
 
       case EPERCENT =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EPercentPercentN(p1, p2)
+        (readPar, readPar).mapN(EPercentPercentN(_, _))
 
       case EMETHOD =>
-        val methodName = readString()
-        val target     = readPar()
-        val arguments  = readPars()
-        EMethodN(methodName, target, arguments)
+        (readString, readPar, readPars).mapN(EMethodN(_, _, _))
 
       case EMATCHES =>
-        val target  = readPar()
-        val pattern = readPar()
-        EMatchesN(target, pattern)
+        (readPar, readPar).mapN(EMatchesN(_, _))
 
       /** Connective */
-      case CONNECTIVE_BOOL      => ConnBoolN
-      case CONNECTIVE_INT       => ConnIntN
-      case CONNECTIVE_BIG_INT   => ConnBigIntN
-      case CONNECTIVE_STRING    => ConnStringN
-      case CONNECTIVE_URI       => ConnUriN
-      case CONNECTIVE_BYTEARRAY => ConnByteArrayN
+      case CONNECTIVE_BOOL      => Eval.now(ConnBoolN)
+      case CONNECTIVE_INT       => Eval.now(ConnIntN)
+      case CONNECTIVE_BIG_INT   => Eval.now(ConnBigIntN)
+      case CONNECTIVE_STRING    => Eval.now(ConnStringN)
+      case CONNECTIVE_URI       => Eval.now(ConnUriN)
+      case CONNECTIVE_BYTEARRAY => Eval.now(ConnByteArrayN)
 
       case CONNECTIVE_NOT =>
-        val p = readPar()
-        ConnNotN(p)
+        readPar.map(ConnNotN(_))
 
       case CONNECTIVE_AND =>
-        val ps = readPars()
-        ConnAndN(ps)
+        readPars.map(ConnAndN(_))
 
       case CONNECTIVE_OR =>
-        val ps = readPars()
-        ConnOrN(ps)
+        readPars.map(ConnOrN(_))
 
       case CONNECTIVE_VARREF =>
-        val index = readInt()
-        val depth = readInt()
-        ConnVarRefN(index, depth)
+        (readInt, readInt).mapN(ConnVarRefN(_, _))
 
       /** Other types */
       case BUNDLE =>
-        val body      = readPar()
-        val writeFlag = readBool()
-        val readFlag  = readBool()
-        BundleN(body, writeFlag, readFlag)
+        (readPar, readBool, readBool).mapN(BundleN(_, _, _))
 
       case _ => throw new Exception("Invalid tag for ParN deserialization")
     }
 
-    def readTagAndMatch[T](f: Byte => T): T = f(readTag())
-    def readPar(): ParN                     = readTagAndMatch(matchPar)
+    def readTagAndMatch[T](f: Byte => Eval[T]): Eval[T] = readTag.flatMap(f)
+    def readPar: Eval[ParN]                             = readTagAndMatch(matchPar)
 
-    readPar()
+    readPar
   }
 }
