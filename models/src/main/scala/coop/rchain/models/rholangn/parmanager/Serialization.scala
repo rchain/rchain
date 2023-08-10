@@ -233,9 +233,9 @@ private[parmanager] object Serialization {
     def readString: Eval[String]     = Eval.always(cis.readString())
     def readBigInt: Eval[BigInt]     = readBytes.map(BigInt(_))
 
-    // Read a sequence, flatMap prevents stackoverflow (force heap objects)
+    // Reads a sequence, flatMap prevents stackoverflow (force heap objects)
     def readSeq[T](v: Eval[T]): Eval[Seq[T]] =
-      readLength.flatMap(Seq.range(0, _).as(v).sequence)
+      readInt.flatMap(Seq.range(0, _).as(v).sequence)
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def readVar: Eval[VarN] =
@@ -249,8 +249,6 @@ private[parmanager] object Serialization {
 
     def readKVPair: Eval[(ParN, ParN)]      = (readPar, readPar).mapN((_, _))
     def readInjection: Eval[(String, ParN)] = (readString, readPar).mapN((_, _))
-
-    def readLength: Eval[Int] = Eval.always(cis.readUInt32())
 
     def readStrings: Eval[Seq[String]]            = readSeq(readString)
     def readPars: Eval[Seq[ParN]]                 = readSeq(readPar)
