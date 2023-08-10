@@ -14,12 +14,12 @@ private[parmanager] object Serialization {
 
     object Serializer {
       // Terminal expressions
-      private def write(x: Array[Byte]): Eval[Unit] = Eval.now(cos.writeByteArrayNoTag(x))
-      private def write(x: Byte): Eval[Unit]        = Eval.now(cos.writeRawByte(x))
-      private def write(x: Boolean): Eval[Unit]     = Eval.now(cos.writeBoolNoTag(x))
-      private def write(x: Int): Eval[Unit]         = Eval.now(cos.writeInt32NoTag(x))
-      private def write(x: Long): Eval[Unit]        = Eval.now(cos.writeInt64NoTag(x))
-      private def write(x: String): Eval[Unit]      = Eval.now(cos.writeStringNoTag(x))
+      private def write(x: Array[Byte]): Eval[Unit] = Eval.always(cos.writeByteArrayNoTag(x))
+      private def write(x: Byte): Eval[Unit]        = Eval.always(cos.writeRawByte(x))
+      private def write(x: Boolean): Eval[Unit]     = Eval.always(cos.writeBoolNoTag(x))
+      private def write(x: Int): Eval[Unit]         = Eval.always(cos.writeInt32NoTag(x))
+      private def write(x: Long): Eval[Unit]        = Eval.always(cos.writeInt64NoTag(x))
+      private def write(x: String): Eval[Unit]      = Eval.always(cos.writeStringNoTag(x))
       private def write(x: BigInt): Eval[Unit]      = write(x.toByteArray)
 
       // Recursive traversal of children elements, defer to prevent stackoverflow (force heap objects)
@@ -218,24 +218,24 @@ private[parmanager] object Serialization {
       }
     }
 
-    Serializer.write(par) <* Eval.now(cos.flush())
+    Serializer.write(par) <* Eval.always(cos.flush())
   }
 
   def deserialize(input: InputStream): Eval[ParN] = {
     val cis = CodedInputStream.newInstance(input)
 
     // Terminal expressions
-    def readBytes: Eval[Array[Byte]] = Eval.now(cis.readByteArray())
-    def readTag: Eval[Byte]          = Eval.now(cis.readRawByte)
-    def readBool: Eval[Boolean]      = Eval.now(cis.readBool)
-    def readInt: Eval[Int]           = Eval.now(cis.readInt32)
-    def readLong: Eval[Long]         = Eval.now(cis.readInt64)
-    def readString: Eval[String]     = Eval.now(cis.readString)
+    def readBytes: Eval[Array[Byte]] = Eval.always(cis.readByteArray())
+    def readTag: Eval[Byte]          = Eval.always(cis.readRawByte())
+    def readBool: Eval[Boolean]      = Eval.always(cis.readBool())
+    def readInt: Eval[Int]           = Eval.always(cis.readInt32())
+    def readLong: Eval[Long]         = Eval.always(cis.readInt64())
+    def readString: Eval[String]     = Eval.always(cis.readString())
     def readBigInt: Eval[BigInt]     = readBytes.map(BigInt(_))
 
     // Read a sequence, flatMap prevents stackoverflow (force heap objects)
-    def readSeq[T](f: () => Eval[T]): Eval[Seq[T]] =
-      readLength.flatMap(count => Seq.range(1, count).map(_ => f()).sequence)
+    def readSeq[T](v: Eval[T]): Eval[Seq[T]] =
+      readLength.flatMap(Seq.range(0, _).as(v).sequence)
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def readVar: Eval[VarN] =
@@ -250,12 +250,12 @@ private[parmanager] object Serialization {
     def readKVPair: Eval[(ParN, ParN)]      = (readPar, readPar).mapN((_, _))
     def readInjection: Eval[(String, ParN)] = (readString, readPar).mapN((_, _))
 
-    def readLength: Eval[Int] = Eval.later(cis.readUInt32())
+    def readLength: Eval[Int] = Eval.always(cis.readUInt32())
 
-    def readStrings: Eval[Seq[String]]            = readSeq(() => readString)
-    def readPars: Eval[Seq[ParN]]                 = readSeq(() => readPar)
-    def readKVPairs: Eval[Seq[(ParN, ParN)]]      = readSeq(() => readKVPair)
-    def readInjections: Eval[Seq[(String, ParN)]] = readSeq(() => readInjection)
+    def readStrings: Eval[Seq[String]]            = readSeq(readString)
+    def readPars: Eval[Seq[ParN]]                 = readSeq(readPar)
+    def readKVPairs: Eval[Seq[(ParN, ParN)]]      = readSeq(readKVPair)
+    def readInjections: Eval[Seq[(String, ParN)]] = readSeq(readInjection)
 
     /** Auxiliary types deserialization */
     def readReceiveBinds: Eval[Seq[ReceiveBindN]] = {
@@ -271,7 +271,7 @@ private[parmanager] object Serialization {
         case _ => throw new Exception("Invalid tag for ReceiveBindN deserialization")
       }
       def readReceiveBind = readTagAndMatch(matchReceiveBind)
-      readSeq(() => readReceiveBind)
+      readSeq(readReceiveBind)
     }
 
     def readMatchCases: Eval[Seq[MatchCaseN]] = {
@@ -286,7 +286,7 @@ private[parmanager] object Serialization {
         case _ => throw new Exception("Invalid tag for matchMCase deserialization")
       }
       def readMatchCase = readTagAndMatch(matchMCase)
-      readSeq(() => readMatchCase)
+      readSeq(readMatchCase)
     }
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -483,7 +483,7 @@ private[parmanager] object Serialization {
       case BUNDLE =>
         (readPar, readBool, readBool).mapN(BundleN(_, _, _))
 
-      case _ => throw new Exception("Invalid tag for ParN deserialization")
+      case _ => throw new Exception(s"Invalid tag `$tag` for ParN deserialization")
     }
 
     def readTagAndMatch[T](f: Byte => Eval[T]): Eval[T] = readTag.flatMap(f)
