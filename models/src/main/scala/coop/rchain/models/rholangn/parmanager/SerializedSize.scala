@@ -11,22 +11,23 @@ private[parmanager] object SerializedSize {
 
   import Constants._
 
+  // Terminal expressions
   private def sSize(bytes: Array[Byte]): Eval[Int] =
     Eval.later(CodedOutputStream.computeByteArraySizeNoTag(bytes))
-
   private def sSize(@unused v: Boolean): Eval[Int] = Eval.now(booleanSize)
   private def sSize(v: Int): Eval[Int]             = Eval.later(CodedOutputStream.computeInt32SizeNoTag(v))
   private def sSize(v: Long): Eval[Int]            = Eval.later(CodedOutputStream.computeInt64SizeNoTag(v))
-  private def sSize(v: BigInt): Eval[Int]          = sSize(v.toByteArray)
   private def sSize(v: String): Eval[Int]          = Eval.later(CodedOutputStream.computeStringSizeNoTag(v))
+  private def sSize(v: BigInt): Eval[Int]          = sSize(v.toByteArray)
+
+  // Recursive traversal of children elements, defer to prevent stackoverflow (force heap objects)
+  private def sSizeSeq[T](seq: Seq[T], f: T => Eval[Int]): Eval[Int] =
+    (sSize(seq.size), Eval.defer(seq.traverse(f).map(_.sum))).mapN(_ + _)
 
   private def sSize(kv: (RhoTypeN, RhoTypeN)): Eval[Int] =
     kv.bimap(sSize, sSize).mapN(_ + _)
   private def sSizeInjection(injection: (String, RhoTypeN)): Eval[Int] =
     injection.bimap(sSize, sSize).mapN(_ + _)
-
-  private def sSizeSeq[T](seq: Seq[T], f: T => Eval[Int]): Eval[Int] =
-    (sSize(seq.size), seq.traverse(f).map(_.sum)).mapN(_ + _)
 
   private def sSize(ps: Seq[RhoTypeN]): Eval[Int] = sSizeSeq[RhoTypeN](ps, sSize)
 
@@ -85,7 +86,7 @@ private[parmanager] object SerializedSize {
     case gUri: GUriN             => sSize(gUri.v).map(totalSize(_))
 
     /** Collections */
-    case list: EListN => (Eval.defer(sSize(list.ps)), sSize(list.remainder)).mapN(totalSize(_, _))
+    case list: EListN => (sSize(list.ps), sSize(list.remainder)).mapN(totalSize(_, _))
 
     case eTuple: ETupleN => sSize(eTuple.ps).map(totalSize(_))
     case eSet: ESetN     => (sSize(eSet.sortedPs), sSize(eSet.remainder)).mapN(totalSize(_, _))

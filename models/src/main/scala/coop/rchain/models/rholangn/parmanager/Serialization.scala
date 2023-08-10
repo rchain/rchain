@@ -13,14 +13,18 @@ private[parmanager] object Serialization {
     val cos = CodedOutputStream.newInstance(output)
 
     object Serializer {
+      // Terminal expressions
       private def write(x: Array[Byte]): Eval[Unit] = Eval.later(cos.writeByteArrayNoTag(x))
+      private def write(x: Byte): Eval[Unit]        = Eval.later(cos.writeRawByte(x))
+      private def write(x: Boolean): Eval[Unit]     = Eval.later(cos.writeBoolNoTag(x))
+      private def write(x: Int): Eval[Unit]         = Eval.later(cos.writeInt32NoTag(x))
+      private def write(x: Long): Eval[Unit]        = Eval.later(cos.writeInt64NoTag(x))
+      private def write(x: String): Eval[Unit]      = Eval.later(cos.writeStringNoTag(x))
+      private def write(x: BigInt): Eval[Unit]      = write(x.toByteArray)
 
-      private def write(x: Byte): Eval[Unit]    = Eval.later(cos.writeRawByte(x))
-      private def write(x: Boolean): Eval[Unit] = Eval.later(cos.writeBoolNoTag(x))
-      private def write(x: Int): Eval[Unit]     = Eval.later(cos.writeInt32NoTag(x))
-      private def write(x: BigInt): Eval[Unit]  = Eval.defer(write(x.toByteArray))
-      private def write(x: Long): Eval[Unit]    = Eval.later(cos.writeInt64NoTag(x))
-      private def write(x: String): Eval[Unit]  = Eval.later(cos.writeStringNoTag(x))
+      // Recursive traversal of children elements, defer to prevent stackoverflow (force heap objects)
+      private def writeSeq[T](seq: Seq[T], f: T => Eval[Unit]): Eval[Unit] =
+        write(seq.size) *> Eval.defer(seq.traverse_(f))
 
       private def write(pOpt: Option[RhoTypeN]): Eval[Unit] =
         pOpt.map(write(true) *> write(_)).getOrElse(write(false))
@@ -31,21 +35,12 @@ private[parmanager] object Serialization {
       private def writeInjection(injection: (String, ParN)): Eval[Unit] =
         write(injection._1) *> write(injection._2)
 
-      private def writeSeq[T](seq: Seq[T], f: T => Eval[Unit]): Eval[Unit] =
-        write(seq.size) <* seq.traverse(f)
-
       private def write(ps: Seq[RhoTypeN]): Eval[Unit]           = writeSeq[RhoTypeN](ps, write)
       private def writeStrings(strings: Seq[String]): Eval[Unit] = writeSeq[String](strings, write)
       private def writeKVPairs(kVPairs: Seq[(ParN, ParN)]): Eval[Unit] =
         writeSeq[(ParN, ParN)](kVPairs, write)
       private def writeInjections(injections: Seq[(String, ParN)]): Eval[Unit] =
-        writeSeq[(String, ParN)](injections, writeInjection)
-
-      private def write1ParOp(tag: Byte, p: ParN): Eval[Unit] =
-        write(tag) *> write(p)
-
-      private def write2ParOp(tag: Byte, p1: ParN, p2: ParN): Eval[Unit] =
-        write(tag) *> write(p1) *> write(p2)
+        writeSeq(injections, writeInjection)
 
       @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       def write(p: RhoTypeN): Eval[Unit] = {
@@ -55,77 +50,77 @@ private[parmanager] object Serialization {
           case _: NilN.type => write(NIL)
 
           case pProc: ParProcN =>
-            write(PARPROC) *> Eval.defer(write(pProc.sortedPs))
+            write(PARPROC) *> write(pProc.sortedPs)
 
           case send: SendN =>
             write(SEND) *>
-              Eval.defer(write(send.chan)) *>
-              Eval.defer(write(send.data)) *>
-              Eval.defer(write(send.persistent))
+              write(send.chan) *>
+              write(send.data) *>
+              write(send.persistent)
 
           case receive: ReceiveN =>
             write(RECEIVE) *>
-              Eval.defer(write(receive.sortedBinds)) *>
-              Eval.defer(write(receive.body)) *>
-              Eval.defer(write(receive.persistent)) *>
-              Eval.defer(write(receive.peek)) *>
-              Eval.defer(write(receive.bindCount))
+              write(receive.sortedBinds) *>
+              write(receive.body) *>
+              write(receive.persistent) *>
+              write(receive.peek) *>
+              write(receive.bindCount)
 
           case m: MatchN =>
             write(MATCH) *>
-              Eval.defer(write(m.target)) *>
-              Eval.defer(write(m.cases))
+              write(m.target) *>
+              write(m.cases)
 
           case n: NewN =>
             write(NEW) *>
               write(n.bindCount) *>
-              Eval.defer(write(n.p)) *>
-              Eval.defer(writeStrings(n.sortedUri)) *>
-              Eval.defer(writeInjections(n.sortedInjections))
+              write(n.p) *>
+              writeStrings(n.sortedUri) *>
+              writeInjections(n.sortedInjections)
 
           /** Ground types */
           case gBool: GBoolN =>
-            write(GBOOL) *> Eval.defer(write(gBool.v))
+            write(GBOOL) *> write(gBool.v)
 
           case gInt: GIntN =>
-            write(GINT) *> Eval.defer(write(gInt.v))
+            write(GINT) *> write(gInt.v)
 
           case gBigInt: GBigIntN =>
-            write(GBIG_INT) *> Eval.defer(write(gBigInt.v))
+            write(GBIG_INT) *> write(gBigInt.v)
 
           case gString: GStringN =>
-            write(GSTRING) *> Eval.defer(write(gString.v))
+            write(GSTRING) *> write(gString.v)
 
           case gByteArray: GByteArrayN =>
-            write(GBYTE_ARRAY) *> Eval.defer(write(gByteArray.v))
+            write(GBYTE_ARRAY) *> write(gByteArray.v)
 
           case gUri: GUriN =>
-            write(GURI) *> Eval.defer(write(gUri.v))
+            write(GURI) *> write(gUri.v)
 
           /** Collections */
           case eList: EListN =>
-            write(ELIST) *> Eval.defer(write(eList.ps)) *> Eval.defer(write(eList.remainder))
+            write(ELIST) *> write(eList.ps) *> write(eList.remainder)
 
           case eTuple: ETupleN =>
-            write(ETUPLE) *> Eval.defer(write(eTuple.ps))
+            write(ETUPLE) *> write(eTuple.ps)
 
           case eSet: ESetN =>
-            write(ESET) *> Eval.defer(write(eSet.sortedPs)) *> Eval.defer(write(eSet.remainder))
+            write(ESET) *> write(eSet.sortedPs) *> write(eSet.remainder)
 
           case eMap: EMapN =>
             write(EMAP) *>
-              Eval.defer(writeKVPairs(eMap.sortedPs)) *>
-              Eval.defer(write(eMap.remainder))
+              writeKVPairs(eMap.sortedPs) *>
+              write(eMap.remainder)
 
           /** Vars */
           case bVar: BoundVarN =>
-            write(BOUND_VAR) *> Eval.defer(write(bVar.idx))
+            write(BOUND_VAR) *> write(bVar.idx)
 
           case fVar: FreeVarN =>
-            write(FREE_VAR) *> Eval.defer(write(fVar.idx))
+            write(FREE_VAR) *> write(fVar.idx)
 
           case _: WildcardN.type =>
-            Eval.defer(write(WILDCARD))
+            write(WILDCARD)
 
           /** Operations */
           case op: Operation1ParN =>
@@ -133,7 +128,7 @@ private[parmanager] object Serialization {
               case _: ENegN => ENEG
               case _: ENotN => ENOT
             }
-            Eval.defer(write1ParOp(tag, op.p))
+            write(tag) *> write(op.p)
 
           case op: Operation2ParN =>
             val tag = op match {
@@ -156,16 +151,16 @@ private[parmanager] object Serialization {
               case _: EMinusMinusN     => EMINUSMINUS
               case _: EPercentPercentN => EPERCENT
             }
-            Eval.defer(write2ParOp(tag, op.p1, op.p2))
+            write(tag) *> write(op.p1) *> write(op.p2)
 
           case eMethod: EMethodN =>
             write(EMETHOD) *>
               write(eMethod.methodName) *>
-              Eval.defer(write(eMethod.target)) *>
-              Eval.defer(write(eMethod.arguments))
+              write(eMethod.target) *>
+              write(eMethod.arguments)
 
           case eMatches: EMatchesN =>
-            Eval.defer(write2ParOp(EMATCHES, eMatches.target, eMatches.pattern))
+            write(EMATCHES) *> write(eMatches.target) *> write(eMatches.pattern)
 
           /** Unforgeable names */
           case unf: UnforgeableN =>
@@ -186,13 +181,13 @@ private[parmanager] object Serialization {
           case _: ConnByteArrayN.type => write(CONNECTIVE_BYTEARRAY)
 
           case connNot: ConnNotN =>
-            write(CONNECTIVE_NOT) *> Eval.defer(write(connNot.p))
+            write(CONNECTIVE_NOT) *> write(connNot.p)
 
           case connAnd: ConnAndN =>
-            write(CONNECTIVE_AND) *> Eval.defer(write(connAnd.ps))
+            write(CONNECTIVE_AND) *> write(connAnd.ps)
 
           case connOr: ConnOrN =>
-            write(CONNECTIVE_OR) *> Eval.defer(write(connOr.ps))
+            write(CONNECTIVE_OR) *> write(connOr.ps)
 
           case connVarRef: ConnVarRefN =>
             write(CONNECTIVE_VARREF) *> write(connVarRef.index) *> write(connVarRef.depth)
@@ -200,23 +195,23 @@ private[parmanager] object Serialization {
           /** Auxiliary types */
           case bind: ReceiveBindN =>
             write(RECEIVE_BIND) *>
-              Eval.defer(write(bind.patterns)) *>
-              Eval.defer(write(bind.source)) *>
-              Eval.defer(write(bind.remainder)) *>
-              Eval.defer(write(bind.freeCount))
+              write(bind.patterns) *>
+              write(bind.source) *>
+              write(bind.remainder) *>
+              write(bind.freeCount)
 
           case mCase: MatchCaseN =>
             write(MATCH_CASE) *>
-              Eval.defer(write(mCase.pattern)) *>
-              Eval.defer(write(mCase.source)) *>
-              Eval.defer(write(mCase.freeCount))
+              write(mCase.pattern) *>
+              write(mCase.source) *>
+              write(mCase.freeCount)
 
           /** Other types */
           case bundle: BundleN =>
             write(BUNDLE) *>
-              Eval.defer(write(bundle.body)) *>
-              Eval.defer(write(bundle.writeFlag)) *>
-              Eval.defer(write(bundle.readFlag))
+              write(bundle.body) *>
+              write(bundle.writeFlag) *>
+              write(bundle.readFlag)
 
           case _ => throw new Exception("Not defined type")
         }
