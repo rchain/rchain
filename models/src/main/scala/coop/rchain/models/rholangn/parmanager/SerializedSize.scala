@@ -136,6 +136,6 @@ private[parmanager] object SerializedSize {
       val readFlagSize  = sSize(bundle.readFlag)
       totalSize(bodySize, writeFlagSize, readFlagSize)
 
-    case _ => throw new Exception("Not defined type")
+    case x => throw new Exception(s"Undefined type $x")
   }
 }

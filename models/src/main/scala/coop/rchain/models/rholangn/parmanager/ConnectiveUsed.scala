@@ -54,6 +54,6 @@ private[parmanager] object ConnectiveUsed {
     /** Other types */
     case _: BundleN => false // There are no situations when New gets into the matcher
 
-    case _ => throw new Exception("Not defined type")
+    case x => throw new Exception(s"Undefined type $x")
   }
 }

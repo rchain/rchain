@@ -380,6 +380,6 @@ private[parmanager] object RhoHash {
       hs.append(bundle.readFlag)
       hs.calcHash
 
-    case _ => throw new Exception("Not defined type")
+    case x => throw new Exception(s"Undefined type $x")
   }
 }

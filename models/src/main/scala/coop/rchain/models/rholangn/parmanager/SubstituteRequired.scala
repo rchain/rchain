@@ -57,6 +57,6 @@ private[parmanager] object SubstituteRequired {
     /** Other types */
     case bundle: BundleN => sReq(bundle.body)
 
-    case _ => throw new Exception("Not defined type")
+    case x => throw new Exception(s"Undefined type $x")
   }
 }
