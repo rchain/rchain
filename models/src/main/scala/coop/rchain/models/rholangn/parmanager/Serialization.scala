@@ -26,7 +26,7 @@ private[parmanager] object Serialization {
 
       // Recursive traversal of children elements, defer to prevent stackoverflow (force heap objects)
       private def writeSeq[T](seq: Seq[T], f: T => Eval[Unit]): Eval[Unit] =
-        write(seq.size) *> Eval.defer(seq.traverse_(f))
+        write(seq.size) *> seq.traverse_(f)
 
       private def write(pOpt: Option[RhoTypeN]): Eval[Unit] =
         pOpt.map(write(true) *> write(_)).getOrElse(write(false))
@@ -45,7 +45,7 @@ private[parmanager] object Serialization {
         writeSeq(injections, writeInjection)
 
       @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-      def write(p: RhoTypeN): Eval[Unit] = {
+      def write(p: RhoTypeN): Eval[Unit] = Eval.defer {
         p match {
 
           /** Basic types */
