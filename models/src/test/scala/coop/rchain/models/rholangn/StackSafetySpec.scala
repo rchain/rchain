@@ -55,6 +55,7 @@ class StackSafetySpec extends AnyFlatSpec with Matchers {
       par == anotherPar
     }
   }
+
   "RholangN par" should "not blow up on a huge structure with List" in {
 
     @tailrec
@@ -70,7 +71,7 @@ class StackSafetySpec extends AnyFlatSpec with Matchers {
       val decoded = ParN.fromBytes(sData)
       assert(par == decoded)
       assert(par.rhoHash sameElements anotherPar.rhoHash)
-      assert(par.serializedSize == anotherPar.serializedSize)
+      assert(par.serializedSize.value == anotherPar.serializedSize.value)
       assert(par == anotherPar)
       par == anotherPar
     }
