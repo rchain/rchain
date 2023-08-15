@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.syntax.all._
-import coop.rchain.models.Connective.ConnectiveInstance.{ConnNotBody, ConnOrBody}
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.interpreter.compiler.{NameVisitOutputs, ProcVisitInputs}
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, PatternReceiveError}
 
@@ -15,9 +15,9 @@ object Utils {
         .fromOption(
           nameRes.freeMap.connectives
             .collectFirst {
-              case (_: ConnOrBody, sourcePosition) =>
+              case (_: ConnOrN, sourcePosition) =>
                 PatternReceiveError(s"\\/ (disjunction) at $sourcePosition")
-              case (_: ConnNotBody, sourcePosition) =>
+              case (_: ConnNotN, sourcePosition) =>
                 PatternReceiveError(s"~ (negation) at $sourcePosition")
             },
           nameRes

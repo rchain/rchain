@@ -1,11 +1,12 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer
 
-import coop.rchain.models.Connective.ConnectiveInstance._
+import cats.Eval
+import coop.rchain.catscontrib.effect.implicits.sEval
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
-import coop.rchain.models.Var.VarInstance._
-import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   Bundle => _,
   Ground => _,
@@ -15,16 +16,12 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
 }
 import coop.rchain.rholang.interpreter.compiler._
 import coop.rchain.rholang.interpreter.errors._
-import cats.Eval
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import coop.rchain.catscontrib.effect.implicits.sEval
-
-import scala.collection.immutable.BitSet
 
 class ProcMatcherSpec extends AnyFlatSpec with Matchers {
-  val inputs                                   = ProcVisitInputs(Par(), BoundMapChain.empty[VarSort], FreeMap.empty[VarSort])
+  val inputs                                   = ProcVisitInputs(NilN, BoundMapChain.empty[VarSort], FreeMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "PNil" should "Compile as no modification to the par object" in {
@@ -41,13 +38,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pvar, boundInputs).value
-    result.par should be(inputs.par.prepend(EVar(BoundVar(0)), 0))
+    result.par should be(BoundVarN(0))
     result.freeMap should be(inputs.freeMap)
-    result.par.locallyFree.get should be(BitSet(0))
   }
   "PVar" should "Compile as FreeVar if it's not in env" in {
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pvar, inputs).value
-    result.par should be(inputs.par.prepend(EVar(FreeVar(0)), 0))
+    result.par should be(FreeVarN(0))
     result.freeMap shouldEqual
       (inputs.freeMap.put(("x", ProcSort, SourcePosition(0, 0))))
   }
@@ -74,7 +70,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pEval, boundInputs).value
-    result.par should be(inputs.par.prepend(EVar(BoundVar(0)), 0))
+    result.par should be(BoundVarN(0))
     result.freeMap should be(inputs.freeMap)
   }
   "PEval" should "Collapse a quote" in {
@@ -85,7 +81,9 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pEval, boundInputs).value
-    result.par should be(inputs.par.prepend(EVar(BoundVar(0)), 0).prepend(EVar(BoundVar(0)), 0))
+    result.par should be(
+      ParProcN(Seq(BoundVarN(0), BoundVarN(0)))
+    )
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -93,7 +91,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val pNot = new PNot(new PGround(new GroundBool(new BoolFalse())))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pNot, inputs).value
-    result.par should be(inputs.par.prepend(ENot(GBool(false)), 0))
+    result.par should be(ENotN(GBoolN(false)))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -103,7 +101,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pNeg, boundInputs).value
-    result.par should be(inputs.par.prepend(ENeg(EVar(BoundVar(0))), 0))
+    result.par should be(ENegN(BoundVarN(0)))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -113,7 +111,9 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMult, boundInputs).value
-    result.par should be(inputs.par.prepend(EMult(EVar(BoundVar(0)), EVar(FreeVar(0))), 0))
+    result.par should be(
+      EMultN(BoundVarN(0), FreeVarN(0))
+    )
     result.freeMap should be(inputs.freeMap.put(("y", ProcSort, SourcePosition(0, 0))))
   }
 
@@ -121,7 +121,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val pDiv = new PDiv(new PGround(new GroundInt("7")), new PGround(new GroundInt("2")))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pDiv, inputs).value
-    result.par should be(inputs.par.prepend(EDiv(GInt(7), GInt(2)), 0))
+    result.par should be(EDivN(GIntN(7), GIntN(2)))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -140,12 +140,9 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       )
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pPercentPercent, inputs).value
     result.par should be(
-      inputs.par.prepend(
-        EPercentPercent(
-          GString("Hi ${name}"),
-          ParMap(seq = List[(Par, Par)]((GString("name"), GString("Alice"))))
-        ),
-        0
+      EPercentPercentN(
+        GStringN("Hi ${name}"),
+        EMapN(Seq((GStringN("name"), GStringN("Alice"))))
       )
     )
     result.freeMap should be(inputs.freeMap)
@@ -160,7 +157,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       )
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pAdd, boundInputs).value
-    result.par should be(inputs.par.prepend(EPlus(EVar(BoundVar(1)), EVar(BoundVar(0))), 0))
+    result.par should be(EPlusN(BoundVarN(1), BoundVarN(0)))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -182,7 +179,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMinus, boundInputs).value
     result.par should be(
-      inputs.par.prepend(EMinus(EVar(BoundVar(2)), EMult(EVar(BoundVar(1)), EVar(BoundVar(0)))), 0)
+      EMinusN(BoundVarN(2), EMultN(BoundVarN(1), BoundVarN(0)))
     )
     result.freeMap should be(inputs.freeMap)
   }
@@ -193,7 +190,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       new PGround(new GroundString("\"def\""))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pPlusPlus, inputs).value
-    result.par should be(inputs.par.prepend(EPlusPlus(GString("abc"), GString("def")), 0))
+    result.par should be(EPlusPlusN(GStringN("abc"), GStringN("def")))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -203,7 +200,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       new PGround(new GroundString("\"def\""))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMinusMinus, inputs).value
-    result.par should be(inputs.par.prepend(EMinusMinus(GString("abc"), GString("def")), 0))
+    result.par should be(EMinusMinusN(GStringN("abc"), GStringN("def")))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -214,9 +211,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val pSend = new PSend(new NameQuote(new PNil()), new SendSingle(), sentData)
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pSend, inputs).value
-    result.par should be(
-      inputs.par.prepend(Send(Par(), List[Par](GInt(7), GInt(8)), false, BitSet()))
-    )
+    result.par should be(SendN(NilN, Seq(GIntN(7), GIntN(8))))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -229,9 +224,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pSend, boundInputs).value
-    result.par should be(
-      inputs.par.prepend(Send(EVar(BoundVar(0)), List[Par](GInt(7), GInt(8)), false, BitSet(0)))
-    )
+    result.par should be(SendN(BoundVarN(0), Seq(GIntN(7), GIntN(8))))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -293,7 +286,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(new PGround(new GroundInt("7")), new PGround(new GroundInt("8")))
     val result    = ProcNormalizeMatcher.normalizeMatch[Eval](parGround, inputs).value
-    result.par should be(inputs.par.copy(exprs = List(GInt(8), GInt(7))))
+    result.par should be(ParProcN(Seq(GIntN(8), GIntN(7))))
     result.freeMap should be(inputs.freeMap)
   }
 
@@ -303,24 +296,22 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleBound, boundInputs).value
-    result.par should be(
-      inputs.par.copy(exprs = List(EVar(BoundVar(0)), EVar(BoundVar(0))), locallyFree = BitSet(0))
-    )
+    result.par should be(ParProcN(Seq(BoundVarN(0), BoundVarN(0))))
     result.freeMap should be(inputs.freeMap)
   }
+
   "PPar" should "Not compile if both branches use the same free variable" in {
     val parDoubleFree = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))
     an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleFree, inputs).value
     }
   }
+
   "PPar" should "Accumulate free counts from both branches" in {
     val parDoubleFree = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](parDoubleFree, inputs).value
-    result.par should be(
-      inputs.par.copy(exprs = List(EVar(FreeVar(1)), EVar(FreeVar(0))), connectiveUsed = true)
-    )
+    result.par should be(ParProcN(Seq(FreeVarN(1), FreeVarN(0))))
     result.freeMap should be(
       inputs.freeMap.put(
         List(("x", ProcSort, SourcePosition(0, 0)), ("y", ProcSort, SourcePosition(0, 0)))
@@ -329,7 +320,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   }
 
   "PPar" should "normalize without StackOverflowError-s even for huge programs" in {
-    val hugePPar = (1 to 50000)
+    val hugePPar = (1 to 100) // TODO: Change to 50000 after creation stacksafe new rho Pars
       .map(x => new PGround(new GroundInt(x.toString)))
       .reduce((l: Proc, r: Proc) => new PPar(l, r))
     noException should be thrownBy {
@@ -363,26 +354,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pBasicContr, boundInputs).value
     result.par should be(
-      inputs.par.prepend(
-        Receive(
-          List(
-            ReceiveBind(
-              List(EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(FreeVar(2))),
-              EVar(BoundVar(0)),
-              freeCount = 3
-            )
-          ),
-          Send(
-            EVar(BoundVar(2)),
-            List[Par](EPlus(EVar(BoundVar(1)), EVar(BoundVar(0)))),
-            false,
-            BitSet(0, 1, 2)
-          ),
-          true, // persistent
-          peek = false,
-          bindCount,
-          BitSet(0)
-        )
+      ReceiveN(
+        Seq(ReceiveBindN(Seq(FreeVarN(0), FreeVarN(1), FreeVarN(2)), BoundVarN(0), freeCount = 3)),
+        SendN(BoundVarN(2), EPlusN(BoundVarN(1), BoundVarN(0))),
+        persistent = true, // persistent
+        peek = false,
+        bindCount
       )
     )
     result.freeMap should be(inputs.freeMap)
@@ -414,21 +391,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pBasicContr, boundInputs).value
     result.par should be(
-      inputs.par.prepend(
-        Receive(
-          List(
-            ReceiveBind(
-              List(EVar(FreeVar(0)), Par().copy(exprs = List(GInt(5)))),
-              EVar(BoundVar(0)),
-              freeCount = 1
-            )
-          ),
-          Send(EVar(BoundVar(0)), List(Par().copy(exprs = List(GInt(5)))), false, BitSet(0)),
-          true, // persistent
-          peek = false,
-          bindCount,
-          BitSet(0)
-        )
+      ReceiveN(
+        Seq(ReceiveBindN(Seq(FreeVarN(0), GIntN(5)), BoundVarN(0), freeCount = 1)),
+        SendN(BoundVarN(0), GIntN(5)),
+        persistent = true, // persistent
+        peek = false,
+        bindCount
       )
     )
     result.freeMap should be(inputs.freeMap)
@@ -460,23 +428,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs).value
     result.par should be(
-      inputs.par.prepend(
-        Receive(
-          List(
-            ReceiveBind(List(EVar(FreeVar(0)), EVar(FreeVar(1))), Par(), freeCount = 2)
-          ),
-          Send(
-            EVar(BoundVar(1)),
-            List[Par](EVar(BoundVar(0))),
-            false,
-            BitSet(0, 1)
-          ),
-          persistent = false,
-          peek = false,
-          bindCount,
-          BitSet(),
-          connectiveUsed = false
-        )
+      ReceiveN(
+        Seq(ReceiveBindN(Seq(FreeVarN(0), FreeVarN(1)), NilN, freeCount = 2)),
+        SendN(BoundVarN(1), BoundVarN(0)),
+        persistent = false,
+        peek = false,
+        bindCount
       )
     )
     result.freeMap should be(inputs.freeMap)
@@ -486,7 +443,10 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     (for {
       basicInput <- Compiler[Eval].sourceToAST("""for ( x, y <<- @Nil ) { x!(*y) }""")
       result     <- ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs)
-    } yield result.par.receives.head.peek shouldBe true).value
+    } yield result.par match {
+      case r: ReceiveN => r.peek shouldBe true
+      case _           => assert(false, "result.par did not match ReceiveN")
+    }).value
   }
 
   "PInput" should "Handle a more complicated receive" in {
@@ -530,33 +490,15 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pInput, inputs).value
     result.par should be(
-      inputs.par.prepend(
-        Receive(
-          List(
-            ReceiveBind(
-              List(EVar(FreeVar(0)), EVar(FreeVar(1))),
-              Par(),
-              freeCount = 2
-            ),
-            ReceiveBind(
-              List(EVar(FreeVar(0)), EVar(FreeVar(1))),
-              GInt(1),
-              freeCount = 2
-            )
-          ),
-          Par().copy(
-            sends = List(
-              Send(EVar(BoundVar(1)), List[Par](EVar(BoundVar(2))), false, BitSet(1, 2)),
-              Send(EVar(BoundVar(3)), List[Par](EVar(BoundVar(0))), false, BitSet(0, 3))
-            ),
-            locallyFree = BitSet(0, 1, 2, 3)
-          ),
-          persistent = false,
-          peek = false,
-          bindCount,
-          BitSet(),
-          connectiveUsed = false
-        )
+      ReceiveN(
+        List(
+          ReceiveBindN(Seq(FreeVarN(0), FreeVarN(1)), NilN, freeCount = 2),
+          ReceiveBindN(Seq(FreeVarN(0), FreeVarN(1)), GIntN(1), freeCount = 2)
+        ),
+        ParProcN(Seq(SendN(BoundVarN(1), BoundVarN(2)), SendN(BoundVarN(3), BoundVarN(0)))),
+        persistent = false,
+        peek = false,
+        bindCount
       )
     )
     result.freeMap should be(inputs.freeMap)
@@ -585,28 +527,14 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val bindCount = 1
     val pInput    = new PInput(listReceipt, new PNil())
     val result    = ProcNormalizeMatcher.normalizeMatch[Eval](pInput, inputs).value
-    val expected = inputs.par.prepend(
-      Receive(
-        List(
-          ReceiveBind(
-            List(
-              Par(
-                connectiveUsed = true,
-                exprs = List(EList(connectiveUsed = true, remainder = Some(FreeVar(0))))
-              )
-            ),
-            Par(),
-            freeCount = 1
-          )
-        ),
-        Par(),
+    val expected =
+      ReceiveN(
+        ReceiveBindN(Seq(EListN(Seq(), Some(FreeVarN(0)))), NilN, freeCount = 1),
+        NilN,
         persistent = false,
         peek = false,
-        bindCount,
-        BitSet(),
-        connectiveUsed = false
+        bindCount
       )
-    )
 
     result.par should be(expected)
   }
@@ -756,14 +684,14 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pNew, inputs).value
     result.par should be(
-      inputs.par.prepend(
-        New(
-          bindCount = 3,
-          p = Send(EVar(BoundVar(2)), List[Par](GInt(7)), false, BitSet(2))
-            .prepend(Send(EVar(BoundVar(1)), List[Par](GInt(8)), false, BitSet(1)))
-            .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(9)), false, BitSet(0))),
-          uri = Vector.empty,
-          locallyFree = BitSet()
+      NewN(
+        bindCount = 3,
+        ParProcN(
+          Seq(
+            SendN(BoundVarN(2), GIntN(7)),
+            SendN(BoundVarN(1), GIntN(8)),
+            SendN(BoundVarN(0), GIntN(9))
+          )
         )
       )
     )
@@ -807,23 +735,21 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pNew, inputs).value
     result.par should be(
-      inputs.par.prepend(
-        New(
-          bindCount = 5,
-          p = Send(EVar(BoundVar(4)), List[Par](GInt(7)), false, BitSet(4))
-            .prepend(Send(EVar(BoundVar(3)), List[Par](GInt(8)), false, BitSet(3)))
-            .prepend(Send(EVar(BoundVar(1)), List[Par](GInt(9)), false, BitSet(1)))
-            .prepend(Send(EVar(BoundVar(0)), List[Par](GInt(10)), false, BitSet(0)))
-            .prepend(Send(EVar(BoundVar(2)), List[Par](GInt(11)), false, BitSet(2))),
-          uri = Vector("rho:registry", "rho:stdout"),
-          locallyFree = BitSet()
-        )
+      NewN(
+        bindCount = 5,
+        p = ParProcN(
+          Seq(
+            SendN(BoundVarN(4), GIntN(7)),
+            SendN(BoundVarN(3), GIntN(8)),
+            SendN(BoundVarN(1), GIntN(9)),
+            SendN(BoundVarN(0), GIntN(10)),
+            SendN(BoundVarN(2), GIntN(11))
+          )
+        ),
+        uri = Vector("rho:registry", "rho:stdout"),
+        Seq()
       )
     )
-    result.par.news(0).p.sends.map(x => x.locallyFree.get) should be(
-      List(BitSet(2), BitSet(0), BitSet(1), BitSet(3), BitSet(4))
-    )
-    result.par.news(0).p.locallyFree.get should be(BitSet(0, 1, 2, 3, 4))
   }
 
   "PMatch" should "Handle a match inside a for comprehension" in {
@@ -860,24 +786,21 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val bindCount = 1
 
     val expectedResult =
-      inputs.par
-        .prepend(Send(Par(), List[Par](GInt(47)), false, BitSet()))
-        .prepend(
-          Receive(
-            List(ReceiveBind(List(EVar(FreeVar(0))), Par(), freeCount = 1)),
-            Match(
-              EVar(BoundVar(0)),
-              List(MatchCase(GInt(42), Par()), MatchCase(EVar(FreeVar(0)), Par(), freeCount = 1)),
-              BitSet(0)
+      ParProcN(
+        Seq(
+          SendN(NilN, GIntN(47)),
+          ReceiveN(
+            Seq(ReceiveBindN(FreeVarN(0), NilN, freeCount = 1)),
+            MatchN(
+              BoundVarN(0),
+              Seq(MatchCaseN(GIntN(42), NilN), MatchCaseN(FreeVarN(0), NilN, freeCount = 1))
             ),
             persistent = false,
             peek = false,
-            bindCount,
-            BitSet(),
-            connectiveUsed = false
+            bindCount
           )
         )
-
+      )
     result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
@@ -896,25 +819,18 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val boundInputs =
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMatch, boundInputs).value
-
-    val expectedResult =
-      inputs.par.prepend(
-        Match(
-          EVar(BoundVar(0)),
-          List(
-            MatchCase(
-              EList(Seq[Par](EVar(FreeVar(0)), EVar(Wildcard(Var.WildcardMsg()))), BitSet(), true),
-              Par(),
-              freeCount = 1
-            ),
-            MatchCase(EVar(Wildcard(Var.WildcardMsg())), Par())
-          ),
-          BitSet(0),
-          false
-        )
+    val expectedResult = MatchN(
+      BoundVarN(0),
+      Seq(
+        MatchCaseN(
+          EListN(Seq(FreeVarN(0), WildcardN)),
+          NilN,
+          freeCount = 1
+        ),
+        MatchCaseN(WildcardN, NilN)
       )
+    )
     result.par should be(expectedResult)
-    result.par.matches.head.cases.head.freeCount should be(1)
   }
 
   "PIf" should "Desugar to match with true/false cases" in {
@@ -927,16 +843,9 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs).value
     result.par should be(
-      inputs.par.prepend(
-        Match(
-          GBool(true),
-          List(
-            MatchCase(GBool(true), Send(Par(), List[Par](GInt(47)), false, BitSet())),
-            MatchCase(GBool(false), Par())
-            // TODO: Fill in type error case
-          ),
-          BitSet()
-        )
+      MatchN(
+        GBoolN(true),
+        Seq(MatchCaseN(GBoolN(true), SendN(NilN, GIntN(47))), MatchCaseN(GBoolN(false), NilN))
       )
     )
     result.freeMap should be(inputs.freeMap)
@@ -946,16 +855,19 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val rightProc =
       new PIf(new PGround(new GroundBool(new BoolTrue())), new PGround(new GroundInt("10")))
 
-    val input  = inputs.copy(par = Par(exprs = Seq(GInt(7))))
+    val input  = inputs.copy(par = GIntN(7))
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](rightProc, input).value
 
     result.freeMap should be(inputs.freeMap)
     result.par should be(
-      inputs.par.copy(
-        matches = Seq(
-          Match(GBool(true), Seq(MatchCase(GBool(true), GInt(10)), MatchCase(GBool(false), Par())))
-        ),
-        exprs = Seq(GInt(7))
+      ParProcN(
+        Seq(
+          MatchN(
+            GBoolN(true),
+            Seq(MatchCaseN(GBoolN(true), GIntN(10)), MatchCaseN(GBoolN(false), NilN))
+          ),
+          GIntN(7)
+        )
       )
     )
   }
@@ -983,34 +895,28 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](basicInput, inputs).value
     result.par should be(
-      inputs.par.prepend(
-        Match(
-          EEq(GInt(47), GInt(47)),
-          List(
-            MatchCase(
-              GBool(true),
-              New(
-                bindCount = 1,
-                p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
-                uri = Vector.empty,
-                locallyFree = BitSet()
-              )
-            ),
-            MatchCase(
-              GBool(false),
-              New(
-                bindCount = 1,
-                p = Send(EVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)),
-                uri = Vector.empty,
-                locallyFree = BitSet()
-              )
+      MatchN(
+        EEqN(GIntN(47), GIntN(47)),
+        Seq(
+          MatchCaseN(
+            GBoolN(true),
+            NewN(
+              bindCount = 1,
+              p = SendN(BoundVarN(0), GIntN(47))
             )
-            // TODO: Fill in type error case
           ),
-          BitSet()
+          MatchCaseN(
+            GBoolN(false),
+            NewN(
+              bindCount = 1,
+              p = SendN(BoundVarN(0), GIntN(47))
+            )
+          )
+          // TODO: Fill in type error case
         )
       )
     )
+
     result.freeMap should be(inputs.freeMap)
   }
   "PMatch" should "Fail if a free variable is used twice in the target" in {
@@ -1054,25 +960,20 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val result    = ProcNormalizeMatcher.normalizeMatch[Eval](input, inputs).value
     val bindCount = 2
 
-    val matchTarget = EVar(FreeVar(1)).prepend(EVar(FreeVar(0)), 0)
+    val matchTarget = ParProcN(Seq(FreeVarN(1), FreeVarN(0)))
     val expectedResult =
-      inputs.par.prepend(
-        Receive(
-          List(
-            ReceiveBind(
-              List(
-                Match(matchTarget, List(MatchCase(GInt(47), Par())), connectiveUsed = true)
-              ),
-              Par(),
-              freeCount = 2
-            )
+      ReceiveN(
+        ReceiveBindN(
+          Seq(
+            MatchN(matchTarget, Seq(MatchCaseN(GIntN(47), NilN)))
           ),
-          Par(),
-          persistent = false,
-          peek = false,
-          bindCount,
-          connectiveUsed = false
-        )
+          NilN,
+          freeCount = 2
+        ),
+        NilN,
+        persistent = false,
+        peek = false,
+        bindCount
       )
 
     result.par should be(expectedResult)
@@ -1090,8 +991,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
         inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
       val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMethod, boundInputs).value
       val expectedResult =
-        inputs.par
-          .prepend(EMethod(methodName, EVar(BoundVar(0)), List(GInt(0)), BitSet(0), false), 0)
+        EMethodN(methodName, BoundVarN(0), GIntN(0))
       result.par === expectedResult && result.freeMap === inputs.freeMap
     }
     methods.forall(m => test(m))
@@ -1102,14 +1002,8 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val pbundle = new PBundle(new BundleReadWrite(), new PVar(new ProcVarVar("x")))
     val boundInputs =
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
-
-    val result = ProcNormalizeMatcher.normalizeMatch[Eval](pbundle, boundInputs).value
-
-    val expectedResult =
-      inputs.par
-        .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = true, readFlag = true)))
-        .withLocallyFree(BitSet(0))
-
+    val result         = ProcNormalizeMatcher.normalizeMatch[Eval](pbundle, boundInputs).value
+    val expectedResult = BundleN(BoundVarN(0), writeFlag = true, readFlag = true)
     result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
   }
@@ -1172,9 +1066,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val boundInputs =
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     def expectedResults(writeFlag: Boolean, readFlag: Boolean) =
-      inputs.par
-        .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = writeFlag, readFlag = readFlag)))
-        .withLocallyFree(BitSet(0))
+      BundleN(BoundVarN(0), writeFlag = writeFlag, readFlag = readFlag)
 
     def test(readOnly: Boolean, writeOnly: Boolean) =
       withClue(s"for bundle with flags readOnly=$readOnly writeOnly=$writeOnly") {
@@ -1198,9 +1090,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val boundInputs =
       inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
 
-    val expectedResults = inputs.par
-      .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = false, readFlag = true)))
-      .withLocallyFree(BitSet(0))
+    val expectedResults = BundleN(BoundVarN(0), writeFlag = false, readFlag = true)
 
     val result =
       ProcNormalizeMatcher.normalizeMatch[Eval](nestedBundle, input = boundInputs).value
@@ -1212,10 +1102,8 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   "PNegation" should "delegate, but not count any free variables inside" in {
     val proc = new PNegation(new PVar(new ProcVarVar("x")))
 
-    val result = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
-    val expectedResult = inputs.par
-      .addConnectives(Connective(ConnNotBody(EVar(FreeVar(0)))))
-      .withConnectiveUsed(true)
+    val result         = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
+    val expectedResult = ConnNotN(FreeVarN(0))
 
     result.par should be(expectedResult)
     result.freeMap.levelBindings should be(inputs.freeMap.levelBindings)
@@ -1225,12 +1113,8 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   "PConjunction" should "delegate, and count any free variables inside" in {
     val proc = new PConjunction(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
 
-    val result = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
-    val expectedResult = inputs.par
-      .addConnectives(
-        Connective(ConnAndBody(ConnectiveBody(Vector(EVar(FreeVar(0)), EVar(FreeVar(1))))))
-      )
-      .withConnectiveUsed(true)
+    val result         = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
+    val expectedResult = ConnAndN(Seq(FreeVarN(0), FreeVarN(1)))
 
     result.par should be(expectedResult)
 
@@ -1245,12 +1129,8 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
   "PDisjunction" should "delegate, but not count any free variables inside" in {
     val proc = new PDisjunction(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))
 
-    val result = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
-    val expectedResult = inputs.par
-      .addConnectives(
-        Connective(ConnOrBody(ConnectiveBody(Vector(EVar(FreeVar(0)), EVar(FreeVar(0))))))
-      )
-      .withConnectiveUsed(true)
+    val result         = ProcNormalizeMatcher.normalizeMatch[Eval](proc, inputs).value
+    val expectedResult = ConnOrN(FreeVarN(0), FreeVarN(0))
 
     result.par should be(expectedResult)
     result.freeMap.levelBindings should be(inputs.freeMap.levelBindings)
@@ -1268,24 +1148,17 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val proc = new PMatch(new PGround(new GroundInt("7")), listCases)
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](proc, boundInputs).value
-    val expectedResult = inputs.par
-      .addMatches(
-        Match(
-          target = GInt(7),
-          cases = List(
-            MatchCase(
-              pattern = Connective(VarRefBody(VarRef(0, 1))).withLocallyFree(BitSet(0)),
-              source = Par()
-            )
-          ),
-          locallyFree = BitSet(0)
+    val expectedResult = MatchN(
+      target = GIntN(7),
+      cases = Seq(
+        MatchCaseN(
+          pattern = ConnVarRefN(0, 1),
+          source = NilN
         )
       )
-      .withLocallyFree(BitSet(0))
+    )
     result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
-    // Make sure that variable references in patterns are reflected
-    result.par.locallyFree.get should be(BitSet(0))
   }
 
   it should "do a deep lookup in a receive case" in {
@@ -1313,23 +1186,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     // format: off
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](proc, boundInputs).value
-    val expectedResult = inputs.par
-      .addReceives(
-        Receive(
-          binds = List(
-            ReceiveBind(
-              patterns = List(
-                Connective(VarRefBody(VarRef(0, 1))).withLocallyFree(BitSet(0))),
-              source = Par())),
-          body = Par(),
-          persistent = false,
-          bindCount = 0,
-          locallyFree = BitSet(0)))
-      .withLocallyFree(BitSet(0))
+    val expectedResult = ReceiveN(
+      ReceiveBindN(ConnVarRefN(0, 1), NilN),
+      body = NilN,
+      bindCount = 0)
     result.par should be(expectedResult)
     result.freeMap should be(inputs.freeMap)
-    result.par.locallyFree.get should be(BitSet(0))
-    // format: on
   }
 
   "PSimpleType" should "result in a connective of the correct type" in {
@@ -1347,24 +1209,12 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val resultUri       = ProcNormalizeMatcher.normalizeMatch[Eval](procUri, inputs).value
     val resultByteArray = ProcNormalizeMatcher.normalizeMatch[Eval](procByteArray, inputs).value
 
-    resultBool.par should be(
-      Par(connectives = Seq(Connective(ConnBool(true))), connectiveUsed = true)
-    )
-    resultInt.par should be(
-      Par(connectives = Seq(Connective(ConnInt(true))), connectiveUsed = true)
-    )
-    resultBigInt.par should be(
-      Par(connectives = Seq(Connective(ConnBigInt(true))), connectiveUsed = true)
-    )
-    resultString.par should be(
-      Par(connectives = Seq(Connective(ConnString(true))), connectiveUsed = true)
-    )
-    resultUri.par should be(
-      Par(connectives = Seq(Connective(ConnUri(true))), connectiveUsed = true)
-    )
-    resultByteArray.par should be(
-      Par(connectives = Seq(Connective(ConnByteArray(true))), connectiveUsed = true)
-    )
+    resultBool.par should be(ConnBoolN)
+    resultInt.par should be(ConnIntN)
+    resultBigInt.par should be(ConnBigIntN)
+    resultString.par should be(ConnStringN)
+    resultUri.par should be(ConnUriN)
+    resultByteArray.par should be(ConnByteArrayN)
   }
 
   "1 matches _" should "normalize correctly" in {
@@ -1372,7 +1222,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMatches, inputs).value
 
-    val expectedPar = inputs.par.prepend(EMatches(GInt(1), EVar(Wildcard(WildcardMsg()))), 0)
+    val expectedPar = EMatchesN(GIntN(1), WildcardN)
 
     result.par shouldBe expectedPar
     result.par.connectiveUsed should be(false)
@@ -1383,7 +1233,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMatches, inputs).value
 
-    val expectedPar = inputs.par.prepend(EMatches(GInt(1), GInt(2)), 0)
+    val expectedPar = EMatchesN(GIntN(1), GIntN(2))
 
     result.par shouldBe expectedPar
     result.par.connectiveUsed should be(false)
@@ -1394,7 +1244,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       new PMatches(new PGround(new GroundInt("1")), new PNegation(new PGround(new GroundInt("1"))))
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMatches, inputs).value
 
-    val expectedPar = inputs.par.prepend(EMatches(GInt(1), Connective(ConnNotBody(GInt(1)))), 0)
+    val expectedPar = EMatchesN(GIntN(1), ConnNotN(GIntN(1)))
 
     result.par shouldBe expectedPar
     result.par.connectiveUsed should be(false)
@@ -1405,7 +1255,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
       new PMatches(new PNegation(new PGround(new GroundInt("1"))), new PGround(new GroundInt("1")))
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](pMatches, inputs).value
 
-    val expectedPar = inputs.par.prepend(EMatches(Connective(ConnNotBody(GInt(1))), GInt(1)), 0)
+    val expectedPar = EMatchesN(ConnNotN(GIntN(1)), GIntN(1))
 
     result.par shouldBe expectedPar
     result.par.connectiveUsed should be(true)

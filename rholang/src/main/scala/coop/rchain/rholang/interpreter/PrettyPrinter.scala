@@ -18,6 +18,8 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{
 }
 import coop.rchain.shared.{Base16, Printer}
 import cats.Eval
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0)
@@ -50,6 +52,7 @@ final case class PrettyPrinter(
   def buildString(e: Expr): String             = buildStringM(e).value.cap()
   def buildString(v: Var): String              = buildStringM(v).value.cap()
   def buildString(m: GeneratedMessage): String = buildStringM(m).value.cap()
+  def buildString(p: ParN): String             = buildStringM(toProto(p)).value.cap()
   def buildChannelString(p: Par): String       = buildChannelStringM(p).value.cap()
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
