@@ -3,49 +3,55 @@ package coop.rchain.models.rholangn.parmanager
 import cats.Eval
 import cats.syntax.all._
 import com.google.protobuf.CodedOutputStream
-import coop.rchain.models.rholangn._
+import coop.rchain.models.rholangn.{RhoTypeN, _}
 
 import scala.annotation.unused
 
-private[parmanager] object SerializedSize {
-
+private object ProtobufSerializedSize {
   import Constants._
 
   // Terminal expressions
-  private def sSize(bytes: Array[Byte]): Eval[Int] =
-    Eval.always(CodedOutputStream.computeByteArraySizeNoTag(bytes))
-  private def sSize(@unused v: Boolean): Eval[Int] = Eval.now(booleanSize)
-  private def sSize(v: Int): Eval[Int]             = Eval.always(CodedOutputStream.computeInt32SizeNoTag(v))
-  private def sSize(v: Long): Eval[Int]            = Eval.always(CodedOutputStream.computeInt64SizeNoTag(v))
-  private def sSize(v: String): Eval[Int]          = Eval.always(CodedOutputStream.computeStringSizeNoTag(v))
-  private def sSize(v: BigInt): Eval[Int]          = sSize(v.toByteArray)
+  def sSize(bytes: Array[Byte]): Eval[Int] =
+    Eval.later(CodedOutputStream.computeByteArraySizeNoTag(bytes))
+  def sSize(@unused v: Boolean): Eval[Int] = Eval.now(booleanSize)
+  def sSize(v: Int): Eval[Int]             = Eval.later(CodedOutputStream.computeInt32SizeNoTag(v))
+  def sSize(v: Long): Eval[Int]            = Eval.later(CodedOutputStream.computeInt64SizeNoTag(v))
+  def sSize(v: String): Eval[Int]          = Eval.later(CodedOutputStream.computeStringSizeNoTag(v))
+  def sSize(v: BigInt): Eval[Int]          = sSize(v.toByteArray)
 
-  // Recursive traversal of children elements, defer to prevent stackoverflow (force heap objects)
-  private def sSizeSeq[T](seq: Seq[T], f: T => Eval[Int]): Eval[Int] =
-    (sSize(seq.size), seq.traverse(f).map(_.sum)).mapN(_ + _)
+  // Recursive traversal using memoized value
+  def sSize(x: RhoTypeN): Eval[Int] = x.serializedSize
 
-  private def sSize(ps: Seq[RhoTypeN]): Eval[Int] = sSizeSeq[RhoTypeN](ps, _.serializedSize)
+  // Recursive traversal of a sequence using memoized values
+  def sSize(ps: Seq[RhoTypeN]): Eval[Int] = sSizeSeq[RhoTypeN](ps, sSize)
 
-  private def sSize(kv: (RhoTypeN, RhoTypeN)): Eval[Int] =
+  def sSize(kv: (RhoTypeN, RhoTypeN)): Eval[Int] =
     kv.bimap(sSize, sSize).mapN(_ + _)
-  private def sSizeInjection(injection: (String, RhoTypeN)): Eval[Int] =
-    injection.bimap(sSize, sSize).mapN(_ + _)
 
-  private def sSizeStrings(strings: Seq[String]): Eval[Int] = sSizeSeq[String](strings, sSize)
+  def sSize(pOpt: Option[RhoTypeN]): Eval[Int] =
+    (Eval.now(booleanSize), pOpt.traverse(sSize)).mapN(_ + _.getOrElse(0))
 
-  private def sSizeKVPairs(strings: Seq[(RhoTypeN, RhoTypeN)]): Eval[Int] =
-    sSizeSeq[(RhoTypeN, RhoTypeN)](strings, sSize)
+  def sSizeSeqTuplePar(seq: Seq[(RhoTypeN, RhoTypeN)]): Eval[Int] =
+    sSizeSeq[(RhoTypeN, RhoTypeN)](seq, sSize)
 
-  private def sSizeInjections(injections: Seq[(String, RhoTypeN)]): Eval[Int] =
-    sSizeSeq[(String, RhoTypeN)](injections, sSizeInjection)
+  def sSizeTupleStringPar(kv: (String, RhoTypeN)): Eval[Int] =
+    kv.bimap(sSize, sSize).mapN(_ + _)
 
-  private def sSize(pOpt: Option[RhoTypeN]): Eval[Int] =
-    (Eval.now(booleanSize), pOpt.traverse(sSize)).mapN(_ * _.getOrElse(0))
+  def sSizeSeqTupleStringPar(seq: Seq[(String, RhoTypeN)]): Eval[Int] =
+    sSizeSeq[(String, RhoTypeN)](seq, sSizeTupleStringPar)
 
-  private def totalSize(sizes: Int*): Int = tagSize + sizes.sum
+  def totalSize(sizes: Int*): Int = tagSize + sizes.sum
+
+  // Calculates serialized size of a sequence (the sum of element sizes)
+  def sSizeSeq[T](seq: Seq[T], f: T => Eval[Int]): Eval[Int] =
+    (sSize(seq.size), seq.traverse(f).map(_.sum)).mapN(_ + _)
+}
+
+private[parmanager] object SerializedSize {
+  import ProtobufSerializedSize._
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def sSize(p: RhoTypeN): Eval[Int] = Eval.defer {
+  def calcSerSize(p: RhoTypeN): Eval[Int] = Eval.defer {
     p match {
 
       /** Basic types */
@@ -73,8 +79,8 @@ private[parmanager] object SerializedSize {
       case n: NewN =>
         val bindCountSize  = sSize(n.bindCount)
         val pSize          = sSize(n.p)
-        val uriSize        = sSizeStrings(n.uri)
-        val injectionsSize = sSizeInjections(n.injections.toSeq)
+        val uriSize        = sSizeSeq[String](n.uri, sSize)
+        val injectionsSize = sSizeSeqTupleStringPar(n.injections.toSeq)
         (bindCountSize, pSize, uriSize, injectionsSize).mapN(totalSize(_, _, _, _))
 
       /** Ground types */
@@ -90,7 +96,8 @@ private[parmanager] object SerializedSize {
 
       case eTuple: ETupleN => sSize(eTuple.ps).map(totalSize(_))
       case eSet: ESetN     => (sSize(eSet.sortedPs), sSize(eSet.remainder)).mapN(totalSize(_, _))
-      case eMap: EMapN     => (sSizeKVPairs(eMap.sortedPs), sSize(eMap.remainder)).mapN(totalSize(_, _))
+      case eMap: EMapN =>
+        (sSizeSeqTuplePar(eMap.sortedPs), sSize(eMap.remainder)).mapN(totalSize(_, _))
 
       /** Vars */
       case v: BoundVarN      => sSize(v.idx).map(totalSize(_))

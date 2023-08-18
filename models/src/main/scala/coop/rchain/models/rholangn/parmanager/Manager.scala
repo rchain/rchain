@@ -3,25 +3,7 @@ package coop.rchain.models.rholangn.parmanager
 import cats.Eval
 import coop.rchain.models.rholangn._
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
-import scala.util.Using
-
 object Manager {
-
-  // TODO: Properly handle errors
-  @SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
-  def parToBytes(p: ParN): Array[Byte] =
-    Using(new ByteArrayOutputStream(SerializedSize.sSize(p).value)) { baos =>
-      Serialization.serialize(p, baos).value
-      baos.toByteArray
-    }.get
-
-  // TODO: Properly handle errors
-  @SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
-  def parFromBytes(bv: Array[Byte]): ParN =
-    Using(new ByteArrayInputStream(bv)) { bais =>
-      Serialization.deserialize(bais).value
-    }.get
 
   def equals(self: RhoTypeN, other: Any): Boolean = other match {
     case x: RhoTypeN => x.rhoHash sameElements self.rhoHash
@@ -69,9 +51,10 @@ object Manager {
   def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
-  def rhoHashFn(p: RhoTypeN): Array[Byte]        = RhoHash.rhoHashFn(p)
-  def serializedSizeFn(p: RhoTypeN): Eval[Int]   = SerializedSize.sSize(p)
-  def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
-  def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
-  def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)
+  def rhoHashFn(p: RhoTypeN): Array[Byte]          = RhoHash.rhoHashFn(p)
+  def serializedSizeFn(p: RhoTypeN): Eval[Int]     = SerializedSize.calcSerSize(p)
+  def serializedFn(p: RhoTypeN): Eval[Array[Byte]] = Serialization.serializeToBytes(p)
+  def connectiveUsedFn(p: RhoTypeN): Boolean       = ConnectiveUsed.connectiveUsedFn(p)
+  def evalRequiredFn(p: RhoTypeN): Boolean         = EvalRequired.evalRequiredFn(p)
+  def substituteRequiredFn(p: RhoTypeN): Boolean   = SubstituteRequired.substituteRequiredFn(p)
 }

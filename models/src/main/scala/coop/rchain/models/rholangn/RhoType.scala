@@ -6,21 +6,24 @@ import coop.rchain.models.rholangn.parmanager.Manager._
 /** Base trait for Rholang elements in the Reducer */
 sealed trait RhoTypeN {
 
-  /** Cryptographic hash code of the element */
+  /** Cryptographic hash code of this object */
   lazy val rhoHash: Array[Byte] = rhoHashFn(this)
 
-  /** Element size after serialization (in bytes) */
-  val serializedSize: Eval[Int] = serializedSizeFn(this)
+  /** The size of serialized bytes lazily evaluated with memoization */
+  val serializedSize: Eval[Int] = serializedSizeFn(this).memoize
 
-  /** True if the element or at least one of the nested elements non-concrete.
-    * Such element cannot be viewed as if it were a term.*/
+  /** Serialized bytes lazily evaluated with memoization */
+  val serialized: Eval[Array[Byte]] = serializedFn(this).memoize
+
+  /** True if the object or at least one of the nested objects non-concrete.
+    * Such a object cannot be viewed as if it were a term.*/
   // TODO: Rename connectiveUsed for more clarity
   lazy val connectiveUsed: Boolean = connectiveUsedFn(this)
 
-  /** True if the element or at least one of the nested elements can be evaluate in Reducer */
+  /** True if the object or at least one of the nested objects can be evaluated in Reducer */
   lazy val evalRequired: Boolean = evalRequiredFn(this)
 
-  /** True if the element or at least one of the nested elements can be substitute in Reducer */
+  /** True if the object or at least one of the nested objects can be substituted in Reducer */
   lazy val substituteRequired: Boolean = substituteRequiredFn(this)
 
   override def equals(x: Any): Boolean = parmanager.Manager.equals(this, x)
@@ -37,8 +40,6 @@ trait AuxParN extends RhoTypeN
 sealed trait ParN extends RhoTypeN
 
 object ParN {
-  def fromBytes(bytes: Array[Byte]): ParN = parFromBytes(bytes)
-  def toBytes(p: ParN): Array[Byte]       = parToBytes(p)
 
   /**
     * Create a flatten parallel Par (ParProc) from par sequence.

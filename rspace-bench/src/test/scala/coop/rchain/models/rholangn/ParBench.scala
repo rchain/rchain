@@ -1,7 +1,7 @@
 package coop.rchain.models.rholangn
 
+import coop.rchain.models.rholangn.parmanager.Serialization
 import org.openjdk.jmh.annotations._
-import scodec.bits.ByteVector
 
 import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
@@ -48,11 +48,11 @@ class ParBench {
   def setup(): Unit = {
     nestedPar = createNestedPar(nestedSize)
     nestedAnotherPar = createNestedPar(nestedSize)
-    nestedParSData = ParN.toBytes(nestedPar)
+    nestedParSData = nestedPar.serialized.value
 
     parProc = createParProc(parProcSize)
     parProcAnother = createParProc(parProcSize)
-    parProcSData = ParN.toBytes(parProc)
+    parProcSData = parProc.serialized.value
   }
 
   @Benchmark
@@ -66,14 +66,14 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedSerialization(): Unit = {
-    val _ = ParN.toBytes(nestedPar)
+    val _ = nestedPar.serialized.value
   }
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedDeserialization(): Unit = {
-    val _ = ParN.fromBytes(nestedParSData)
+    val _ = Serialization.deserializeFromBytes(nestedParSData)
   }
 
   @Benchmark
@@ -114,14 +114,14 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcSerialization(): Unit = {
-    val _ = ParN.toBytes(parProc)
+    val _ = parProc.serialized.value
   }
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcDeserialization(): Unit = {
-    val _ = ParN.fromBytes(parProcSData)
+    val _ = Serialization.deserializeFromBytes(parProcSData)
   }
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))

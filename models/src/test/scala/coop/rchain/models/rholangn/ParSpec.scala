@@ -1,5 +1,6 @@
 package coop.rchain.models.rholangn
 
+import coop.rchain.models.rholangn.parmanager.Serialization
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -13,8 +14,8 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     */
   def simpleCheck(p1: ParN, p2Opt: Option[ParN] = None): Boolean = {
     // Serialization and hashing testing
-    val bytes1        = ParN.toBytes(p1)
-    val recover1      = ParN.fromBytes(bytes1)
+    val bytes1        = p1.serialized.value
+    val recover1      = Serialization.deserializeFromBytes(bytes1)
     val res1: Boolean = p1.rhoHash sameElements recover1.rhoHash
 
     // Testing possibility of calculating the rest of the metadata (without checking correctness)
@@ -23,7 +24,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     // the correct sorting testing
     val res2: Boolean = if (p2Opt.isDefined) {
       val p2     = p2Opt.get
-      val bytes2 = ParN.toBytes(p2)
+      val bytes2 = p2.serialized.value
       (p1.rhoHash sameElements p2.rhoHash) &&
       (bytes1 sameElements bytes2) &&
       (p1.connectiveUsed == p2.connectiveUsed) &&

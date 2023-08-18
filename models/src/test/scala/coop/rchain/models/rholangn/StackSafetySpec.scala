@@ -2,6 +2,7 @@ package coop.rchain.models.rholangn
 
 import cats.Eval
 import coop.rchain.catscontrib.effect.implicits.sEval
+import coop.rchain.models.rholangn.parmanager.Serialization
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -67,8 +68,8 @@ class StackSafetySpec extends AnyFlatSpec with Matchers {
     val par                    = hugePar(maxRecursionDepth)
     val anotherPar             = hugePar(maxRecursionDepth)
     noException shouldBe thrownBy {
-      val sData   = ParN.toBytes(par)
-      val decoded = ParN.fromBytes(sData)
+      val sData   = par.serialized.value
+      val decoded = Serialization.deserializeFromBytes(sData)
       assert(par == decoded)
       assert(par.rhoHash sameElements anotherPar.rhoHash)
       assert(par.serializedSize.value == anotherPar.serializedSize.value)
