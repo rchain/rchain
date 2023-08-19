@@ -11,18 +11,19 @@ import scala.util.Using
 
 /** Wrapper for protobuf serialization of primitive types. */
 private class ProtobufPrimitiveWriter(output: CodedOutputStream) {
-  def write(x: Array[Byte]): Eval[Unit] = Eval.later(output.writeRawBytes(x))
   def write(x: Byte): Eval[Unit]        = Eval.later(output.writeRawByte(x))
+  def write(x: Array[Byte]): Eval[Unit] = Eval.later(output.writeRawBytes(x))
   def write(x: Boolean): Eval[Unit]     = Eval.later(output.writeBoolNoTag(x))
   def write(x: Int): Eval[Unit]         = Eval.later(output.writeUInt32NoTag(x))
   def write(x: Long): Eval[Unit]        = Eval.later(output.writeUInt64NoTag(x))
   def write(x: String): Eval[Unit]      = Eval.later(output.writeStringNoTag(x))
 }
 
+/** Wrapper for protobuf serialization with recursive function. */
 private class ProtobufRecWriter(writer: ProtobufPrimitiveWriter, rec: RhoTypeN => Eval[Unit]) {
   // Terminal expressions
-  def write(x: Array[Byte]): Eval[Unit] = writer.write(x)
   def write(x: Byte): Eval[Unit]        = writer.write(x)
+  def write(x: Array[Byte]): Eval[Unit] = writer.write(x)
   def write(x: Boolean): Eval[Unit]     = writer.write(x)
   def write(x: Int): Eval[Unit]         = writer.write(x)
   def write(x: Long): Eval[Unit]        = writer.write(x)
@@ -47,6 +48,16 @@ private class ProtobufRecWriter(writer: ProtobufPrimitiveWriter, rec: RhoTypeN =
   // Writes serialized value of a sequence
   def writeSeq[T](seq: Seq[T], f: T => Eval[Unit]): Eval[Unit] =
     write(seq.size) *> seq.traverse_(f)
+}
+
+/** Wrapper for protobuf de-serialization of primitive types. */
+private class ProtobufReader(input: CodedInputStream) {
+  def readByte: Eval[Byte]         = Eval.later(input.readRawByte())
+  def readBytes: Eval[Array[Byte]] = Eval.later(input.readByteArray())
+  def readBool: Eval[Boolean]      = Eval.later(input.readBool())
+  def readInt: Eval[Int]           = Eval.later(input.readInt32())
+  def readLong: Eval[Long]         = Eval.later(input.readInt64())
+  def readString: Eval[String]     = Eval.later(input.readString())
 }
 
 object Serialization {
@@ -237,20 +248,22 @@ object Serialization {
 
   // TODO: Properly handle errors with return type (remove throw)
   def deserialize(input: InputStream): Eval[ParN] = {
-    val cis = CodedInputStream.newInstance(input)
+    val cis    = CodedInputStream.newInstance(input)
+    val reader = new ProtobufReader(cis)
 
-    // Terminal expressions
-    def readBytes: Eval[Array[Byte]] = Eval.later(cis.readByteArray())
-    def readTag: Eval[Byte]          = Eval.later(cis.readRawByte())
-    def readBool: Eval[Boolean]      = Eval.later(cis.readBool())
-    def readInt: Eval[Int]           = Eval.later(cis.readInt32())
-    def readLong: Eval[Long]         = Eval.later(cis.readInt64())
-    def readString: Eval[String]     = Eval.later(cis.readString())
-    def readBigInt: Eval[BigInt]     = readBytes.map(BigInt(_))
+    import reader._
 
-    // Reads a sequence, flatMap prevents stackoverflow (force heap objects)
-    def readSeq[T](v: Eval[T]): Eval[Seq[T]] =
-      readInt.flatMap(Seq.range(0, _).as(v).sequence)
+    def readBigInt: Eval[BigInt] = readBytes.map(BigInt(_))
+
+    // Reads a sequence
+    def readSeq[T](v: Eval[T]): Eval[Seq[T]] = readInt.flatMap(Seq.range(0, _).as(v).sequence)
+
+    // Reads par object with all nested objects
+    // NOTE: defer is needed here to ensure correct deserialization
+    def readPar: Eval[ParN] = Eval.defer(readByte) >>= matchPar
+
+    // Reads sequence of pars
+    def readPars: Eval[Seq[ParN]] = readSeq(readPar)
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def readVar: Eval[VarN] =
@@ -262,13 +275,8 @@ object Serialization {
     def readVarOpt: Eval[Option[VarN]] =
       readBool.flatMap(x => if (x) readVar.map(Some(_)) else Eval.now(none))
 
-    def readKVPair: Eval[(ParN, ParN)]      = (readPar, readPar).mapN((_, _))
-    def readInjection: Eval[(String, ParN)] = (readString, readPar).mapN((_, _))
-
-    def readStrings: Eval[Seq[String]]            = readSeq(readString)
-    def readPars: Eval[Seq[ParN]]                 = readSeq(readPar)
-    def readKVPairs: Eval[Seq[(ParN, ParN)]]      = readSeq(readKVPair)
-    def readInjections: Eval[Seq[(String, ParN)]] = readSeq(readInjection)
+    def readTuplePar: Eval[(ParN, ParN)]         = (readPar, readPar).mapN((_, _))
+    def readTupleStringPar: Eval[(String, ParN)] = (readString, readPar).mapN((_, _))
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def readReceiveBind(tag: Byte): Eval[ReceiveBindN] = tag match {
@@ -296,174 +304,27 @@ object Serialization {
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def matchPar(tag: Byte): Eval[ParN] = tag match {
 
-      /** Basic types */
-      case PARPROC =>
-        readPars.map(ParProcN(_))
+      /* Terminal expressions (0-arity constructors) */
+      /* =========================================== */
 
-      case SEND =>
-        for {
-          chan       <- readPar
-          dataSeq    <- readPars
-          persistent <- readBool
-        } yield SendN(chan, dataSeq, persistent)
+      case NIL         => Eval.now(NilN)
+      case GBOOL       => readBool.map(GBoolN(_))
+      case GINT        => readLong.map(GIntN(_))
+      case GBIG_INT    => readBigInt.map(GBigIntN(_))
+      case GSTRING     => readString.map(GStringN(_))
+      case GBYTE_ARRAY => readBytes.map(GByteArrayN(_))
+      case GURI        => readString.map(GUriN(_))
+      case WILDCARD    => Eval.now(WildcardN)
 
-      case RECEIVE =>
-        for {
-          binds      <- readSeq(readTag >>= readReceiveBind)
-          body       <- readPar
-          persistent <- readBool
-          peek       <- readBool
-          bindCount  <- readInt
-        } yield ReceiveN(binds, body, persistent, peek, bindCount)
+      /* Unforgeable names */
+      case UPRIVATE => readBytes.map(UPrivateN(_))
 
-      case MATCH =>
-        for {
-          target <- readPar
-          cases  <- readSeq(readTag >>= readMatchMCase)
-        } yield MatchN(target, cases)
+      /* Vars */
+      case BOUND_VAR         => readInt.map(BoundVarN(_))
+      case FREE_VAR          => readInt.map(FreeVarN(_))
+      case CONNECTIVE_VARREF => (readInt, readInt).mapN(ConnVarRefN(_, _))
 
-      case NEW =>
-        for {
-          bindCount  <- readInt
-          p          <- readPar
-          uri        <- readStrings
-          injections <- readInjections
-        } yield NewN(bindCount, p, uri, injections)
-
-      /** Ground types */
-      case NIL => Eval.now(NilN)
-
-      case GBOOL =>
-        readBool.map(GBoolN(_))
-
-      case GINT =>
-        readLong.map(GIntN(_))
-
-      case GBIG_INT =>
-        readBigInt.map(GBigIntN(_))
-
-      case GSTRING =>
-        readString.map(GStringN(_))
-
-      case GBYTE_ARRAY =>
-        readBytes.map(GByteArrayN(_))
-
-      case GURI =>
-        readString.map(GUriN(_))
-
-      /** Collections */
-      case ELIST =>
-        for {
-          ps        <- readPars
-          remainder <- readVarOpt
-        } yield EListN(ps, remainder)
-
-      case ETUPLE =>
-        readPars.map(ETupleN(_))
-
-      case ESET =>
-        for {
-          ps        <- readPars
-          remainder <- readVarOpt
-        } yield ESetN(ps, remainder)
-
-      case EMAP =>
-        for {
-          ps        <- readKVPairs
-          remainder <- readVarOpt
-        } yield EMapN(ps, remainder)
-
-      /** Vars */
-      case BOUND_VAR =>
-        readInt.map(BoundVarN(_))
-
-      case FREE_VAR =>
-        readInt.map(FreeVarN(_))
-
-      case WILDCARD => Eval.now(WildcardN)
-
-      /** Unforgeable names */
-      case UPRIVATE =>
-        readBytes.map(UPrivateN(_))
-
-      case UDEPLOY_ID =>
-        readBytes.map(UDeployIdN(_))
-
-      case UDEPLOYER_ID =>
-        readBytes.map(UDeployerIdN(_))
-
-      // TODO: Temporary solution for easier conversion from old types - change type in the future
-      case SYS_AUTH_TOKEN =>
-        readBytes.as(USysAuthTokenN())
-
-      /** Operations */
-      case ENEG =>
-        readPar.map(ENegN(_))
-
-      case ENOT =>
-        readPar.map(ENotN(_))
-
-      case EPLUS =>
-        (readPar, readPar).mapN(EPlusN(_, _))
-
-      case EMINUS =>
-        (readPar, readPar).mapN(EMinusN(_, _))
-
-      case EMULT =>
-        (readPar, readPar).mapN(EMultN(_, _))
-
-      case EDIV =>
-        (readPar, readPar).mapN(EDivN(_, _))
-
-      case EMOD =>
-        (readPar, readPar).mapN(EModN(_, _))
-
-      case ELT =>
-        (readPar, readPar).mapN(ELtN(_, _))
-
-      case ELTE =>
-        (readPar, readPar).mapN(ELteN(_, _))
-
-      case EGT =>
-        (readPar, readPar).mapN(EGtN(_, _))
-
-      case EGTE =>
-        (readPar, readPar).mapN(EGteN(_, _))
-
-      case EEQ =>
-        (readPar, readPar).mapN(EEqN(_, _))
-
-      case ENEQ =>
-        (readPar, readPar).mapN(ENeqN(_, _))
-
-      case EAND =>
-        (readPar, readPar).mapN(EAndN(_, _))
-
-      case ESHORTAND =>
-        (readPar, readPar).mapN(EShortAndN(_, _))
-
-      case EOR =>
-        (readPar, readPar).mapN(EOrN(_, _))
-
-      case ESHORTOR =>
-        (readPar, readPar).mapN(EShortOrN(_, _))
-
-      case EPLUSPLUS =>
-        (readPar, readPar).mapN(EPlusPlusN(_, _))
-
-      case EMINUSMINUS =>
-        (readPar, readPar).mapN(EMinusMinusN(_, _))
-
-      case EPERCENT =>
-        (readPar, readPar).mapN(EPercentPercentN(_, _))
-
-      case EMETHOD =>
-        (readString, readPar, readPars).mapN(EMethodN(_, _, _))
-
-      case EMATCHES =>
-        (readPar, readPar).mapN(EMatchesN(_, _))
-
-      /** Connective */
+      /* Simple types */
       case CONNECTIVE_BOOL      => Eval.now(ConnBoolN)
       case CONNECTIVE_INT       => Eval.now(ConnIntN)
       case CONNECTIVE_BIG_INT   => Eval.now(ConnBigIntN)
@@ -471,26 +332,78 @@ object Serialization {
       case CONNECTIVE_URI       => Eval.now(ConnUriN)
       case CONNECTIVE_BYTEARRAY => Eval.now(ConnByteArrayN)
 
-      case CONNECTIVE_NOT =>
-        readPar.map(ConnNotN(_))
+      case UDEPLOY_ID   => readBytes.map(UDeployIdN(_))
+      case UDEPLOYER_ID => readBytes.map(UDeployerIdN(_))
 
-      case CONNECTIVE_AND =>
-        readPars.map(ConnAndN(_))
+      // TODO: Temporary solution for easier conversion from old types - change type in the future
+      case SYS_AUTH_TOKEN => readBytes.as(USysAuthTokenN())
 
-      case CONNECTIVE_OR =>
-        readPars.map(ConnOrN(_))
+      /* Unary expressions (1-arity constructors) */
+      /* ======================================== */
 
-      case CONNECTIVE_VARREF =>
-        (readInt, readInt).mapN(ConnVarRefN(_, _))
+      case ENEG => readPar.map(ENegN(_))
+      case ENOT => readPar.map(ENotN(_))
 
-      /** Other types */
-      case BUNDLE =>
-        (readPar, readBool, readBool).mapN(BundleN(_, _, _))
+      case BUNDLE => (readPar, readBool, readBool).mapN(BundleN(_, _, _))
+
+      /* Connective */
+      case CONNECTIVE_NOT => readPar.map(ConnNotN(_))
+
+      /* Binary expressions (2-arity constructors) */
+      /* ========================================= */
+
+      case EPLUS       => (readPar, readPar).mapN(EPlusN(_, _))
+      case EMINUS      => (readPar, readPar).mapN(EMinusN(_, _))
+      case EMULT       => (readPar, readPar).mapN(EMultN(_, _))
+      case EDIV        => (readPar, readPar).mapN(EDivN(_, _))
+      case EMOD        => (readPar, readPar).mapN(EModN(_, _))
+      case ELT         => (readPar, readPar).mapN(ELtN(_, _))
+      case ELTE        => (readPar, readPar).mapN(ELteN(_, _))
+      case EGT         => (readPar, readPar).mapN(EGtN(_, _))
+      case EGTE        => (readPar, readPar).mapN(EGteN(_, _))
+      case EEQ         => (readPar, readPar).mapN(EEqN(_, _))
+      case ENEQ        => (readPar, readPar).mapN(ENeqN(_, _))
+      case EAND        => (readPar, readPar).mapN(EAndN(_, _))
+      case ESHORTAND   => (readPar, readPar).mapN(EShortAndN(_, _))
+      case EOR         => (readPar, readPar).mapN(EOrN(_, _))
+      case ESHORTOR    => (readPar, readPar).mapN(EShortOrN(_, _))
+      case EPLUSPLUS   => (readPar, readPar).mapN(EPlusPlusN(_, _))
+      case EMINUSMINUS => (readPar, readPar).mapN(EMinusMinusN(_, _))
+      case EPERCENT    => (readPar, readPar).mapN(EPercentPercentN(_, _))
+
+      case EMATCHES => (readPar, readPar).mapN(EMatchesN(_, _))
+
+      /* N-ary parameter expressions (N-arity constructors) */
+      /* ================================================== */
+
+      case PARPROC => readPars.map(ParProcN(_))
+
+      case SEND => (readPar, readPars, readBool).mapN(SendN(_, _, _))
+
+      case RECEIVE =>
+        (readSeq(readByte >>= readReceiveBind), readPar, readBool, readBool, readInt)
+          .mapN(ReceiveN(_, _, _, _, _))
+
+      case MATCH =>
+        (readPar, readSeq(readByte >>= readMatchMCase)).mapN(MatchN(_, _))
+
+      case NEW =>
+        (readInt, readPar, readSeq(readString), readSeq(readTupleStringPar)).mapN(NewN(_, _, _, _))
+
+      /* Collections */
+      case ELIST  => (readPars, readVarOpt).mapN(EListN(_, _))
+      case ETUPLE => readPars.map(ETupleN(_))
+      case ESET   => (readPars, readVarOpt).mapN(ESetN(_, _))
+      case EMAP   => (readSeq(readTuplePar), readVarOpt).mapN(EMapN(_, _))
+
+      /* Connective */
+      case CONNECTIVE_AND => readPars.map(ConnAndN(_))
+      case CONNECTIVE_OR  => readPars.map(ConnOrN(_))
+
+      case EMETHOD => (readString, readPar, readPars).mapN(EMethodN(_, _, _))
 
       case _ => throw new Exception(s"Invalid tag `$tag` for ParN deserialization")
     }
-
-    def readPar: Eval[ParN] = readTag >>= matchPar
 
     readPar
   }
