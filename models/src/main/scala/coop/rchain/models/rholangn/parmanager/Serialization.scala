@@ -11,8 +11,13 @@ import scala.util.Using
 
 /** Wrapper for protobuf serialization of primitive types. */
 private class ProtobufPrimitiveWriter(output: CodedOutputStream) {
-  def write(x: Byte): Eval[Unit]        = Eval.later(output.writeRawByte(x))
-  def write(x: Array[Byte]): Eval[Unit] = Eval.later(output.writeRawBytes(x))
+  def write(x: Byte): Eval[Unit] = Eval.later(output.writeRawByte(x))
+
+  /** Writes raw bytes without size prefix */
+  def writeRaw(x: Array[Byte]): Eval[Unit] = Eval.later(output.writeRawBytes(x))
+
+  /** Writes bytes with size prefix */
+  def write(x: Array[Byte]): Eval[Unit] = Eval.later(output.writeByteArrayNoTag(x))
   def write(x: Boolean): Eval[Unit]     = Eval.later(output.writeBoolNoTag(x))
   def write(x: Int): Eval[Unit]         = Eval.later(output.writeUInt32NoTag(x))
   def write(x: Long): Eval[Unit]        = Eval.later(output.writeUInt64NoTag(x))
@@ -21,43 +26,37 @@ private class ProtobufPrimitiveWriter(output: CodedOutputStream) {
 
 /** Wrapper for protobuf serialization with recursive function. */
 private class ProtobufRecWriter(writer: ProtobufPrimitiveWriter, rec: RhoTypeN => Eval[Unit]) {
-  // Terminal expressions
-  def write(x: Byte): Eval[Unit]        = writer.write(x)
-  def write(x: Array[Byte]): Eval[Unit] = writer.write(x)
-  def write(x: Boolean): Eval[Unit]     = writer.write(x)
-  def write(x: Int): Eval[Unit]         = writer.write(x)
-  def write(x: Long): Eval[Unit]        = writer.write(x)
-  def write(x: String): Eval[Unit]      = writer.write(x)
-  def write(x: BigInt): Eval[Unit]      = write(x.toByteArray)
+  def writeBigInt(x: BigInt): Eval[Unit] = writer.write(x.toByteArray)
 
   // Recursive traversal
-  def write(x: RhoTypeN): Eval[Unit] = rec(x)
+  def writePar(x: RhoTypeN): Eval[Unit] = rec(x)
 
   // Recursive traversal of a sequence
-  def write(seq: Seq[RhoTypeN]): Eval[Unit] = writeSeq[RhoTypeN](seq, write)
+  def writeSeq(seq: Seq[RhoTypeN]): Eval[Unit] = writeSeq[RhoTypeN](seq, writePar)
 
-  def write(pOpt: Option[RhoTypeN]): Eval[Unit] =
-    pOpt.map(write(true) *> write(_)).getOrElse(write(false))
+  def writeOpt(pOpt: Option[RhoTypeN]): Eval[Unit] =
+    pOpt.map(writer.write(true) *> writePar(_)).getOrElse(writer.write(false))
 
   def writeTuplePar(kv: (RhoTypeN, RhoTypeN)): Eval[Unit] =
-    write(kv._1) *> write(kv._2)
+    writePar(kv._1) *> writePar(kv._2)
 
   def writeTupleStringPar(kv: (String, RhoTypeN)): Eval[Unit] =
-    write(kv._1) *> write(kv._2)
+    writer.write(kv._1) *> writePar(kv._2)
 
   // Writes serialized value of a sequence
   def writeSeq[T](seq: Seq[T], f: T => Eval[Unit]): Eval[Unit] =
-    write(seq.size) *> seq.traverse_(f)
+    writer.write(seq.size) *> seq.traverse_(f)
 }
 
 /** Wrapper for protobuf de-serialization of primitive types. */
 private class ProtobufReader(input: CodedInputStream) {
-  def readByte: Eval[Byte]         = Eval.later(input.readRawByte())
-  def readBytes: Eval[Array[Byte]] = Eval.later(input.readByteArray())
-  def readBool: Eval[Boolean]      = Eval.later(input.readBool())
-  def readInt: Eval[Int]           = Eval.later(input.readInt32())
-  def readLong: Eval[Long]         = Eval.later(input.readInt64())
-  def readString: Eval[String]     = Eval.later(input.readString())
+  // NOTE: Eval.always is used to ensure correct deserialization and read from input stream
+  def readByte: Eval[Byte]         = Eval.always(input.readRawByte())
+  def readBytes: Eval[Array[Byte]] = Eval.always(input.readByteArray())
+  def readBool: Eval[Boolean]      = Eval.always(input.readBool())
+  def readInt: Eval[Int]           = Eval.always(input.readUInt32())
+  def readLong: Eval[Long]         = Eval.always(input.readUInt64())
+  def readString: Eval[String]     = Eval.always(input.readString())
 }
 
 object Serialization {
@@ -88,10 +87,11 @@ object Serialization {
     lazy val serializer = new ProtobufRecWriter(protoWriter, writeRec)
 
     // Serializer with recursive traversal using memoized values
-    // val serializer = new ProtobufRecWriter(protoWriter, _.serialized.flatMap(protoWriter.write))
+    // val serializer = new ProtobufRecWriter(protoWriter, _.serialized.flatMap(protoWriter.writeRaw))
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def writeRec(p: RhoTypeN): Eval[Unit] = Eval.defer {
+      import protoWriter._
       import serializer._
 
       p match {
@@ -102,7 +102,7 @@ object Serialization {
         case _: NilN.type            => write(NIL)
         case gBool: GBoolN           => write(GBOOL) *> write(gBool.v)
         case gInt: GIntN             => write(GINT) *> write(gInt.v)
-        case gBigInt: GBigIntN       => write(GBIG_INT) *> write(gBigInt.v)
+        case gBigInt: GBigIntN       => write(GBIG_INT) *> writeBigInt(gBigInt.v)
         case gString: GStringN       => write(GSTRING) *> write(gString.v)
         case gByteArray: GByteArrayN => write(GBYTE_ARRAY) *> write(gByteArray.v)
         case gUri: GUriN             => write(GURI) *> write(gUri.v)
@@ -140,13 +140,13 @@ object Serialization {
             case _: ENegN => ENEG
             case _: ENotN => ENOT
           }
-          write(tag) *> write(op.p)
+          write(tag) *> writePar(op.p)
 
-        case bundle: BundleN =>
-          write(BUNDLE) *> write(bundle.body) *> write(bundle.writeFlag) *> write(bundle.readFlag)
+        case b: BundleN =>
+          write(BUNDLE) *> writePar(b.body) *> write(b.writeFlag) *> write(b.readFlag)
 
         /* Connective */
-        case connNot: ConnNotN => write(CONNECTIVE_NOT) *> write(connNot.p)
+        case connNot: ConnNotN => write(CONNECTIVE_NOT) *> writePar(connNot.p)
 
         /* Binary expressions (2-arity constructors) */
         /* ========================================= */
@@ -172,71 +172,71 @@ object Serialization {
             case _: EMinusMinusN     => EMINUSMINUS
             case _: EPercentPercentN => EPERCENT
           }
-          write(tag) *> write(op.p1) *> write(op.p2)
+          write(tag) *> writePar(op.p1) *> writePar(op.p2)
 
         case eMatches: EMatchesN =>
-          write(EMATCHES) *> write(eMatches.target) *> write(eMatches.pattern)
+          write(EMATCHES) *> writePar(eMatches.target) *> writePar(eMatches.pattern)
 
         /* N-ary parameter expressions (N-arity constructors) */
         /* ================================================== */
 
-        case pProc: ParProcN => write(PARPROC) *> write(pProc.sortedPs)
+        case pProc: ParProcN => write(PARPROC) *> writeSeq(pProc.sortedPs)
 
         case send: SendN =>
           write(SEND) *>
-            write(send.chan) *>
-            write(send.data) *>
+            writePar(send.chan) *>
+            writeSeq(send.data) *>
             write(send.persistent)
 
         case receive: ReceiveN =>
           write(RECEIVE) *>
-            write(receive.sortedBinds) *>
-            write(receive.body) *>
+            writeSeq(receive.sortedBinds) *>
+            writePar(receive.body) *>
             write(receive.persistent) *>
             write(receive.peek) *>
             write(receive.bindCount)
 
-        case m: MatchN => write(MATCH) *> write(m.target) *> write(m.cases)
+        case m: MatchN => write(MATCH) *> writePar(m.target) *> writeSeq(m.cases)
 
         case n: NewN =>
           write(NEW) *>
             write(n.bindCount) *>
-            write(n.p) *>
+            writePar(n.p) *>
             writeSeq[String](n.sortedUri, write) *>
             writeSeq[(String, ParN)](n.sortedInjections, writeTupleStringPar)
 
         /* Collections */
-        case eList: EListN   => write(ELIST) *> write(eList.ps) *> write(eList.remainder)
-        case eTuple: ETupleN => write(ETUPLE) *> write(eTuple.ps)
-        case eSet: ESetN     => write(ESET) *> write(eSet.sortedPs) *> write(eSet.remainder)
+        case eList: EListN   => write(ELIST) *> writeSeq(eList.ps) *> writeOpt(eList.remainder)
+        case eTuple: ETupleN => write(ETUPLE) *> writeSeq(eTuple.ps)
+        case eSet: ESetN     => write(ESET) *> writeSeq(eSet.sortedPs) *> writeOpt(eSet.remainder)
         case eMap: EMapN =>
           write(EMAP) *>
             writeSeq[(ParN, ParN)](eMap.sortedPs, writeTuplePar) *>
-            write(eMap.remainder)
+            writeOpt(eMap.remainder)
 
         /* Connective */
-        case connAnd: ConnAndN => write(CONNECTIVE_AND) *> write(connAnd.ps)
-        case connOr: ConnOrN   => write(CONNECTIVE_OR) *> write(connOr.ps)
+        case connAnd: ConnAndN => write(CONNECTIVE_AND) *> writeSeq(connAnd.ps)
+        case connOr: ConnOrN   => write(CONNECTIVE_OR) *> writeSeq(connOr.ps)
 
         case eMethod: EMethodN =>
           write(EMETHOD) *>
             write(eMethod.methodName) *>
-            write(eMethod.target) *>
-            write(eMethod.arguments)
+            writePar(eMethod.target) *>
+            writeSeq(eMethod.arguments)
 
         /* Auxiliary types */
 
         case bind: ReceiveBindN =>
           write(RECEIVE_BIND) *>
-            write(bind.patterns) *>
-            write(bind.source) *>
-            write(bind.remainder) *>
+            writeSeq(bind.patterns) *>
+            writePar(bind.source) *>
+            writeOpt(bind.remainder) *>
             write(bind.freeCount)
 
         case mCase: MatchCaseN =>
           write(MATCH_CASE) *>
-            write(mCase.pattern) *>
-            write(mCase.source) *>
+            writePar(mCase.pattern) *>
+            writePar(mCase.source) *>
             write(mCase.freeCount)
 
         case unknownType => throw new Exception(s"Unknown type `$unknownType`")
@@ -259,8 +259,7 @@ object Serialization {
     def readSeq[T](v: Eval[T]): Eval[Seq[T]] = readInt.flatMap(Seq.range(0, _).as(v).sequence)
 
     // Reads par object with all nested objects
-    // NOTE: defer is needed here to ensure correct deserialization
-    def readPar: Eval[ParN] = Eval.defer(readByte) >>= matchPar
+    def readPar: Eval[ParN] = readByte >>= matchPar
 
     // Reads sequence of pars
     def readPars: Eval[Seq[ParN]] = readSeq(readPar)
@@ -317,7 +316,11 @@ object Serialization {
       case WILDCARD    => Eval.now(WildcardN)
 
       /* Unforgeable names */
-      case UPRIVATE => readBytes.map(UPrivateN(_))
+      case UPRIVATE     => readBytes.map(UPrivateN(_))
+      case UDEPLOY_ID   => readBytes.map(UDeployIdN(_))
+      case UDEPLOYER_ID => readBytes.map(UDeployerIdN(_))
+      // TODO: Temporary solution for easier conversion from old types - change type in the future
+      case SYS_AUTH_TOKEN => readBytes.as(USysAuthTokenN())
 
       /* Vars */
       case BOUND_VAR         => readInt.map(BoundVarN(_))
@@ -331,12 +334,6 @@ object Serialization {
       case CONNECTIVE_STRING    => Eval.now(ConnStringN)
       case CONNECTIVE_URI       => Eval.now(ConnUriN)
       case CONNECTIVE_BYTEARRAY => Eval.now(ConnByteArrayN)
-
-      case UDEPLOY_ID   => readBytes.map(UDeployIdN(_))
-      case UDEPLOYER_ID => readBytes.map(UDeployerIdN(_))
-
-      // TODO: Temporary solution for easier conversion from old types - change type in the future
-      case SYS_AUTH_TOKEN => readBytes.as(USysAuthTokenN())
 
       /* Unary expressions (1-arity constructors) */
       /* ======================================== */
