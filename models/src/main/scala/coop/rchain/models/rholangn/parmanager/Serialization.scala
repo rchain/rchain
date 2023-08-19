@@ -85,89 +85,60 @@ object Serialization {
 
       p match {
 
-        /** Basic types */
-        case _: NilN.type => write(NIL)
+        /* Terminal expressions (0-arity constructors) */
+        /* =========================================== */
 
-        case pProc: ParProcN =>
-          write(PARPROC) *> write(pProc.sortedPs)
+        case _: NilN.type            => write(NIL)
+        case gBool: GBoolN           => write(GBOOL) *> write(gBool.v)
+        case gInt: GIntN             => write(GINT) *> write(gInt.v)
+        case gBigInt: GBigIntN       => write(GBIG_INT) *> write(gBigInt.v)
+        case gString: GStringN       => write(GSTRING) *> write(gString.v)
+        case gByteArray: GByteArrayN => write(GBYTE_ARRAY) *> write(gByteArray.v)
+        case gUri: GUriN             => write(GURI) *> write(gUri.v)
+        case _: WildcardN.type       => write(WILDCARD)
 
-        case send: SendN =>
-          write(SEND) *>
-            write(send.chan) *>
-            write(send.data) *>
-            write(send.persistent)
+        /* Unforgeable names */
+        case unf: UnforgeableN =>
+          val unfKind = unf match {
+            case _: UPrivateN      => UPRIVATE
+            case _: UDeployIdN     => UDEPLOY_ID
+            case _: UDeployerIdN   => UDEPLOYER_ID
+            case _: USysAuthTokenN => SYS_AUTH_TOKEN
+          }
+          write(unfKind) *> write(unf.v)
 
-        case receive: ReceiveN =>
-          write(RECEIVE) *>
-            write(receive.sortedBinds) *>
-            write(receive.body) *>
-            write(receive.persistent) *>
-            write(receive.peek) *>
-            write(receive.bindCount)
+        /* Vars */
+        case bVar: BoundVarN => write(BOUND_VAR) *> write(bVar.idx)
+        case fVar: FreeVarN  => write(FREE_VAR) *> write(fVar.idx)
+        case rVar: ConnVarRefN =>
+          write(CONNECTIVE_VARREF) *> write(rVar.index) *> write(rVar.depth)
 
-        case m: MatchN =>
-          write(MATCH) *>
-            write(m.target) *>
-            write(m.cases)
+        /* Simple types */
+        case _: ConnBoolN.type      => write(CONNECTIVE_BOOL)
+        case _: ConnIntN.type       => write(CONNECTIVE_INT)
+        case _: ConnBigIntN.type    => write(CONNECTIVE_BIG_INT)
+        case _: ConnStringN.type    => write(CONNECTIVE_STRING)
+        case _: ConnUriN.type       => write(CONNECTIVE_URI)
+        case _: ConnByteArrayN.type => write(CONNECTIVE_BYTEARRAY)
 
-        case n: NewN =>
-          write(NEW) *>
-            write(n.bindCount) *>
-            write(n.p) *>
-            writeSeq[String](n.sortedUri, write) *>
-            writeSeq[(String, ParN)](n.sortedInjections, writeTupleStringPar)
+        /* Unary expressions (1-arity constructors) */
+        /* ======================================== */
 
-        /** Ground types */
-        case gBool: GBoolN =>
-          write(GBOOL) *> write(gBool.v)
-
-        case gInt: GIntN =>
-          write(GINT) *> write(gInt.v)
-
-        case gBigInt: GBigIntN =>
-          write(GBIG_INT) *> write(gBigInt.v)
-
-        case gString: GStringN =>
-          write(GSTRING) *> write(gString.v)
-
-        case gByteArray: GByteArrayN =>
-          write(GBYTE_ARRAY) *> write(gByteArray.v)
-
-        case gUri: GUriN =>
-          write(GURI) *> write(gUri.v)
-
-        /** Collections */
-        case eList: EListN =>
-          write(ELIST) *> write(eList.ps) *> write(eList.remainder)
-
-        case eTuple: ETupleN =>
-          write(ETUPLE) *> write(eTuple.ps)
-
-        case eSet: ESetN =>
-          write(ESET) *> write(eSet.sortedPs) *> write(eSet.remainder)
-
-        case eMap: EMapN =>
-          write(EMAP) *>
-            writeSeq[(ParN, ParN)](eMap.sortedPs, writeTuplePar) *>
-            write(eMap.remainder)
-
-        /** Vars */
-        case bVar: BoundVarN =>
-          write(BOUND_VAR) *> write(bVar.idx)
-
-        case fVar: FreeVarN =>
-          write(FREE_VAR) *> write(fVar.idx)
-
-        case _: WildcardN.type =>
-          write(WILDCARD)
-
-        /** Operations */
         case op: Operation1ParN =>
           val tag = op match {
             case _: ENegN => ENEG
             case _: ENotN => ENOT
           }
           write(tag) *> write(op.p)
+
+        case bundle: BundleN =>
+          write(BUNDLE) *> write(bundle.body) *> write(bundle.writeFlag) *> write(bundle.readFlag)
+
+        /* Connective */
+        case connNot: ConnNotN => write(CONNECTIVE_NOT) *> write(connNot.p)
+
+        /* Binary expressions (2-arity constructors) */
+        /* ========================================= */
 
         case op: Operation2ParN =>
           val tag = op match {
@@ -192,46 +163,58 @@ object Serialization {
           }
           write(tag) *> write(op.p1) *> write(op.p2)
 
+        case eMatches: EMatchesN =>
+          write(EMATCHES) *> write(eMatches.target) *> write(eMatches.pattern)
+
+        /* N-ary parameter expressions (N-arity constructors) */
+        /* ================================================== */
+
+        case pProc: ParProcN => write(PARPROC) *> write(pProc.sortedPs)
+
+        case send: SendN =>
+          write(SEND) *>
+            write(send.chan) *>
+            write(send.data) *>
+            write(send.persistent)
+
+        case receive: ReceiveN =>
+          write(RECEIVE) *>
+            write(receive.sortedBinds) *>
+            write(receive.body) *>
+            write(receive.persistent) *>
+            write(receive.peek) *>
+            write(receive.bindCount)
+
+        case m: MatchN => write(MATCH) *> write(m.target) *> write(m.cases)
+
+        case n: NewN =>
+          write(NEW) *>
+            write(n.bindCount) *>
+            write(n.p) *>
+            writeSeq[String](n.sortedUri, write) *>
+            writeSeq[(String, ParN)](n.sortedInjections, writeTupleStringPar)
+
+        /* Collections */
+        case eList: EListN   => write(ELIST) *> write(eList.ps) *> write(eList.remainder)
+        case eTuple: ETupleN => write(ETUPLE) *> write(eTuple.ps)
+        case eSet: ESetN     => write(ESET) *> write(eSet.sortedPs) *> write(eSet.remainder)
+        case eMap: EMapN =>
+          write(EMAP) *>
+            writeSeq[(ParN, ParN)](eMap.sortedPs, writeTuplePar) *>
+            write(eMap.remainder)
+
+        /* Connective */
+        case connAnd: ConnAndN => write(CONNECTIVE_AND) *> write(connAnd.ps)
+        case connOr: ConnOrN   => write(CONNECTIVE_OR) *> write(connOr.ps)
+
         case eMethod: EMethodN =>
           write(EMETHOD) *>
             write(eMethod.methodName) *>
             write(eMethod.target) *>
             write(eMethod.arguments)
 
-        case eMatches: EMatchesN =>
-          write(EMATCHES) *> write(eMatches.target) *> write(eMatches.pattern)
+        /* Auxiliary types */
 
-        /** Unforgeable names */
-        case unf: UnforgeableN =>
-          val writeUnfKind = unf match {
-            case _: UPrivateN      => write(UPRIVATE)
-            case _: UDeployIdN     => write(UDEPLOY_ID)
-            case _: UDeployerIdN   => write(UDEPLOYER_ID)
-            case _: USysAuthTokenN => write(SYS_AUTH_TOKEN)
-          }
-          writeUnfKind *> write(unf.v)
-
-        /** Connective */
-        case _: ConnBoolN.type      => write(CONNECTIVE_BOOL)
-        case _: ConnIntN.type       => write(CONNECTIVE_INT)
-        case _: ConnBigIntN.type    => write(CONNECTIVE_BIG_INT)
-        case _: ConnStringN.type    => write(CONNECTIVE_STRING)
-        case _: ConnUriN.type       => write(CONNECTIVE_URI)
-        case _: ConnByteArrayN.type => write(CONNECTIVE_BYTEARRAY)
-
-        case connNot: ConnNotN =>
-          write(CONNECTIVE_NOT) *> write(connNot.p)
-
-        case connAnd: ConnAndN =>
-          write(CONNECTIVE_AND) *> write(connAnd.ps)
-
-        case connOr: ConnOrN =>
-          write(CONNECTIVE_OR) *> write(connOr.ps)
-
-        case connVarRef: ConnVarRefN =>
-          write(CONNECTIVE_VARREF) *> write(connVarRef.index) *> write(connVarRef.depth)
-
-        /** Auxiliary types */
         case bind: ReceiveBindN =>
           write(RECEIVE_BIND) *>
             write(bind.patterns) *>
@@ -244,13 +227,6 @@ object Serialization {
             write(mCase.pattern) *>
             write(mCase.source) *>
             write(mCase.freeCount)
-
-        /** Other types */
-        case bundle: BundleN =>
-          write(BUNDLE) *>
-            write(bundle.body) *>
-            write(bundle.writeFlag) *>
-            write(bundle.readFlag)
 
         case unknownType => throw new Exception(s"Unknown type `$unknownType`")
       }

@@ -54,8 +54,51 @@ private[parmanager] object SerializedSize {
   def calcSerSize(p: RhoTypeN): Eval[Int] = Eval.defer {
     p match {
 
-      /** Basic types */
-      case _: NilN.type => Eval.now(totalSize())
+      /* Terminal expressions (0-arity constructors) */
+      /* =========================================== */
+
+      case _: NilN.type            => Eval.now(totalSize())
+      case gBool: GBoolN           => sSize(gBool.v).map(totalSize(_))
+      case gInt: GIntN             => sSize(gInt.v).map(totalSize(_))
+      case gBigInt: GBigIntN       => sSize(gBigInt.v).map(totalSize(_))
+      case gString: GStringN       => sSize(gString.v).map(totalSize(_))
+      case gByteArray: GByteArrayN => sSize(gByteArray.v).map(totalSize(_))
+      case gUri: GUriN             => sSize(gUri.v).map(totalSize(_))
+      case _: WildcardN.type       => Eval.now(totalSize())
+
+      /* Unforgeable names */
+      case unf: UnforgeableN => sSize(unf.v).map(totalSize(_))
+
+      /* Vars */
+      case v: BoundVarN   => sSize(v.idx).map(totalSize(_))
+      case v: FreeVarN    => sSize(v.idx).map(totalSize(_))
+      case v: ConnVarRefN => (sSize(v.index), sSize(v.depth)).mapN(totalSize(_, _))
+
+      /* Simple types */
+      case _: ConnectiveSTypeN => Eval.now(totalSize())
+
+      /* Unary expressions (1-arity constructors) */
+      /* ======================================== */
+
+      case op: Operation1ParN => sSize(op.p).map(totalSize(_))
+
+      case bundle: BundleN =>
+        (sSize(bundle.body), sSize(bundle.writeFlag), sSize(bundle.readFlag))
+          .mapN(totalSize(_, _, _))
+
+      /* Connective */
+      case connNot: ConnNotN => sSize(connNot.p).map(totalSize(_))
+
+      /* Binary expressions (2-arity constructors) */
+      /* ========================================= */
+
+      case op: Operation2ParN => (sSize(op.p1), sSize(op.p2)).mapN(totalSize(_, _))
+
+      case eMatches: EMatchesN =>
+        (sSize(eMatches.target), sSize(eMatches.pattern)).mapN(totalSize(_, _))
+
+      /* N-ary parameter expressions (N-arity constructors) */
+      /* ================================================== */
 
       case pProc: ParProcN => sSize(pProc.ps).map(totalSize(_))
 
@@ -83,52 +126,25 @@ private[parmanager] object SerializedSize {
         val injectionsSize = sSizeSeqTupleStringPar(n.injections.toSeq)
         (bindCountSize, pSize, uriSize, injectionsSize).mapN(totalSize(_, _, _, _))
 
-      /** Ground types */
-      case gBool: GBoolN           => sSize(gBool.v).map(totalSize(_))
-      case gInt: GIntN             => sSize(gInt.v).map(totalSize(_))
-      case gBigInt: GBigIntN       => sSize(gBigInt.v).map(totalSize(_))
-      case gString: GStringN       => sSize(gString.v).map(totalSize(_))
-      case gByteArray: GByteArrayN => sSize(gByteArray.v).map(totalSize(_))
-      case gUri: GUriN             => sSize(gUri.v).map(totalSize(_))
-
-      /** Collections */
-      case list: EListN => (sSize(list.ps), sSize(list.remainder)).mapN(totalSize(_, _))
-
+      /* Collections */
+      case list: EListN    => (sSize(list.ps), sSize(list.remainder)).mapN(totalSize(_, _))
       case eTuple: ETupleN => sSize(eTuple.ps).map(totalSize(_))
       case eSet: ESetN     => (sSize(eSet.sortedPs), sSize(eSet.remainder)).mapN(totalSize(_, _))
       case eMap: EMapN =>
         (sSizeSeqTuplePar(eMap.sortedPs), sSize(eMap.remainder)).mapN(totalSize(_, _))
 
-      /** Vars */
-      case v: BoundVarN      => sSize(v.idx).map(totalSize(_))
-      case v: FreeVarN       => sSize(v.idx).map(totalSize(_))
-      case _: WildcardN.type => Eval.now(totalSize())
+      /* Connective */
+      case connAnd: ConnAndN => sSize(connAnd.ps).map(totalSize(_))
+      case connOr: ConnOrN   => sSize(connOr.ps).map(totalSize(_))
 
-      /** Operations */
-      case op: Operation1ParN => sSize(op.p).map(totalSize(_))
-      case op: Operation2ParN => (sSize(op.p1), sSize(op.p2)).mapN(totalSize(_, _))
       case eMethod: EMethodN =>
         val methodNameSize = sSize(eMethod.methodName)
         val targetSize     = sSize(eMethod.target)
         val argumentsSize  = sSize(eMethod.arguments)
         (methodNameSize, targetSize, argumentsSize).mapN(totalSize(_, _, _))
-      case eMatches: EMatchesN =>
-        (sSize(eMatches.target), sSize(eMatches.pattern)).mapN(totalSize(_, _))
 
-      /** Unforgeable names */
-      case unf: UnforgeableN => sSize(unf.v).map(totalSize(_))
+      /* Auxiliary types */
 
-      /** Connective */
-      case _: ConnectiveSTypeN => Eval.now(totalSize())
-
-      case connNot: ConnNotN => sSize(connNot.p).map(totalSize(_))
-      case connAnd: ConnAndN => sSize(connAnd.ps).map(totalSize(_))
-      case connOr: ConnOrN   => sSize(connOr.ps).map(totalSize(_))
-
-      case connVarRef: ConnVarRefN =>
-        (sSize(connVarRef.index), sSize(connVarRef.depth)).mapN(totalSize(_, _))
-
-      /** Auxiliary types */
       case bind: ReceiveBindN =>
         val patternsSize  = sSize(bind.patterns)
         val sourceSize    = sSize(bind.source)
@@ -141,13 +157,6 @@ private[parmanager] object SerializedSize {
         val sourceSize    = sSize(mCase.source)
         val freeCountSize = sSize(mCase.freeCount)
         (patternSize, sourceSize, freeCountSize).mapN(totalSize(_, _, _))
-
-      /** Other types */
-      case bundle: BundleN =>
-        val bodySize      = sSize(bundle.body)
-        val writeFlagSize = sSize(bundle.writeFlag)
-        val readFlagSize  = sSize(bundle.readFlag)
-        (bodySize, writeFlagSize, readFlagSize).mapN(totalSize(_, _, _))
 
       case x => throw new Exception(s"Undefined type $x")
     }
