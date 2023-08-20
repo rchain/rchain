@@ -1,6 +1,6 @@
 package coop.rchain.models.rholangn
 
-import coop.rchain.models.rholangn.parmanager.Serialization
+import coop.rchain.models.rholangn.parmanager.Manager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -15,7 +15,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   def simpleCheck(p1: ParN, p2Opt: Option[ParN] = None): Boolean = {
     // Serialization and hashing testing
     val bytes1        = p1.serialized.value
-    val recover1      = Serialization.deserializeFromBytes(bytes1)
+    val recover1      = Manager.protoDeserialize(bytes1)
     val res1: Boolean = p1.rhoHash sameElements recover1.rhoHash
 
     // Testing possibility of calculating the rest of the metadata (without checking correctness)

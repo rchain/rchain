@@ -1,7 +1,13 @@
 package coop.rchain.models.rholangn.parmanager
 
 import cats.Eval
+import com.google.protobuf.{CodedInputStream, CodedOutputStream}
 import coop.rchain.models.rholangn._
+import coop.rchain.models.rholangn.parmanager.protobuf.{
+  ProtoCodec,
+  ProtoPrimitiveReader,
+  ProtoPrimitiveWriter
+}
 
 object Manager {
 
@@ -51,10 +57,19 @@ object Manager {
   def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
-  def rhoHashFn(p: RhoTypeN): Array[Byte]          = RhoHash.rhoHashFn(p)
-  def serializedSizeFn(p: RhoTypeN): Eval[Int]     = SerializedSize.calcSerSize(p)
-  def serializedFn(p: RhoTypeN): Eval[Array[Byte]] = Serialization.serializeToBytes(p)
-  def connectiveUsedFn(p: RhoTypeN): Boolean       = ConnectiveUsed.connectiveUsedFn(p)
-  def evalRequiredFn(p: RhoTypeN): Boolean         = EvalRequired.evalRequiredFn(p)
-  def substituteRequiredFn(p: RhoTypeN): Boolean   = SubstituteRequired.substituteRequiredFn(p)
+  def rhoHashFn(p: RhoTypeN): Array[Byte]      = RhoHash.rhoHashFn(p)
+  def serializedSizeFn(p: RhoTypeN): Eval[Int] = SerializedSize.calcSerSize(p)
+  def serializedFn(p: RhoTypeN): Eval[Array[Byte]] = {
+    val write = (out: CodedOutputStream) => Serialization.serialize(p, ProtoPrimitiveWriter(out))
+    p.serializedSize.flatMap(size => ProtoCodec.encode(size, write))
+  }
+  def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
+  def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
+  def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)
+
+  // Deserialize with protobuf
+  def protoDeserialize(bytes: Array[Byte]): ParN = {
+    val decode = (in: CodedInputStream) => Serialization.deserialize(ProtoPrimitiveReader(in))
+    ProtoCodec.decode(bytes, decode).value
+  }
 }
