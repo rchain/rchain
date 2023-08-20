@@ -8,6 +8,7 @@ trait PrimitiveWriter[F[_]] {
 
   /** Writes bytes with size prefix */
   def write(x: Array[Byte]): F[Unit]
+
   def write(x: Boolean): F[Unit]
   def write(x: Int): F[Unit]
   def write(x: Long): F[Unit]

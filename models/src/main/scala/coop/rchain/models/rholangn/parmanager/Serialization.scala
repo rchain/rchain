@@ -8,17 +8,29 @@ import coop.rchain.models.rholangn.parmanager.primitive.{PrimitiveReader, Primit
 
 object Serialization {
 
+  /**
+    * Serialization of the Rholang AST types.
+    *
+    * @param p Rholang AST root object
+    * @param wrt Writer of primitive types
+    * @param memo Use memoization for all children fields recursively
+    */
   // TODO: Properly handle errors with return type (remove throw)
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def serialize(p: RhoTypeN, primitiveWriter: PrimitiveWriter[Eval]): Eval[Unit] = Eval.defer {
-    import primitiveWriter._
-    val syntax = primitive.syntax.PrimitiveWriterSyntax.primitiveWriterSyntax(primitiveWriter)
-    import syntax._
+  def serialize(p: RhoTypeN, wrt: PrimitiveWriter[Eval], memo: Boolean): Eval[Unit] = Eval.defer {
+    // Recursive traversal with or without memoization of all children objects
+    val writePar: RhoTypeN => Eval[Unit] =
+      if (memo)
+        // Recursive traversal using memoized values
+        _.serialized.flatMap(wrt.writeRaw)
+      else
+        // Recursive traversal of the whole object without memoization of intermediaries
+        serialize(_, wrt, memo)
 
-    // Recursive traversal of the whole object without memoization of intermediaries
-    val writePar: RhoTypeN => Eval[Unit] = serialize(_, primitiveWriter)
-    // Recursive traversal using memoized values
-    // val writePar: RhoTypeN => Eval[Unit] = _.serialized.flatMap(primitiveWriter.writeRaw)
+    val rhoWriter: RhoRecWriter[Eval] = RhoRecWriter(wrt, writePar)
+
+    import wrt._
+    import rhoWriter._
 
     p match {
 
@@ -106,17 +118,17 @@ object Serialization {
       /* N-ary parameter expressions (N-arity constructors) */
       /* ================================================== */
 
-      case pProc: ParProcN => write(PARPROC) *> writeSeq(pProc.sortedPs, writePar)
+      case pProc: ParProcN => write(PARPROC) *> writeSeq(pProc.sortedPs)
 
       case send: SendN =>
         write(SEND) *>
           writePar(send.chan) *>
-          writeSeq(send.data, writePar) *>
+          writeSeq(send.data) *>
           write(send.persistent)
 
       case receive: ReceiveN =>
         write(RECEIVE) *>
-          writeSeq(receive.sortedBinds, writePar) *>
+          writeSeq(receive.sortedBinds) *>
           writePar(receive.body) *>
           write(receive.persistent) *>
           write(receive.peek) *>
@@ -129,35 +141,33 @@ object Serialization {
           write(n.bindCount) *>
           writePar(n.p) *>
           writeSeq[String](n.sortedUri, write) *>
-          writeSeq[(String, ParN)](n.sortedInjections, writeTupleStringT(_, writePar))
+          writeSeq[(String, ParN)](n.sortedInjections, writeTupleStringPar(_))
 
       /* Collections */
-      case eList: EListN =>
-        write(ELIST) *> writeSeq(eList.ps, writePar) *> writeOpt(eList.remainder, writePar)
-      case eTuple: ETupleN => write(ETUPLE) *> writeSeq(eTuple.ps, writePar)
-      case eSet: ESetN =>
-        write(ESET) *> writeSeq(eSet.sortedPs, writePar) *> writeOpt(eSet.remainder, writePar)
+      case eList: EListN   => write(ELIST) *> writeSeq(eList.ps) *> writeOpt(eList.remainder)
+      case eTuple: ETupleN => write(ETUPLE) *> writeSeq(eTuple.ps)
+      case eSet: ESetN     => write(ESET) *> writeSeq(eSet.sortedPs) *> writeOpt(eSet.remainder)
       case eMap: EMapN =>
         write(EMAP) *>
-          writeSeq[(ParN, ParN)](eMap.sortedPs, writeTuple(_, writePar)) *>
-          writeOpt(eMap.remainder, writePar)
+          writeSeq[(ParN, ParN)](eMap.sortedPs, writeTuplePar(_)) *>
+          writeOpt(eMap.remainder)
 
       /* Connective */
-      case connAnd: ConnAndN => write(CONNECTIVE_AND) *> writeSeq(connAnd.ps, writePar)
-      case connOr: ConnOrN   => write(CONNECTIVE_OR) *> writeSeq(connOr.ps, writePar)
+      case connAnd: ConnAndN => write(CONNECTIVE_AND) *> writeSeq(connAnd.ps)
+      case connOr: ConnOrN   => write(CONNECTIVE_OR) *> writeSeq(connOr.ps)
 
       case eMethod: EMethodN =>
         write(EMETHOD) *>
           write(eMethod.methodName) *>
           writePar(eMethod.target) *>
-          writeSeq(eMethod.arguments, writePar)
+          writeSeq(eMethod.arguments)
 
       /* Auxiliary types */
       case bind: ReceiveBindN =>
         write(RECEIVE_BIND) *>
-          writeSeq(bind.patterns, writePar) *>
+          writeSeq(bind.patterns) *>
           writePar(bind.source) *>
-          writeOpt(bind.remainder, writePar) *>
+          writeOpt(bind.remainder) *>
           write(bind.freeCount)
 
       case mCase: MatchCaseN =>

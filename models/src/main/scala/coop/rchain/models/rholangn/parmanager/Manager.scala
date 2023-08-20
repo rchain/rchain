@@ -1,13 +1,15 @@
 package coop.rchain.models.rholangn.parmanager
 
 import cats.Eval
-import com.google.protobuf.{CodedInputStream, CodedOutputStream}
+import com.google.protobuf.CodedOutputStream
 import coop.rchain.models.rholangn._
 import coop.rchain.models.rholangn.parmanager.protobuf.{
   ProtoCodec,
   ProtoPrimitiveReader,
   ProtoPrimitiveWriter
 }
+
+import java.io.InputStream
 
 object Manager {
 
@@ -59,8 +61,9 @@ object Manager {
   /** MetaData */
   def rhoHashFn(p: RhoTypeN): Array[Byte]      = RhoHash.rhoHashFn(p)
   def serializedSizeFn(p: RhoTypeN): Eval[Int] = SerializedSize.calcSerSize(p)
-  def serializedFn(p: RhoTypeN): Eval[Array[Byte]] = {
-    val write = (out: CodedOutputStream) => Serialization.serialize(p, ProtoPrimitiveWriter(out))
+  def serializedFn(p: RhoTypeN, memoChilds: Boolean): Eval[Array[Byte]] = {
+    val write = (out: CodedOutputStream) =>
+      Serialization.serialize(p, ProtoPrimitiveWriter(out), memoChilds)
     p.serializedSize.flatMap(size => ProtoCodec.encode(size, write))
   }
   def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
@@ -69,7 +72,7 @@ object Manager {
 
   // Deserialize with protobuf
   def protoDeserialize(bytes: Array[Byte]): ParN = {
-    val decode = (in: CodedInputStream) => Serialization.deserialize(ProtoPrimitiveReader(in))
+    val decode = (in: InputStream) => Serialization.deserialize(ProtoPrimitiveReader(in))
     ProtoCodec.decode(bytes, decode).value
   }
 }

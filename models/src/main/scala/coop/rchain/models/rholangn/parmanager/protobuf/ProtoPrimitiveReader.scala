@@ -4,21 +4,27 @@ import cats.Eval
 import com.google.protobuf.CodedInputStream
 import coop.rchain.models.rholangn.parmanager.primitive.PrimitiveReader
 
+import java.io.InputStream
+
 object ProtoPrimitiveReader {
 
   /** Wrapper for protobuf de-serialization of primitive types. */
-  def apply(input: CodedInputStream) = new PrimitiveReader[Eval] {
-    // NOTE: Eval.always is used to ensure correct deserialization and read from input stream
-    def readByte: Eval[Byte] = Eval.always(input.readRawByte())
+  def apply(input: InputStream) = {
+    val cis = CodedInputStream.newInstance(input)
 
-    def readBytes: Eval[Array[Byte]] = Eval.always(input.readByteArray())
+    new PrimitiveReader[Eval] {
+      // NOTE: Eval.always is used to ensure correct deserialization and read from input stream
+      def readByte: Eval[Byte] = Eval.always(cis.readRawByte())
 
-    def readBool: Eval[Boolean] = Eval.always(input.readBool())
+      def readBytes: Eval[Array[Byte]] = Eval.always(cis.readByteArray())
 
-    def readInt: Eval[Int] = Eval.always(input.readUInt32())
+      def readBool: Eval[Boolean] = Eval.always(cis.readBool())
 
-    def readLong: Eval[Long] = Eval.always(input.readUInt64())
+      def readInt: Eval[Int] = Eval.always(cis.readUInt32())
 
-    def readString: Eval[String] = Eval.always(input.readString())
+      def readLong: Eval[Long] = Eval.always(cis.readUInt64())
+
+      def readString: Eval[String] = Eval.always(cis.readString())
+    }
   }
 }
