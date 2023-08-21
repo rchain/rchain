@@ -61,9 +61,9 @@ object Manager {
   /** MetaData */
   def rhoHashFn(p: RhoTypeN): Array[Byte]      = RhoHash.rhoHashFn(p)
   def serializedSizeFn(p: RhoTypeN): Eval[Int] = SerializedSize.calcSerSize(p)
-  def serializedFn(p: RhoTypeN, memoChilds: Boolean): Eval[Array[Byte]] = {
+  def serializedFn(p: RhoTypeN, memoizeChildren: Boolean): Eval[Array[Byte]] = {
     val write = (out: CodedOutputStream) =>
-      Serialization.serialize(p, ProtoPrimitiveWriter(out), memoChilds)
+      Serialization.serialize(p, ProtoPrimitiveWriter(out), memoizeChildren)
     p.serializedSize.flatMap(size => ProtoCodec.encode(size, write))
   }
   def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)

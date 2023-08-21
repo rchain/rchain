@@ -13,7 +13,7 @@ sealed trait RhoTypeN {
   val serializedSize: Eval[Int] = serializedSizeFn(this).memoize
 
   /** Serialized bytes lazily evaluated with memoization */
-  val serialized: Eval[Array[Byte]] = serializedFn(this, memoChilds = false).memoize
+  val serialized: Eval[Array[Byte]] = serializedFn(this, memoizeChildren = false).memoize
 
   /** True if the object or at least one of the nested objects non-concrete.
     * Such a object cannot be viewed as if it were a term.*/

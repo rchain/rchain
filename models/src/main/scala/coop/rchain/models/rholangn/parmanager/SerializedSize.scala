@@ -19,10 +19,10 @@ private object ProtobufSerializedSize {
   def sSize(v: String): Eval[Int]          = Eval.later(CodedOutputStream.computeStringSizeNoTag(v))
   def sSize(v: BigInt): Eval[Int]          = sSize(v.toByteArray)
 
-  // Recursive traversal using memoized value
+  // Recursive traversal with memoization of serialized size on children objects
   def sSize(x: RhoTypeN): Eval[Int] = x.serializedSize
 
-  // Recursive traversal of a sequence using memoized values
+  // Recursive traversal of a sequence with memoization of serialized size on children objects
   def sSize(ps: Seq[RhoTypeN]): Eval[Int] = sSizeSeq[RhoTypeN](ps, sSize)
 
   def sSize(kv: (RhoTypeN, RhoTypeN)): Eval[Int] =
