@@ -1,21 +1,17 @@
 package coop.rchain.models.rholangn.parmanager
 
+import cats.Eval
+import com.google.protobuf.CodedOutputStream
 import coop.rchain.models.rholangn._
+import coop.rchain.models.rholangn.parmanager.protobuf.{
+  ProtoCodec,
+  ProtoPrimitiveReader,
+  ProtoPrimitiveWriter
+}
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.io.InputStream
 
 object Manager {
-
-  def parToBytes(p: ParN): Array[Byte] = {
-    val baos = new ByteArrayOutputStream(p.serializedSize)
-    Serialization.serialize(p, baos)
-    baos.toByteArray
-  }
-
-  def parFromBytes(bv: Array[Byte]): ParN = {
-    val bais = new ByteArrayInputStream(bv)
-    Serialization.deserialize(bais)
-  }
 
   def equals(self: RhoTypeN, other: Any): Boolean = other match {
     case x: RhoTypeN => x.rhoHash sameElements self.rhoHash
@@ -63,9 +59,20 @@ object Manager {
   def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
-  def rhoHashFn(p: RhoTypeN): Array[Byte]        = RhoHash.rhoHashFn(p)
-  def serializedSizeFn(p: RhoTypeN): Int         = SerializedSize.serializedSizeFn(p)
+  def rhoHashFn(p: RhoTypeN): Array[Byte]      = RhoHash.rhoHashFn(p)
+  def serializedSizeFn(p: RhoTypeN): Eval[Int] = SerializedSize.calcSerSize(p)
+  def serializedFn(p: RhoTypeN, memoizeChildren: Boolean): Eval[Array[Byte]] = {
+    val write = (out: CodedOutputStream) =>
+      Serialization.serialize(p, ProtoPrimitiveWriter(out), memoizeChildren)
+    p.serializedSize.flatMap(size => ProtoCodec.encode(size, write))
+  }
   def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
   def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
   def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)
+
+  // Deserialize with protobuf
+  def protoDeserialize(bytes: Array[Byte]): ParN = {
+    val decode = (in: InputStream) => Serialization.deserialize(ProtoPrimitiveReader(in))
+    ProtoCodec.decode(bytes, decode).value
+  }
 }

@@ -1,7 +1,7 @@
 package coop.rchain.models.rholangn
 
+import coop.rchain.models.rholangn.parmanager.{Manager, Serialization}
 import org.openjdk.jmh.annotations._
-import scodec.bits.ByteVector
 
 import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
@@ -48,11 +48,11 @@ class ParBench {
   def setup(): Unit = {
     nestedPar = createNestedPar(nestedSize)
     nestedAnotherPar = createNestedPar(nestedSize)
-    nestedParSData = ParN.toBytes(nestedPar)
+    nestedParSData = nestedPar.serialized.value
 
     parProc = createParProc(parProcSize)
     parProcAnother = createParProc(parProcSize)
-    parProcSData = ParN.toBytes(parProc)
+    parProcSData = parProc.serialized.value
   }
 
   @Benchmark
@@ -66,21 +66,21 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedSerialization(): Unit = {
-    val _ = ParN.toBytes(nestedPar)
+    val _ = nestedPar.serialized.value
   }
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedDeserialization(): Unit = {
-    val _ = ParN.fromBytes(nestedParSData)
+    val _ = Manager.protoDeserialize(nestedParSData)
   }
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedSerializedSize(): Unit = {
-    val _ = nestedPar.serializedSize
+    val _ = nestedPar.serializedSize.value
   }
 
   @Benchmark
@@ -114,20 +114,20 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcSerialization(): Unit = {
-    val _ = ParN.toBytes(parProc)
+    val _ = parProc.serialized.value
   }
 
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcDeserialization(): Unit = {
-    val _ = ParN.fromBytes(parProcSData)
+    val _ = Manager.protoDeserialize(parProcSData)
   }
   @Benchmark
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcSerializedSize(): Unit = {
-    val _ = parProc.serializedSize
+    val _ = parProc.serializedSize.value
   }
 
   @Benchmark

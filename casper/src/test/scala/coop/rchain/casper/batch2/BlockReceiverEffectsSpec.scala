@@ -192,6 +192,8 @@ class BlockReceiverEffectsSpec
           shardId,
           incomingBlockQueue.trySend(_).void
         )
+        // Limit the chunk size to prevent taking more then one element
+          .map(_.chunkLimit(1).unchunks)
       }
       res <- f(incomingBlockQueue, validatedBlocksQueue, blockReceiver, bs, br, bds)
     } yield res

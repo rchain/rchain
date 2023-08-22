@@ -1,581 +1,338 @@
 package coop.rchain.models.rholangn.parmanager
 
-import com.google.protobuf.{CodedInputStream, CodedOutputStream}
+import cats.Eval
+import cats.syntax.all._
 import coop.rchain.models.rholangn._
 import coop.rchain.models.rholangn.parmanager.Constants._
+import coop.rchain.models.rholangn.parmanager.primitive.{PrimitiveReader, PrimitiveWriter}
 
-import java.io.{InputStream, OutputStream}
+object Serialization {
 
-private[parmanager] object Serialization {
-  def serialize(par: ParN, output: OutputStream): Unit = {
-    val cos = CodedOutputStream.newInstance(output)
+  /**
+    * Serialization of the Rholang AST types.
+    *
+    * @param p Rholang AST root object
+    * @param wrt Writer of primitive types
+    * @param memo Use memoization for all children fields recursively
+    */
+  // TODO: Properly handle errors with return type (remove throw)
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def serialize(p: RhoTypeN, wrt: PrimitiveWriter[Eval], memo: Boolean): Eval[Unit] = Eval.defer {
+    // Recursive traversal with or without memoization of all children objects
+    val writePar: RhoTypeN => Eval[Unit] =
+      if (memo)
+        // Recursive traversal using memoized values
+        _.serialized.flatMap(wrt.writeRaw)
+      else
+        // Recursive traversal of the whole object without memoization of intermediaries
+        serialize(_, wrt, memo)
 
-    object Serializer {
-      private def write(x: Array[Byte]): Unit = cos.writeByteArrayNoTag(x)
+    val rhoWriter: RhoRecWriter[Eval] = RhoRecWriter(wrt, writePar)
 
-      private def write(x: Byte): Unit    = cos.writeRawByte(x)
-      private def write(x: Boolean): Unit = cos.writeBoolNoTag(x)
-      private def write(x: Int): Unit     = cos.writeInt32NoTag(x)
-      private def write(x: BigInt): Unit  = write(x.toByteArray)
-      private def write(x: Long): Unit    = cos.writeInt64NoTag(x)
-      private def write(x: String): Unit  = cos.writeStringNoTag(x)
+    import wrt._
+    import rhoWriter._
 
-      private def write(pOpt: Option[RhoTypeN]): Unit =
-        if (pOpt.isDefined) {
-          write(true)
-          write(pOpt.get)
-        } else write(false)
+    p match {
 
-      private def write(kv: (ParN, ParN)): Unit = {
-        write(kv._1)
-        write(kv._2)
-      }
+      /* Terminal expressions (0-arity constructors) */
+      /* =========================================== */
 
-      private def writeInjection(injection: (String, ParN)): Unit = {
-        write(injection._1)
-        write(injection._2)
-      }
+      case _: NilN.type            => write(NIL)
+      case gBool: GBoolN           => write(GBOOL) *> write(gBool.v)
+      case gInt: GIntN             => write(GINT) *> write(gInt.v)
+      case gBigInt: GBigIntN       => write(GBIG_INT) *> writeBigInt(gBigInt.v)
+      case gString: GStringN       => write(GSTRING) *> write(gString.v)
+      case gByteArray: GByteArrayN => write(GBYTE_ARRAY) *> write(gByteArray.v)
+      case gUri: GUriN             => write(GURI) *> write(gUri.v)
+      case _: WildcardN.type       => write(WILDCARD)
 
-      private def writeSeq[T](seq: Seq[T], f: T => Unit): Unit = {
-        write(seq.size)
-        seq.foreach(f)
-      }
+      /* Unforgeable names */
+      case unf: UnforgeableN =>
+        val unfKind = unf match {
+          case _: UPrivateN      => UPRIVATE
+          case _: UDeployIdN     => UDEPLOY_ID
+          case _: UDeployerIdN   => UDEPLOYER_ID
+          case _: USysAuthTokenN => SYS_AUTH_TOKEN
+        }
+        write(unfKind) *> write(unf.v)
 
-      private def write(ps: Seq[RhoTypeN]): Unit           = writeSeq[RhoTypeN](ps, write)
-      private def writeStrings(strings: Seq[String]): Unit = writeSeq[String](strings, write)
-      private def writeKVPairs(kVPairs: Seq[(ParN, ParN)]): Unit =
-        writeSeq[(ParN, ParN)](kVPairs, write)
-      private def writeInjections(injections: Seq[(String, ParN)]): Unit =
-        writeSeq[(String, ParN)](injections, writeInjection)
+      /* Vars */
+      case bVar: BoundVarN => write(BOUND_VAR) *> write(bVar.idx)
+      case fVar: FreeVarN  => write(FREE_VAR) *> write(fVar.idx)
+      case rVar: ConnVarRefN =>
+        write(CONNECTIVE_VARREF) *> write(rVar.index) *> write(rVar.depth)
 
-      private def write1ParOp(tag: Byte, p: ParN): Unit = {
-        write(tag)
-        write(p)
-      }
+      /* Simple types */
+      case _: ConnBoolN.type      => write(CONNECTIVE_BOOL)
+      case _: ConnIntN.type       => write(CONNECTIVE_INT)
+      case _: ConnBigIntN.type    => write(CONNECTIVE_BIG_INT)
+      case _: ConnStringN.type    => write(CONNECTIVE_STRING)
+      case _: ConnUriN.type       => write(CONNECTIVE_URI)
+      case _: ConnByteArrayN.type => write(CONNECTIVE_BYTEARRAY)
 
-      private def write2ParOp(tag: Byte, p1: ParN, p2: ParN): Unit = {
-        write(tag)
-        write(p1)
-        write(p2)
-      }
+      /* Unary expressions (1-arity constructors) */
+      /* ======================================== */
 
-      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-      def write(p: RhoTypeN): Unit = p match {
+      case op: Operation1ParN =>
+        val tag = op match {
+          case _: ENegN => ENEG
+          case _: ENotN => ENOT
+        }
+        write(tag) *> writePar(op.p)
 
-        /** Basic types */
-        case _: NilN.type => write(NIL)
+      case b: BundleN =>
+        write(BUNDLE) *> writePar(b.body) *> write(b.writeFlag) *> write(b.readFlag)
 
-        case pProc: ParProcN =>
-          write(PARPROC)
-          write(pProc.sortedPs)
+      /* Connective */
+      case connNot: ConnNotN => write(CONNECTIVE_NOT) *> writePar(connNot.p)
 
-        case send: SendN =>
-          write(SEND)
-          write(send.chan)
-          write(send.data)
+      /* Binary expressions (2-arity constructors) */
+      /* ========================================= */
+
+      case op: Operation2ParN =>
+        val tag = op match {
+          case _: EPlusN           => EPLUS
+          case _: EMinusN          => EMINUS
+          case _: EMultN           => EMULT
+          case _: EDivN            => EDIV
+          case _: EModN            => EMOD
+          case _: ELtN             => ELT
+          case _: ELteN            => ELTE
+          case _: EGtN             => EGT
+          case _: EGteN            => EGTE
+          case _: EEqN             => EEQ
+          case _: ENeqN            => ENEQ
+          case _: EAndN            => EAND
+          case _: EShortAndN       => ESHORTAND
+          case _: EOrN             => EOR
+          case _: EShortOrN        => ESHORTOR
+          case _: EPlusPlusN       => EPLUSPLUS
+          case _: EMinusMinusN     => EMINUSMINUS
+          case _: EPercentPercentN => EPERCENT
+        }
+        write(tag) *> writePar(op.p1) *> writePar(op.p2)
+
+      case eMatches: EMatchesN =>
+        write(EMATCHES) *> writePar(eMatches.target) *> writePar(eMatches.pattern)
+
+      /* N-ary parameter expressions (N-arity constructors) */
+      /* ================================================== */
+
+      case pProc: ParProcN => write(PARPROC) *> writeSeq(pProc.sortedPs)
+
+      case send: SendN =>
+        write(SEND) *>
+          writePar(send.chan) *>
+          writeSeq(send.data) *>
           write(send.persistent)
 
-        case receive: ReceiveN =>
-          write(RECEIVE)
-          write(receive.sortedBinds)
-          write(receive.body)
-          write(receive.persistent)
-          write(receive.peek)
+      case receive: ReceiveN =>
+        write(RECEIVE) *>
+          writeSeq(receive.sortedBinds) *>
+          writePar(receive.body) *>
+          write(receive.persistent) *>
+          write(receive.peek) *>
           write(receive.bindCount)
 
-        case m: MatchN =>
-          write(MATCH)
-          write(m.target)
-          write(m.cases)
+      case m: MatchN => write(MATCH) *> writePar(m.target) *> writeSeq(m.cases, writePar)
 
-        case n: NewN =>
-          write(NEW)
-          write(n.bindCount)
-          write(n.p)
-          writeStrings(n.sortedUri)
-          writeInjections(n.sortedInjections)
+      case n: NewN =>
+        write(NEW) *>
+          write(n.bindCount) *>
+          writePar(n.p) *>
+          writeSeq[String](n.sortedUri, write) *>
+          writeSeq[(String, ParN)](n.sortedInjections, writeTupleStringPar(_))
 
-        /** Ground types */
-        case gBool: GBoolN =>
-          write(GBOOL)
-          write(gBool.v)
+      /* Collections */
+      case eList: EListN   => write(ELIST) *> writeSeq(eList.ps) *> writeOpt(eList.remainder)
+      case eTuple: ETupleN => write(ETUPLE) *> writeSeq(eTuple.ps)
+      case eSet: ESetN     => write(ESET) *> writeSeq(eSet.sortedPs) *> writeOpt(eSet.remainder)
+      case eMap: EMapN =>
+        write(EMAP) *>
+          writeSeq[(ParN, ParN)](eMap.sortedPs, writeTuplePar(_)) *>
+          writeOpt(eMap.remainder)
 
-        case gInt: GIntN =>
-          write(GINT)
-          write(gInt.v)
+      /* Connective */
+      case connAnd: ConnAndN => write(CONNECTIVE_AND) *> writeSeq(connAnd.ps)
+      case connOr: ConnOrN   => write(CONNECTIVE_OR) *> writeSeq(connOr.ps)
 
-        case gBigInt: GBigIntN =>
-          write(GBIG_INT)
-          write(gBigInt.v)
+      case eMethod: EMethodN =>
+        write(EMETHOD) *>
+          write(eMethod.methodName) *>
+          writePar(eMethod.target) *>
+          writeSeq(eMethod.arguments)
 
-        case gString: GStringN =>
-          write(GSTRING)
-          write(gString.v)
-
-        case gByteArray: GByteArrayN =>
-          write(GBYTE_ARRAY)
-          write(gByteArray.v)
-
-        case gUri: GUriN =>
-          write(GURI)
-          write(gUri.v)
-
-        /** Collections */
-        case eList: EListN =>
-          write(ELIST)
-          write(eList.ps)
-          write(eList.remainder)
-
-        case eTuple: ETupleN =>
-          write(ETUPLE)
-          write(eTuple.ps)
-
-        case eSet: ESetN =>
-          write(ESET)
-          write(eSet.sortedPs)
-          write(eSet.remainder)
-
-        case eMap: EMapN =>
-          write(EMAP)
-          writeKVPairs(eMap.sortedPs)
-          write(eMap.remainder)
-
-        /** Vars */
-        case bVar: BoundVarN =>
-          write(BOUND_VAR)
-          write(bVar.idx)
-
-        case fVar: FreeVarN =>
-          write(FREE_VAR)
-          write(fVar.idx)
-
-        case _: WildcardN.type =>
-          write(WILDCARD)
-
-        /** Operations */
-        case op: Operation1ParN =>
-          val tag = op match {
-            case _: ENegN => ENEG
-            case _: ENotN => ENOT
-          }
-          write1ParOp(tag, op.p)
-
-        case op: Operation2ParN =>
-          val tag = op match {
-            case _: EPlusN           => EPLUS
-            case _: EMinusN          => EMINUS
-            case _: EMultN           => EMULT
-            case _: EDivN            => EDIV
-            case _: EModN            => EMOD
-            case _: ELtN             => ELT
-            case _: ELteN            => ELTE
-            case _: EGtN             => EGT
-            case _: EGteN            => EGTE
-            case _: EEqN             => EEQ
-            case _: ENeqN            => ENEQ
-            case _: EAndN            => EAND
-            case _: EShortAndN       => ESHORTAND
-            case _: EOrN             => EOR
-            case _: EShortOrN        => ESHORTOR
-            case _: EPlusPlusN       => EPLUSPLUS
-            case _: EMinusMinusN     => EMINUSMINUS
-            case _: EPercentPercentN => EPERCENT
-          }
-          write2ParOp(tag, op.p1, op.p2)
-
-        case eMethod: EMethodN =>
-          write(EMETHOD)
-          write(eMethod.methodName)
-          write(eMethod.target)
-          write(eMethod.arguments)
-
-        case eMatches: EMatchesN =>
-          write2ParOp(EMATCHES, eMatches.target, eMatches.pattern)
-
-        /** Unforgeable names */
-        case unf: UnforgeableN =>
-          unf match {
-            case _: UPrivateN      => write(UPRIVATE)
-            case _: UDeployIdN     => write(UDEPLOY_ID)
-            case _: UDeployerIdN   => write(UDEPLOYER_ID)
-            case _: USysAuthTokenN => write(SYS_AUTH_TOKEN)
-          }
-          write(unf.v)
-
-        /** Connective */
-        case _: ConnBoolN.type      => write(CONNECTIVE_BOOL)
-        case _: ConnIntN.type       => write(CONNECTIVE_INT)
-        case _: ConnBigIntN.type    => write(CONNECTIVE_BIG_INT)
-        case _: ConnStringN.type    => write(CONNECTIVE_STRING)
-        case _: ConnUriN.type       => write(CONNECTIVE_URI)
-        case _: ConnByteArrayN.type => write(CONNECTIVE_BYTEARRAY)
-
-        case connNot: ConnNotN =>
-          write(CONNECTIVE_NOT)
-          write(connNot.p)
-
-        case connAnd: ConnAndN =>
-          write(CONNECTIVE_AND)
-          write(connAnd.ps)
-
-        case connOr: ConnOrN =>
-          write(CONNECTIVE_OR)
-          write(connOr.ps)
-
-        case connVarRef: ConnVarRefN =>
-          write(CONNECTIVE_VARREF)
-          write(connVarRef.index)
-          write(connVarRef.depth)
-
-        /** Auxiliary types */
-        case bind: ReceiveBindN =>
-          write(RECEIVE_BIND)
-          write(bind.patterns)
-          write(bind.source)
-          write(bind.remainder)
+      /* Auxiliary types */
+      case bind: ReceiveBindN =>
+        write(RECEIVE_BIND) *>
+          writeSeq(bind.patterns) *>
+          writePar(bind.source) *>
+          writeOpt(bind.remainder) *>
           write(bind.freeCount)
 
-        case mCase: MatchCaseN =>
-          write(MATCH_CASE)
-          write(mCase.pattern)
-          write(mCase.source)
+      case mCase: MatchCaseN =>
+        write(MATCH_CASE) *>
+          writePar(mCase.pattern) *>
+          writePar(mCase.source) *>
           write(mCase.freeCount)
 
-        /** Other types */
-        case bundle: BundleN =>
-          write(BUNDLE)
-          write(bundle.body)
-          write(bundle.writeFlag)
-          write(bundle.readFlag)
-
-        case _ => throw new Exception("Not defined type")
-      }
+      case unknownType => throw new Exception(s"Unknown type `$unknownType`")
     }
-
-    Serializer.write(par)
-    cos.flush()
   }
 
-  def deserialize(input: InputStream): ParN = {
-    val cis = CodedInputStream.newInstance(input)
+  // TODO: Properly handle errors with return type (remove throw)
+  def deserialize(primitiveReader: PrimitiveReader[Eval]): Eval[ParN] = {
+    import primitiveReader._
 
-    def readBytes(): Array[Byte] = cis.readByteArray()
+    def readBigInt: Eval[BigInt] = readBytes.map(BigInt(_))
 
-    def readTag(): Byte      = cis.readRawByte()
-    def readBool(): Boolean  = cis.readBool()
-    def readInt(): Int       = cis.readInt32()
-    def readBigInt(): BigInt = BigInt(readBytes())
-    def readLong(): Long     = cis.readInt64()
-    def readString(): String = cis.readString()
+    // Reads a sequence
+    def readSeq[T](v: Eval[T]): Eval[Seq[T]] = readInt.flatMap(Seq.range(0, _).as(v).sequence)
+
+    // Reads par object with all nested objects
+    def readPar: Eval[ParN] = readByte >>= matchPar
+
+    // Reads sequence of pars
+    def readPars: Eval[Seq[ParN]] = readSeq(readPar)
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-    def readVar(): VarN = readPar() match {
-      case v: VarN => v
-      case _       => throw new Exception("Value must be Var")
-    }
-
-    def readVarOpt(): Option[VarN]      = if (readBool()) Some(readVar()) else None
-    def readKVPair(): (ParN, ParN)      = (readPar(), readPar())
-    def readInjection(): (String, ParN) = (readString(), readPar())
-
-    def readLength(): Int = cis.readUInt32()
-    def readSeq[T](f: () => T): Seq[T] = {
-      val count = readLength()
-      (1 to count).map(_ => f())
-    }
-
-    def readStrings(): Seq[String]            = readSeq(readString _)
-    def readPars(): Seq[ParN]                 = readSeq(readPar _)
-    def readKVPairs(): Seq[(ParN, ParN)]      = readSeq(readKVPair _)
-    def readInjections(): Seq[(String, ParN)] = readSeq(readInjection _)
-
-    /** Auxiliary types deserialization */
-    def readReceiveBinds(): Seq[ReceiveBindN] = {
-      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-      def matchReceiveBind(tag: Byte): ReceiveBindN = tag match {
-        case RECEIVE_BIND =>
-          val patterns  = readPars()
-          val source    = readPar()
-          val remainder = readVarOpt()
-          val freeCount = readInt()
-          ReceiveBindN(patterns, source, remainder, freeCount)
-        case _ => throw new Exception("Invalid tag for ReceiveBindN deserialization")
+    def readVar: Eval[VarN] =
+      readPar.map {
+        case v: VarN => v
+        case p       => throw new Exception(s"Value must be Var, found `$p`")
       }
-      def readReceiveBind() = readTagAndMatch(matchReceiveBind)
-      readSeq(readReceiveBind _)
-    }
 
-    def readMatchCases(): Seq[MatchCaseN] = {
-      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-      def matchMCase(tag: Byte): MatchCaseN = tag match {
-        case MATCH_CASE =>
-          val pattern   = readPar()
-          val source    = readPar()
-          val freeCount = readInt()
-          MatchCaseN(pattern, source, freeCount)
-        case _ => throw new Exception("Invalid tag for matchMCase deserialization")
-      }
-      def readMatchCase() = readTagAndMatch(matchMCase)
-      readSeq(readMatchCase _)
+    def readVarOpt: Eval[Option[VarN]] =
+      readBool.flatMap(x => if (x) readVar.map(Some(_)) else Eval.now(none))
+
+    def readTuplePar: Eval[(ParN, ParN)]         = (readPar, readPar).mapN((_, _))
+    def readTupleStringPar: Eval[(String, ParN)] = (readString, readPar).mapN((_, _))
+
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    def readReceiveBind(tag: Byte): Eval[ReceiveBindN] = tag match {
+      case RECEIVE_BIND =>
+        for {
+          patterns  <- readPars
+          source    <- readPar
+          remainder <- readVarOpt
+          freeCount <- readInt
+        } yield ReceiveBindN(patterns, source, remainder, freeCount)
+      case _ => throw new Exception(s"Invalid tag `$tag` for ReceiveBindN deserialization")
     }
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-    def matchPar(tag: Byte): ParN = tag match {
+    def readMatchMCase(tag: Byte): Eval[MatchCaseN] = tag match {
+      case MATCH_CASE =>
+        for {
+          pattern   <- readPar
+          source    <- readPar
+          freeCount <- readInt
+        } yield MatchCaseN(pattern, source, freeCount)
+      case _ => throw new Exception(s"Invalid tag `$tag` for matchMCase deserialization")
+    }
 
-      /** Basic types */
-      case PARPROC =>
-        val ps = readPars()
-        ParProcN(ps)
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    def matchPar(tag: Byte): Eval[ParN] = tag match {
 
-      case SEND =>
-        val chan       = readPar()
-        val dataSeq    = readPars()
-        val persistent = readBool()
-        SendN(chan, dataSeq, persistent)
+      /* Terminal expressions (0-arity constructors) */
+      /* =========================================== */
+
+      case NIL         => Eval.now(NilN)
+      case GBOOL       => readBool.map(GBoolN(_))
+      case GINT        => readLong.map(GIntN(_))
+      case GBIG_INT    => readBigInt.map(GBigIntN(_))
+      case GSTRING     => readString.map(GStringN(_))
+      case GBYTE_ARRAY => readBytes.map(GByteArrayN(_))
+      case GURI        => readString.map(GUriN(_))
+      case WILDCARD    => Eval.now(WildcardN)
+
+      /* Unforgeable names */
+      case UPRIVATE     => readBytes.map(UPrivateN(_))
+      case UDEPLOY_ID   => readBytes.map(UDeployIdN(_))
+      case UDEPLOYER_ID => readBytes.map(UDeployerIdN(_))
+      // TODO: Temporary solution for easier conversion from old types - change type in the future
+      case SYS_AUTH_TOKEN => readBytes.as(USysAuthTokenN())
+
+      /* Vars */
+      case BOUND_VAR         => readInt.map(BoundVarN(_))
+      case FREE_VAR          => readInt.map(FreeVarN(_))
+      case CONNECTIVE_VARREF => (readInt, readInt).mapN(ConnVarRefN(_, _))
+
+      /* Simple types */
+      case CONNECTIVE_BOOL      => Eval.now(ConnBoolN)
+      case CONNECTIVE_INT       => Eval.now(ConnIntN)
+      case CONNECTIVE_BIG_INT   => Eval.now(ConnBigIntN)
+      case CONNECTIVE_STRING    => Eval.now(ConnStringN)
+      case CONNECTIVE_URI       => Eval.now(ConnUriN)
+      case CONNECTIVE_BYTEARRAY => Eval.now(ConnByteArrayN)
+
+      /* Unary expressions (1-arity constructors) */
+      /* ======================================== */
+
+      case ENEG => readPar.map(ENegN(_))
+      case ENOT => readPar.map(ENotN(_))
+
+      case BUNDLE => (readPar, readBool, readBool).mapN(BundleN(_, _, _))
+
+      /* Connective */
+      case CONNECTIVE_NOT => readPar.map(ConnNotN(_))
+
+      /* Binary expressions (2-arity constructors) */
+      /* ========================================= */
+
+      case EPLUS       => (readPar, readPar).mapN(EPlusN(_, _))
+      case EMINUS      => (readPar, readPar).mapN(EMinusN(_, _))
+      case EMULT       => (readPar, readPar).mapN(EMultN(_, _))
+      case EDIV        => (readPar, readPar).mapN(EDivN(_, _))
+      case EMOD        => (readPar, readPar).mapN(EModN(_, _))
+      case ELT         => (readPar, readPar).mapN(ELtN(_, _))
+      case ELTE        => (readPar, readPar).mapN(ELteN(_, _))
+      case EGT         => (readPar, readPar).mapN(EGtN(_, _))
+      case EGTE        => (readPar, readPar).mapN(EGteN(_, _))
+      case EEQ         => (readPar, readPar).mapN(EEqN(_, _))
+      case ENEQ        => (readPar, readPar).mapN(ENeqN(_, _))
+      case EAND        => (readPar, readPar).mapN(EAndN(_, _))
+      case ESHORTAND   => (readPar, readPar).mapN(EShortAndN(_, _))
+      case EOR         => (readPar, readPar).mapN(EOrN(_, _))
+      case ESHORTOR    => (readPar, readPar).mapN(EShortOrN(_, _))
+      case EPLUSPLUS   => (readPar, readPar).mapN(EPlusPlusN(_, _))
+      case EMINUSMINUS => (readPar, readPar).mapN(EMinusMinusN(_, _))
+      case EPERCENT    => (readPar, readPar).mapN(EPercentPercentN(_, _))
+
+      case EMATCHES => (readPar, readPar).mapN(EMatchesN(_, _))
+
+      /* N-ary parameter expressions (N-arity constructors) */
+      /* ================================================== */
+
+      case PARPROC => readPars.map(ParProcN(_))
+
+      case SEND => (readPar, readPars, readBool).mapN(SendN(_, _, _))
 
       case RECEIVE =>
-        val binds      = readReceiveBinds()
-        val body       = readPar()
-        val persistent = readBool()
-        val peek       = readBool()
-        val bindCount  = readInt()
-        ReceiveN(binds, body, persistent, peek, bindCount)
+        (readSeq(readByte >>= readReceiveBind), readPar, readBool, readBool, readInt)
+          .mapN(ReceiveN(_, _, _, _, _))
 
       case MATCH =>
-        val target = readPar()
-        val cases  = readMatchCases()
-        MatchN(target, cases)
+        (readPar, readSeq(readByte >>= readMatchMCase)).mapN(MatchN(_, _))
 
       case NEW =>
-        val bindCount  = readInt()
-        val p          = readPar()
-        val uri        = readStrings()
-        val injections = readInjections()
-        NewN(bindCount, p, uri, injections)
+        (readInt, readPar, readSeq(readString), readSeq(readTupleStringPar)).mapN(NewN(_, _, _, _))
 
-      /** Ground types */
-      case NIL => NilN
+      /* Collections */
+      case ELIST  => (readPars, readVarOpt).mapN(EListN(_, _))
+      case ETUPLE => readPars.map(ETupleN(_))
+      case ESET   => (readPars, readVarOpt).mapN(ESetN(_, _))
+      case EMAP   => (readSeq(readTuplePar), readVarOpt).mapN(EMapN(_, _))
 
-      case GBOOL =>
-        val v = readBool()
-        GBoolN(v)
+      /* Connective */
+      case CONNECTIVE_AND => readPars.map(ConnAndN(_))
+      case CONNECTIVE_OR  => readPars.map(ConnOrN(_))
 
-      case GINT =>
-        val v = readLong()
-        GIntN(v)
+      case EMETHOD => (readString, readPar, readPars).mapN(EMethodN(_, _, _))
 
-      case GBIG_INT =>
-        val v = readBigInt()
-        GBigIntN(v)
-
-      case GSTRING =>
-        val v = readString()
-        GStringN(v)
-
-      case GBYTE_ARRAY =>
-        val v = readBytes()
-        GByteArrayN(v)
-
-      case GURI =>
-        val v = readString()
-        GUriN(v)
-
-      /** Collections */
-      case ELIST =>
-        val ps        = readPars()
-        val remainder = readVarOpt()
-        EListN(ps, remainder)
-
-      case ETUPLE =>
-        val ps = readPars()
-        ETupleN(ps)
-
-      case ESET =>
-        val ps        = readPars()
-        val remainder = readVarOpt()
-        ESetN(ps, remainder)
-
-      case EMAP =>
-        val ps        = readKVPairs()
-        val remainder = readVarOpt()
-        EMapN(ps, remainder)
-
-      /** Vars */
-      case BOUND_VAR =>
-        val v = readInt()
-        BoundVarN(v)
-
-      case FREE_VAR =>
-        val v = readInt()
-        FreeVarN(v)
-
-      case WILDCARD => WildcardN
-
-      /** Unforgeable names */
-      case UPRIVATE =>
-        val v = readBytes()
-        UPrivateN(v)
-
-      case UDEPLOY_ID =>
-        val v = readBytes()
-        UDeployIdN(v)
-
-      case UDEPLOYER_ID =>
-        val v = readBytes()
-        UDeployerIdN(v)
-
-      case SYS_AUTH_TOKEN =>
-        val _ = readBytes() // TODO: Temporary solution for easier conversion from old types - change type in the future
-        USysAuthTokenN()
-
-      /** Operations */
-      case ENEG =>
-        val p = readPar()
-        ENegN(p)
-
-      case ENOT =>
-        val p = readPar()
-        ENotN(p)
-
-      case EPLUS =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EPlusN(p1, p2)
-
-      case EMINUS =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EMinusN(p1, p2)
-
-      case EMULT =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EMultN(p1, p2)
-
-      case EDIV =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EDivN(p1, p2)
-
-      case EMOD =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EModN(p1, p2)
-
-      case ELT =>
-        val p1 = readPar()
-        val p2 = readPar()
-        ELtN(p1, p2)
-
-      case ELTE =>
-        val p1 = readPar()
-        val p2 = readPar()
-        ELteN(p1, p2)
-
-      case EGT =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EGtN(p1, p2)
-
-      case EGTE =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EGteN(p1, p2)
-
-      case EEQ =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EEqN(p1, p2)
-
-      case ENEQ =>
-        val p1 = readPar()
-        val p2 = readPar()
-        ENeqN(p1, p2)
-
-      case EAND =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EAndN(p1, p2)
-
-      case ESHORTAND =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EShortAndN(p1, p2)
-
-      case EOR =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EOrN(p1, p2)
-
-      case ESHORTOR =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EShortOrN(p1, p2)
-
-      case EPLUSPLUS =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EPlusPlusN(p1, p2)
-
-      case EMINUSMINUS =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EMinusMinusN(p1, p2)
-
-      case EPERCENT =>
-        val p1 = readPar()
-        val p2 = readPar()
-        EPercentPercentN(p1, p2)
-
-      case EMETHOD =>
-        val methodName = readString()
-        val target     = readPar()
-        val arguments  = readPars()
-        EMethodN(methodName, target, arguments)
-
-      case EMATCHES =>
-        val target  = readPar()
-        val pattern = readPar()
-        EMatchesN(target, pattern)
-
-      /** Connective */
-      case CONNECTIVE_BOOL      => ConnBoolN
-      case CONNECTIVE_INT       => ConnIntN
-      case CONNECTIVE_BIG_INT   => ConnBigIntN
-      case CONNECTIVE_STRING    => ConnStringN
-      case CONNECTIVE_URI       => ConnUriN
-      case CONNECTIVE_BYTEARRAY => ConnByteArrayN
-
-      case CONNECTIVE_NOT =>
-        val p = readPar()
-        ConnNotN(p)
-
-      case CONNECTIVE_AND =>
-        val ps = readPars()
-        ConnAndN(ps)
-
-      case CONNECTIVE_OR =>
-        val ps = readPars()
-        ConnOrN(ps)
-
-      case CONNECTIVE_VARREF =>
-        val index = readInt()
-        val depth = readInt()
-        ConnVarRefN(index, depth)
-
-      /** Other types */
-      case BUNDLE =>
-        val body      = readPar()
-        val writeFlag = readBool()
-        val readFlag  = readBool()
-        BundleN(body, writeFlag, readFlag)
-
-      case _ => throw new Exception("Invalid tag for ParN deserialization")
+      case _ => throw new Exception(s"Invalid tag `$tag` for ParN deserialization")
     }
 
-    def readTagAndMatch[T](f: Byte => T): T = f(readTag())
-    def readPar(): ParN                     = readTagAndMatch(matchPar)
-
-    readPar()
+    readPar
   }
 }
