@@ -3,6 +3,7 @@ package coop.rchain.models.rholangn.parmanager
 import cats.Eval
 import com.google.protobuf.CodedOutputStream
 import coop.rchain.models.rholangn._
+import coop.rchain.models.rholangn.parmanager.blake2.Blake2Hash
 import coop.rchain.models.rholangn.parmanager.protobuf.{
   ProtoCodec,
   ProtoPrimitiveReader,
@@ -14,7 +15,7 @@ import java.io.InputStream
 object Manager {
 
   def equals(self: RhoTypeN, other: Any): Boolean = other match {
-    case x: RhoTypeN => x.rhoHash sameElements self.rhoHash
+    case x: RhoTypeN => x.rhoHash.value sameElements self.rhoHash.value
     case _           => false
   }
 
@@ -59,7 +60,11 @@ object Manager {
   def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
-  def rhoHashFn(p: RhoTypeN): Array[Byte]      = RhoHash.rhoHashFn(p)
+  def rhoHashFn(p: RhoTypeN): Eval[Array[Byte]] = {
+    val write = (out: CodedOutputStream) => RhoHash.serializeForHash(p, ProtoPrimitiveWriter(out))
+    // 4096 is the preallocated size of ByteArrayOutputStream, might be enough for most cases
+    ProtoCodec.encode(4096, write).map(Blake2Hash.hash)
+  }
   def serializedSizeFn(p: RhoTypeN): Eval[Int] = SerializedSize.calcSerSize(p)
   def serializedFn(p: RhoTypeN, memoizeChildren: Boolean): Eval[Array[Byte]] = {
     val write = (out: CodedOutputStream) =>

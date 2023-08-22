@@ -71,7 +71,7 @@ class StackSafetySpec extends AnyFlatSpec with Matchers {
       val sData   = par.serialized.value
       val decoded = Manager.protoDeserialize(sData)
       assert(par == decoded)
-      assert(par.rhoHash sameElements anotherPar.rhoHash)
+      assert(par.rhoHash.value sameElements anotherPar.rhoHash.value)
       assert(par.serializedSize.value == anotherPar.serializedSize.value)
       assert(par == anotherPar)
       par == anotherPar

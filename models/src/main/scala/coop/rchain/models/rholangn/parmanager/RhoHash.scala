@@ -1,385 +1,173 @@
 package coop.rchain.models.rholangn.parmanager
 
+import cats.Eval
 import coop.rchain.models.rholangn._
 import coop.rchain.models.rholangn.parmanager.Constants._
-import org.bouncycastle.crypto.digests.Blake2bDigest
-
-import java.util.concurrent.atomic.AtomicInteger
-import scala.annotation.unused
+import coop.rchain.models.rholangn.parmanager.primitive.PrimitiveWriter
+import cats.syntax.all._
 
 private[parmanager] object RhoHash {
 
-  private class Hashable(val tag: Byte, val bodySize: Int) {
-    import Hashable._
-
-    private val arrSize: Int     = bodySize + tagSize
-    private val arr: Array[Byte] = new Array[Byte](arrSize)
-    private val pos              = new AtomicInteger(tagSize)
-
-    arr(0) = tag // Fill the first element of arr with the tag
-
-    /** Appending methods */
-    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-    private def append(b: Byte): Unit = {
-      val currentPos = pos.getAndIncrement()
-      if (currentPos + 1 > arrSize) throw new Exception("Array size exceeded")
-      else arr(currentPos) = b
-    }
-    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-    def append(bytes: Array[Byte]): Unit = {
-      val bytesLength = bytes.length
-      val currentPos  = pos.getAndAdd(bytesLength)
-      if (currentPos + bytesLength > arrSize) throw new Exception("Array size exceeded")
-      else Array.copy(bytes, 0, arr, currentPos, bytesLength)
-    }
-
-    def append(v: Boolean): Unit = append(booleanToByte(v))
-    def append(v: Int): Unit     = append(intToBytes(v))
-    def append(v: Long): Unit    = append(longToBytes(v))
-
-    def append(v: BigInt): Unit = append(v.toByteArray)
-    def append(v: String): Unit = append(stringToBytes(v))
-
-    def append(p: RhoTypeN): Unit = append(p.rhoHash)
-    private def append(kv: (RhoTypeN, RhoTypeN)): Unit = {
-      append(kv._1)
-      append(kv._2)
-    }
-    private def appendInjection(injection: (String, RhoTypeN)): Unit = {
-      append(injection._1)
-      append(injection._2)
-    }
-    def appendStrings(strings: Seq[String]): Unit               = strings.foreach(append)
-    def appendKVPairs(kvPairs: Seq[(RhoTypeN, RhoTypeN)]): Unit = kvPairs.foreach(append)
-    def appendInjections(injections: Seq[(String, RhoTypeN)]): Unit =
-      injections.foreach(appendInjection)
-    def append(ps: Seq[RhoTypeN]): Unit      = ps.foreach(append)
-    def append(pOpt: Option[RhoTypeN]): Unit = pOpt.foreach(append)
-
-    // Get the hash of the current array
-    def calcHash: Array[Byte] = {
-      val curSize = pos.get()
-
-      if (curSize <= hashSize) {
-        if (curSize == hashSize) {
-          arr
-        } else {
-          val newBytes     = new Array[Byte](hashSize)
-          val dataStartPos = hashSize - curSize
-
-          for (i <- 0 until hashSize) {
-            if (i < dataStartPos) newBytes(i) = 0x00.toByte // fill empty place with 0x00.toByte
-            else newBytes(i) = arr(i - dataStartPos)
-          }
-          newBytes
-        }
-      } else {
-        val hashData = arr.slice(0, curSize)
-
-        @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-        def hash(input: Array[Byte]): Array[Byte] = {
-          val digestFn = new Blake2bDigest(hashSize * 8)
-          digestFn.update(input, 0, input.length)
-          val res = new Array[Byte](hashSize)
-          digestFn.doFinal(res, 0)
-          res
-        }
-        hash(hashData)
-      }
-    }
-  }
-  private object Hashable {
-    def apply(tag: Byte, size: Int = 0): Hashable = new Hashable(tag, size)
-
-    private def booleanToByte(v: Boolean): Byte = if (v) 1 else 0
-
-    private def intToBytes(value: Int): Array[Byte] = {
-      val byteArray = new Array[Byte](intSize)
-      for (i <- 0 until intSize) {
-        byteArray(intSize - 1 - i) = ((value >>> (i * 8)) & 0xFF).toByte
-      }
-      byteArray
-    }
-
-    private def longToBytes(value: Long): Array[Byte] = {
-      val byteArray = new Array[Byte](longSize)
-      for (i <- 0 until longSize) {
-        byteArray(longSize - 1 - i) = ((value >>> (i * longSize)) & 0xFF).toByte
-      }
-      byteArray
-    }
-
-    private def stringToBytes(v: String): Array[Byte] = v.getBytes("UTF-8")
-
-    private def hSizeSeq[T](seq: Seq[T], f: T => Int): Int = seq.map(f).sum
-
-    def hSize(@unused v: Boolean): Int = booleanSize
-    def hSize(@unused v: Int): Int     = intSize
-    def hSize(@unused v: Long): Int    = longSize
-    def hSize(v: BigInt): Int          = hSize(v.toByteArray)
-    def hSize(v: String): Int          = stringToBytes(v).length
-    def hSize(bytes: Array[Byte]): Int = bytes.length
-
-    def hSize(@unused p: RhoTypeN): Int              = hashSize
-    private def hSize(kv: (RhoTypeN, RhoTypeN)): Int = hSize(kv._1) + hSize(kv._2)
-    private def hSizeInjection(injection: (String, RhoTypeN)): Int =
-      hSize(injection._1) + hSize(injection._2)
-    def hSize(ps: Seq[RhoTypeN]): Int          = hSizeSeq[RhoTypeN](ps, hSize)
-    def hSizeString(strings: Seq[String]): Int = hSizeSeq[String](strings, hSize)
-    def hSizeKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Int =
-      hSizeSeq[(RhoTypeN, RhoTypeN)](kVPairs, hSize)
-    def hSizeInjections(injections: Seq[(String, RhoTypeN)]): Int =
-      hSizeSeq[(String, RhoTypeN)](injections, hSizeInjection)
-    def hSize(pOpt: Option[RhoTypeN]): Int = if (pOpt.isDefined) hashSize else 0
-  }
-
-  import Hashable._
+  /**
+    * Serialization of the Rholang AST types.
+    *
+    * @param p    Rholang AST root object
+    * @param wrt  Writer of primitive types
+    * @param memo Use memoization for all children fields recursively
+    */
+  // TODO: Properly handle errors with return type (remove throw)
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def rhoHashFn(p: RhoTypeN): Array[Byte] = p match {
+  def serializeForHash(p: RhoTypeN, wrt: PrimitiveWriter[Eval]): Eval[Unit] =
+    Eval.defer {
+      val rhoWriter: RhoRecWriter[Eval] = RhoRecWriter(wrt, _.rhoHash.flatMap(wrt.writeRaw))
+      import rhoWriter._
+      import wrt._
 
-    /** Basic types */
-    case _: NilN.type => Hashable(NIL).calcHash
+      p match {
 
-    case pProc: ParProcN =>
-      val hs = Hashable(PARPROC, hSize(pProc.ps))
-      hs.append(pProc.sortedPs)
-      hs.calcHash
+        /* Terminal expressions (0-arity constructors) */
+        /* =========================================== */
 
-    case send: SendN =>
-      val bodySize = hSize(send.chan) + hSize(send.data) + hSize(send.persistent)
-      val hs       = Hashable(SEND, bodySize)
-      hs.append(send.chan)
-      hs.append(send.data)
-      hs.append(send.persistent)
-      hs.calcHash
+        case _: NilN.type            => write(NIL)
+        case gBool: GBoolN           => write(GBOOL) *> write(gBool.v)
+        case gInt: GIntN             => write(GINT) *> write(gInt.v)
+        case gBigInt: GBigIntN       => write(GBIG_INT) *> writeBigInt(gBigInt.v)
+        case gString: GStringN       => write(GSTRING) *> write(gString.v)
+        case gByteArray: GByteArrayN => write(GBYTE_ARRAY) *> write(gByteArray.v)
+        case gUri: GUriN             => write(GURI) *> write(gUri.v)
+        case _: WildcardN.type       => write(WILDCARD)
 
-    case receive: ReceiveN =>
-      val bodySize = hSize(receive.binds) + hSize(receive.body) +
-        hSize(receive.persistent) + hSize(receive.peek) + hSize(receive.bindCount)
-      val hs = Hashable(RECEIVE, bodySize)
-      hs.append(receive.sortedBinds)
-      hs.append(receive.body)
-      hs.append(receive.persistent)
-      hs.append(receive.peek)
-      hs.append(receive.bindCount)
-      hs.calcHash
+        /* Unforgeable names */
+        case unf: UnforgeableN =>
+          val unfKind = unf match {
+            case _: UPrivateN      => UPRIVATE
+            case _: UDeployIdN     => UDEPLOY_ID
+            case _: UDeployerIdN   => UDEPLOYER_ID
+            case _: USysAuthTokenN => SYS_AUTH_TOKEN
+          }
+          write(unfKind) *> write(unf.v)
 
-    case m: MatchN =>
-      val bodySize = hSize(m.target) + hSize(m.cases)
-      val hs       = Hashable(MATCH, bodySize)
-      hs.append(m.target)
-      hs.append(m.cases)
-      hs.calcHash
+        /* Vars */
+        case bVar: BoundVarN => write(BOUND_VAR) *> write(bVar.idx)
+        case fVar: FreeVarN  => write(FREE_VAR) *> write(fVar.idx)
+        case rVar: ConnVarRefN =>
+          write(CONNECTIVE_VARREF) *> write(rVar.index) *> write(rVar.depth)
 
-    case n: NewN =>
-      val bodySize = hSize(n.bindCount) + hSize(n.p) +
-        hSizeString(n.uri) + hSizeInjections(n.injections.toSeq)
-      val hs = Hashable(NEW, bodySize)
-      hs.append(n.bindCount)
-      hs.append(n.p)
-      hs.appendStrings(n.sortedUri)
-      hs.appendInjections(n.sortedInjections)
-      hs.calcHash
+        /* Simple types */
+        case _: ConnBoolN.type      => write(CONNECTIVE_BOOL)
+        case _: ConnIntN.type       => write(CONNECTIVE_INT)
+        case _: ConnBigIntN.type    => write(CONNECTIVE_BIG_INT)
+        case _: ConnStringN.type    => write(CONNECTIVE_STRING)
+        case _: ConnUriN.type       => write(CONNECTIVE_URI)
+        case _: ConnByteArrayN.type => write(CONNECTIVE_BYTEARRAY)
 
-    /** Ground types */
-    case gBool: GBoolN =>
-      val hs = Hashable(GBOOL, hSize(gBool.v))
-      hs.append(gBool.v)
-      hs.calcHash
+        /* Unary expressions (1-arity constructors) */
+        /* ======================================== */
 
-    case gInt: GIntN =>
-      val hs = Hashable(GINT, hSize(gInt.v))
-      hs.append(gInt.v)
-      hs.calcHash
+        case op: Operation1ParN =>
+          val tag = op match {
+            case _: ENegN => ENEG
+            case _: ENotN => ENOT
+          }
+          write(tag) *> writePar(op.p)
 
-    case gBigInt: GBigIntN =>
-      val hs = Hashable(GBIG_INT, hSize(gBigInt.v))
-      hs.append(gBigInt.v)
-      hs.calcHash
+        case b: BundleN =>
+          write(BUNDLE) *> writePar(b.body) *> write(b.writeFlag) *> write(b.readFlag)
 
-    case gString: GStringN =>
-      val hs = Hashable(GSTRING, hSize(gString.v))
-      hs.append(gString.v)
-      hs.calcHash
+        /* Connective */
+        case connNot: ConnNotN => write(CONNECTIVE_NOT) *> writePar(connNot.p)
 
-    case gByteArrayN: GByteArrayN =>
-      val hs = Hashable(GBYTE_ARRAY, hSize(gByteArrayN.v))
-      hs.append(gByteArrayN.v)
-      hs.calcHash
+        /* Binary expressions (2-arity constructors) */
+        /* ========================================= */
 
-    case gUri: GUriN =>
-      val hs = Hashable(GURI, hSize(gUri.v))
-      hs.append(gUri.v)
-      hs.calcHash
+        case op: Operation2ParN =>
+          val tag = op match {
+            case _: EPlusN           => EPLUS
+            case _: EMinusN          => EMINUS
+            case _: EMultN           => EMULT
+            case _: EDivN            => EDIV
+            case _: EModN            => EMOD
+            case _: ELtN             => ELT
+            case _: ELteN            => ELTE
+            case _: EGtN             => EGT
+            case _: EGteN            => EGTE
+            case _: EEqN             => EEQ
+            case _: ENeqN            => ENEQ
+            case _: EAndN            => EAND
+            case _: EShortAndN       => ESHORTAND
+            case _: EOrN             => EOR
+            case _: EShortOrN        => ESHORTOR
+            case _: EPlusPlusN       => EPLUSPLUS
+            case _: EMinusMinusN     => EMINUSMINUS
+            case _: EPercentPercentN => EPERCENT
+          }
+          write(tag) *> writePar(op.p1) *> writePar(op.p2)
 
-    /** Collections */
-    case eList: EListN =>
-      val bodySize = hSize(eList.ps) + hSize(eList.remainder)
-      val hs       = Hashable(ELIST, bodySize)
-      hs.append(eList.ps)
-      hs.append(eList.remainder)
-      hs.calcHash
+        case eMatches: EMatchesN =>
+          write(EMATCHES) *> writePar(eMatches.target) *> writePar(eMatches.pattern)
 
-    case eTuple: ETupleN =>
-      val bodySize = hSize(eTuple.ps)
-      val hs       = Hashable(ETUPLE, bodySize)
-      hs.append(eTuple.ps)
-      hs.calcHash
+        /* N-ary parameter expressions (N-arity constructors) */
+        /* ================================================== */
 
-    case eSet: ESetN =>
-      val bodySize = hSize(eSet.sortedPs) + hSize(eSet.remainder)
-      val hs       = Hashable(ELIST, bodySize)
-      hs.append(eSet.sortedPs)
-      hs.append(eSet.remainder)
-      hs.calcHash
+        case pProc: ParProcN => write(PARPROC) *> writeSeq(pProc.sortedPs)
 
-    case eMap: EMapN =>
-      val bodySize = hSizeKVPairs(eMap.sortedPs) + hSize(eMap.remainder)
-      val hs       = Hashable(EMAP, bodySize)
-      hs.appendKVPairs(eMap.sortedPs)
-      hs.append(eMap.remainder)
-      hs.calcHash
+        case send: SendN =>
+          write(SEND) *>
+            writePar(send.chan) *>
+            writeSeq(send.data) *>
+            write(send.persistent)
 
-    /** Vars */
-    case bv: BoundVarN =>
-      val hs = Hashable(BOUND_VAR, hSize(bv.idx))
-      hs.append(bv.idx)
-      hs.calcHash
+        case receive: ReceiveN =>
+          write(RECEIVE) *>
+            writeSeq(receive.sortedBinds) *>
+            writePar(receive.body) *>
+            write(receive.persistent) *>
+            write(receive.peek) *>
+            write(receive.bindCount)
 
-    case fv: FreeVarN =>
-      val hs = Hashable(FREE_VAR, hSize(fv.idx))
-      hs.append(fv.idx)
-      hs.calcHash
+        case m: MatchN => write(MATCH) *> writePar(m.target) *> writeSeq(m.cases, writePar)
 
-    case _: WildcardN.type => Hashable(WILDCARD).calcHash
+        case n: NewN =>
+          write(NEW) *>
+            write(n.bindCount) *>
+            writePar(n.p) *>
+            writeSeq[String](n.sortedUri, write) *>
+            writeSeq[(String, ParN)](n.sortedInjections, writeTupleStringPar(_))
 
-    /** Operations */
-    case op: Operation1ParN =>
-      val tag = op match {
-        case _: ENegN => ENEG
-        case _: ENotN => ENOT
+        /* Collections */
+        case eList: EListN   => write(ELIST) *> writeSeq(eList.ps) *> writeOpt(eList.remainder)
+        case eTuple: ETupleN => write(ETUPLE) *> writeSeq(eTuple.ps)
+        case eSet: ESetN     => write(ESET) *> writeSeq(eSet.sortedPs) *> writeOpt(eSet.remainder)
+        case eMap: EMapN =>
+          write(EMAP) *>
+            writeSeq[(ParN, ParN)](eMap.sortedPs, writeTuplePar(_)) *>
+            writeOpt(eMap.remainder)
+
+        /* Connective */
+        case connAnd: ConnAndN => write(CONNECTIVE_AND) *> writeSeq(connAnd.ps)
+        case connOr: ConnOrN   => write(CONNECTIVE_OR) *> writeSeq(connOr.ps)
+
+        case eMethod: EMethodN =>
+          write(EMETHOD) *>
+            write(eMethod.methodName) *>
+            writePar(eMethod.target) *>
+            writeSeq(eMethod.arguments)
+
+        /* Auxiliary types */
+        case bind: ReceiveBindN =>
+          write(RECEIVE_BIND) *>
+            writeSeq(bind.patterns) *>
+            writePar(bind.source) *>
+            writeOpt(bind.remainder) *>
+            write(bind.freeCount)
+
+        case mCase: MatchCaseN =>
+          write(MATCH_CASE) *>
+            writePar(mCase.pattern) *>
+            writePar(mCase.source) *>
+            write(mCase.freeCount)
+
+        case unknownType => throw new Exception(s"Unknown type `$unknownType`")
       }
-      val bodySize = hSize(op.p)
-      val hs       = Hashable(tag, bodySize)
-      hs.append(op.p)
-      hs.calcHash
-
-    case op: Operation2ParN =>
-      val tag = op match {
-        case _: EPlusN           => EPLUS
-        case _: EMinusN          => EMINUS
-        case _: EMultN           => EMULT
-        case _: EDivN            => EDIV
-        case _: EModN            => EMOD
-        case _: ELtN             => ELT
-        case _: ELteN            => ELTE
-        case _: EGtN             => EGT
-        case _: EGteN            => EGTE
-        case _: EEqN             => EEQ
-        case _: ENeqN            => ENEQ
-        case _: EAndN            => EAND
-        case _: EShortAndN       => ESHORTAND
-        case _: EOrN             => EOR
-        case _: EShortOrN        => ESHORTOR
-        case _: EPlusPlusN       => EPLUSPLUS
-        case _: EMinusMinusN     => EMINUSMINUS
-        case _: EPercentPercentN => EPERCENT
-      }
-      val bodySize = hSize(op.p1) + hSize(op.p2)
-      val hs       = Hashable(tag, bodySize)
-      hs.append(op.p1)
-      hs.append(op.p2)
-      hs.calcHash
-
-    case eMethod: EMethodN =>
-      val bodySize = hSize(eMethod.methodName) + hSize(eMethod.target) + hSize(eMethod.arguments)
-      val hs       = Hashable(EMETHOD, bodySize)
-      hs.append(eMethod.methodName)
-      hs.append(eMethod.target)
-      hs.append(eMethod.arguments)
-      hs.calcHash
-
-    case eMatches: EMatchesN =>
-      val bodySize = hSize(eMatches.target) + hSize(eMatches.pattern)
-      val hs       = Hashable(EMATCHES, bodySize)
-      hs.append(eMatches.target)
-      hs.append(eMatches.pattern)
-      hs.calcHash
-
-    /** Unforgeable names */
-    case unf: UnforgeableN =>
-      val bodySize = hSize(unf.v)
-      val t = unf match {
-        case _: UPrivateN      => UPRIVATE
-        case _: UDeployIdN     => UDEPLOY_ID
-        case _: UDeployerIdN   => UDEPLOYER_ID
-        case _: USysAuthTokenN => SYS_AUTH_TOKEN
-      }
-      val hs = Hashable(t, bodySize)
-      hs.append(unf.v)
-      hs.calcHash
-
-    /** Connective */
-    case _: ConnBoolN.type      => Hashable(CONNECTIVE_BOOL).calcHash
-    case _: ConnIntN.type       => Hashable(CONNECTIVE_INT).calcHash
-    case _: ConnBigIntN.type    => Hashable(CONNECTIVE_BIG_INT).calcHash
-    case _: ConnStringN.type    => Hashable(CONNECTIVE_STRING).calcHash
-    case _: ConnUriN.type       => Hashable(CONNECTIVE_URI).calcHash
-    case _: ConnByteArrayN.type => Hashable(CONNECTIVE_BYTEARRAY).calcHash
-
-    case connNot: ConnNotN =>
-      val bodySize = hSize(connNot.p)
-      val hs       = Hashable(CONNECTIVE_NOT, bodySize)
-      hs.append(connNot.p)
-      hs.calcHash
-
-    case connAnd: ConnAndN =>
-      val bodySize = hSize(connAnd.ps)
-      val hs       = Hashable(CONNECTIVE_AND, bodySize)
-      hs.append(connAnd.ps)
-      hs.calcHash
-
-    case connOr: ConnOrN =>
-      val bodySize = hSize(connOr.ps)
-      val hs       = Hashable(CONNECTIVE_OR, bodySize)
-      hs.append(connOr.ps)
-      hs.calcHash
-
-    case connVarRef: ConnVarRefN =>
-      val bodySize = hSize(connVarRef.index) + hSize(connVarRef.depth)
-      val hs       = Hashable(CONNECTIVE_VARREF, bodySize)
-      hs.append(connVarRef.index)
-      hs.append(connVarRef.depth)
-      hs.calcHash
-
-    /** Auxiliary types */
-    case bind: ReceiveBindN =>
-      val bodySize = hSize(bind.patterns) + hSize(bind.source) +
-        hSize(bind.remainder) + hSize(bind.freeCount)
-      val hs = Hashable(RECEIVE_BIND, bodySize)
-      hs.append(bind.patterns)
-      hs.append(bind.source)
-      hs.append(bind.remainder)
-      hs.append(bind.freeCount)
-      hs.calcHash
-
-    case mCase: MatchCaseN =>
-      val bodySize = hSize(mCase.pattern) + hSize(mCase.source) + hSize(mCase.freeCount)
-      val hs       = Hashable(MATCH_CASE, bodySize)
-      hs.append(mCase.pattern)
-      hs.append(mCase.source)
-      hs.append(mCase.freeCount)
-      hs.calcHash
-
-    /** Other types */
-    case bundle: BundleN =>
-      val bodySize = hSize(bundle.body) + hSize(bundle.writeFlag) + hSize(bundle.readFlag)
-      val hs       = Hashable(BUNDLE, bodySize)
-      hs.append(bundle.body)
-      hs.append(bundle.writeFlag)
-      hs.append(bundle.readFlag)
-      hs.calcHash
-
-    case x => throw new Exception(s"Undefined type $x")
-  }
+    }
 }
