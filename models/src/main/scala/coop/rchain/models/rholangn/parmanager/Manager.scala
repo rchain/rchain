@@ -71,9 +71,9 @@ object Manager {
       Serialization.serialize(p, ProtoPrimitiveWriter(out), memoizeChildren)
     p.serializedSize.flatMap(size => ProtoCodec.encode(size, write))
   }
-  def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
-  def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
-  def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)
+  def connectiveUsedFn(p: RhoTypeN): Eval[Boolean] = ConnectiveUsed.connectiveUsedFn(p)
+  def evalRequiredFn(p: RhoTypeN): Boolean         = EvalRequired.evalRequiredFn(p)
+  def substituteRequiredFn(p: RhoTypeN): Boolean   = SubstituteRequired.substituteRequiredFn(p)
 
   // Deserialize with protobuf
   def protoDeserialize(bytes: Array[Byte]): ParN = {

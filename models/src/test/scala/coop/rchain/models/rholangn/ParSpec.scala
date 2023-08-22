@@ -19,7 +19,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     val res1: Boolean = p1.rhoHash.value sameElements recover1.rhoHash.value
 
     // Testing possibility of calculating the rest of the metadata (without checking correctness)
-    val _ = p1.connectiveUsed || p1.evalRequired || p1.substituteRequired
+    val _ = p1.connectiveUsed.value || p1.evalRequired || p1.substituteRequired
 
     // the correct sorting testing
     val res2: Boolean = if (p2Opt.isDefined) {
@@ -27,7 +27,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
       val bytes2 = p2.serialized.value
       (p1.rhoHash.value sameElements p2.rhoHash.value) &&
       (bytes1 sameElements bytes2) &&
-      (p1.connectiveUsed == p2.connectiveUsed) &&
+      (p1.connectiveUsed.value == p2.connectiveUsed.value) &&
       (p1.evalRequired == p2.evalRequired) &&
       (p1.substituteRequired == p2.substituteRequired)
     } else true
