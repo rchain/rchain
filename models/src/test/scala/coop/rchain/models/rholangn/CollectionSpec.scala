@@ -32,7 +32,7 @@ class EListSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers 
 
   it should "perform prepend operation" in {
     val p1 = NilN +: pproc1 +: EListN(EListN())
-    val p2 = EListN(Seq(NilN, pproc1, ESetN()))
+    val p2 = EListN(Seq(NilN, pproc1, EListN()))
     p1 should be(p2)
   }
 
