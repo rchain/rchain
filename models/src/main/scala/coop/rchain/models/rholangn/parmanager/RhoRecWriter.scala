@@ -12,7 +12,7 @@ object RhoRecWriter {
   ): RhoRecWriter[F] = new RhoRecWriter(writer, rec)
 }
 
-/** Wrapper for protobuf serialization with recursive function. */
+/** The extension of primitive types serialization with recursive function. */
 class RhoRecWriter[F[_]: Applicative] private (
     writer: PrimitiveWriter[F],
     rec: RhoTypeN => F[Unit]
