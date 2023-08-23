@@ -23,7 +23,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     val _ = p1.connectiveUsed.value || p1.evalRequired || p1.substituteRequired
 
     // the correct sorting testing
-    p2Opt.map { p2 =>
+    p2Opt.foreach { p2 =>
       val bytes2 = p2.serialized.value
       if (eq) p1.rhoHash.value shouldBe p2.rhoHash.value
       if (eq) bytes1 shouldBe bytes2
