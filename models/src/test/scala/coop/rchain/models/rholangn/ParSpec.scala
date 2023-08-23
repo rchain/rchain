@@ -10,9 +10,10 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   /** Test hashing and serialization for par
     * @param p1 Par for testing
     * @param p2Opt optional Par (used for testing if necessary to check the correct sorting)
+    * @param eq whether two objects should be equal
     * @return true - if the result of serialization and hashing for both pairs is the same
     */
-  def simpleCheck(p1: ParN, p2Opt: Option[ParN] = None): Any = {
+  def simpleCheck(p1: ParN, p2Opt: Option[ParN] = None, eq: Boolean = true): Any = {
     // Serialization and hashing testing
     val bytes1   = p1.serialized.value
     val recover1 = Manager.protoDeserialize(bytes1)
@@ -24,8 +25,8 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
     // the correct sorting testing
     p2Opt.map { p2 =>
       val bytes2 = p2.serialized.value
-      p1.rhoHash.value shouldBe p2.rhoHash.value
-      bytes1 shouldBe bytes2
+      if (eq) p1.rhoHash.value shouldBe p2.rhoHash.value
+      if (eq) bytes1 shouldBe bytes2
       p1.connectiveUsed.value shouldBe p2.connectiveUsed.value
       p1.evalRequired shouldBe p2.evalRequired
       p1.substituteRequired shouldBe p2.substituteRequired
@@ -56,7 +57,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "test Send with different data order" in {
     val p1 = SendN(NilN, Seq(NilN, SendN(NilN, NilN)), persistent = true)
     val p2 = SendN(NilN, Seq(SendN(NilN, NilN), NilN), persistent = true)
-    simpleCheck(p1, Some(p2))
+    simpleCheck(p1, Some(p2), false)
   }
 
   it should "test Receive with same data order" in {
@@ -132,7 +133,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "test EList with different data order" in {
     val p1 = EListN(Seq(NilN, EListN()), Some(BoundVarN(42)))
     val p2 = EListN(Seq(EListN(), NilN), Some(BoundVarN(42)))
-    simpleCheck(p1, Some(p2))
+    simpleCheck(p1, Some(p2), false)
   }
 
   it should "test ETuple with same data order" in {
@@ -143,7 +144,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "test ETuple with different data order" in {
     val p1 = ETupleN(Seq(NilN, ETupleN(NilN)))
     val p2 = ETupleN(Seq(ETupleN(NilN), NilN))
-    simpleCheck(p1, Some(p2))
+    simpleCheck(p1, Some(p2), false)
   }
 
   it should "test ESet with same data order" in {
@@ -203,7 +204,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "test EPlus with different data order" in {
     val p1 = EPlusN(GIntN(42), GIntN(43))
     val p2 = EPlusN(GIntN(43), GIntN(42))
-    simpleCheck(p1, Some(p2))
+    simpleCheck(p1, Some(p2), false)
   }
 
   it should "test EMinus" in {

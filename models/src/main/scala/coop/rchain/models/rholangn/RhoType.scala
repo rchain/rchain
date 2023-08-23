@@ -7,7 +7,7 @@ import coop.rchain.models.rholangn.parmanager.Manager._
 sealed trait RhoTypeN {
 
   /** Cryptographic hash code of this object */
-  lazy val rhoHash: Eval[Array[Byte]] = rhoHashFn(this).memoize
+  val rhoHash: Eval[Array[Byte]] = rhoHashFn(this).memoize
 
   /** The size of serialized bytes lazily evaluated with memoization */
   val serializedSize: Eval[Int] = serializedSizeFn(this).memoize
