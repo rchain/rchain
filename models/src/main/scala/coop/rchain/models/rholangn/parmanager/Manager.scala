@@ -3,6 +3,8 @@ package coop.rchain.models.rholangn.parmanager
 import cats.Eval
 import com.google.protobuf.CodedOutputStream
 import coop.rchain.models.rholangn._
+import coop.rchain.models.rholangn.parmanager.Constants.hashSize
+import coop.rchain.models.rholangn.parmanager.blake2.Blake2Hash
 import coop.rchain.models.rholangn.parmanager.protobuf.{
   ProtoCodec,
   ProtoPrimitiveReader,
@@ -14,7 +16,7 @@ import java.io.InputStream
 object Manager {
 
   def equals(self: RhoTypeN, other: Any): Boolean = other match {
-    case x: RhoTypeN => x.rhoHash sameElements self.rhoHash
+    case x: RhoTypeN => x.rhoHash.value sameElements self.rhoHash.value
     case _           => false
   }
 
@@ -59,16 +61,27 @@ object Manager {
   def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
-  def rhoHashFn(p: RhoTypeN): Array[Byte]      = RhoHash.rhoHashFn(p)
+  def rhoHashFn(p: RhoTypeN): Eval[Array[Byte]] = {
+    val write = (out: CodedOutputStream) => RhoHash.serializeForHash(p, ProtoPrimitiveWriter(out))
+    // Return data padded with zero from left if its size less then the limit ot hash of the data
+    def padOrHash(data: Array[Byte], limit: Int, hash: Array[Byte] => Array[Byte]): Array[Byte] = {
+      val pad = limit - data.length
+      if (pad <= 0) hash(data) else Array.concat(data, Array.fill(pad)(0.toByte))
+    }
+    // The size of the byte stream here (payloadSize) will be the serialized primitive types or collection of
+    // hashes from nested objects. The size is growing by doubling so as to minimize resizing overhead 512 bytes
+    // set here.
+    ProtoCodec.encode(512, write).map { padOrHash(_, hashSize, Blake2Hash.hash) }
+  }
   def serializedSizeFn(p: RhoTypeN): Eval[Int] = SerializedSize.calcSerSize(p)
   def serializedFn(p: RhoTypeN, memoizeChildren: Boolean): Eval[Array[Byte]] = {
     val write = (out: CodedOutputStream) =>
       Serialization.serialize(p, ProtoPrimitiveWriter(out), memoizeChildren)
     p.serializedSize.flatMap(size => ProtoCodec.encode(size, write))
   }
-  def connectiveUsedFn(p: RhoTypeN): Boolean     = ConnectiveUsed.connectiveUsedFn(p)
-  def evalRequiredFn(p: RhoTypeN): Boolean       = EvalRequired.evalRequiredFn(p)
-  def substituteRequiredFn(p: RhoTypeN): Boolean = SubstituteRequired.substituteRequiredFn(p)
+  def connectiveUsedFn(p: RhoTypeN): Eval[Boolean] = ConnectiveUsed.connectiveUsedFn(p)
+  def evalRequiredFn(p: RhoTypeN): Boolean         = EvalRequired.evalRequiredFn(p)
+  def substituteRequiredFn(p: RhoTypeN): Boolean   = SubstituteRequired.substituteRequiredFn(p)
 
   // Deserialize with protobuf
   def protoDeserialize(bytes: Array[Byte]): ParN = {

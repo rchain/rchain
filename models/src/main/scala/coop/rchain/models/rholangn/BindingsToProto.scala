@@ -130,7 +130,7 @@ private[rholangn] object BindingsToProto {
   /** Basic types */
   private def toParProc(x: ParProcN): Par = {
     val p = x.ps.foldLeft(Par())((acc, pN) => acc ++ toProto(pN))
-    p.withConnectiveUsed(x.connectiveUsed)
+    p.withConnectiveUsed(x.connectiveUsed.value)
   }
 
   def toSend(x: SendN): Send = {
@@ -138,7 +138,7 @@ private[rholangn] object BindingsToProto {
     val data           = toProto(x.data)
     val persistent     = x.persistent
     val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
+    val connectiveUsed = x.connectiveUsed.value
     Send(chan, data, persistent, locallyFree, connectiveUsed)
   }
 
@@ -149,7 +149,7 @@ private[rholangn] object BindingsToProto {
     val peek           = x.peek
     val bindCount      = x.bindCount
     val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
+    val connectiveUsed = x.connectiveUsed.value
     Receive(binds, body, persistent, peek, bindCount, locallyFree, connectiveUsed)
   }
 
@@ -165,7 +165,7 @@ private[rholangn] object BindingsToProto {
     val target         = toProto(x.target)
     val cases          = x.cases.map(toMatchCase)
     val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
+    val connectiveUsed = x.connectiveUsed.value
     Match(target, cases, locallyFree, connectiveUsed)
   }
 
@@ -220,7 +220,7 @@ private[rholangn] object BindingsToProto {
   private def toEList(x: EListN): EList = {
     val ps             = toProto(x.ps)
     val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
+    val connectiveUsed = x.connectiveUsed.value
     val remainder      = toProto(x.remainder)
     EList(ps, locallyFree, connectiveUsed, remainder)
   }
@@ -228,14 +228,14 @@ private[rholangn] object BindingsToProto {
   private def toETuple(x: ETupleN): ETuple = {
     val ps             = toProto(x.ps)
     val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
+    val connectiveUsed = x.connectiveUsed.value
     ETuple(ps, locallyFree, connectiveUsed)
   }
 
   private def toParSet(x: ESetN): ParSet = {
     val ps             = toProto(x.sortedPs)
     val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
+    val connectiveUsed = x.connectiveUsed.value
     val remainder      = toProto(x.remainder)
     ParSet(ps, connectiveUsed, Sync[Eval].delay(locallyFree), remainder)
   }
@@ -243,7 +243,7 @@ private[rholangn] object BindingsToProto {
   private def toParMap(x: EMapN): ParMap = {
     val ps             = toProtoKVPairs(x.sortedPs)
     val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
+    val connectiveUsed = x.connectiveUsed.value
     val remainder      = toProto(x.remainder)
     ParMap(ps, connectiveUsed, Sync[Eval].delay(locallyFree), remainder)
   }
@@ -402,7 +402,7 @@ private[rholangn] object BindingsToProto {
     val target         = toProto(x.target)
     val arguments      = toProto(x.arguments)
     val locallyFree    = BitSet()
-    val connectiveUsed = x.connectiveUsed
+    val connectiveUsed = x.connectiveUsed.value
     EMethod(methodName, target, arguments, locallyFree, connectiveUsed)
   }
 

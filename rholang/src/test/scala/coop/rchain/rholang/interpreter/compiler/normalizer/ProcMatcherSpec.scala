@@ -1225,7 +1225,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val expectedPar = EMatchesN(GIntN(1), WildcardN)
 
     result.par shouldBe expectedPar
-    result.par.connectiveUsed should be(false)
+    result.par.connectiveUsed.value should be(false)
   }
 
   "1 matches 2" should "normalize correctly" in {
@@ -1236,7 +1236,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val expectedPar = EMatchesN(GIntN(1), GIntN(2))
 
     result.par shouldBe expectedPar
-    result.par.connectiveUsed should be(false)
+    result.par.connectiveUsed.value should be(false)
   }
 
   "1 matches ~1" should "normalize with connectiveUsed=false" in {
@@ -1247,7 +1247,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val expectedPar = EMatchesN(GIntN(1), ConnNotN(GIntN(1)))
 
     result.par shouldBe expectedPar
-    result.par.connectiveUsed should be(false)
+    result.par.connectiveUsed.value should be(false)
   }
 
   "~1 matches 1" should "normalize with connectiveUsed=true" in {
@@ -1258,7 +1258,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
     val expectedPar = EMatchesN(ConnNotN(GIntN(1)), GIntN(1))
 
     result.par shouldBe expectedPar
-    result.par.connectiveUsed should be(true)
+    result.par.connectiveUsed.value should be(true)
   }
 
   "Patterns" should "compile when used not in the top level" in {

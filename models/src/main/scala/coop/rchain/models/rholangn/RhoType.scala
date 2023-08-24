@@ -7,7 +7,7 @@ import coop.rchain.models.rholangn.parmanager.Manager._
 sealed trait RhoTypeN {
 
   /** Cryptographic hash code of this object */
-  lazy val rhoHash: Array[Byte] = rhoHashFn(this)
+  val rhoHash: Eval[Array[Byte]] = rhoHashFn(this).memoize
 
   /** The size of serialized bytes lazily evaluated with memoization */
   val serializedSize: Eval[Int] = serializedSizeFn(this).memoize
@@ -18,7 +18,7 @@ sealed trait RhoTypeN {
   /** True if the object or at least one of the nested objects non-concrete.
     * Such a object cannot be viewed as if it were a term.*/
   // TODO: Rename connectiveUsed for more clarity
-  lazy val connectiveUsed: Boolean = connectiveUsedFn(this)
+  val connectiveUsed: Eval[Boolean] = connectiveUsedFn(this).memoize
 
   /** True if the object or at least one of the nested objects can be evaluated in Reducer */
   lazy val evalRequired: Boolean = evalRequiredFn(this)
