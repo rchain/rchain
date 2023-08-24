@@ -18,7 +18,7 @@ sealed trait RhoTypeN {
   /** True if the object or at least one of the nested objects non-concrete.
     * Such a object cannot be viewed as if it were a term.*/
   // TODO: Rename connectiveUsed for more clarity
-  val connectiveUsed: Eval[Boolean] = connectiveUsedFn(this)
+  val connectiveUsed: Eval[Boolean] = connectiveUsedFn(this).memoize
 
   /** True if the object or at least one of the nested objects can be evaluated in Reducer */
   lazy val evalRequired: Boolean = evalRequiredFn(this)

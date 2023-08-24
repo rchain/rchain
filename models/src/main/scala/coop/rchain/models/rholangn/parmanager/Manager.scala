@@ -68,8 +68,10 @@ object Manager {
       val pad = limit - data.length
       if (pad <= 0) hash(data) else Array.concat(data, Array.fill(pad)(0.toByte))
     }
-    // 4096 is the preallocated size of ByteArrayOutputStream, might be enough for most cases
-    ProtoCodec.encode(4096, write).map { padOrHash(_, hashSize, Blake2Hash.hash) }
+    // The size of the byte stream here (payloadSize) will be the serialized primitive types or collection of
+    // hashes from nested objects. The size is growing by doubling so as to minimize resizing overhead 512 bytes
+    // set here.
+    ProtoCodec.encode(512, write).map { padOrHash(_, hashSize, Blake2Hash.hash) }
   }
   def serializedSizeFn(p: RhoTypeN): Eval[Int] = SerializedSize.calcSerSize(p)
   def serializedFn(p: RhoTypeN, memoizeChildren: Boolean): Eval[Array[Byte]] = {
