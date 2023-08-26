@@ -3,7 +3,7 @@ package coop.rchain.models.rholangn.parmanager
 import cats.Eval
 import cats.syntax.all._
 import com.google.protobuf.CodedOutputStream
-import coop.rchain.models.rholangn.{RhoTypeN, _}
+import coop.rchain.models.rholangn._
 
 import scala.annotation.unused
 
@@ -33,12 +33,6 @@ private object ProtobufSerializedSize {
 
   def sSizeSeqTuplePar(seq: Seq[(RhoTypeN, RhoTypeN)]): Eval[Int] =
     sSizeSeq[(RhoTypeN, RhoTypeN)](seq, sSize)
-
-  def sSizeTupleStringPar(kv: (String, RhoTypeN)): Eval[Int] =
-    kv.bimap(sSize, sSize).mapN(_ + _)
-
-  def sSizeSeqTupleStringPar(seq: Seq[(String, RhoTypeN)]): Eval[Int] =
-    sSizeSeq[(String, RhoTypeN)](seq, sSizeTupleStringPar)
 
   def totalSize(sizes: Int*): Int = tagSize + sizes.sum
 
@@ -102,8 +96,7 @@ private[parmanager] object SerializedSize {
 
       case pProc: ParProcN => sSize(pProc.ps).map(totalSize(_))
 
-      case send: SendN =>
-        (sSize(send.chan), sSize(send.data), sSize(send.persistent)).mapN(totalSize(_, _, _))
+      case p: SendN => (sSize(p.chan), sSize(p.args), sSize(p.persistent)).mapN(totalSize(_, _, _))
 
       case receive: ReceiveN =>
         val bindsSize      = sSize(receive.binds)
@@ -122,26 +115,23 @@ private[parmanager] object SerializedSize {
       case n: NewN =>
         val bindCountSize  = sSize(n.bindCount)
         val pSize          = sSize(n.p)
-        val uriSize        = sSizeSeq[String](n.uri, sSize)
-        val injectionsSize = sSizeSeqTupleStringPar(n.injections.toSeq)
+        val uriSize        = sSize(n.uri)
+        val injectionsSize = sSizeSeqTuplePar(n.injections.toSeq)
         (bindCountSize, pSize, uriSize, injectionsSize).mapN(totalSize(_, _, _, _))
 
       /* Collections */
       case list: EListN    => (sSize(list.ps), sSize(list.remainder)).mapN(totalSize(_, _))
       case eTuple: ETupleN => sSize(eTuple.ps).map(totalSize(_))
-      case eSet: ESetN     => (sSize(eSet.sortedPs), sSize(eSet.remainder)).mapN(totalSize(_, _))
+      case eSet: ESetN     => (sSize(eSet.ps.toSeq), sSize(eSet.remainder)).mapN(totalSize(_, _))
       case eMap: EMapN =>
-        (sSizeSeqTuplePar(eMap.sortedPs), sSize(eMap.remainder)).mapN(totalSize(_, _))
+        (sSizeSeqTuplePar(eMap.ps.toSeq), sSize(eMap.remainder)).mapN(totalSize(_, _))
 
       /* Connective */
       case connAnd: ConnAndN => sSize(connAnd.ps).map(totalSize(_))
       case connOr: ConnOrN   => sSize(connOr.ps).map(totalSize(_))
 
-      case eMethod: EMethodN =>
-        val methodNameSize = sSize(eMethod.methodName)
-        val targetSize     = sSize(eMethod.target)
-        val argumentsSize  = sSize(eMethod.arguments)
-        (methodNameSize, targetSize, argumentsSize).mapN(totalSize(_, _, _))
+      case p: EMethodN =>
+        (sSize(p.methodName), sSize(p.target), sSize(p.args)).mapN(totalSize(_, _, _))
 
       /* Auxiliary types */
 

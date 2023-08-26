@@ -1,8 +1,8 @@
 package coop.rchain.models.rholangn.parmanager
 
 import cats.Eval
-import coop.rchain.models.rholangn._
 import cats.syntax.all._
+import coop.rchain.models.rholangn._
 
 private[parmanager] object ConnectiveUsed {
   private def cUsed(p: RhoTypeN): Eval[Boolean] = p.connectiveUsed
@@ -17,21 +17,21 @@ private[parmanager] object ConnectiveUsed {
     p match {
 
       /** Basic types */
-      case _: NilN.type      => Eval.False
-      case pProc: ParProcN   => cUsed(pProc.ps)
-      case send: SendN       => (cUsed(send.chan), cUsed(send.data)).mapN(_ || _)
-      case receive: ReceiveN => (cUsed(receive.binds), cUsed(receive.body)).mapN(_ || _)
-      case m: MatchN         => (cUsed(m.target), cUsed(m.cases)).mapN(_ || _)
-      case _: NewN           => Eval.False // There are no situations when New gets into the matcher
+      case _: NilN.type => Eval.False
+      case p: ParProcN  => cUsed(p.ps)
+      case p: SendN     => (cUsed(p.chan), cUsed(p.args)).mapN(_ || _)
+      case p: ReceiveN  => (cUsed(p.binds.map(_.source)), cUsed(p.body)).mapN(_ || _)
+      case p: MatchN    => (cUsed(p.target), cUsed(p.cases.map(_.source))).mapN(_ || _)
+      case _: NewN      => Eval.False // There are no situations when New gets into the matcher
 
       /** Ground types */
       case _: GroundN => Eval.False
 
       /** Collections */
-      case eList: EListN   => (cUsed(eList.ps), eList.remainder.existsM(cUsed)).mapN(_ || _)
-      case eTuple: ETupleN => cUsed(eTuple.ps)
-      case eSet: ESetN     => (cUsed(eSet.sortedPs), eSet.remainder.existsM(cUsed)).mapN(_ || _)
-      case eMap: EMapN     => (cUsedKVPairs(eMap.sortedPs), eMap.remainder.existsM(cUsed)).mapN(_ || _)
+      case p: EListN  => (cUsed(p.ps), p.remainder.existsM(cUsed)).mapN(_ || _)
+      case p: ETupleN => cUsed(p.ps)
+      case p: ESetN   => (cUsed(p.ps.toSeq), p.remainder.existsM(cUsed)).mapN(_ || _)
+      case p: EMapN   => (cUsedKVPairs(p.ps.toSeq), p.remainder.existsM(cUsed)).mapN(_ || _)
 
       /** Vars */
       case _: BoundVarN      => Eval.False
@@ -39,10 +39,10 @@ private[parmanager] object ConnectiveUsed {
       case _: WildcardN.type => Eval.True
 
       /** Operations */
-      case op: Operation1ParN  => cUsed(op.p)
-      case op: Operation2ParN  => (cUsed(op.p1), cUsed(op.p2)).mapN(_ || _)
-      case eMethod: EMethodN   => (cUsed(eMethod.target), cUsed(eMethod.arguments)).mapN(_ || _)
-      case eMatches: EMatchesN => cUsed(eMatches.target)
+      case p: Operation1ParN => cUsed(p.p)
+      case p: Operation2ParN => (cUsed(p.p1), cUsed(p.p2)).mapN(_ || _)
+      case p: EMethodN       => (cUsed(p.target), cUsed(p.args)).mapN(_ || _)
+      case p: EMatchesN      => cUsed(p.target)
 
       /** Unforgeable names */
       case _: UnforgeableN => Eval.False

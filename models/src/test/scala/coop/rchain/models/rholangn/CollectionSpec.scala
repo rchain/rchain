@@ -76,7 +76,7 @@ class ESetSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "preserve ordering" in {
     val p1 = ESetN(Seq(NilN, ESetN(), pproc1))
     val p2 = ESetN(Seq(NilN, pproc2, ESetN()))
-    p1.sortedPs should be(p2.sortedPs)
+    p1.psSorted.value should be(p2.psSorted.value)
     p1 should be(p2)
   }
 
@@ -144,7 +144,7 @@ class EMapSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "preserve ordering" in {
     val p1 = EMapN(Seq(NilN   -> GIntN(42), pproc1 -> EMapN()))
     val p2 = EMapN(Seq(pproc2 -> EMapN(), NilN     -> GIntN(42)))
-    p1.sortedPs should be(p2.sortedPs)
+    p1.psSorted.value should be(p2.psSorted.value)
     p1 should be(p2)
   }
 
@@ -227,14 +227,14 @@ class EMapSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   it should "return keys in right order" in {
     val p     = EMapN(Seq(NilN -> GIntN(42), pproc1 -> EMapN(), EMapN() -> NilN))
     val keys1 = p.keys
-    val keys2 = p.sortedPs.map(_._1)
+    val keys2 = p.psSorted.value.map(_._1)
     keys1 should be(keys2)
   }
 
   it should "return values in right order" in {
     val p       = EMapN(Seq(NilN -> GIntN(42), pproc1 -> EMapN(), EMapN() -> NilN))
     val values1 = p.values
-    val values2 = p.sortedPs.map(_._2)
+    val values2 = p.psSorted.value.map(_._2)
     values1 should be(values2)
   }
 }
@@ -245,8 +245,8 @@ class CollectionSortSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with 
     val set   = ESetN(Seq(pproc2, GIntN(42), ESetN(), NilN))
     val map   = EMapN(Seq(NilN -> NilN, pproc2 -> NilN, GIntN(42) -> NilN, ESetN() -> NilN))
 
-    val ps1 = pProc.sortedPs
-    val ps2 = set.sortedPs
+    val ps1 = pProc.psSorted.value
+    val ps2 = set.psSorted.value
     val ps3 = map.keys
 
     (ps1 == ps2) == (ps1 == ps3) should be(true)

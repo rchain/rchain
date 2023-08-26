@@ -3,6 +3,9 @@ package coop.rchain.models.rholangn
 import cats.Eval
 import coop.rchain.models.rholangn.parmanager.Manager._
 
+import java.util
+import scala.math.Ordered.orderingToOrdered
+
 /** Base trait for Rholang elements in the Reducer */
 sealed trait RhoTypeN {
 
@@ -40,6 +43,8 @@ trait AuxParN extends RhoTypeN
 sealed trait ParN extends RhoTypeN
 
 object ParN {
+  implicit val o: Ordering[Array[Byte]] = (a: Array[Byte], b: Array[Byte]) =>
+    util.Arrays.compare(a, b)
 
   /**
     * Create a flatten parallel Par (ParProc) from par sequence.
@@ -50,7 +55,7 @@ object ParN {
   /** Combine two pars for their parallel execution */
   def combine(p1: ParN, p2: ParN): ParN = combinePars(p1, p2)
 
-  def compare(p1: ParN, p2: ParN): Int = comparePars(p1, p2)
+  def compare(p1: ParN, p2: ParN): Int = p1.rhoHash.value compare p2.rhoHash.value
   val ordering: Ordering[ParN]         = (p1: ParN, p2: ParN) => compare(p1, p2)
 }
 

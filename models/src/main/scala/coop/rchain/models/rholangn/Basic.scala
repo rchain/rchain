@@ -1,5 +1,10 @@
 package coop.rchain.models.rholangn
 
+import cats.Eval
+import cats.syntax.all._
+import coop.rchain.models.rholangn.ParN._
+import coop.rchain.models.rholangn.parmanager.RhoHash
+
 object NilN extends BasicN
 
 /** *
@@ -9,27 +14,30 @@ object NilN extends BasicN
   * and one receive.
   */
 final class ParProcN(val ps: Seq[ParN]) extends BasicN {
-  def sortedPs: Seq[ParN] = parmanager.Manager.sortPars(ps)
+  // Sorted by objects hash which is memoized as Rho type
+  val psSorted: Eval[Seq[ParN]] =
+    this.ps.traverse(p => p.rhoHash.map((p, _))).map(_.sortBy(_._2).map(_._1)).memoize
 }
+
 object ParProcN { def apply(ps: Seq[ParN]): ParProcN = new ParProcN(ps) }
 
 /** *
   * A send is written `chan!(data)` or `chan!!(data)` for a persistent send.
   * Upon send, all free variables in data are substituted with their values.
   */
-final class SendN(val chan: ParN, val data: Seq[ParN], val persistent: Boolean) extends BasicN
+final class SendN(val chan: ParN, val args: Seq[ParN], val persistent: Boolean) extends BasicN
 object SendN {
-  def apply(chan: ParN, data: Seq[ParN], persistent: Boolean): SendN =
-    new SendN(chan, data, persistent)
+  def apply(chan: ParN, args: Seq[ParN], persistent: Boolean): SendN =
+    new SendN(chan, args, persistent)
 
-  def apply(chan: ParN, data: Seq[ParN]): SendN =
-    apply(chan, data, persistent = false)
+  def apply(chan: ParN, args: Seq[ParN]): SendN =
+    apply(chan, args, persistent = false)
 
-  def apply(chan: ParN, data: ParN, persistent: Boolean): SendN =
-    apply(chan, Seq(data), persistent)
+  def apply(chan: ParN, args: ParN, persistent: Boolean): SendN =
+    apply(chan, Seq(args), persistent)
 
-  def apply(chan: ParN, data: ParN): SendN =
-    apply(chan, Seq(data), persistent = false)
+  def apply(chan: ParN, arg: ParN): SendN =
+    apply(chan, Seq(arg), persistent = false)
 }
 
 /** *
@@ -46,8 +54,11 @@ final class ReceiveN(
     val peek: Boolean,
     val bindCount: Int
 ) extends BasicN {
-  def sortedBinds: Seq[ReceiveBindN] = parmanager.Manager.sortBinds(binds)
+  // Sorted by objects hash which is memoized as Rho type
+  val bindsSorted: Eval[Seq[ReceiveBindN]] =
+    this.binds.traverse(rb => rb.rhoHash.map((rb, _))).map(_.sortBy(_._2).map(_._1)).memoize
 }
+
 object ReceiveN {
   def apply(
       binds: Seq[ReceiveBindN],
@@ -79,7 +90,11 @@ final class ReceiveBindN(
     val source: ParN,
     val remainder: Option[VarN],
     val freeCount: Int
-) extends AuxParN
+) extends AuxParN {
+
+  /** Cryptographic hash code of this object */
+  override val rhoHash: Eval[Array[Byte]] = RhoHash.hashReceiveBind(this).memoize
+}
 
 object ReceiveBindN {
   def apply(
@@ -102,9 +117,6 @@ object ReceiveBindN {
     apply(Seq(pattern), source, 0)
 }
 
-/**
-  *
-  */
 final class MatchN(val target: ParN, val cases: Seq[MatchCaseN]) extends BasicN
 
 object MatchN {
@@ -112,7 +124,11 @@ object MatchN {
   def apply(target: ParN, mCase: MatchCaseN): MatchN      = apply(target, Seq(mCase))
 }
 
-final class MatchCaseN(val pattern: ParN, val source: ParN, val freeCount: Int) extends AuxParN
+final class MatchCaseN(val pattern: ParN, val source: ParN, val freeCount: Int) extends AuxParN {
+
+  /** Cryptographic hash code of this object */
+  override val rhoHash: Eval[Array[Byte]] = RhoHash.hashMatchCase(this).memoize
+}
 
 object MatchCaseN {
   def apply(pattern: ParN, source: ParN, freeCount: Int = 0): MatchCaseN =
@@ -136,11 +152,21 @@ object MatchCaseN {
 final class NewN(
     val bindCount: Int,
     val p: ParN,
-    val uri: Seq[String],
-    val injections: Map[String, ParN]
+    val uri: Seq[GStringN],
+    val injections: Map[GStringN, ParN]
 ) extends BasicN {
-  def sortedUri: Seq[String]                = parmanager.Manager.sortUris(uri)
-  def sortedInjections: Seq[(String, ParN)] = parmanager.Manager.sortInjections(injections)
+  // Sorted by objects hash which is memoized as Rho type
+  val urisSorted: Eval[Seq[GStringN]] =
+    this.uri.traverse(uri => uri.rhoHash.map((uri, _))).map(_.sortBy(_._2).map(_._1)).memoize
+
+  // Sorted by objects hash which is memoized as Rho type
+  val injectionsSorted: Eval[Seq[(GStringN, ParN)]] =
+    this.injections.toSeq
+      .traverse(inj => inj.bimap(_.rhoHash, _.rhoHash).mapN(_ ++ _).map((inj, _)))
+      .map(_.sortBy(_._2).map(_._1))
+      .memoize
+
+  def injectionsStrKeys: Map[String, ParN] = this.injections.map(_.bimap(_.v, identity))
 }
 
 object NewN {
@@ -149,14 +175,15 @@ object NewN {
       p: ParN,
       uri: Seq[String],
       injections: Map[String, ParN]
-  ): NewN = new NewN(bindCount, p, uri, injections)
+  ): NewN =
+    new NewN(bindCount, p, uri.map(GStringN(_)), injections.map(_.bimap(GStringN(_), identity)))
 
   def apply(
       bindCount: Int,
       p: ParN,
-      uri: Seq[String],
-      injections: Seq[(String, ParN)]
-  ): NewN = new NewN(bindCount, p, uri, Map.from(injections))
+      uri: Seq[GStringN],
+      injections: Seq[(GStringN, ParN)]
+  ): NewN = new NewN(bindCount, p, uri, injections.toMap)
 
   def apply(bindCount: Int, p: ParN): NewN = new NewN(bindCount, p, Seq(), Map())
 }

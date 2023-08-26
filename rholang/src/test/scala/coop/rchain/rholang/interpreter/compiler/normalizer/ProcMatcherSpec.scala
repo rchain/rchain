@@ -746,7 +746,7 @@ class ProcMatcherSpec extends AnyFlatSpec with Matchers {
             SendN(BoundVarN(2), GIntN(11))
           )
         ),
-        uri = Vector("rho:registry", "rho:stdout"),
+        uri = Vector("rho:registry", "rho:stdout").map(GStringN(_)),
         Seq()
       )
     )

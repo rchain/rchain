@@ -1,5 +1,6 @@
 package coop.rchain.models.rholangn
 
+import cats.syntax.all._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.GUnforgeable.UnfInstance._
@@ -175,7 +176,7 @@ private[rholangn] object BindingsFromProto {
     val p                               = fromProto(x.p)
     val uri                             = x.uri
     val injections: Seq[(String, ParN)] = fromProtoInjections(x.injections.toSeq)
-    NewN(bindCount, p, uri, injections)
+    NewN(bindCount, p, uri.map(GStringN(_)), injections.map(_.bimap(GStringN(_), identity)))
   }
 
   /** Ground types */

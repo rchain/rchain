@@ -29,8 +29,21 @@ object Serialization {
 
     val rhoWriter: RhoRecWriter[Eval] = RhoRecWriter(wrt, writePar)
 
-    import wrt._
     import rhoWriter._
+    import wrt._
+
+    def writeReceiveBind(p: ReceiveBindN) =
+      write(RECEIVE_BIND) *>
+        writeSeq(p.patterns) *>
+        writePar(p.source) *>
+        writeOpt(p.remainder) *>
+        write(p.freeCount)
+
+    def writeMatchCase(p: MatchCaseN) =
+      write(MATCH_CASE) *>
+        writePar(p.pattern) *>
+        writePar(p.source) *>
+        write(p.freeCount)
 
     p match {
 
@@ -118,38 +131,34 @@ object Serialization {
       /* N-ary parameter expressions (N-arity constructors) */
       /* ================================================== */
 
-      case pProc: ParProcN => write(PARPROC) *> writeSeq(pProc.sortedPs)
+      case pProc: ParProcN => write(PARPROC) *> pProc.psSorted.flatMap(writeSeq)
 
-      case send: SendN =>
-        write(SEND) *>
-          writePar(send.chan) *>
-          writeSeq(send.data) *>
-          write(send.persistent)
+      case p: SendN => write(SEND) *> writePar(p.chan) *> writeSeq(p.args) *> write(p.persistent)
 
       case receive: ReceiveN =>
         write(RECEIVE) *>
-          writeSeq(receive.sortedBinds) *>
+          receive.bindsSorted.flatMap(writeSeq(_, writeReceiveBind)) *>
           writePar(receive.body) *>
           write(receive.persistent) *>
           write(receive.peek) *>
           write(receive.bindCount)
 
-      case m: MatchN => write(MATCH) *> writePar(m.target) *> writeSeq(m.cases, writePar)
+      case p: MatchN => write(MATCH) *> writePar(p.target) *> writeSeq(p.cases, writeMatchCase)
 
       case n: NewN =>
         write(NEW) *>
           write(n.bindCount) *>
           writePar(n.p) *>
-          writeSeq[String](n.sortedUri, write) *>
-          writeSeq[(String, ParN)](n.sortedInjections, writeTupleStringPar(_))
+          n.urisSorted.flatMap(writeSeq) *>
+          n.injectionsSorted.flatMap(writeSeq(_, writeTuplePar))
 
       /* Collections */
       case eList: EListN   => write(ELIST) *> writeSeq(eList.ps) *> writeOpt(eList.remainder)
       case eTuple: ETupleN => write(ETUPLE) *> writeSeq(eTuple.ps)
-      case eSet: ESetN     => write(ESET) *> writeSeq(eSet.sortedPs) *> writeOpt(eSet.remainder)
+      case eSet: ESetN     => write(ESET) *> eSet.psSorted.flatMap(writeSeq) *> writeOpt(eSet.remainder)
       case eMap: EMapN =>
         write(EMAP) *>
-          writeSeq[(ParN, ParN)](eMap.sortedPs, writeTuplePar(_)) *>
+          eMap.psSorted.flatMap(writeSeq(_, writeTuplePar)) *>
           writeOpt(eMap.remainder)
 
       /* Connective */
@@ -160,7 +169,7 @@ object Serialization {
         write(EMETHOD) *>
           write(eMethod.methodName) *>
           writePar(eMethod.target) *>
-          writeSeq(eMethod.arguments)
+          writeSeq(eMethod.args)
 
       /* Auxiliary types */
       case bind: ReceiveBindN =>
@@ -199,36 +208,32 @@ object Serialization {
     def readVar: Eval[VarN] =
       readPar.map {
         case v: VarN => v
-        case p       => throw new Exception(s"Value must be Var, found `$p`")
+        case p       => throw new Exception(s"Expected VarN, found `$p`")
+      }
+
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+    def readGString: Eval[GStringN] =
+      readPar.map {
+        case v: GStringN => v
+        case p           => throw new Exception(s"Expected GStringN, found `$p`")
       }
 
     def readVarOpt: Eval[Option[VarN]] =
       readBool.flatMap(x => if (x) readVar.map(Some(_)) else Eval.now(none))
 
-    def readTuplePar: Eval[(ParN, ParN)]         = (readPar, readPar).mapN((_, _))
-    def readTupleStringPar: Eval[(String, ParN)] = (readString, readPar).mapN((_, _))
+    def readTuplePar: Eval[(ParN, ParN)]           = (readPar, readPar).mapN((_, _))
+    def readTupleStringPar: Eval[(GStringN, ParN)] = (readGString, readPar).mapN((_, _))
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def readReceiveBind(tag: Byte): Eval[ReceiveBindN] = tag match {
-      case RECEIVE_BIND =>
-        for {
-          patterns  <- readPars
-          source    <- readPar
-          remainder <- readVarOpt
-          freeCount <- readInt
-        } yield ReceiveBindN(patterns, source, remainder, freeCount)
-      case _ => throw new Exception(s"Invalid tag `$tag` for ReceiveBindN deserialization")
+      case RECEIVE_BIND => (readPars, readPar, readVarOpt, readInt).mapN(ReceiveBindN(_, _, _, _))
+      case _            => throw new Exception(s"Invalid tag `$tag` for ReceiveBindN deserialization")
     }
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def readMatchMCase(tag: Byte): Eval[MatchCaseN] = tag match {
-      case MATCH_CASE =>
-        for {
-          pattern   <- readPar
-          source    <- readPar
-          freeCount <- readInt
-        } yield MatchCaseN(pattern, source, freeCount)
-      case _ => throw new Exception(s"Invalid tag `$tag` for matchMCase deserialization")
+      case MATCH_CASE => (readPar, readPar, readInt).mapN(MatchCaseN(_, _, _))
+      case _          => throw new Exception(s"Invalid tag `$tag` for matchMCase deserialization")
     }
 
     @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -312,11 +317,10 @@ object Serialization {
         (readSeq(readByte >>= readReceiveBind), readPar, readBool, readBool, readInt)
           .mapN(ReceiveN(_, _, _, _, _))
 
-      case MATCH =>
-        (readPar, readSeq(readByte >>= readMatchMCase)).mapN(MatchN(_, _))
+      case MATCH => (readPar, readSeq(readByte >>= readMatchMCase)).mapN(MatchN(_, _))
 
       case NEW =>
-        (readInt, readPar, readSeq(readString), readSeq(readTupleStringPar)).mapN(NewN(_, _, _, _))
+        (readInt, readPar, readSeq(readGString), readSeq(readTupleStringPar)).mapN(NewN(_, _, _, _))
 
       /* Collections */
       case ELIST  => (readPars, readVarOpt).mapN(EListN(_, _))

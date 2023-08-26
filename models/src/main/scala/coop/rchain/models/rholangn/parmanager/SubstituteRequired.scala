@@ -13,12 +13,12 @@ private[parmanager] object SubstituteRequired {
   def substituteRequiredFn(p: RhoTypeN): Boolean = p match {
 
     /** Basic types */
-    case _: NilN.type      => false
-    case pProc: ParProcN   => sReq(pProc.ps)
-    case send: SendN       => sReq(send.chan) || sReq(send.data)
-    case receive: ReceiveN => sReq(receive.binds) || sReq(receive.body)
-    case m: MatchN         => sReq(m.target) || sReq(m.cases)
-    case n: NewN           => sReq(n.p)
+    case _: NilN.type => false
+    case p: ParProcN  => sReq(p.ps)
+    case p: SendN     => sReq(p.chan) || sReq(p.args)
+    case p: ReceiveN  => sReq(p.binds) || sReq(p.body)
+    case p: MatchN    => sReq(p.target) || sReq(p.cases)
+    case p: NewN      => sReq(p.p)
 
     /** Ground types */
     case _: GroundN => false
@@ -26,8 +26,8 @@ private[parmanager] object SubstituteRequired {
     /** Collections */
     case eList: EListN   => sReq(eList.ps)
     case eTuple: ETupleN => sReq(eTuple.ps)
-    case eSet: ESetN     => sReq(eSet.sortedPs)
-    case eMap: EMapN     => sReqKVPairs(eMap.sortedPs)
+    case eSet: ESetN     => sReq(eSet.ps.toSeq)
+    case eMap: EMapN     => sReqKVPairs(eMap.ps.toSeq)
 
     /** Vars */
     case _: BoundVarN      => true
@@ -35,10 +35,10 @@ private[parmanager] object SubstituteRequired {
     case _: WildcardN.type => false
 
     /** Operations */
-    case op: Operation1ParN  => sReq(op.p)
-    case op: Operation2ParN  => sReq(op.p1) || sReq(op.p2)
-    case eMethod: EMethodN   => sReq(eMethod.target) || sReq(eMethod.arguments)
-    case eMatches: EMatchesN => sReq(eMatches.target) || sReq(eMatches.pattern)
+    case p: Operation1ParN => sReq(p.p)
+    case p: Operation2ParN => sReq(p.p1) || sReq(p.p2)
+    case p: EMethodN       => sReq(p.target) || sReq(p.args)
+    case p: EMatchesN      => sReq(p.target) || sReq(p.pattern)
 
     /** Unforgeable names */
     case _: UnforgeableN => false

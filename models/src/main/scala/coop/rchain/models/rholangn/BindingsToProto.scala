@@ -135,7 +135,7 @@ private[rholangn] object BindingsToProto {
 
   def toSend(x: SendN): Send = {
     val chan           = toProto(x.chan)
-    val data           = toProto(x.data)
+    val data           = toProto(x.args)
     val persistent     = x.persistent
     val locallyFree    = BitSet()
     val connectiveUsed = x.connectiveUsed.value
@@ -180,9 +180,9 @@ private[rholangn] object BindingsToProto {
     val bindCount                    = x.bindCount
     val p                            = toProto(x.p)
     val uri                          = x.uri
-    val injections: Map[String, Par] = Map.from(toProtoInjections(x.injections.toSeq))
+    val injections: Map[String, Par] = Map.from(toProtoInjections(x.injectionsStrKeys.toSeq))
     val locallyFree                  = BitSet()
-    New(bindCount, p, uri, injections, locallyFree)
+    New(bindCount, p, uri.map(_.v), injections, locallyFree)
   }
 
   /** Ground types */
@@ -233,7 +233,7 @@ private[rholangn] object BindingsToProto {
   }
 
   private def toParSet(x: ESetN): ParSet = {
-    val ps             = toProto(x.sortedPs)
+    val ps             = toProto(x.psSorted.value)
     val locallyFree    = BitSet()
     val connectiveUsed = x.connectiveUsed.value
     val remainder      = toProto(x.remainder)
@@ -241,7 +241,7 @@ private[rholangn] object BindingsToProto {
   }
 
   private def toParMap(x: EMapN): ParMap = {
-    val ps             = toProtoKVPairs(x.sortedPs)
+    val ps             = toProtoKVPairs(x.psSorted.value)
     val locallyFree    = BitSet()
     val connectiveUsed = x.connectiveUsed.value
     val remainder      = toProto(x.remainder)
@@ -400,7 +400,7 @@ private[rholangn] object BindingsToProto {
   private def toEMethod(x: EMethodN): EMethod = {
     val methodName     = x.methodName
     val target         = toProto(x.target)
-    val arguments      = toProto(x.arguments)
+    val arguments      = toProto(x.args)
     val locallyFree    = BitSet()
     val connectiveUsed = x.connectiveUsed.value
     EMethod(methodName, target, arguments, locallyFree, connectiveUsed)

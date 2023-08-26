@@ -1,5 +1,9 @@
 package coop.rchain.models.rholangn
 
+import cats.Eval
+import cats.syntax.all._
+import coop.rchain.models.rholangn.ParN._
+
 import scala.collection.immutable.{TreeMap, TreeSet}
 
 /**
@@ -26,6 +30,7 @@ object EListN {
   * @param ps The non-empty sequence of any Rholang processes
   */
 final class ETupleN private (val ps: Seq[ParN]) extends CollectionN
+
 object ETupleN {
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def apply(ps: Seq[ParN]): ETupleN =
@@ -40,8 +45,10 @@ object ETupleN {
   * @param remainder gives support to use ... in the set construction and deconstruction e.g. Set(1, 2, 3 ... rest).
   *                  It's defined as optional variable.
   */
-final class ESetN(private val ps: TreeSet[ParN], val remainder: Option[VarN]) extends CollectionN {
-  def sortedPs: Seq[ParN] = ps.toSeq
+final class ESetN(val ps: TreeSet[ParN], val remainder: Option[VarN]) extends CollectionN {
+  // Sorted by objects hash which is memoized as Rho type
+  val psSorted: Eval[Seq[ParN]] =
+    this.ps.toSeq.traverse(p => p.rhoHash.map((p, _))).map(_.sortBy(_._2).map(_._1)).memoize
 
   def +(elem: ParN): ESetN = ESetN(ps + elem, remainder)
   def -(elem: ParN): ESetN = ESetN(ps - elem, remainder)
@@ -54,6 +61,7 @@ final class ESetN(private val ps: TreeSet[ParN], val remainder: Option[VarN]) ex
 
   def contains(elem: ParN): Boolean = ps.contains(elem)
 }
+
 object ESetN {
   def apply(): ESetN = new ESetN(TreeSet.empty(ParN.ordering), None)
   def apply(ps: Seq[ParN], r: Option[VarN] = None): ESetN =
@@ -69,9 +77,13 @@ object ESetN {
   * @param remainder gives support to use ... in the set construction and deconstruction e.g. {"a":1, "b":2 ... rest}.
   *                  It's defined as optional variable.
   */
-final class EMapN(private val ps: TreeMap[ParN, ParN], val remainder: Option[VarN])
-    extends CollectionN {
-  def sortedPs: Seq[(ParN, ParN)] = ps.toSeq
+final class EMapN(val ps: TreeMap[ParN, ParN], val remainder: Option[VarN]) extends CollectionN {
+  // Sorted by objects hash which is memoized as Rho type
+  val psSorted: Eval[Seq[(ParN, ParN)]] =
+    ps.toSeq
+      .traverse(pp => pp.bimap(_.rhoHash, _.rhoHash).mapN(_ ++ _).map((pp, _)))
+      .map(_.sortBy(_._2).map(_._1))
+      .memoize
 
   def +(kv: (ParN, ParN)): EMapN = EMapN(ps + kv, remainder)
   def -(key: ParN): EMapN        = EMapN(ps - key, remainder)

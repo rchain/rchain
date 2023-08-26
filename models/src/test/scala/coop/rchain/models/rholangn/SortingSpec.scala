@@ -26,7 +26,7 @@ class SortingSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
 
   it should "test sorting for ParProc" in {
     val unsorted: Seq[GIntN] = Seq(GIntN(2), GIntN(5), GIntN(1), GIntN(3), GIntN(4), GIntN(2))
-    val sorted               = ParProcN(unsorted).sortedPs
+    val sorted               = ParProcN(unsorted).psSorted.value
     val expected: Seq[GIntN] =
       unsorted.sortWith((a, b) => compareHashes(a.rhoHash.value, b.rhoHash.value) < 0)
     sorted should be(expected)
@@ -34,7 +34,7 @@ class SortingSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
 
   it should "test sorting for ESet" in {
     val unsorted: Seq[GIntN] = Seq(GIntN(2), GIntN(5), GIntN(1), GIntN(3), GIntN(4))
-    val sorted               = ESetN(unsorted).sortedPs
+    val sorted               = ESetN(unsorted).psSorted.value
     val expected: Seq[GIntN] =
       unsorted.sortWith((a, b) => compareHashes(a.rhoHash.value, b.rhoHash.value) < 0)
     sorted should be(expected.distinct)
@@ -44,7 +44,7 @@ class SortingSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
     val unsorted: Seq[GIntN] = Seq(GIntN(2), GIntN(5), GIntN(1), GIntN(3), GIntN(4))
     val values               = Seq.range(1, unsorted.length + 1).map(x => GIntN(x.toLong))
     val pars                 = unsorted zip values
-    val sorted               = EMapN(pars).sortedPs
+    val sorted               = EMapN(pars).psSorted.value
     val expectedPars =
       pars.sortWith((a, b) => compareHashes(a._1.rhoHash.value, b._1.rhoHash.value) < 0)
     sorted should be(expectedPars)
@@ -57,21 +57,12 @@ class SortingSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matcher
     val bind4         = ReceiveBindN(Seq(FreeVarN(44)), NilN, Some(BoundVarN(42)), 1)
     val bind5         = ReceiveBindN(Seq(FreeVarN(45)), NilN, Some(BoundVarN(42)), 1)
     val unsortedBinds = Seq(bind1, bind2, bind3, bind4, bind5)
-    val sorted        = parmanager.Manager.sortBinds(unsortedBinds)
+    val receive       = ReceiveN(unsortedBinds, NilN, 0)
+
+    val sorted = receive.bindsSorted.value
     val expected =
       unsortedBinds.sortWith((a, b) => compareHashes(a.rhoHash.value, b.rhoHash.value) < 0)
     sorted should be(expected)
-
-    val bind1WithT    = (bind1, 1)
-    val bind2WithT    = (bind2, 2)
-    val bind3WithT    = (bind3, 3)
-    val bind4WithT    = (bind4, 4)
-    val bind5WithT    = (bind5, 5)
-    val unsortedWithT = Seq(bind1WithT, bind2WithT, bind3WithT, bind4WithT, bind5WithT)
-    val sortedWithT   = parmanager.Manager.sortBindsWithT(unsortedWithT)
-    val expectedWithT =
-      unsortedWithT.sortWith((a, b) => compareHashes(a._1.rhoHash.value, b._1.rhoHash.value) < 0)
-    sortedWithT should be(expectedWithT)
   }
 
 }

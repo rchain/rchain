@@ -24,4 +24,7 @@ object ProtoPrimitiveWriter {
 
       def write(x: String): Eval[Unit] = Eval.later(output.writeStringNoTag(x))
     }
+
+  def encodeWith(write: PrimitiveWriter[Eval] => Eval[Unit]): Eval[Array[Byte]] =
+    ProtoCodec.encode(payloadSize = 256, ProtoPrimitiveWriter.apply _ andThen write)
 }
