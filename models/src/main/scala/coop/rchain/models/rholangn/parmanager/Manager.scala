@@ -44,7 +44,7 @@ object Manager {
   def combinePars(p1: ParN, p2: ParN): ParN = flattedPProc(Seq(p1, p2))
 
   /** MetaData */
-  def rhoHashFn(p: RhoTypeN): Eval[Array[Byte]] = RhoHash.hashRec(p)
+  def rhoHashFn(p: RhoTypeN): Eval[Array[Byte]] = RhoHash.calcHash(p)
   def serializedSizeFn(p: RhoTypeN): Eval[Int]  = SerializedSize.calcSerSize(p)
   def serializedFn(p: RhoTypeN, memoizeChildren: Boolean): Eval[Array[Byte]] = {
     val write = (out: CodedOutputStream) =>

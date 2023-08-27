@@ -31,7 +31,7 @@ object RhoHash {
     */
   // TODO: Properly handle errors with return type (remove throw)
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def hashRec(input: RhoTypeN): Eval[Array[Byte]] = Eval.defer {
+  def calcHash(input: RhoTypeN): Eval[Array[Byte]] = Eval.defer {
     input match {
 
       /* Terminal expressions (0-arity constructors) */
