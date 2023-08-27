@@ -45,28 +45,28 @@ private[parmanager] object SerializedSize {
   import ProtobufSerializedSize._
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def calcSerSize(p: RhoTypeN): Eval[Int] = Eval.defer {
-    p match {
+  def calcSerSize(input: RhoTypeN): Eval[Int] = Eval.defer {
+    input match {
 
       /* Terminal expressions (0-arity constructors) */
       /* =========================================== */
 
-      case _: NilN.type            => Eval.now(totalSize())
-      case gBool: GBoolN           => sSize(gBool.v).map(totalSize(_))
-      case gInt: GIntN             => sSize(gInt.v).map(totalSize(_))
-      case gBigInt: GBigIntN       => sSize(gBigInt.v).map(totalSize(_))
-      case gString: GStringN       => sSize(gString.v).map(totalSize(_))
-      case gByteArray: GByteArrayN => sSize(gByteArray.v).map(totalSize(_))
-      case gUri: GUriN             => sSize(gUri.v).map(totalSize(_))
-      case _: WildcardN.type       => Eval.now(totalSize())
+      case _: NilN.type      => Eval.now(totalSize())
+      case p: GBoolN         => sSize(p.v).map(totalSize(_))
+      case p: GIntN          => sSize(p.v).map(totalSize(_))
+      case p: GBigIntN       => sSize(p.v).map(totalSize(_))
+      case p: GStringN       => sSize(p.v).map(totalSize(_))
+      case p: GByteArrayN    => sSize(p.v).map(totalSize(_))
+      case p: GUriN          => sSize(p.v).map(totalSize(_))
+      case _: WildcardN.type => Eval.now(totalSize())
 
       /* Unforgeable names */
-      case unf: UnforgeableN => sSize(unf.v).map(totalSize(_))
+      case p: UnforgeableN => sSize(p.v).map(totalSize(_))
 
       /* Vars */
-      case v: BoundVarN   => sSize(v.idx).map(totalSize(_))
-      case v: FreeVarN    => sSize(v.idx).map(totalSize(_))
-      case v: ConnVarRefN => (sSize(v.index), sSize(v.depth)).mapN(totalSize(_, _))
+      case p: BoundVarN   => sSize(p.idx).map(totalSize(_))
+      case p: FreeVarN    => sSize(p.idx).map(totalSize(_))
+      case p: ConnVarRefN => (sSize(p.index), sSize(p.depth)).mapN(totalSize(_, _))
 
       /* Simple types */
       case _: ConnectiveSTypeN => Eval.now(totalSize())
@@ -74,81 +74,68 @@ private[parmanager] object SerializedSize {
       /* Unary expressions (1-arity constructors) */
       /* ======================================== */
 
-      case op: Operation1ParN => sSize(op.p).map(totalSize(_))
+      case p: Operation1ParN => sSize(p.p).map(totalSize(_))
 
-      case bundle: BundleN =>
-        (sSize(bundle.body), sSize(bundle.writeFlag), sSize(bundle.readFlag))
-          .mapN(totalSize(_, _, _))
+      case p: BundleN =>
+        (sSize(p.body), sSize(p.writeFlag), sSize(p.readFlag)).mapN(totalSize(_, _, _))
 
       /* Connective */
-      case connNot: ConnNotN => sSize(connNot.p).map(totalSize(_))
+      case p: ConnNotN => sSize(p.p).map(totalSize(_))
 
       /* Binary expressions (2-arity constructors) */
       /* ========================================= */
 
-      case op: Operation2ParN => (sSize(op.p1), sSize(op.p2)).mapN(totalSize(_, _))
+      case p: Operation2ParN => (sSize(p.p1), sSize(p.p2)).mapN(totalSize(_, _))
 
-      case eMatches: EMatchesN =>
-        (sSize(eMatches.target), sSize(eMatches.pattern)).mapN(totalSize(_, _))
+      case p: EMatchesN =>
+        (sSize(p.target), sSize(p.pattern)).mapN(totalSize(_, _))
 
       /* N-ary parameter expressions (N-arity constructors) */
       /* ================================================== */
 
-      case pProc: ParProcN => sSize(pProc.ps).map(totalSize(_))
+      case p: ParProcN => sSize(p.ps).map(totalSize(_))
 
       case p: SendN => (sSize(p.chan), sSize(p.args), sSize(p.persistent)).mapN(totalSize(_, _, _))
 
-      case receive: ReceiveN =>
-        val bindsSize      = sSize(receive.binds)
-        val bodySize       = sSize(receive.body)
-        val persistentSize = sSize(receive.persistent)
-        val peekSize       = sSize(receive.peek)
-        val bindCountSize  = sSize(receive.bindCount)
-        (bindsSize, bodySize, persistentSize, peekSize, bindCountSize)
+      case p: ReceiveN =>
+        (sSize(p.binds), sSize(p.body), sSize(p.persistent), sSize(p.peek), sSize(p.bindCount))
           .mapN(totalSize(_, _, _, _, _))
 
-      case m: MatchN =>
-        val targetSize = sSize(m.target)
-        val casesSize  = sSize(m.cases)
-        (targetSize, casesSize).mapN(totalSize(_, _))
+      case p: MatchN => (sSize(p.target), sSize(p.cases)).mapN(totalSize(_, _))
 
-      case n: NewN =>
-        val bindCountSize  = sSize(n.bindCount)
-        val pSize          = sSize(n.p)
-        val uriSize        = sSize(n.uri)
-        val injectionsSize = sSizeSeqTuplePar(n.injections.toSeq)
-        (bindCountSize, pSize, uriSize, injectionsSize).mapN(totalSize(_, _, _, _))
+      case p: NewN =>
+        (sSize(p.bindCount), sSize(p.p), sSize(p.uri), sSizeSeqTuplePar(p.injections.toSeq))
+          .mapN(totalSize(_, _, _, _))
 
       /* Collections */
-      case list: EListN    => (sSize(list.ps), sSize(list.remainder)).mapN(totalSize(_, _))
-      case eTuple: ETupleN => sSize(eTuple.ps).map(totalSize(_))
-      case eSet: ESetN     => (sSize(eSet.ps.toSeq), sSize(eSet.remainder)).mapN(totalSize(_, _))
-      case eMap: EMapN =>
-        (sSizeSeqTuplePar(eMap.ps.toSeq), sSize(eMap.remainder)).mapN(totalSize(_, _))
+      case p: EListN  => (sSize(p.ps), sSize(p.remainder)).mapN(totalSize(_, _))
+      case p: ETupleN => sSize(p.ps).map(totalSize(_))
+      case p: ESetN   => (sSize(p.ps.toSeq), sSize(p.remainder)).mapN(totalSize(_, _))
+      case p: EMapN   => (sSizeSeqTuplePar(p.ps.toSeq), sSize(p.remainder)).mapN(totalSize(_, _))
 
       /* Connective */
-      case connAnd: ConnAndN => sSize(connAnd.ps).map(totalSize(_))
-      case connOr: ConnOrN   => sSize(connOr.ps).map(totalSize(_))
+      case p: ConnAndN => sSize(p.ps).map(totalSize(_))
+      case p: ConnOrN  => sSize(p.ps).map(totalSize(_))
 
       case p: EMethodN =>
         (sSize(p.methodName), sSize(p.target), sSize(p.args)).mapN(totalSize(_, _, _))
 
       /* Auxiliary types */
 
-      case bind: ReceiveBindN =>
-        val patternsSize  = sSize(bind.patterns)
-        val sourceSize    = sSize(bind.source)
-        val reminderSize  = sSize(bind.remainder)
-        val freeCountSize = sSize(bind.freeCount)
+      case p: ReceiveBindN =>
+        val patternsSize  = sSize(p.patterns)
+        val sourceSize    = sSize(p.source)
+        val reminderSize  = sSize(p.remainder)
+        val freeCountSize = sSize(p.freeCount)
         (patternsSize, sourceSize, reminderSize, freeCountSize).mapN(totalSize(_, _, _, _))
 
-      case mCase: MatchCaseN =>
-        val patternSize   = sSize(mCase.pattern)
-        val sourceSize    = sSize(mCase.source)
-        val freeCountSize = sSize(mCase.freeCount)
+      case p: MatchCaseN =>
+        val patternSize   = sSize(p.pattern)
+        val sourceSize    = sSize(p.source)
+        val freeCountSize = sSize(p.freeCount)
         (patternSize, sourceSize, freeCountSize).mapN(totalSize(_, _, _))
 
-      case x => throw new Exception(s"Undefined type $x")
+      case p => throw new Exception(s"Undefined type $p")
     }
   }
 }

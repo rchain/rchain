@@ -11,13 +11,13 @@ object Serialization {
   /**
     * Serialization of the Rholang AST types.
     *
-    * @param p Rholang AST root object
+    * @param inp Rholang AST root object
     * @param wrt Writer of primitive types
     * @param memo Use memoization for all children fields recursively
     */
   // TODO: Properly handle errors with return type (remove throw)
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def serialize(p: RhoTypeN, wrt: PrimitiveWriter[Eval], memo: Boolean): Eval[Unit] = Eval.defer {
+  def serialize(inp: RhoTypeN, wrt: PrimitiveWriter[Eval], memo: Boolean): Eval[Unit] = Eval.defer {
     // Recursive traversal with or without memoization of all children objects
     val writePar: RhoTypeN => Eval[Unit] =
       if (memo)
@@ -45,35 +45,34 @@ object Serialization {
         writePar(p.source) *>
         write(p.freeCount)
 
-    p match {
+    inp match {
 
       /* Terminal expressions (0-arity constructors) */
       /* =========================================== */
 
-      case _: NilN.type            => write(NIL)
-      case gBool: GBoolN           => write(GBOOL) *> write(gBool.v)
-      case gInt: GIntN             => write(GINT) *> write(gInt.v)
-      case gBigInt: GBigIntN       => write(GBIG_INT) *> writeBigInt(gBigInt.v)
-      case gString: GStringN       => write(GSTRING) *> write(gString.v)
-      case gByteArray: GByteArrayN => write(GBYTE_ARRAY) *> write(gByteArray.v)
-      case gUri: GUriN             => write(GURI) *> write(gUri.v)
-      case _: WildcardN.type       => write(WILDCARD)
+      case _: NilN.type      => write(NIL)
+      case p: GBoolN         => write(GBOOL) *> write(p.v)
+      case p: GIntN          => write(GINT) *> write(p.v)
+      case p: GBigIntN       => write(GBIG_INT) *> writeBigInt(p.v)
+      case p: GStringN       => write(GSTRING) *> write(p.v)
+      case p: GByteArrayN    => write(GBYTE_ARRAY) *> write(p.v)
+      case p: GUriN          => write(GURI) *> write(p.v)
+      case _: WildcardN.type => write(WILDCARD)
 
       /* Unforgeable names */
-      case unf: UnforgeableN =>
-        val unfKind = unf match {
+      case p: UnforgeableN =>
+        val unfKind = p match {
           case _: UPrivateN      => UPRIVATE
           case _: UDeployIdN     => UDEPLOY_ID
           case _: UDeployerIdN   => UDEPLOYER_ID
           case _: USysAuthTokenN => SYS_AUTH_TOKEN
         }
-        write(unfKind) *> write(unf.v)
+        write(unfKind) *> write(p.v)
 
       /* Vars */
-      case bVar: BoundVarN => write(BOUND_VAR) *> write(bVar.idx)
-      case fVar: FreeVarN  => write(FREE_VAR) *> write(fVar.idx)
-      case rVar: ConnVarRefN =>
-        write(CONNECTIVE_VARREF) *> write(rVar.index) *> write(rVar.depth)
+      case p: BoundVarN   => write(BOUND_VAR) *> write(p.idx)
+      case p: FreeVarN    => write(FREE_VAR) *> write(p.idx)
+      case p: ConnVarRefN => write(CONNECTIVE_VARREF) *> write(p.index) *> write(p.depth)
 
       /* Simple types */
       case _: ConnBoolN.type      => write(CONNECTIVE_BOOL)
@@ -86,24 +85,24 @@ object Serialization {
       /* Unary expressions (1-arity constructors) */
       /* ======================================== */
 
-      case op: Operation1ParN =>
-        val tag = op match {
+      case p: Operation1ParN =>
+        val tag = p match {
           case _: ENegN => ENEG
           case _: ENotN => ENOT
         }
-        write(tag) *> writePar(op.p)
+        write(tag) *> writePar(p.p)
 
-      case b: BundleN =>
-        write(BUNDLE) *> writePar(b.body) *> write(b.writeFlag) *> write(b.readFlag)
+      case p: BundleN =>
+        write(BUNDLE) *> writePar(p.body) *> write(p.writeFlag) *> write(p.readFlag)
 
       /* Connective */
-      case connNot: ConnNotN => write(CONNECTIVE_NOT) *> writePar(connNot.p)
+      case p: ConnNotN => write(CONNECTIVE_NOT) *> writePar(p.p)
 
       /* Binary expressions (2-arity constructors) */
       /* ========================================= */
 
-      case op: Operation2ParN =>
-        val tag = op match {
+      case p: Operation2ParN =>
+        val tag = p match {
           case _: EPlusN           => EPLUS
           case _: EMinusN          => EMINUS
           case _: EMultN           => EMULT
@@ -123,47 +122,44 @@ object Serialization {
           case _: EMinusMinusN     => EMINUSMINUS
           case _: EPercentPercentN => EPERCENT
         }
-        write(tag) *> writePar(op.p1) *> writePar(op.p2)
+        write(tag) *> writePar(p.p1) *> writePar(p.p2)
 
-      case eMatches: EMatchesN =>
-        write(EMATCHES) *> writePar(eMatches.target) *> writePar(eMatches.pattern)
+      case p: EMatchesN => write(EMATCHES) *> writePar(p.target) *> writePar(p.pattern)
 
       /* N-ary parameter expressions (N-arity constructors) */
       /* ================================================== */
 
-      case pProc: ParProcN => write(PARPROC) *> pProc.psSorted.flatMap(writeSeq)
+      case p: ParProcN => write(PARPROC) *> p.psSorted.flatMap(writeSeq)
 
       case p: SendN => write(SEND) *> writePar(p.chan) *> writeSeq(p.args) *> write(p.persistent)
 
-      case receive: ReceiveN =>
+      case p: ReceiveN =>
         write(RECEIVE) *>
-          receive.bindsSorted.flatMap(writeSeq(_, writeReceiveBind)) *>
-          writePar(receive.body) *>
-          write(receive.persistent) *>
-          write(receive.peek) *>
-          write(receive.bindCount)
+          p.bindsSorted.flatMap(writeSeq(_, writeReceiveBind)) *>
+          writePar(p.body) *>
+          write(p.persistent) *>
+          write(p.peek) *>
+          write(p.bindCount)
 
       case p: MatchN => write(MATCH) *> writePar(p.target) *> writeSeq(p.cases, writeMatchCase)
 
-      case n: NewN =>
+      case p: NewN =>
         write(NEW) *>
-          write(n.bindCount) *>
-          writePar(n.p) *>
-          n.urisSorted.flatMap(writeSeq) *>
-          n.injectionsSorted.flatMap(writeSeq(_, writeTuplePar))
+          write(p.bindCount) *>
+          writePar(p.p) *>
+          p.urisSorted.flatMap(writeSeq) *>
+          p.injectionsSorted.flatMap(writeSeq(_, writeTuplePar))
 
       /* Collections */
-      case eList: EListN   => write(ELIST) *> writeSeq(eList.ps) *> writeOpt(eList.remainder)
-      case eTuple: ETupleN => write(ETUPLE) *> writeSeq(eTuple.ps)
-      case eSet: ESetN     => write(ESET) *> eSet.psSorted.flatMap(writeSeq) *> writeOpt(eSet.remainder)
-      case eMap: EMapN =>
-        write(EMAP) *>
-          eMap.psSorted.flatMap(writeSeq(_, writeTuplePar)) *>
-          writeOpt(eMap.remainder)
+      case p: EListN  => write(ELIST) *> writeSeq(p.ps) *> writeOpt(p.remainder)
+      case p: ETupleN => write(ETUPLE) *> writeSeq(p.ps)
+      case p: ESetN   => write(ESET) *> p.psSorted.flatMap(writeSeq) *> writeOpt(p.remainder)
+      case p: EMapN =>
+        write(EMAP) *> p.psSorted.flatMap(writeSeq(_, writeTuplePar)) *> writeOpt(p.remainder)
 
       /* Connective */
-      case connAnd: ConnAndN => write(CONNECTIVE_AND) *> writeSeq(connAnd.ps)
-      case connOr: ConnOrN   => write(CONNECTIVE_OR) *> writeSeq(connOr.ps)
+      case p: ConnAndN => write(CONNECTIVE_AND) *> writeSeq(p.ps)
+      case p: ConnOrN  => write(CONNECTIVE_OR) *> writeSeq(p.ps)
 
       case eMethod: EMethodN =>
         write(EMETHOD) *>
@@ -172,20 +168,20 @@ object Serialization {
           writeSeq(eMethod.args)
 
       /* Auxiliary types */
-      case bind: ReceiveBindN =>
+      case p: ReceiveBindN =>
         write(RECEIVE_BIND) *>
-          writeSeq(bind.patterns) *>
-          writePar(bind.source) *>
-          writeOpt(bind.remainder) *>
-          write(bind.freeCount)
+          writeSeq(p.patterns) *>
+          writePar(p.source) *>
+          writeOpt(p.remainder) *>
+          write(p.freeCount)
 
-      case mCase: MatchCaseN =>
+      case p: MatchCaseN =>
         write(MATCH_CASE) *>
-          writePar(mCase.pattern) *>
-          writePar(mCase.source) *>
-          write(mCase.freeCount)
+          writePar(p.pattern) *>
+          writePar(p.source) *>
+          write(p.freeCount)
 
-      case unknownType => throw new Exception(s"Unknown type `$unknownType`")
+      case p => throw new Exception(s"Unknown type `$p`")
     }
   }
 
