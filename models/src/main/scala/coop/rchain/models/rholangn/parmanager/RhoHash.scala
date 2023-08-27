@@ -41,17 +41,17 @@ object RhoHash {
     *
     * ===Concatenates two byte arrays===
     *
-    * {{{ ++ : Eval[Array[Byte]] => Eval[Array[Byte]] }}}
+    * {{{ ++ : Eval[Array[Byte]] => Eval[Array[Byte]] => Eval[Array[Byte]] }}}
     * Concatenates two byte arrays. It works the same as Scala concat (`++`) function, but wrapped in `Eval`.
     *
     * ===Prepends a byte array to the sequence of byte arrays===
     *
-    * {{{ +++ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] }}}
+    * {{{ +++ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] => Eval[Array[Byte]] }}}
     * Prepends a byte array to the sequence of byte arrays, concatenates the sequence and computes the final hash.
     *
     * ===Prepends a byte array to the sequence of byte arrays with sorting===
     *
-    * {{{ +|+ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] }}}
+    * {{{ +|+ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] => Eval[Array[Byte]] }}}
     * The same as `+++`, but the sequence is first sorted before concatenation.
     *
     * @param input Rholang AST root object

@@ -14,9 +14,8 @@ object NilN extends BasicN
   * and one receive.
   */
 final class ParProcN(val ps: Seq[ParN]) extends BasicN {
-  // Sorted by objects hash which is memoized as Rho type
-  val psSorted: Eval[Seq[ParN]] =
-    this.ps.traverse(p => p.rhoHash.map((p, _))).map(_.sortBy(_._2).map(_._1)).memoize
+  // Sorted by the hash of the objects which is memoized as part of Rho type
+  val psSorted: Eval[Seq[ParN]] = this.ps.sortByBytes(_.rhoHash).memoize
 }
 
 object ParProcN { def apply(ps: Seq[ParN]): ParProcN = new ParProcN(ps) }
@@ -54,9 +53,8 @@ final class ReceiveN(
     val peek: Boolean,
     val bindCount: Int
 ) extends BasicN {
-  // Sorted by objects hash which is memoized as Rho type
-  val bindsSorted: Eval[Seq[ReceiveBindN]] =
-    this.binds.traverse(rb => rb.rhoHash.map((rb, _))).map(_.sortBy(_._2).map(_._1)).memoize
+  // Sorted by the hash of the objects which is memoized as part of Rho type
+  val bindsSorted: Eval[Seq[ReceiveBindN]] = this.binds.sortByBytes(_.rhoHash).memoize
 }
 
 object ReceiveN {
@@ -155,16 +153,12 @@ final class NewN(
     val uri: Seq[GStringN],
     val injections: Map[GStringN, ParN]
 ) extends BasicN {
-  // Sorted by objects hash which is memoized as Rho type
-  val urisSorted: Eval[Seq[GStringN]] =
-    this.uri.traverse(uri => uri.rhoHash.map((uri, _))).map(_.sortBy(_._2).map(_._1)).memoize
+  // Sorted by the hash of the objects which is memoized as part of Rho type
+  val urisSorted: Eval[Seq[GStringN]] = this.uri.sortByBytes(_.rhoHash).memoize
 
-  // Sorted by objects hash which is memoized as Rho type
+  // Sorted by the hash of the objects which is memoized as part of Rho type
   val injectionsSorted: Eval[Seq[(GStringN, ParN)]] =
-    this.injections.toSeq
-      .traverse(inj => inj.bimap(_.rhoHash, _.rhoHash).mapN(_ ++ _).map((inj, _)))
-      .map(_.sortBy(_._2).map(_._1))
-      .memoize
+    this.injections.toSeq.sortByBytes(_.bimap(_.rhoHash, _.rhoHash).mapN(_ ++ _)).memoize
 
   def injectionsStrKeys: Map[String, ParN] = this.injections.map(_.bimap(_.v, identity))
 }

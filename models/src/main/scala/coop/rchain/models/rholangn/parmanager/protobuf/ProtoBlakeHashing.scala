@@ -41,7 +41,7 @@ object ProtoBlakeHashing {
 
     /** ===Concatenates two byte arrays===
       *
-      * {{{ ++ : Eval[Array[Byte]] => Eval[Array[Byte]] }}}
+      * {{{ ++ : Eval[Array[Byte]] => Eval[Array[Byte]] => Eval[Array[Byte]] }}}
       * Concatenates two byte arrays. It works the same as Scala concat (`++`) function, but wrapped in `Eval`.
       */
     @inline def ++(seq2: Eval[Array[Byte]]): Eval[Array[Byte]] =
@@ -49,7 +49,7 @@ object ProtoBlakeHashing {
 
     /** ===Prepends a byte array to the sequence of byte arrays===
       *
-      * {{{ +++ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] }}}
+      * {{{ +++ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] => Eval[Array[Byte]] }}}
       * Prepends a byte array to the sequence of byte arrays, concatenates the sequence and computes the final hash.
       */
     @inline def +++(seq2: Eval[Seq[Array[Byte]]]): Eval[Array[Byte]] =
@@ -57,7 +57,7 @@ object ProtoBlakeHashing {
 
     /** ===Prepends a byte array to the sequence of byte arrays with sorting===
       *
-      * {{{ +|+ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] }}}
+      * {{{ +|+ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] => Eval[Array[Byte]] }}}
       * The same as `+++`, but the sequence is first sorted before concatenation.
       */
     @inline def +|+(seq2: Eval[Seq[Array[Byte]]]): Eval[Array[Byte]] =

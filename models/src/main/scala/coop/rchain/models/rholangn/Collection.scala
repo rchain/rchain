@@ -46,9 +46,8 @@ object ETupleN {
   *                  It's defined as optional variable.
   */
 final class ESetN(val ps: TreeSet[ParN], val remainder: Option[VarN]) extends CollectionN {
-  // Sorted by objects hash which is memoized as Rho type
-  val psSorted: Eval[Seq[ParN]] =
-    this.ps.toSeq.traverse(p => p.rhoHash.map((p, _))).map(_.sortBy(_._2).map(_._1)).memoize
+  // Sorted by the hash of the objects which is memoized as part of Rho type
+  val psSorted: Eval[Seq[ParN]] = this.ps.toSeq.sortByBytes(_.rhoHash).memoize
 
   def +(elem: ParN): ESetN = ESetN(ps + elem, remainder)
   def -(elem: ParN): ESetN = ESetN(ps - elem, remainder)
@@ -78,12 +77,9 @@ object ESetN {
   *                  It's defined as optional variable.
   */
 final class EMapN(val ps: TreeMap[ParN, ParN], val remainder: Option[VarN]) extends CollectionN {
-  // Sorted by objects hash which is memoized as Rho type
+  // Sorted by the hash of the objects which is memoized as part of Rho type
   val psSorted: Eval[Seq[(ParN, ParN)]] =
-    ps.toSeq
-      .traverse(pp => pp.bimap(_.rhoHash, _.rhoHash).mapN(_ ++ _).map((pp, _)))
-      .map(_.sortBy(_._2).map(_._1))
-      .memoize
+    ps.toSeq.sortByBytes(_.bimap(_.rhoHash, _.rhoHash).mapN(_ ++ _)).memoize
 
   def +(kv: (ParN, ParN)): EMapN = EMapN(ps + kv, remainder)
   def -(key: ParN): EMapN        = EMapN(ps - key, remainder)

@@ -1,6 +1,7 @@
 package coop.rchain.models.rholangn
 
 import cats.Eval
+import cats.syntax.all._
 import coop.rchain.models.rholangn.parmanager.Manager._
 
 import java.util
@@ -55,6 +56,13 @@ object ParN {
 
   def compare(p1: ParN, p2: ParN): Int = p1.rhoHash.value compare p2.rhoHash.value
   val ordering: Ordering[ParN]         = (p1: ParN, p2: ParN) => compare(p1, p2)
+
+  implicit class SequenceHelpers[T](val seq: Seq[T]) extends AnyVal {
+
+    /** Sorts the sequence by the selected byte array and its defined `Ordering` instance. */
+    @inline def sortByBytes(f: T => Eval[Array[Byte]]): Eval[Seq[T]] =
+      seq.traverse(t => f(t).map((t, _))).map(_.sortBy(_._2).map(_._1))
+  }
 }
 
 /** Basic rholang operations that can be executed in parallel*/
