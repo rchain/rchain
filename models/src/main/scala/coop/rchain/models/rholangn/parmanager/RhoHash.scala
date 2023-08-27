@@ -47,7 +47,7 @@ object RhoHash {
     * ===Prepends a byte array to the sequence of byte arrays===
     *
     * {{{ +++ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] => Eval[Array[Byte]] }}}
-    * Prepends a byte array to the sequence of byte arrays, concatenates the sequence and computes the final hash.
+    * Prepends the byte array to the concatenated and hashed sequence of byte arrays.
     *
     * ===Prepends a byte array to the sequence of byte arrays with sorting===
     *

@@ -50,10 +50,10 @@ object ProtoBlakeHashing {
     /** ===Prepends a byte array to the sequence of byte arrays===
       *
       * {{{ +++ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] => Eval[Array[Byte]] }}}
-      * Prepends a byte array to the sequence of byte arrays, concatenates the sequence and computes the final hash.
+      * Prepends the byte array to the concatenated and hashed sequence of byte arrays.
       */
     @inline def +++(seq2: Eval[Seq[Array[Byte]]]): Eval[Array[Byte]] =
-      (seq1, seq2).mapN(_ +: _).map(concatSeq).map(hash)
+      seq1 ++ seq2.map(concatSeq _ andThen hash)
 
     /** ===Prepends a byte array to the sequence of byte arrays with sorting===
       *
@@ -61,6 +61,6 @@ object ProtoBlakeHashing {
       * The same as `+++`, but the sequence is first sorted before concatenation.
       */
     @inline def +|+(seq2: Eval[Seq[Array[Byte]]]): Eval[Array[Byte]] =
-      (seq1, seq2).mapN(_ +: _).map(_.sorted).map(concatSeq).map(hash)
+      seq1 +++ seq2.map(_.sorted)
   }
 }
