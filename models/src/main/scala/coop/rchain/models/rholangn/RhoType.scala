@@ -29,7 +29,12 @@ sealed trait RhoTypeN {
   /** True if the object or at least one of the nested objects can be substituted in Reducer */
   lazy val substituteRequired: Boolean = substituteRequiredFn(this)
 
-  override def equals(x: Any): Boolean = parmanager.Manager.equals(this, x)
+  override def equals(other: Any): Boolean = other match {
+    case x: RhoTypeN => this.rhoHash.value sameElements x.rhoHash.value
+    case _           => false
+  }
+
+  override def hashCode(): Int = this.rhoHash.value.hashCode()
 }
 
 /** Rholang element that can be processed in parallel, together with other elements */

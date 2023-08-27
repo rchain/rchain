@@ -10,17 +10,8 @@ import coop.rchain.models.rholangn.parmanager.protobuf.{
 }
 
 import java.io.InputStream
-import java.util
 
 object Manager {
-  implicit val o: Ordering[Array[Byte]] = (a: Array[Byte], b: Array[Byte]) =>
-    util.Arrays.compare(a, b)
-
-  def equals(self: RhoTypeN, other: Any): Boolean = other match {
-    case x: RhoTypeN => x.rhoHash.value sameElements self.rhoHash.value
-    case _           => false
-  }
-
   private def flatPs(ps: Seq[ParN]): Seq[ParN] =
     ps.flatMap {
       case _: NilN.type => Seq()
