@@ -345,7 +345,7 @@ class BindingsSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matche
   }
 
   it should "test EMethod" in {
-    val p1: ParN = EMethodN("nth", EListN(NilN), GIntN(1))
+    val p1: ParN = EMethodN(EListN(NilN), "nth", GIntN(1))
     val p2: Par  = EMethod("nth", EList(Seq(Par())), Seq(GInt(1): Par))
     toProto(p1) should be(p2)
     fromProto(p2) should be(p1)

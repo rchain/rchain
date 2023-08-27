@@ -298,7 +298,7 @@ class ParSpec extends AnyFlatSpec with ScalaCheckPropertyChecks with Matchers {
   }
 
   it should "test EMethod" in {
-    val p = EMethodN("nth", EListN(NilN), GIntN(1))
+    val p = EMethodN(EListN(NilN), "nth", GIntN(1))
     simpleCheck(p)
   }
 

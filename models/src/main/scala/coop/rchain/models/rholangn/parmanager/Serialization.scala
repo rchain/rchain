@@ -163,8 +163,8 @@ object Serialization {
 
       case eMethod: EMethodN =>
         write(EMETHOD) *>
-          write(eMethod.methodName) *>
           writePar(eMethod.target) *>
+          write(eMethod.methodName) *>
           writeSeq(eMethod.args)
 
       case p => throw new Exception(s"Unknown type `$p`")
@@ -314,7 +314,7 @@ object Serialization {
       case CONNECTIVE_AND => readPars.map(ConnAndN(_))
       case CONNECTIVE_OR  => readPars.map(ConnOrN(_))
 
-      case EMETHOD => (readString, readPar, readPars).mapN(EMethodN(_, _, _))
+      case EMETHOD => (readPar, readString, readPars).mapN(EMethodN(_, _, _))
 
       case _ => throw new Exception(s"Invalid tag `$tag` for ParN deserialization")
     }

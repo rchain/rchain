@@ -66,13 +66,14 @@ object EPercentPercentN {
   def apply(p1: ParN, p2: ParN): EPercentPercentN = new EPercentPercentN(p1, p2)
 }
 
-final class EMethodN(val methodName: String, val target: ParN, val args: Seq[ParN])
+final class EMethodN(val target: ParN, val methodName: String, val args: Seq[ParN])
     extends OperationOtherN
+
 object EMethodN {
-  def apply(methodName: String, target: ParN, arguments: Seq[ParN] = Seq()): EMethodN =
-    new EMethodN(methodName, target, arguments)
-  def apply(methodName: String, target: ParN, argument: ParN): EMethodN =
-    new EMethodN(methodName, target, Seq(argument))
+  def apply(target: ParN, methodName: String, args: Seq[ParN] = Seq()): EMethodN =
+    new EMethodN(target, methodName, args)
+  def apply(target: ParN, methodName: String, arg: ParN): EMethodN =
+    new EMethodN(target, methodName, Seq(arg))
 }
 
 /**

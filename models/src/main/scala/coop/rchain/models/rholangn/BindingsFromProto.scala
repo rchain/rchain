@@ -383,10 +383,10 @@ private[rholangn] object BindingsFromProto {
   }
 
   private def fromEMethod(x: EMethod): EMethodN = {
-    val methodName = x.methodName
     val target     = fromProto(x.target)
+    val methodName = x.methodName
     val arguments  = fromProto(x.arguments)
-    EMethodN(methodName, target, arguments)
+    EMethodN(target, methodName, arguments)
   }
 
   private def fromEMatches(x: EMatches): EMatchesN = {
