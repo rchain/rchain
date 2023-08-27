@@ -44,20 +44,12 @@ private object ProtobufSerializedSize {
 private[parmanager] object SerializedSize {
   import ProtobufSerializedSize._
 
-  def sSizeReceiveBind(p: ReceiveBindN): Eval[Int] = {
-    val patternsSize  = sSize(p.patterns)
-    val sourceSize    = sSize(p.source)
-    val reminderSize  = sSize(p.remainder)
-    val freeCountSize = sSize(p.freeCount)
-    (patternsSize, sourceSize, reminderSize, freeCountSize).mapN(totalSize(_, _, _, _))
-  }
+  def sSizeReceiveBind(p: ReceiveBindN): Eval[Int] =
+    (sSize(p.patterns), sSize(p.source), sSize(p.remainder), sSize(p.freeCount))
+      .mapN(totalSize(_, _, _, _))
 
-  def sSizeMatchCase(p: MatchCaseN): Eval[Int] = {
-    val patternSize   = sSize(p.pattern)
-    val sourceSize    = sSize(p.source)
-    val freeCountSize = sSize(p.freeCount)
-    (patternSize, sourceSize, freeCountSize).mapN(totalSize(_, _, _))
-  }
+  def sSizeMatchCase(p: MatchCaseN): Eval[Int] =
+    (sSize(p.pattern), sSize(p.source), sSize(p.freeCount)).mapN(totalSize(_, _, _))
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def calcSerSize(input: RhoTypeN): Eval[Int] = Eval.defer {

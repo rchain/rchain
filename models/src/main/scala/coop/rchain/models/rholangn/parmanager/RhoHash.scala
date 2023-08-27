@@ -8,11 +8,14 @@ import coop.rchain.models.rholangn.parmanager.protobuf.ProtoBlakeHashing._
 
 object RhoHash {
 
+  /** Creates singleton byte array with supplied byte. */
   def arE(b: Byte): Eval[Array[Byte]] = Eval.now(Array[Byte](b))
 
+  /** Hashes Rholang AST node wrapped in Option. */
   def hashOpt(opt: Option[ParN]): Eval[Array[Byte]] =
-    opt.map(x => (hashTrue, x.rhoHash).mapN(_ ++ _)).getOrElse(hashFalse)
+    opt.map(x => (HASH_TRUE, x.rhoHash).mapN(_ ++ _)).getOrElse(HASH_FALSE)
 
+  /** Hashes [[ReceiveBindN]] object part of the [[ReceiveN]] Rholang constructor. */
   def hashReceiveBind(p: ReceiveBindN): Eval[Array[Byte]] =
     (arE(RECEIVE_BIND)
       +++ p.patterns.traverse(_.rhoHash)
@@ -21,11 +24,35 @@ object RhoHash {
       ++ hashOpt(p.remainder))
       .map(hash)
 
+  /** Hashes [[MatchCaseN]] object part of the [[MatchN]] Rholang constructor. */
   def hashMatchCase(p: MatchCaseN): Eval[Array[Byte]] =
     (arE(MATCH_CASE) ++ p.pattern.rhoHash ++ p.source.rhoHash ++ hash(p.freeCount)).map(hash)
 
-  /**
-    * Computes hash of the Rholang AST types.
+  /** ==Computes the hash of the Rholang AST types.==
+    *
+    * This function represents the specification of the hashing algorithm for the Rholang core types (AST).
+    *
+    * ===How to read the code?===
+    *
+    * To make the specification more succinct three combinator functions are defined `++`, `+++` and `+|+`.
+    * These functions are lifted to work on the `Eval` type level which means combining types are wrapped in `Eval`.
+    *
+    * They are used to combine bytes representing hashes of the object tree being hashed.
+    *
+    * ===Concatenates two byte arrays===
+    *
+    * {{{ ++ : Eval[Array[Byte]] => Eval[Array[Byte]] }}}
+    * Concatenates two byte arrays. It works the same as Scala concat (`++`) function, but wrapped in `Eval`.
+    *
+    * ===Prepends a byte array to the sequence of byte arrays===
+    *
+    * {{{ +++ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] }}}
+    * Prepends a byte array to the sequence of byte arrays, concatenates the sequence and computes the final hash.
+    *
+    * ===Prepends a byte array to the sequence of byte arrays with sorting===
+    *
+    * {{{ +|+ : Eval[Array[Byte]] => Eval[Seq[Array[Byte]] }}}
+    * The same as `+++`, but the sequence is first sorted before concatenation.
     *
     * @param input Rholang AST root object
     */

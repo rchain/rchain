@@ -40,10 +40,7 @@ object Serialization {
         write(p.freeCount)
 
     def writeMatchCase(p: MatchCaseN): Eval[Unit] =
-      write(MATCH_CASE) *>
-        writePar(p.pattern) *>
-        writePar(p.source) *>
-        write(p.freeCount)
+      write(MATCH_CASE) *> writePar(p.pattern) *> writePar(p.source) *> write(p.freeCount)
 
     inp match {
 
