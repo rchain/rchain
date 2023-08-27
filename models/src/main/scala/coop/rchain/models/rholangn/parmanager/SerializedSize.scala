@@ -44,6 +44,21 @@ private object ProtobufSerializedSize {
 private[parmanager] object SerializedSize {
   import ProtobufSerializedSize._
 
+  def sSizeReceiveBind(p: ReceiveBindN): Eval[Int] = {
+    val patternsSize  = sSize(p.patterns)
+    val sourceSize    = sSize(p.source)
+    val reminderSize  = sSize(p.remainder)
+    val freeCountSize = sSize(p.freeCount)
+    (patternsSize, sourceSize, reminderSize, freeCountSize).mapN(totalSize(_, _, _, _))
+  }
+
+  def sSizeMatchCase(p: MatchCaseN): Eval[Int] = {
+    val patternSize   = sSize(p.pattern)
+    val sourceSize    = sSize(p.source)
+    val freeCountSize = sSize(p.freeCount)
+    (patternSize, sourceSize, freeCountSize).mapN(totalSize(_, _, _))
+  }
+
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def calcSerSize(input: RhoTypeN): Eval[Int] = Eval.defer {
     input match {
@@ -98,10 +113,13 @@ private[parmanager] object SerializedSize {
       case p: SendN => (sSize(p.chan), sSize(p.args), sSize(p.persistent)).mapN(totalSize(_, _, _))
 
       case p: ReceiveN =>
-        (sSize(p.binds), sSize(p.body), sSize(p.persistent), sSize(p.peek), sSize(p.bindCount))
+        val bindsSize = p.binds.traverse(sSizeReceiveBind).map(totalSize)
+        (bindsSize, sSize(p.body), sSize(p.persistent), sSize(p.peek), sSize(p.bindCount))
           .mapN(totalSize(_, _, _, _, _))
 
-      case p: MatchN => (sSize(p.target), sSize(p.cases)).mapN(totalSize(_, _))
+      case p: MatchN =>
+        val casesSize = p.cases.traverse(sSizeMatchCase).map(totalSize)
+        (sSize(p.target), casesSize).mapN(totalSize(_, _))
 
       case p: NewN =>
         (sSize(p.bindCount), sSize(p.p), sSize(p.uri), sSizeSeqTuplePar(p.injections.toSeq))
@@ -119,21 +137,6 @@ private[parmanager] object SerializedSize {
 
       case p: EMethodN =>
         (sSize(p.methodName), sSize(p.target), sSize(p.args)).mapN(totalSize(_, _, _))
-
-      /* Auxiliary types */
-
-      case p: ReceiveBindN =>
-        val patternsSize  = sSize(p.patterns)
-        val sourceSize    = sSize(p.source)
-        val reminderSize  = sSize(p.remainder)
-        val freeCountSize = sSize(p.freeCount)
-        (patternsSize, sourceSize, reminderSize, freeCountSize).mapN(totalSize(_, _, _, _))
-
-      case p: MatchCaseN =>
-        val patternSize   = sSize(p.pattern)
-        val sourceSize    = sSize(p.source)
-        val freeCountSize = sSize(p.freeCount)
-        (patternSize, sourceSize, freeCountSize).mapN(totalSize(_, _, _))
 
       case p => throw new Exception(s"Undefined type $p")
     }

@@ -4,17 +4,15 @@ import cats.Eval
 import cats.syntax.all._
 import coop.rchain.models.rholangn._
 
-private[parmanager] object ConnectiveUsed {
-  private def cUsed(p: RhoTypeN): Eval[Boolean] = p.connectiveUsed
-  private def cUsed(kv: (RhoTypeN, RhoTypeN)): Eval[Boolean] =
-    (cUsed(kv._1), cUsed(kv._2)).mapN(_ || _)
-  private def cUsed(ps: Seq[RhoTypeN]): Eval[Boolean] = ps.existsM(cUsed)
-  private def cUsedKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Eval[Boolean] =
-    kVPairs.existsM(cUsed)
+object ConnectiveUsed {
+  def cUsed(p: RhoTypeN): Eval[Boolean]                               = p.connectiveUsed
+  def cUsed(kv: (RhoTypeN, RhoTypeN)): Eval[Boolean]                  = (cUsed(kv._1), cUsed(kv._2)).mapN(_ || _)
+  def cUsed(ps: Seq[RhoTypeN]): Eval[Boolean]                         = ps.existsM(cUsed)
+  def cUsedKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Eval[Boolean] = kVPairs.existsM(cUsed)
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def connectiveUsedFn(p: RhoTypeN): Eval[Boolean] = Eval.defer {
-    p match {
+  def connectiveUsedFn(input: RhoTypeN): Eval[Boolean] = Eval.defer {
+    input match {
 
       /** Basic types */
       case _: NilN.type => Eval.False
@@ -52,14 +50,10 @@ private[parmanager] object ConnectiveUsed {
       case _: ConnectiveFuncN  => Eval.True
       case _: ConnectiveVarN   => Eval.False
 
-      /** Auxiliary types */
-      case bind: ReceiveBindN => cUsed(bind.source)
-      case mCase: MatchCaseN  => cUsed(mCase.source)
-
       /** Other types */
       case _: BundleN => Eval.False // There are no situations when New gets into the matcher
 
-      case x => throw new Exception(s"Undefined type $x")
+      case p => throw new Exception(s"Undefined type $p")
     }
   }
 }

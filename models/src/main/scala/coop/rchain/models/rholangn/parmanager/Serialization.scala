@@ -32,14 +32,14 @@ object Serialization {
     import rhoWriter._
     import wrt._
 
-    def writeReceiveBind(p: ReceiveBindN) =
+    def writeReceiveBind(p: ReceiveBindN): Eval[Unit] =
       write(RECEIVE_BIND) *>
         writeSeq(p.patterns) *>
         writePar(p.source) *>
         writeOpt(p.remainder) *>
         write(p.freeCount)
 
-    def writeMatchCase(p: MatchCaseN) =
+    def writeMatchCase(p: MatchCaseN): Eval[Unit] =
       write(MATCH_CASE) *>
         writePar(p.pattern) *>
         writePar(p.source) *>
@@ -166,20 +166,6 @@ object Serialization {
           write(eMethod.methodName) *>
           writePar(eMethod.target) *>
           writeSeq(eMethod.args)
-
-      /* Auxiliary types */
-      case p: ReceiveBindN =>
-        write(RECEIVE_BIND) *>
-          writeSeq(p.patterns) *>
-          writePar(p.source) *>
-          writeOpt(p.remainder) *>
-          write(p.freeCount)
-
-      case p: MatchCaseN =>
-        write(MATCH_CASE) *>
-          writePar(p.pattern) *>
-          writePar(p.source) *>
-          write(p.freeCount)
 
       case p => throw new Exception(s"Unknown type `$p`")
     }

@@ -90,10 +90,10 @@ final class ReceiveBindN(
     val source: ParN,
     val remainder: Option[VarN],
     val freeCount: Int
-) extends AuxParN {
+) {
 
   /** Cryptographic hash code of this object */
-  override val rhoHash: Eval[Array[Byte]] = RhoHash.hashReceiveBind(this).memoize
+  val rhoHash: Eval[Array[Byte]] = RhoHash.hashReceiveBind(this).memoize
 }
 
 object ReceiveBindN {
@@ -124,10 +124,10 @@ object MatchN {
   def apply(target: ParN, mCase: MatchCaseN): MatchN      = apply(target, Seq(mCase))
 }
 
-final class MatchCaseN(val pattern: ParN, val source: ParN, val freeCount: Int) extends AuxParN {
+final class MatchCaseN(val pattern: ParN, val source: ParN, val freeCount: Int) {
 
   /** Cryptographic hash code of this object */
-  override val rhoHash: Eval[Array[Byte]] = RhoHash.hashMatchCase(this).memoize
+  val rhoHash: Eval[Array[Byte]] = RhoHash.hashMatchCase(this).memoize
 }
 
 object MatchCaseN {

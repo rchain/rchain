@@ -32,13 +32,6 @@ sealed trait RhoTypeN {
   override def equals(x: Any): Boolean = parmanager.Manager.equals(this, x)
 }
 
-/* TODO: In the future, it is necessary to append the classification.
-         Add main types and ground types.
-         Ground types must be part of expressions, and expressions are part of the main types.
- */
-/** Auxiliary elements included in other pairs */
-trait AuxParN extends RhoTypeN
-
 /** Rholang element that can be processed in parallel, together with other elements */
 sealed trait ParN extends RhoTypeN
 

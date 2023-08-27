@@ -2,14 +2,14 @@ package coop.rchain.models.rholangn.parmanager
 
 import coop.rchain.models.rholangn._
 
-private[parmanager] object EvalRequired {
-  private def eReq(p: RhoTypeN): Boolean                       = p.evalRequired
-  private def eReq(kv: (RhoTypeN, RhoTypeN)): Boolean          = eReq(kv._1) || eReq(kv._2)
-  private def eReq(ps: Seq[RhoTypeN]): Boolean                 = ps.exists(eReq)
-  private def eReqKVPairs(kVPairs: Seq[(ParN, ParN)]): Boolean = kVPairs.exists(eReq)
+object EvalRequired {
+  def eReq(p: RhoTypeN): Boolean                               = p.evalRequired
+  def eReq(kv: (RhoTypeN, RhoTypeN)): Boolean                  = eReq(kv._1) || eReq(kv._2)
+  def eReq(ps: Seq[RhoTypeN]): Boolean                         = ps.exists(eReq)
+  def eReqKVPairs(kVPairs: Seq[(RhoTypeN, RhoTypeN)]): Boolean = kVPairs.exists(eReq)
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def evalRequiredFn(p: RhoTypeN): Boolean = p match {
+  def evalRequiredFn(input: RhoTypeN): Boolean = input match {
 
     /** Basic types */
     case p: BasicN =>
@@ -23,10 +23,10 @@ private[parmanager] object EvalRequired {
     case _: GroundN => false
 
     /** Collections */
-    case eList: EListN   => eReq(eList.ps)
-    case eTuple: ETupleN => eReq(eTuple.ps)
-    case eSet: ESetN     => eReq(eSet.ps.toSeq)
-    case eMap: EMapN     => eReqKVPairs(eMap.ps.toSeq)
+    case p: EListN  => eReq(p.ps)
+    case p: ETupleN => eReq(p.ps)
+    case p: ESetN   => eReq(p.ps.toSeq)
+    case p: EMapN   => eReqKVPairs(p.ps.toSeq)
 
     /** Vars */
     case _: VarN => true
@@ -40,13 +40,9 @@ private[parmanager] object EvalRequired {
     /** Connective */
     case _: ConnectiveN => false
 
-    /** Auxiliary types */
-    case _: ReceiveBindN => true
-    case _: MatchCaseN   => true
-
     /** Other types */
-    case bundle: BundleN => eReq(bundle.body)
+    case p: BundleN => eReq(p.body)
 
-    case x => throw new Exception(s"Undefined type $x")
+    case p => throw new Exception(s"Undefined type $p")
   }
 }

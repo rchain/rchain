@@ -137,18 +137,6 @@ object RhoHash {
         (arE(EMETHOD) ++ hash(p.methodName) +++ p.args.traverse(_.rhoHash) ++ p.target.rhoHash)
           .map(hash)
 
-      /* Auxiliary types */
-      case p: ReceiveBindN =>
-        (arE(RECEIVE_BIND)
-          +++ p.patterns.traverse(_.rhoHash)
-          ++ hash(p.freeCount)
-          ++ p.source.rhoHash
-          ++ hashOpt(p.remainder))
-          .map(hash)
-
-      case p: MatchCaseN =>
-        (arE(MATCH_CASE) ++ p.pattern.rhoHash ++ p.source.rhoHash ++ hash(p.freeCount)).map(hash)
-
       case p => throw new Exception(s"Unknown type `$p`")
     }
   }
