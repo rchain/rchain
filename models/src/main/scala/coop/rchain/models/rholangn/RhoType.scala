@@ -61,7 +61,9 @@ object ParN {
 
     /** Sorts the sequence by the selected byte array and its defined `Ordering` instance. */
     @inline def sortByBytes(f: T => Eval[Array[Byte]]): Eval[Seq[T]] =
-      seq.traverse(t => f(t).map((t, _))).map(_.sortBy(_._2).map(_._1))
+      seq
+        .traverse(t => f(t).map((t, _)))
+        .map(_.sortBy { case (_, hash) => hash }.map { case (t, _) => t })
   }
 }
 
