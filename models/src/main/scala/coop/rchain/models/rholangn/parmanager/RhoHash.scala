@@ -73,6 +73,7 @@ object RhoHash {
           /* Simple types */
           | _: ConnBoolN.type | _: ConnIntN.type | _: ConnBigIntN.type | _: ConnStringN.type |
           _: ConnUriN.type | _: ConnByteArrayN.type =>
+        // Terminals use serialized value as a source for hashing (AST base case)
         input.serialized.map(hash)
 
       /* Unary expressions (1-arity constructors) */
