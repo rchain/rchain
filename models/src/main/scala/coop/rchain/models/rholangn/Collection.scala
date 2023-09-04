@@ -1,8 +1,6 @@
 package coop.rchain.models.rholangn
 
 import cats.Eval
-import cats.syntax.all._
-import coop.rchain.models.rholangn.ParN._
 
 import scala.collection.immutable.{TreeMap, TreeSet}
 
@@ -46,7 +44,7 @@ object ETupleN {
   *                  It's defined as optional variable.
   */
 final class ESetN(val ps: TreeSet[ParN], val remainder: Option[VarN]) extends CollectionN {
-  // Sorted by the hash of the objects which is memoized as part of Rho type
+  // TreeSet is sorted internally by the ParN hash
   val psSorted: Eval[Seq[ParN]] = Eval.later(this.ps.toSeq).memoize
 
   def +(elem: ParN): ESetN = ESetN(ps + elem, remainder)
@@ -77,7 +75,7 @@ object ESetN {
   *                  It's defined as optional variable.
   */
 final class EMapN(val ps: TreeMap[ParN, ParN], val remainder: Option[VarN]) extends CollectionN {
-  // Sorted by the hash of the objects which is memoized as part of Rho type
+  // TreeMap is sorted internally by the ParN hash
   val psSorted: Eval[Seq[(ParN, ParN)]] = Eval.later(ps.toSeq).memoize
 
   def +(kv: (ParN, ParN)): EMapN = EMapN(ps + kv, remainder)
