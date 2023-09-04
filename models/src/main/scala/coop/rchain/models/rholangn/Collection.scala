@@ -10,7 +10,7 @@ import scala.collection.immutable.{TreeMap, TreeSet}
   * @param remainder gives support to use ... in the list construction and deconstruction e.g. [1, 2, 3 ... rest].
   *                  It's defined as optional variable.
   */
-final class EListN(val ps: Seq[ParN], val remainder: Option[VarN]) extends CollectionN {
+final class EListN private (val ps: Seq[ParN], val remainder: Option[VarN]) extends CollectionN {
   def :+(elem: ParN): EListN       = EListN(ps :+ elem, remainder)
   def +:(elem: ParN): EListN       = EListN(elem +: ps, remainder)
   def ++(elems: Seq[ParN]): EListN = EListN(ps ++ elems, None)
@@ -43,7 +43,7 @@ object ETupleN {
   * @param remainder gives support to use ... in the set construction and deconstruction e.g. Set(1, 2, 3 ... rest).
   *                  It's defined as optional variable.
   */
-final class ESetN(val ps: TreeSet[ParN], val remainder: Option[VarN]) extends CollectionN {
+final class ESetN private (val ps: TreeSet[ParN], val remainder: Option[VarN]) extends CollectionN {
   // TreeSet is sorted internally by the ParN hash
   val psSorted: Eval[Seq[ParN]] = Eval.later(this.ps.toSeq).memoize
 
@@ -74,7 +74,8 @@ object ESetN {
   * @param remainder gives support to use ... in the set construction and deconstruction e.g. {"a":1, "b":2 ... rest}.
   *                  It's defined as optional variable.
   */
-final class EMapN(val ps: TreeMap[ParN, ParN], val remainder: Option[VarN]) extends CollectionN {
+final class EMapN private (val ps: TreeMap[ParN, ParN], val remainder: Option[VarN])
+    extends CollectionN {
   // TreeMap is sorted internally by the ParN hash
   val psSorted: Eval[Seq[(ParN, ParN)]] = Eval.later(ps.toSeq).memoize
 
