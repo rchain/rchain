@@ -1,6 +1,6 @@
 package coop.rchain.models.rholangn
 
-import coop.rchain.models.rholangn.parmanager.{Manager, Serialization}
+import coop.rchain.models.rholangn.parmanager.Manager
 import org.openjdk.jmh.annotations._
 
 import java.util.concurrent.TimeUnit
@@ -87,7 +87,7 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def nestedHash(): Unit = {
-    val _ = nestedPar.rhoHash
+    val _ = nestedPar.rhoHash.value
   }
 
   @Benchmark
@@ -134,7 +134,7 @@ class ParBench {
   @BenchmarkMode(Array(Mode.AverageTime))
   @OutputTimeUnit(TimeUnit.NANOSECONDS)
   def parProcHash(): Unit = {
-    val _ = parProc.rhoHash
+    val _ = parProc.rhoHash.value
   }
 
   @Benchmark
