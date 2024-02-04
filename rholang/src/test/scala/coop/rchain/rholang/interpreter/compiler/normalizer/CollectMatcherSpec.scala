@@ -1,34 +1,21 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer
 
+import cats.Eval
+import coop.rchain.catscontrib.effect.implicits.sEval
+import coop.rchain.models._
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
-
+import coop.rchain.rholang.interpreter.ParBuilderUtil
+import coop.rchain.rholang.interpreter.compiler._
+import coop.rchain.rholang.interpreter.errors._
 import org.scalatest._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.collection.immutable.BitSet
-import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Var.VarInstance._
-import coop.rchain.models._
-import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.ParBuilderUtil
-import coop.rchain.rholang.interpreter.compiler.{
-  BoundMapChain,
-  FreeMap,
-  NameSort,
-  ProcNormalizeMatcher,
-  ProcSort,
-  ProcVisitInputs,
-  SourcePosition,
-  VarSort
-}
-import cats.Eval
-import coop.rchain.catscontrib.effect.implicits.sEval
-
 class CollectMatcherSpec extends AnyFlatSpec with Matchers {
   val inputs = ProcVisitInputs(
-    Par(),
+    NilN,
     BoundMapChain
       .empty[VarSort]
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
@@ -47,15 +34,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
     val list = new PCollect(new CollectList(listData, new ProcRemainderEmpty()))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](list, inputs).value
-    result.par should be(
-      inputs.par.prepend(
-        EList(
-          List[Par](EVar(BoundVar(1)), EVar(BoundVar(0)), GInt(7)),
-          locallyFree = BitSet(0, 1)
-        ),
-        0
-      )
-    )
+    result.par should be(EListN(Seq(BoundVarN(1), BoundVarN(0), GIntN(7))))
     result.freeMap should be(inputs.freeMap)
   }
   "List" should "sort the insides of their elements" in {
@@ -84,6 +63,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
         |  )}""".stripMargin
     assertEqualNormalized(rho1, rho2)
   }
+
   "Tuple" should "delegate" in {
     val tupleData = new ListProc()
     tupleData.add(new PEval(new NameVar("y")))
@@ -91,19 +71,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
       new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](tuple, inputs).value
-    result.par should be(
-      inputs.par.prepend(
-        ETuple(
-          List[Par](
-            EVar(FreeVar(0)),
-            EVar(FreeVar(1))
-          ),
-          locallyFree = BitSet(),
-          connectiveUsed = true
-        ),
-        0
-      )
-    )
+    result.par should be(ETupleN(Seq(FreeVarN(0), FreeVarN(1))))
     result.freeMap should be(
       inputs.freeMap.put(
         List(("Q", ProcSort, SourcePosition(0, 0)), ("y", NameSort, SourcePosition(0, 0)))
@@ -124,6 +92,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
   "Tuple" should "sort the insides of their elements" in {
     assertEqualNormalized("@0!(({1 | 2}))", "@0!(({2 | 1}))")
   }
+
   "Set" should "delegate" in {
     val setData = new ListProc()
     setData.add(new PAdd(new PVar(new ProcVarVar("P")), new PVar(new ProcVarVar("R"))))
@@ -134,16 +103,9 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](set, inputs).value
 
     result.par should be(
-      inputs.par.prepend(
-        ParSet(
-          Seq[Par](
-            EPlus(EVar(BoundVar(1)), EVar(FreeVar(1))),
-            GInt(7),
-            GInt(8).prepend(EVar(FreeVar(2)), 0)
-          ),
-          remainder = Some(FreeVar(0))
-        ),
-        depth = 0
+      ESetN(
+        Seq(EPlusN(BoundVarN(1), FreeVarN(1)), GIntN(7), ParN.combine(GIntN(8), FreeVarN(2))),
+        Some(FreeVarN(0))
       )
     )
     val newBindings = List(
@@ -169,18 +131,7 @@ class CollectMatcherSpec extends AnyFlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Eval](map, inputs).value
     result.par should be(
-      inputs.par.prepend(
-        ParMap(
-          List[(Par, Par)](
-            (GInt(7), GString("Seven")),
-            (EVar(BoundVar(1)), EVar(FreeVar(1)))
-          ),
-          locallyFree = BitSet(1),
-          connectiveUsed = true,
-          remainder = Some(Var(FreeVar(0)))
-        ),
-        depth = 0
-      )
+      EMapN(Seq(GIntN(7) -> GStringN("Seven"), BoundVarN(1) -> FreeVarN(1)), Some(FreeVarN(0)))
     )
     val newBindings = List(
       ("Z", ProcSort, SourcePosition(0, 0)),

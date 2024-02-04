@@ -1,16 +1,15 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.Applicative
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.{Match, MatchCase, Par}
-import coop.rchain.models.rholang.implicits._
+import cats.syntax.all._
+import coop.rchain.models.Par
+import coop.rchain.models.rholangn._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Case, CaseImpl, PMatch, Proc}
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{FreeMap, ProcVisitInputs, ProcVisitOutputs}
 import coop.rchain.rholang.interpreter.errors.UnrecognizedNormalizerError
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Case, CaseImpl, PMatch, Proc}
 
-import scala.collection.immutable.{BitSet, Vector}
 import scala.jdk.CollectionConverters._
 
 object PMatchNormalizer {
@@ -25,10 +24,10 @@ object PMatchNormalizer {
     }
 
     for {
-      targetResult <- normalizeMatch[F](p.proc_, input.copy(par = VectorPar()))
+      targetResult <- normalizeMatch[F](p.proc_, input.copy(par = NilN))
       cases        <- p.listcase_.asScala.toList.traverse(liftCase)
 
-      initAcc = (Vector[MatchCase](), targetResult.freeMap, BitSet(), false)
+      initAcc = (Vector[MatchCaseN](), targetResult.freeMap)
       casesResult <- cases.foldM(initAcc)(
                       (acc, caseImpl) =>
                         caseImpl match {
@@ -37,7 +36,7 @@ object PMatchNormalizer {
                               patternResult <- normalizeMatch[F](
                                                 pattern,
                                                 ProcVisitInputs(
-                                                  VectorPar(),
+                                                  NilN,
                                                   input.boundMapChain.push,
                                                   FreeMap.empty
                                                 )
@@ -46,29 +45,22 @@ object PMatchNormalizer {
                               boundCount = patternResult.freeMap.countNoWildcards
                               caseBodyResult <- normalizeMatch[F](
                                                  caseBody,
-                                                 ProcVisitInputs(VectorPar(), caseEnv, acc._2)
+                                                 ProcVisitInputs(NilN, caseEnv, acc._2)
                                                )
                             } yield (
-                              MatchCase(patternResult.par, caseBodyResult.par, boundCount) +: acc._1,
-                              caseBodyResult.freeMap,
-                              acc._3 | patternResult.par.locallyFree | caseBodyResult.par.locallyFree
-                                .rangeFrom(boundCount)
-                                .map(x => x - boundCount),
-                              acc._4 || caseBodyResult.par.connectiveUsed
+                              MatchCaseN(
+                                patternResult.par,
+                                caseBodyResult.par,
+                                boundCount
+                              ) +: acc._1,
+                              caseBodyResult.freeMap
                             )
                           }
                         }
                     )
-    } yield ProcVisitOutputs(
-      input.par.prepend(
-        Match(
-          targetResult.par,
-          casesResult._1.reverse,
-          casesResult._3 | targetResult.par.locallyFree,
-          casesResult._4 || targetResult.par.connectiveUsed
-        )
-      ),
-      casesResult._2
-    )
+    } yield {
+      val m = MatchN(targetResult.par, casesResult._1.reverse)
+      ProcVisitOutputs(ParN.combine(input.par, m), casesResult._2)
+    }
   }
 }

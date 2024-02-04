@@ -1,15 +1,12 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.Expr.ExprInstance.GBool
-import coop.rchain.models.{Match, MatchCase, Par}
-import coop.rchain.models.rholang.implicits._
+import cats.syntax.all._
+import coop.rchain.models.Par
+import coop.rchain.models.rholangn._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.Proc
-
-import scala.collection.immutable.Vector
 
 object PIfNormalizer {
   def normalize[F[_]: Sync](
@@ -24,21 +21,19 @@ object PIfNormalizer {
       targetResult <- normalizeMatch[F](valueProc, input)
       trueCaseBody <- normalizeMatch[F](
                        trueBodyProc,
-                       ProcVisitInputs(VectorPar(), input.boundMapChain, targetResult.freeMap)
+                       ProcVisitInputs(NilN, input.boundMapChain, targetResult.freeMap)
                      )
       falseCaseBody <- normalizeMatch[F](
                         falseBodyProc,
-                        ProcVisitInputs(VectorPar(), input.boundMapChain, trueCaseBody.freeMap)
+                        ProcVisitInputs(NilN, input.boundMapChain, trueCaseBody.freeMap)
                       )
-      desugaredIf = Match(
+      desugaredIf = MatchN(
         targetResult.par,
-        Vector(
-          MatchCase(GBool(true), trueCaseBody.par, 0),
-          MatchCase(GBool(false), falseCaseBody.par, 0)
-        ),
-        targetResult.par.locallyFree | trueCaseBody.par.locallyFree | falseCaseBody.par.locallyFree,
-        targetResult.par.connectiveUsed || trueCaseBody.par.connectiveUsed || falseCaseBody.par.connectiveUsed
+        Seq(
+          MatchCaseN(GBoolN(true), trueCaseBody.par),
+          MatchCaseN(GBoolN(false), falseCaseBody.par)
+        )
       )
-    } yield ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.freeMap)
+    } yield ProcVisitOutputs(ParN.combine(input.par, desugaredIf), falseCaseBody.freeMap)
 
 }

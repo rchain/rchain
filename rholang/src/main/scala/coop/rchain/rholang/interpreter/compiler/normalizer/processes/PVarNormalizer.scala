@@ -1,24 +1,14 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
-import coop.rchain.models.{EVar, Var}
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.compiler.{
-  BoundContext,
-  FreeContext,
-  NameSort,
-  ProcSort,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  SourcePosition
-}
+import cats.syntax.all._
+import coop.rchain.models.rholangn._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PVar, ProcVarVar, ProcVarWildcard}
+import coop.rchain.rholang.interpreter.compiler._
 import coop.rchain.rholang.interpreter.errors.{
   UnexpectedProcContext,
   UnexpectedReuseOfProcContextFree
 }
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PVar, ProcVarVar, ProcVarWildcard}
 
 object PVarNormalizer {
   def normalize[F[_]: Sync](p: PVar, input: ProcVisitInputs): F[ProcVisitOutputs] =
@@ -27,7 +17,7 @@ object PVarNormalizer {
         input.boundMapChain.get(pvv.var_) match {
           case Some(BoundContext(level, ProcSort, _)) =>
             ProcVisitOutputs(
-              input.par.prepend(EVar(BoundVar(level)), input.boundMapChain.depth),
+              ParN.combine(input.par, BoundVarN(level)),
               input.freeMap
             ).pure[F]
           case Some(BoundContext(_, NameSort, sourcePosition)) =>
@@ -46,9 +36,7 @@ object PVarNormalizer {
                     (pvv.var_, ProcSort, SourcePosition(pvv.line_num, pvv.col_num))
                   )
                 ProcVisitOutputs(
-                  input.par
-                    .prepend(EVar(FreeVar(input.freeMap.nextLevel)), input.boundMapChain.depth)
-                    .withConnectiveUsed(true),
+                  ParN.combine(input.par, FreeVarN(input.freeMap.nextLevel)),
                   newBindingsPair
                 ).pure[F]
               case Some(FreeContext(_, _, firstSourcePosition)) =>
@@ -63,9 +51,7 @@ object PVarNormalizer {
         }
       case _: ProcVarWildcard =>
         ProcVisitOutputs(
-          input.par
-            .prepend(EVar(Wildcard(Var.WildcardMsg())), input.boundMapChain.depth)
-            .withConnectiveUsed(true),
+          ParN.combine(input.par, WildcardN),
           input.freeMap.addWildcard(SourcePosition(p.line_num, p.col_num))
         ).pure[F]
     }

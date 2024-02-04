@@ -2,8 +2,9 @@ package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{New, Par}
+import coop.rchain.models.Par
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{NameDeclSimpl, NameDeclUrn, PNew}
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.normalizer.GroundNormalizeMatcher
@@ -41,16 +42,14 @@ object PNewNormalizer {
     val newEnv       = input.boundMapChain.put(newBindings.toList)
     val newCount     = newEnv.count - input.boundMapChain.count
 
-    normalizeMatch[F](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.freeMap)).map {
-      bodyResult =>
-        val resultNew = New(
-          bindCount = newCount,
-          p = bodyResult.par,
-          uri = uris,
-          injections = env,
-          locallyFree = bodyResult.par.locallyFree.rangeFrom(newCount).map(x => x - newCount)
-        )
-        ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.freeMap)
+    normalizeMatch[F](p.proc_, ProcVisitInputs(NilN, newEnv, input.freeMap)).map { bodyResult =>
+      val resultNew = NewN(
+        bindCount = newCount,
+        p = bodyResult.par,
+        uri = uris,
+        injections = env.map { case (s, par) => (s, fromProto(par)) }
+      )
+      ProcVisitOutputs(ParN.combine(input.par, resultNew), bodyResult.freeMap)
     }
 
   }

@@ -1,11 +1,11 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
+import cats.syntax.all._
 import coop.rchain.models.Par
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.PPar
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.PPar
 
 object PParNormalizer {
   def normalize[F[_]: Sync](p: PPar, input: ProcVisitInputs)(

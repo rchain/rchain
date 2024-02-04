@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.io.StringReader
 
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.interpreter.compiler.{
   BoundMapChain,
@@ -30,6 +30,8 @@ import org.scalatest.matchers.should.Matchers
 import coop.rchain.catscontrib.effect.implicits.sEval
 
 import scala.collection.immutable.BitSet
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 
 class BoolPrinterSpec extends AnyFlatSpec with Matchers {
 
@@ -74,7 +76,7 @@ class GroundPrinterSpec extends AnyFlatSpec with Matchers {
 class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 
   val inputs = ProcVisitInputs(
-    Par(),
+    NilN,
     BoundMapChain
       .empty[VarSort]
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
@@ -162,7 +164,7 @@ class CollectPrinterSpec extends AnyFlatSpec with Matchers {
 }
 
 class ProcPrinterSpec extends AnyFlatSpec with Matchers {
-  val inputs                                   = ProcVisitInputs(Par(), BoundMapChain.empty, FreeMap.empty)
+  val inputs                                   = ProcVisitInputs(NilN, BoundMapChain.empty, FreeMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "New" should "use 0-based indexing" in {
@@ -699,7 +701,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Eval](basicInput1, inputs).value.par
       )
     val target =
-      """for( @{x0}, @{for( @{y0}, @{y1} <- @{Nil} ) { y1 | y0 | x1 }} <- @{Nil} ) {
+      """for( @{x0}, @{for( @{y0}, @{y1} <- @{Nil} ) { x1 | y0 | y1 }} <- @{Nil} ) {
         |  @{x0}!(x1)
         |}""".stripMargin
     result shouldBe target
@@ -971,7 +973,7 @@ class ProcPrinterSpec extends AnyFlatSpec with Matchers {
     val result = PrettyPrinter().buildString(
       ProcNormalizeMatcher.normalizeMatch[Eval](input, inputs).value.par
     )
-    result shouldBe """for( @{match x0 | x1 { 47 => { Nil } }} <- @{Nil} ) {
+    result shouldBe """for( @{match x1 | x0 { 47 => { Nil } }} <- @{Nil} ) {
                       |  Nil
                       |}""".stripMargin
   }

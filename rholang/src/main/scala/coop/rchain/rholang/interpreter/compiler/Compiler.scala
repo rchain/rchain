@@ -4,8 +4,9 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
+import coop.rchain.models.rholangn.Bindings._
+import coop.rchain.models.rholangn._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.ast.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.interpreter.errors._
@@ -79,7 +80,7 @@ object Compiler {
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
-          ProcVisitInputs(VectorPar(), BoundMapChain.empty, FreeMap.empty)
+          ProcVisitInputs(NilN, BoundMapChain.empty, FreeMap.empty)
         )
         .flatMap { normalizedTerm =>
           if (normalizedTerm.freeMap.count > 0) {
@@ -91,12 +92,12 @@ object Compiler {
                 TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString(", "))
               )
             } else if (normalizedTerm.freeMap.connectives.nonEmpty) {
-              def connectiveInstanceToString(conn: ConnectiveInstance): String =
-                if (conn.isConnAndBody) "/\\ (conjunction)"
-                else if (conn.isConnOrBody) "\\/ (disjunction)"
-                else if (conn.isConnNotBody) "~ (negation)"
-                else conn.toString
-
+              def connectiveInstanceToString(conn: ConnectiveN): String = conn match {
+                case _: ConnAndN => "/\\ (conjunction)"
+                case _: ConnOrN  => "\\/ (disjunction)"
+                case _: ConnNotN => "~ (negation)"
+                case x           => x.toString
+              }
               val connectives = normalizedTerm.freeMap.connectives
                 .map {
                   case (connType, sourcePosition) =>
@@ -112,7 +113,7 @@ object Compiler {
                 TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString(", "))
               )
             }
-          } else normalizedTerm.par.pure[F]
+          } else toProto(normalizedTerm.par).pure[F]
         }
 
     /**
