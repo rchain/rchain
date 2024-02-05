@@ -63,7 +63,7 @@ object Dependencies {
   val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % kamonVersion
   val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.2-Beta")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
-  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.8.2"
+  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.9.0"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.4.6"
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "6.6"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
