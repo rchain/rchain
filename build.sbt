@@ -1,8 +1,9 @@
-import Dependencies._
-import BNFC._
-import Rholang._
-import NativePackagerHelper._
-import com.typesafe.sbt.packager.docker._
+import Dependencies.*
+import BNFC.*
+import Rholang.*
+import NativePackagerHelper.*
+import Secp256k1.*
+import com.typesafe.sbt.packager.docker.*
 import protocbridge.Target
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
@@ -234,12 +235,11 @@ lazy val crypto = (project in file("crypto"))
       bouncyProvCastle,
       scalacheck,
       kalium,
-      secp256k1Java,
       scodecBits
     ),
     fork := true
   )
-  .dependsOn(shared)
+  .dependsOn(shared, secp256k1)
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)
@@ -548,6 +548,31 @@ lazy val rspaceBench = (project in file("rspace-bench"))
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace % "test->test", rholang % "test->test", models % "test->test")
 
+lazy val secp256k1 = (project in file("secp256k1"))
+  .settings(commonSettings: _*)
+  .settings(
+    libraryDependencies ++= commonDependencies :+ bouncyProvCastle,
+    // this is quite hacky way to pull native libraries
+    pullNative := {
+      val log = streams.value.log
+      val pullCached = FileFunction.cached(
+        // this string does not matter, just has to some folder that is supposed to be created and
+        // looked up to see if cache exists
+        streams.value.cacheDirectory / "qXr7LbNp",
+        inStyle = FilesInfo.hash,
+        outStyle = FilesInfo.exists
+      ) { (in: Set[File]) =>
+        log.info("Missing Secp256k1 native library, downloading...")
+        // This is the main function that does download native libs into managed resource
+        pullSecp256k1(in.head)
+      }(Set((Compile / resourceManaged).value))
+      // Returning generated files paths is important so they are copied by sbt to classes folder
+      pullCached.toSeq
+    },
+    // NOTE: this is not called on `compile` but when tests are called or on assembly
+    Compile / resourceGenerators += pullNative.taskValue
+  )
+
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
@@ -564,5 +589,6 @@ lazy val rchain = (project in file("."))
     rspace,
     rspaceBench,
     shared,
-    sdk
+    sdk,
+    secp256k1
   )
