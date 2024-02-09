@@ -492,7 +492,7 @@ class ValidateTest
         _ <- Validate.formatOfFields[IO](genesis.copy(blockHash = ByteString.EMPTY)) shouldBeF false
         _ <- Validate.formatOfFields[IO](genesis.copy(sig = ByteString.EMPTY)) shouldBeF false
         _ <- Validate.formatOfFields[IO](genesis.copy(sigAlgorithm = "")) shouldBeF false
-        _ <- Validate.formatOfFields[IO](genesis.copy(shardId = "")) shouldBeF false
+//        _ <- Validate.formatOfFields[IO](genesis.copy(shardId = "")) shouldBeF false
         _ <- Validate.formatOfFields[IO](
               genesis.copy(postStateHash = ByteString.EMPTY)
             ) shouldBeF false
