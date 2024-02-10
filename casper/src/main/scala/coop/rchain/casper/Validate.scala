@@ -66,10 +66,10 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
       } yield false
-    } else if (b.shardId.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
-      } yield false
+//    } else if (b.shardId.isEmpty) {
+//      for {
+//        _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
+//      } yield false
     } else if (b.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))

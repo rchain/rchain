@@ -364,7 +364,7 @@ object NodeMain {
   private def checkShardNameOnlyAscii[F[_]: Sync: Log](shardName: String): F[Unit] =
     (Log[F].error("Shard name should contain only ASCII characters") >>
       Sync[F].raiseError(new RuntimeException("Invalid shard name")))
-      .whenA(!shardName.onlyAscii)
+      .unlessA(shardName.isEmpty || shardName.onlyAscii)
 
   private def logConfiguration[F[_]: Sync: Log](
       conf: NodeConf,
