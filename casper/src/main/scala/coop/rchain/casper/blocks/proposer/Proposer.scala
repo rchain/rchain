@@ -153,7 +153,7 @@ object Proposer {
         toSlash       = offenders intersect preStateBonds.filter { case (_, b) => b > 0 }.keySet
         _             <- Log[F].info(s"Slashing senders: [${toSlash.map(_.show).mkString("; ")}]")
         // epoch
-        changeEpoch = epochLength % nextBlockNum == 0
+        changeEpoch = nextBlockNum % epochLength == 0
         // attestation
         // no need to attest if nothing meaningful to finalize.
         dag         <- BlockDagStorage[F].getRepresentation
