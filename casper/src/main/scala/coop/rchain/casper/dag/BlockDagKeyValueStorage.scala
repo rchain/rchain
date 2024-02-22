@@ -95,7 +95,7 @@ final class BlockDagKeyValueStorage[F[_]: Async: Log] private (
         dag <- representationState.updateAndGet { dr =>
                 // Update DAG messages state
                 val dagMsgSt       = dr.dagMessageState
-                val msg            = messageFromBlockMetadata(blockMetadata, dagMsgSt.msgMap)
+                val msg            = messageFromBlockMetadata(blockMetadata, dagMsgSt.msgMap, heightMap)
                 val newDagMsgState = dagMsgSt.insertMsg(msg)
 
                 // Update fringe data cache
@@ -256,7 +256,7 @@ object BlockDagKeyValueStorage {
               msgMap = ds.msgMap
               updateMessage = for {
                 block <- metadata.getUnsafe(hash)
-                msg   = messageFromBlockMetadata(block, msgMap)
+                msg   = messageFromBlockMetadata(block, msgMap, heightMap)
                 newDs = ds.insertMsg(msg)
 
                 fringeDataCached = fs.contains(msg.fringe)
@@ -297,11 +297,17 @@ object BlockDagKeyValueStorage {
 
   private def messageFromBlockMetadata(
       block: BlockMetadata,
-      msgMap: Map[BlockHash, Message[BlockHash, Validator]]
+      msgMap: Map[BlockHash, Message[BlockHash, Validator]],
+      heightMap: Map[Long, Set[BlockHash]]
   ) = {
     val parents = block.justifications
+
+    val highestParent = parents.map(msgMap(_).height).maxOption.getOrElse(0L)
+    val truncateRange = 0L to Math.max(highestParent - 100, 0L)
+    val toTruncate    = truncateRange.flatMap(heightMap.get).flatten.toSet
+
     // Seen messages are all seen from justifications combined
-    val seen = parents.map(msgMap).flatMap(_.seen) + block.blockHash
+    val seen = parents.map(msgMap).flatMap(_.seen) + block.blockHash -- toTruncate
     Message(
       id = block.blockHash,
       height = block.blockNum,
