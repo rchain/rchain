@@ -78,15 +78,15 @@ class GrpcTransportClient[F[_]: Async: Log: Metrics](
       d: Dispatcher[F]
   ): F[BufferedGrpcStreamChannel[F]] =
     for {
-      _                <- Log[F].info(s"Creating new channel to peer ${peer.toAddress}")
-      clientSslContext <- clientSslContextTask
+      _ <- Log[F].info(s"Creating new channel to peer ${peer.toAddress}")
+//      clientSslContext <- clientSslContextTask
       grpcChannel = NettyChannelBuilder
         .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
         .maxInboundMessageSize(maxMessageSize)
-        .negotiationType(NegotiationType.TLS)
-        .sslContext(clientSslContext)
-        .intercept(new SslSessionClientInterceptor[F](networkId, d))
-        .overrideAuthority(peer.id.toString)
+        .usePlaintext()
+//        .sslContext(clientSslContext)
+//        .intercept(new SslSessionClientInterceptor[F](networkId, d))
+//        .overrideAuthority(peer.id.toString)
         .build()
       buffer <- StreamObservable[F](peer, clientQueueSize, cache)
 

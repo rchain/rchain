@@ -184,9 +184,13 @@ object GrpcTransportReceiver {
         NettyServerBuilder
           .forPort(port)
           .maxInboundMessageSize(maxMessageSize)
-          .sslContext(serverSslContext)
           .addService(TransportLayerFs2Grpc.bindService(d, service))
-          .intercept(new SslSessionServerInterceptor(networkId, d))
+          // SSL makes operator experience quite miserable, since after restart of the node with clean state and
+          // new generated self signed certificate it is effectively become ignored.
+          // What is the exact mechanism for this requires investigation, but anyway SSL without proper
+          // does not make sense without PKI infra, and it is parallel for cryptography required for consensus
+//          .sslContext(serverSslContext)
+//          .intercept(new SslSessionServerInterceptor(networkId, d))
           .build
           .start
       )
