@@ -1,0 +1,38 @@
+[package]
+name = "rchain-node"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain node module (glue: configuration, runtime, API)."
+
+[dependencies]
+async-trait = "0.1"
+axum = "0.7"
+clap = { version = "4", features = ["derive"] }
+futures-util = "0.3"
+hocon = "0.9"
+linked-hash-map = "0.5"
+prost = "0.13"
+reqwest = { version = "0.11", default-features = false, features = ["json"] }
+rustyline = { version = "14", features = ["derive"] }
+rchain-block-storage = { path = "../block-storage" }
+rchain-casper = { path = "../casper" }
+rchain-comm = { path = "../comm" }
+rchain-crypto = { path = "../crypto" }
+rchain-models = { path = "../models" }
+rchain-rholang = { path = "../rholang" }
+rchain-rspace = { path = "../rspace" }
+rchain-sdk = { path = "../sdk" }
+rchain-shared = { path = "../shared" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+tonic = { version = "0.12", features = ["transport"] }
+tower = { version = "0.4", features = ["timeout"] }
+tower-http = { version = "0.5", features = ["cors", "timeout"] }
+
+[dev-dependencies]
+
+[[bin]]
+name = "rnode"
+path = "src/main.rs"

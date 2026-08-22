@@ -1,0 +1,28 @@
+[package]
+name = "rchain-comm"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain comm module (peer-to-peer networking)."
+
+[dependencies]
+async-trait = "0.1"
+chrono = "0.4"
+crossbeam = "0.8"
+futures = "0.3"
+http = "1"
+hyper-util = "0.1"
+prost = "0.13"
+rand = "0.8"
+roxmltree = "0.20"
+rcgen = { version = "0.13", default-features = false, features = ["crypto", "ring", "pem"] }
+rchain-crypto = { path = "../crypto" }
+rchain-models = { path = "../models" }
+rchain-shared = { path = "../shared" }
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls-pemfile = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12", "ring"] }
+tokio-stream = "0.1"
+tonic = "0.12"
+tower = "0.4"
+x509-parser = "0.16"

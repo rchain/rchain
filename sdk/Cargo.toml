@@ -1,0 +1,8 @@
+[package]
+name = "rchain-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain sdk module (consensus stake + DAG merge conflict resolution)."
+
+[dependencies]
+rchain-shared = { path = "../shared", default-features = false }

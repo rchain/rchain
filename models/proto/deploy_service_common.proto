@@ -1,0 +1,197 @@
+// Vendored, scalapb-stripped copy of models/src/main/protobuf/DeployServiceCommon.proto.
+// Field numbers and types are unchanged; scalapb options/imports and the `ReportEventProto` sealed
+// trait preamble are removed. `PeekProto`/`SystemDeployDataProto` come from casper.proto;
+// `Par`/`BindPattern`/`ListParWithRandom` come from RhoTypes.proto (package rholang).
+syntax = "proto3";
+
+package casper;
+
+import "casper.proto";
+import "RhoTypes.proto";
+
+message FindDeployQuery {
+  bytes deployId = 1;
+}
+
+message BlockQuery {
+  string hash = 1;
+}
+
+message ReportQuery {
+  string hash = 1;
+  bool forceReplay = 2;
+}
+
+message BlocksQuery {
+  int32 depth = 1;
+}
+
+message BlocksQueryByHeight {
+  int64 startBlockNumber = 1;
+  int64 endBlockNumber = 2;
+}
+
+message DataAtNameQuery {
+  int32 depth = 1;
+  rholang.Par name = 2;
+}
+
+message DataAtNameByBlockQuery {
+  rholang.Par par = 1;
+  string blockHash = 2;
+  bool usePreStateHash = 3;
+}
+
+message ContinuationAtNameQuery {
+  int32 depth = 1;
+  repeated rholang.Par names = 2;
+}
+
+message VisualizeDagQuery {
+  int32 depth = 1;
+  bool showJustificationLines = 2;
+  int32 startBlockNumber = 3;
+}
+
+message MachineVerifyQuery {
+  int32 depth = 1;
+}
+
+message LastFinalizedBlockQuery {}
+
+message IsFinalizedQuery {
+  string hash = 1;
+}
+
+message BondStatusQuery {
+  bytes publicKey = 1;
+}
+
+message ExploratoryDeployQuery {
+  string term = 1;
+  string blockHash = 2;
+  bool usePreStateHash = 3;
+}
+
+message BondInfo {
+  string validator = 1;
+  int64 stake = 2;
+}
+
+message JustificationInfo {
+  string validator = 1;
+  string latestBlockHash = 2;
+}
+
+message DeployInfo {
+  string deployer = 1;
+  string term = 2;
+  int64 timestamp = 3;
+  string sig = 4;
+  string sigAlgorithm = 5;
+  int64 phloPrice = 6;
+  int64 phloLimit = 7;
+  int64 validAfterBlockNumber = 8;
+  uint64 cost = 9;
+  bool errored = 10;
+  string systemDeployError = 11;
+}
+
+message LightBlockInfo {
+  int32 version = 1;
+  string shardId = 2;
+  string blockHash = 3;
+  int64 blockNumber = 4;
+  string sender = 5;
+  int64 seqNum = 6;
+  string preStateHash = 7;
+  string postStateHash = 8;
+  repeated string justifications = 9;
+  repeated BondInfo bonds = 10;
+  string sigAlgorithm = 11;
+  string sig = 12;
+  string blockSize = 13;
+  int32 deployCount = 14;
+  repeated string rejectedDeploys = 16;
+}
+
+message BlockInfo {
+  LightBlockInfo blockInfo = 1;
+  repeated DeployInfo deploys = 2;
+}
+
+message DataWithBlockInfo {
+  repeated rholang.Par postBlockData = 1;
+  LightBlockInfo block = 2;
+}
+
+message ContinuationsWithBlockInfo {
+  repeated WaitingContinuationInfo postBlockContinuations = 1;
+  LightBlockInfo block = 2;
+}
+
+message WaitingContinuationInfo {
+  repeated rholang.BindPattern postBlockPatterns = 1;
+  rholang.Par postBlockContinuation = 2;
+}
+
+message ReportProduceProto {
+  rholang.Par channel = 1;
+  rholang.ListParWithRandom data = 2;
+}
+
+message ReportConsumeProto {
+  repeated rholang.Par channels = 1;
+  repeated rholang.BindPattern patterns = 2;
+  repeated PeekProto peeks = 4;
+}
+
+message ReportCommProto {
+  ReportConsumeProto consume = 1;
+  repeated ReportProduceProto produces = 2;
+}
+
+message ReportProto {
+  oneof report {
+    ReportProduceProto produce = 1;
+    ReportConsumeProto consume = 2;
+    ReportCommProto comm = 3;
+  }
+}
+
+message SingleReport {
+  repeated ReportProto events = 1;
+}
+
+message DeployInfoWithEventData {
+  DeployInfo deployInfo = 1;
+  repeated SingleReport report = 2;
+}
+
+message SystemDeployInfoWithEventData {
+  SystemDeployDataProto systemDeploy = 1;
+  repeated SingleReport report = 2;
+}
+
+message BlockEventInfo {
+  LightBlockInfo blockInfo = 1;
+  repeated DeployInfoWithEventData deploys = 2;
+  repeated SystemDeployInfoWithEventData systemDeploys = 3;
+  bytes postStateHash = 4;
+}
+
+message Status {
+  VersionInfo version = 1;
+  string address = 2;
+  string networkId = 3;
+  string shardId = 4;
+  int32 peers = 5;
+  int32 nodes = 6;
+  int64 minPhloPrice = 7;
+  int64 latestBlockNumber = 8;
+}
+
+message VersionInfo {
+  string api = 1;
+  string node = 2;
+}

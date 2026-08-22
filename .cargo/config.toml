@@ -1,0 +1,5 @@
+[env]
+# Cap libtest parallelism: `nproc` = 24 here, and a full `cargo test --workspace` spawned one
+# thread per core in every test binary, OOM-crashing the session. Ten threads per test binary is
+# enough for the suite without exhausting memory. (Build parallelism is unchanged.)
+RUST_TEST_THREADS = "10"

@@ -1,0 +1,21 @@
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tonic_build::configure()
+        .build_server(true)
+        .build_client(true)
+        .compile_protos(
+            &[
+                "proto/casper.proto",
+                "proto/routing.proto",
+                "proto/kademlia.proto",
+                "proto/RhoTypes.proto",
+                "proto/service_error.proto",
+                "proto/propose_service_common.proto",
+                "proto/propose_service_v1.proto",
+                "proto/deploy_service_common.proto",
+                "proto/deploy_service_v1.proto",
+                "proto/repl.proto",
+            ],
+            &["proto"],
+        )?;
+    Ok(())
+}

@@ -1,0 +1,18 @@
+# Rust build artifacts
+target/
+
+# VCS
+.git/
+.gitignore
+
+# Legacy Scala sources (reference only, not part of the Rust build)
+legacy/
+
+# Formal spec (Lean) + docs
+spec/
+docs/
+
+# Markdown / editor / CI noise
+*.md
+.vscode/
+.idea/

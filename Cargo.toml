@@ -1,0 +1,3 @@
+[workspace]
+resolver = "2"
+members = ["sdk", "shared", "crypto", "graphz", "models", "block-storage", "comm", "rspace", "rholang", "casper", "node", "rspace-bench"]

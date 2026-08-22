@@ -1,0 +1,7 @@
+[package]
+name = "rchain-graphz"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain graphz module (Graphviz DOT string builder)."
+
+[dependencies]

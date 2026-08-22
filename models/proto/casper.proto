@@ -1,0 +1,209 @@
+// Vendored, scalapb-stripped copy of models/src/main/protobuf/CasperMessage.proto.
+// Field numbers and types are unchanged; only scalapb options/imports are removed.
+// `PCost` (normally from RhoTypes.proto) is inlined so this file is self-contained.
+
+syntax = "proto3";
+
+package casper;
+
+// ---------- Approved block ---------
+
+message FinalizedFringeProto {
+  repeated bytes hashes = 1;
+  bytes stateHash       = 2;
+}
+
+message FinalizedFringeRequestProto {
+  string identifier = 1;
+  bool   trimState  = 2;
+}
+
+// ------- End Approved block --------
+
+message ForkChoiceTipRequestProto {
+}
+
+message HasBlockRequestProto {
+  bytes hash = 1;
+}
+
+message HasBlockProto {
+  bytes hash = 1;
+}
+
+message BlockRequestProto {
+  bytes hash = 1;
+}
+
+message BlockHashMessageProto {
+  bytes hash         = 1;
+  bytes blockCreator = 2;
+}
+
+// --------- Core Protocol  --------
+
+message BlockMessageProto {
+  int32  version        = 1;
+  string shardId        = 2;
+  bytes  blockHash      = 3;
+  int64  blockNumber    = 4;
+  bytes  sender         = 5;
+  int64  seqNum         = 6;
+  bytes  preStateHash   = 7;
+  bytes  postStateHash  = 8;
+  repeated bytes justifications = 9;
+  repeated BondProto bonds      = 10;
+  repeated bytes rejectedDeploys    = 11;
+  repeated bytes rejectedBlocks     = 12;
+  repeated bytes rejectedSenders    = 13;
+  RholangStateProto state          = 14;
+  string sigAlgorithm   = 15;
+  bytes  sig            = 16;
+}
+
+message DeployDataProto {
+  bytes  deployer              = 1;
+  string term                  = 2;
+  int64  timestamp             = 3;
+  bytes  sig                   = 4;
+  string sigAlgorithm          = 5;
+  int64  phloPrice             = 7;
+  int64  phloLimit             = 8;
+  int64  validAfterBlockNumber = 10;
+  string shardId               = 11;
+}
+
+// Inlined from RhoTypes.proto.
+message PCost {
+  uint64 cost = 1;
+}
+
+message RholangStateProto {
+  repeated ProcessedDeployProto       deploys       = 1;
+  repeated ProcessedSystemDeployProto systemDeploys = 2;
+}
+
+message ProcessedDeployProto {
+  DeployDataProto deploy        = 1;
+  PCost cost                    = 2;
+  repeated EventProto deployLog = 3;
+  bool errored                  = 4;
+  string systemDeployError      = 5;
+}
+
+message SlashSystemDeployDataProto {
+  bytes slashedValidator = 1;
+}
+
+message CloseBlockSystemDeployDataProto {
+}
+
+message SystemDeployDataProto {
+  oneof systemDeploy {
+    SlashSystemDeployDataProto slashSystemDeploy = 1;
+    CloseBlockSystemDeployDataProto closeBlockSystemDeploy = 2;
+  }
+}
+
+message ProcessedSystemDeployProto {
+  SystemDeployDataProto systemDeploy = 1;
+  repeated EventProto deployLog      = 2;
+  string errorMsg                    = 3;
+}
+
+message RejectedDeployProto {
+  bytes sig = 1;
+}
+
+message EventProto {
+  oneof event_instance {
+    ProduceEventProto produce = 1;
+    ConsumeEventProto consume = 2;
+    CommEventProto comm       = 3;
+  }
+}
+
+message ProduceEventProto {
+  bytes channelsHash  = 1;
+  bytes hash          = 2;
+  bool  persistent    = 3;
+  int32 timesRepeated = 4;
+}
+
+message ConsumeEventProto {
+  repeated bytes channelsHashes = 1;
+  bytes hash                    = 2;
+  bool  persistent              = 3;
+}
+
+message CommEventProto {
+  ConsumeEventProto consume          = 1;
+  repeated ProduceEventProto produces = 2;
+  repeated PeekProto peeks           = 3;
+}
+
+message PeekProto {
+  int32 channelIndex = 1;
+}
+
+message BondProto {
+  bytes validator = 1;
+  int64 stake     = 2;
+}
+
+// --------- End Core Protocol  --------
+
+// --------- Last finalized state  --------
+
+message StoreNodeKeyProto {
+  bytes hash  = 1;
+  int32 index = 2;
+}
+
+message StoreItemsMessageRequestProto {
+  repeated StoreNodeKeyProto startPath = 1;
+  int32 skip = 2;
+  int32 take = 3;
+}
+
+message StoreItemProto {
+  bytes key   = 1;
+  bytes value = 2;
+}
+
+message StoreItemsMessageProto {
+  repeated StoreNodeKeyProto startPath    = 1;
+  repeated StoreNodeKeyProto lastPath     = 2;
+  repeated StoreItemProto historyItems    = 3;
+  repeated StoreItemProto dataItems       = 4;
+}
+
+// --------- End Last finalized state  --------
+
+// --------- Internal types ---------
+
+message BlockMetadataProto {
+  bytes blockHash               = 1;
+  int64 blockNum                = 2;
+  bytes sender                  = 3;
+  int64 seqNum                  = 4;
+  repeated bytes justifications = 5;
+  repeated BondProto bonds      = 6;
+  bool validated                = 20;
+  bool validationFailed         = 21;
+  repeated bytes fringe         = 30;
+  bytes fringeStateHash         = 31;
+  bytes memberOfFringe          = 40;
+}
+
+message FringeDataProto {
+  bytes fringeHash               = 1;
+  repeated bytes fringe          = 2;
+  repeated bytes fringeDiff      = 3;
+  bytes stateHash                = 4;
+  repeated bytes rejectedDeploys = 10;
+  repeated bytes rejectedBlocks  = 11;
+  repeated bytes rejectedSenders = 12;
+}
+
+// --------- End Internal types ---------

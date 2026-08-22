@@ -1,0 +1,20 @@
+[package]
+name = "rchain-crypto"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain crypto module (Blake2b256, Blake2b512Random, secp256k1, Ed25519, Curve25519)."
+
+[dependencies]
+rchain-shared = { path = "../shared" }
+blake2 = "0.10"
+sha2 = { version = "0.10", features = ["oid"] }
+sha3 = "0.10"
+k256 = { version = "0.13", features = ["ecdsa", "arithmetic"] }
+p256 = { version = "0.13", features = ["ecdsa", "arithmetic", "pem", "pkcs8"] }
+x509-cert = { version = "0.2", features = ["builder", "pem"] }
+pkcs8 = { version = "0.10", features = ["encryption", "pem"] }
+pkcs5 = { version = "0.7", features = ["alloc", "pbes2"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+crypto_box = "0.9"
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }

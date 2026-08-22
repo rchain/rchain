@@ -1,0 +1,16 @@
+[package]
+name = "rchain-block-storage"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain block-storage module (DAG finalizer/estimator)."
+
+[dependencies]
+async-trait = "0.1"
+lz4_flex = "0.11"
+rchain-crypto = { path = "../crypto" }
+rchain-models = { path = "../models" }
+rchain-sdk = { path = "../sdk" }
+rchain-shared = { path = "../shared" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }

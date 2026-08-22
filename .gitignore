@@ -10,6 +10,12 @@
 .worksheet/
 .tmpBin/
 
+# Rust
+Cargo.lock
+
+# mdbook output
+docs/book/
+
 # Maven Output #
 #################
 target

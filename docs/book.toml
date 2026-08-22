@@ -1,0 +1,5 @@
+[book]
+title = "RChain"
+authors = ["RChain-Rust contributors"]
+language = "en"
+src = "src"

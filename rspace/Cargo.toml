@@ -1,0 +1,21 @@
+[package]
+name = "rchain-rspace"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain rspace module (concurrent tuple space + radix history)."
+
+[features]
+default = []
+lmdb = ["rchain-shared/lmdb"]
+
+[dependencies]
+async-recursion = "1"
+async-trait = "0.1"
+dashmap = "5"
+rchain-crypto = { path = "../crypto" }
+rchain-shared = { path = "../shared" }
+tokio = { version = "1", features = ["sync"] }
+
+[dev-dependencies]
+proptest = "1"
+tokio = { version = "1", features = ["macros", "rt"] }

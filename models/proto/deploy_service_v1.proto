@@ -1,0 +1,186 @@
+// Vendored, scalapb-stripped copy of models/src/main/protobuf/DeployServiceV1.proto.
+// Field numbers and types are unchanged; scalapb options/imports are removed. `DeployDataProto`
+// comes from casper.proto, the deploy-common types from deploy_service_common.proto, and `Par` from
+// RhoTypes.proto (package rholang).
+syntax = "proto3";
+
+package casper;
+
+import "casper.proto";
+import "service_error.proto";
+import "deploy_service_common.proto";
+import "RhoTypes.proto";
+import "google/protobuf/empty.proto";
+
+service DeployService {
+  rpc doDeploy(DeployDataProto) returns (DeployResponse) {}
+  rpc deployStatus(FindDeployQuery) returns (DeployStatusResponse) {}
+  rpc getBlock(BlockQuery) returns (BlockResponse) {}
+  rpc visualizeDag(VisualizeDagQuery) returns (stream VisualizeBlocksResponse) {}
+  rpc machineVerifiableDag(MachineVerifyQuery) returns (MachineVerifyResponse) {}
+  rpc getBlocks(BlocksQuery) returns (stream BlockInfoResponse) {}
+  rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  rpc getDataAtName(DataAtNameByBlockQuery) returns (RhoDataResponse) {}
+  rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ContinuationAtNameResponse) {}
+  rpc findDeploy(FindDeployQuery) returns (FindDeployResponse) {}
+  rpc lastFinalizedBlock(LastFinalizedBlockQuery) returns (LastFinalizedBlockResponse) {}
+  rpc isFinalized(IsFinalizedQuery) returns (IsFinalizedResponse) {}
+  rpc bondStatus(BondStatusQuery) returns (BondStatusResponse) {}
+  rpc exploratoryDeploy(ExploratoryDeployQuery) returns (ExploratoryDeployResponse) {}
+  rpc getBlocksByHeights(BlocksQueryByHeight) returns (stream BlockInfoResponse) {}
+  rpc getEventByHash(ReportQuery) returns (EventInfoResponse) {}
+  rpc status(google.protobuf.Empty) returns (StatusResponse) {}
+}
+
+message EventInfoResponse {
+  oneof message {
+    ServiceError error = 1;
+    BlockEventInfo result = 2;
+  }
+}
+
+message ExploratoryDeployResponse {
+  oneof message {
+    ServiceError error = 1;
+    DataWithBlockInfo result = 2;
+  }
+}
+
+message DeployResponse {
+  oneof message {
+    ServiceError error = 1;
+    string result = 2;
+  }
+}
+
+message DeployStatusResponse {
+  oneof message {
+    ServiceError error = 1;
+    DeployExecStatus deployExecStatus = 2;
+  }
+}
+
+message DeployExecStatus {
+  oneof status {
+    ProcessedWithSuccess processedWithSuccess = 1;
+    ProcessedWithError processedWithError = 2;
+    NotProcessed notProcessed = 3;
+  }
+}
+
+message ProcessedWithSuccess {
+  repeated rholang.Par deployResult = 1;
+  LightBlockInfo block = 2;
+}
+
+message ProcessedWithError {
+  string deployError = 1;
+  LightBlockInfo block = 2;
+}
+
+message NotProcessed {
+  string status = 1;
+}
+
+message BlockResponse {
+  oneof message {
+    ServiceError error = 1;
+    BlockInfo blockInfo = 2;
+  }
+}
+
+message VisualizeBlocksResponse {
+  oneof message {
+    ServiceError error = 1;
+    string content = 2;
+  }
+}
+
+message MachineVerifyResponse {
+  oneof message {
+    ServiceError error = 1;
+    string content = 2;
+  }
+}
+
+message BlockInfoResponse {
+  oneof message {
+    ServiceError error = 1;
+    LightBlockInfo blockInfo = 2;
+  }
+}
+
+message ListeningNameDataResponse {
+  oneof message {
+    ServiceError error = 1;
+    ListeningNameDataPayload payload = 2;
+  }
+}
+
+message ListeningNameDataPayload {
+  repeated DataWithBlockInfo blockInfo = 1;
+  int32 length = 2;
+}
+
+message RhoDataResponse {
+  oneof message {
+    ServiceError error = 1;
+    RhoDataPayload payload = 2;
+  }
+}
+
+message RhoDataPayload {
+  repeated rholang.Par par = 1;
+  LightBlockInfo block = 2;
+}
+
+message ContinuationAtNameResponse {
+  oneof message {
+    ServiceError error = 1;
+    ContinuationAtNamePayload payload = 2;
+  }
+}
+
+message ContinuationAtNamePayload {
+  repeated ContinuationsWithBlockInfo blockResults = 1;
+  int32 length = 2;
+}
+
+message FindDeployResponse {
+  oneof message {
+    ServiceError error = 1;
+    LightBlockInfo blockInfo = 2;
+  }
+}
+
+message PrivateNamePreviewPayload {
+  repeated bytes ids = 1;
+}
+
+message LastFinalizedBlockResponse {
+  oneof message {
+    ServiceError error = 1;
+    BlockInfo blockInfo = 2;
+  }
+}
+
+message IsFinalizedResponse {
+  oneof message {
+    ServiceError error = 1;
+    bool isFinalized = 2;
+  }
+}
+
+message BondStatusResponse {
+  oneof message {
+    ServiceError error = 1;
+    bool isBonded = 2;
+  }
+}
+
+message StatusResponse {
+  oneof message {
+    ServiceError error = 1;
+    Status status = 2;
+  }
+}

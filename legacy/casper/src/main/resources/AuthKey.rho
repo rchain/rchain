@@ -1,0 +1,96 @@
+/*
+ The table below describes the required computations and their dependencies
+
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = f450b26bac63e5dd9343cd46f5fae1986d367a893cd21eedd98a4cb3ac699abc
+ 2.  |            | given              | timestamp = 1559156356769
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 04f4b4417f930e6fab5765ac0defcf9fce169982acfd046e7c27f9b14c0804014623c0439e5c8035e9607599a549303b5b6b90cd9685e6965278bddca65dac7510
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0x741f6ee13b54ca29cd6e3340e24a781e8cc2739bc4ab5fd1650de54e11040955)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0x741f6ee13b54ca29cd6e3340e24a781e8cc2739bc4ab5fd1650de54e11040955) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a20741f6ee13b54ca29cd6e3340e24a781e8cc2739bc4ab5fd1650de54e110409551001
+ 8.  | 7, 1,      | secp256k1          | sig = 304402205d2dc163a40804a445237ef6bd181249a68598d146e66d0c96484c6cfeaaaffd02205e537f1e7bae82b99abbdc25c8472c44f5848085a3a3f23357507c05524be4a7
+ 9.  | 4,         | registry           | uri = rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+
+new
+  AuthKey,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  uriOut,
+  _authKey,
+  deployerId(`rho:rchain:deployerId`),
+  rl(`rho:registry:lookup`),
+  systemContractManagerCh,
+  dispatcherCh,
+  configPublicKeyCheckCh
+in {
+
+  // An `AuthKey` is a means for creating a safe authentication token based on a process / unfograble name
+  // (the `shape` of the key) without risking the leak of that process / name.
+  //
+  // Both the `make` and `check` methods would be used by a contract willing to add authentication
+  // around some of its methods.
+  //
+  // `check` would be used in the methods being guarded (they would take an additional `authKey` parameter).
+  //
+  // `make` would be used in an "issueKey" method that would customize the key so that it can't be re-made (forged)
+  // based on publicly availabe data (all purely-forgable names are public). One way to prevent forgrability of the
+  // `AuthKey` would be to mix a private, non-leaking unforgrable name into its `shape`.
+  //
+  // A good usage example (at the time of writing) is the RevVault contract.
+
+  // Creates an `AuthKey` based on the provided `shape` and retuns it on `ret`.
+  contract AuthKey(@"make", @shape, ret) = {
+    new authKey in {
+
+      // Notice that having this publicly-callable
+      // (and not secured from contract impersonation by using a private unforgable name as part of method name)
+      // is (AFAICT) needed for the `check` call to return in a synchronous manner.
+      // Despite this, the `shape` never leaks, as the impersonating contract's `challenge` is called with just a return
+      // channel, and the "original" implementation returns the shape via a bundle0, along with a "originality proof"
+      // (the non-leaking `_authKey` unforgable name).
+
+      // We could make the key 'usable once' by changing this to a single (vs persistent) receive
+      // and returning the response along with a nonce (an unforgable naem), created inside the "challenge" method.
+      contract authKey(@"challenge", retCh) = {
+        retCh!(bundle0{ (*_authKey, shape)})
+      } |
+
+      ret ! (bundle+{*authKey})
+    }
+  } |
+
+  // Returns `true` iff the provided `key` is of the provided `shape`. Returns `false` otherwise.
+  contract AuthKey(@"check", key, @shape, ret) = {
+    new responseCh in {
+      key!("challenge", *responseCh) |
+      for (@response <- responseCh) {
+        ret!(response == { bundle0{ (*_authKey, shape) } } )
+      }
+    }
+  } |
+  // Method required for updates.
+  for (ret <- @(*AuthKey, "extractState")) {
+    ret!({"authKeyUnf": *_authKey})
+  }  |
+
+  rl!(`rho:registry:systemContractManager`, *systemContractManagerCh)|
+  rl!(`rho:rchain:configPublicKeyCheck`, *configPublicKeyCheckCh)|
+  for (@(_, systemContractManager) <- systemContractManagerCh & @(_, configPublicKeyCheck)<- configPublicKeyCheckCh){
+    @systemContractManager!("createDispatcher", *AuthKey, *dispatcherCh)|
+    contract @(*AuthKey, "securityCheck")(@deployerId, ret) = {
+      @configPublicKeyCheck!(deployerId, *ret)
+    } |
+    for (dispatcher <- dispatcherCh){
+      // Inserts signed write-only AuthKey dispatcher contract into the registry
+      rs!(
+        (9223372036854775807, bundle+{*dispatcher}),
+        *deployerId,
+        *uriOut
+      )
+    }
+  }
+
+}

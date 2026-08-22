@@ -1,0 +1,21 @@
+[package]
+name = "rspace-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Criterion benchmarks for the RSpace / rholang reduce path (port of legacy/rspace-bench)."
+
+[dependencies]
+rchain-crypto = { path = "../crypto" }
+rchain-models = { path = "../models" }
+rchain-rholang = { path = "../rholang" }
+rchain-rspace = { path = "../rspace" }
+rchain-shared = { path = "../shared" }
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "rspace_bench"
+harness = false

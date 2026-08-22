@@ -1,0 +1,8 @@
+// Vendored, scalapb-stripped copy of models/src/main/protobuf/ServiceError.proto.
+syntax = "proto3";
+
+package casper;
+
+message ServiceError {
+  repeated string messages = 1;
+}

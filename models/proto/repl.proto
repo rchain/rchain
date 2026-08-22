@@ -1,0 +1,22 @@
+// Vendored, scalapb-stripped copy of node/src/main/protobuf/repl.proto.
+syntax = "proto3";
+
+package repl;
+
+service Repl {
+  rpc Run(CmdRequest) returns (ReplResponse) {}
+  rpc Eval(EvalRequest) returns (ReplResponse) {}
+}
+
+message CmdRequest {
+  string line = 1;
+}
+
+message EvalRequest {
+  string program = 1;
+  bool printUnmatchedSendsOnly = 2;
+}
+
+message ReplResponse {
+  string output = 1;
+}

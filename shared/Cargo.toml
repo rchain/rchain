@@ -1,0 +1,19 @@
+[package]
+name = "rchain-shared"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain shared module (Base16, Serialize, DagOps, store traits)."
+
+[features]
+default = ["tokio"]
+tokio = ["dep:tokio", "dep:async-trait", "dep:lz4_flex"]
+lmdb = ["tokio", "dep:lmdb-rkv"]
+
+[dependencies]
+tokio = { version = "1", features = ["sync", "rt"], optional = true }
+async-trait = { version = "0.1", optional = true }
+lz4_flex = { version = "0.11", optional = true }
+lmdb-rkv = { version = "0.14", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }

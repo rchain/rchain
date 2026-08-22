@@ -1,0 +1,18 @@
+[package]
+name = "rchain-rholang"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain rholang interpreter (core: Env, Substitute, matcher, accounting, Reduce)."
+
+[dependencies]
+async-trait = "0.1"
+num-bigint = "0.4"
+num-traits = "0.2"
+rchain-models = { path = "../models" }
+rchain-crypto = { path = "../crypto" }
+rchain-rspace = { path = "../rspace" }
+rchain-shared = { path = "../shared" }
+tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

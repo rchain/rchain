@@ -1,0 +1,38 @@
+// Vendored, scalapb-stripped copy of comm/src/main/protobuf/coop/rchain/comm/protocol/kademlia.proto.
+// Field numbers and types are unchanged; only scalapb options/imports are removed.
+
+syntax = "proto3";
+
+package coop.rchain.comm.discovery;
+
+message Node {
+  bytes  id       = 1;
+  bytes  host     = 2;
+  uint32 tcp_port = 3;
+  uint32 udp_port = 4;
+}
+
+message Ping {
+  Node   sender    = 1;
+  string networkId = 2;
+}
+
+message Pong {
+  string networkId = 1;
+}
+
+message Lookup {
+  bytes  id        = 1;
+  Node   sender    = 2;
+  string networkId = 3;
+}
+
+message LookupResponse {
+  repeated Node nodes = 1;
+  string networkId    = 2;
+}
+
+service KademliaRPCService {
+  rpc SendPing (Ping) returns (Pong) {}
+  rpc SendLookup (Lookup) returns (LookupResponse) {}
+}

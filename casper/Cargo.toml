@@ -1,0 +1,24 @@
+[package]
+name = "rchain-casper"
+version = "0.1.0"
+edition = "2021"
+description = "Faithful Rust port of the RChain casper module (CBC-Casper consensus + DAG)."
+
+[dependencies]
+async-trait = "0.1"
+serde = "1"
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "rt", "time"] }
+tonic = { version = "0.12", features = ["transport"] }
+rchain-models = { path = "../models" }
+rchain-crypto = { path = "../crypto" }
+rchain-graphz = { path = "../graphz" }
+rchain-block-storage = { path = "../block-storage" }
+rchain-comm = { path = "../comm" }
+rchain-rholang = { path = "../rholang" }
+rchain-rspace = { path = "../rspace" }
+rchain-sdk = { path = "../sdk" }
+rchain-shared = { path = "../shared", features = ["lmdb"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }

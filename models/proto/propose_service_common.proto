@@ -1,0 +1,14 @@
+// Vendored, scalapb-stripped copy of models/src/main/protobuf/ProposeServiceCommon.proto.
+syntax = "proto3";
+
+package casper;
+
+message PrintUnmatchedSendsQuery {
+  bool printUnmatchedSends = 1;
+}
+
+message ProposeResultQuery {}
+
+message ProposeQuery {
+  bool isAsync = 1;
+}

@@ -1,0 +1,43 @@
+contract @"makeWideSingle"(@n, ret) = {
+  new loop in {
+    contract loop(@k, @acc) = {
+      if (k == 0) { ret!(acc) }
+      else {
+        new name in {
+          loop!(k - 1, {acc | for(_ <- name) { Nil } | name!(Nil)})
+        }
+      }
+    } |
+    loop !(n, Nil)
+  }
+} |
+contract @"makeWide"(@n, ret) = {
+  new w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13, w14, w15, w16, w17, w18, w19, w20 in {
+    @"makeWideSingle"!(n, *w1) |
+    @"makeWideSingle"!(n, *w2) |
+    @"makeWideSingle"!(n, *w3) |
+    @"makeWideSingle"!(n, *w4) |
+    @"makeWideSingle"!(n, *w5) |
+    @"makeWideSingle"!(n, *w6) |
+    @"makeWideSingle"!(n, *w7) |
+    @"makeWideSingle"!(n, *w8) |
+    @"makeWideSingle"!(n, *w9) |
+    @"makeWideSingle"!(n, *w10) |
+    @"makeWideSingle"!(n, *w11) |
+    @"makeWideSingle"!(n, *w12) |
+    @"makeWideSingle"!(n, *w13) |
+    @"makeWideSingle"!(n, *w14) |
+    @"makeWideSingle"!(n, *w15) |
+    @"makeWideSingle"!(n, *w16) |
+    @"makeWideSingle"!(n, *w17) |
+    @"makeWideSingle"!(n, *w18) |
+    @"makeWideSingle"!(n, *w19) |
+    @"makeWideSingle"!(n, *w20) |
+
+    for(@p1 <- w1; @p2 <- w2; @p3 <- w3; @p4 <- w4; @p5 <- w5; @p6 <- w6; @p7 <- w7; @p8 <- w8; @p9 <- w9; @p10 <- w10;
+        @p11 <- w11; @p12 <- w12; @p13 <- w13; @p14 <- w14; @p15 <- w15; @p16 <- w16; @p17 <- w17; @p18 <- w18; @p19 <- w19; @p20 <- w20) {
+      ret!({p1 | p2 | p3 | p4 | p5 | p6 | p7 | p8 | p9 | p10 | p11 | p12 | p13 | p14 | p15 | p16 | p17 | p18 | p19 | p20})
+    }
+  }
+} |
+@"makeWide"!(100, "myWide")

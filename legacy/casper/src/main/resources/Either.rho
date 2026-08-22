@@ -1,0 +1,254 @@
+/*
+ The table below describes the required computations and their dependencies
+
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = 5248f8913f8572d8227a3c7787b54bd8263389f7209adc1422e36bb2beb160dc
+ 2.  |            | given              | timestamp = 1559156217509
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 04c71f6c7b87edf4bec14f16f715ee49c6fea918549abdf06c734d384b60ba922990317cc4bf68da8c85b455a65595cf7007f1e54bfd6be26ffee53d1ea6d7406b
+ 5.  | 4, 2,      | genIds             | uname = Unforgeable(0xcaad4e983dedd6c5ae42384b6d87ba6f77997cdf6bb75b8e5f3ffa2133e6b45d)
+ 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xcaad4e983dedd6c5ae42384b6d87ba6f77997cdf6bb75b8e5f3ffa2133e6b45d) })
+ 7.  | 6,         | protobuf           | toSign = 2a40aa013d0a0d2a0b10feffffffffffffffff010a2c5a2a0a263a240a220a20caad4e983dedd6c5ae42384b6d87ba6f77997cdf6bb75b8e5f3ffa2133e6b45d1001
+ 8.  | 7, 1,      | secp256k1          | sig = 3045022100aa2bbdd706e157efb6df78156f1520c6422ff651728ccff69d5bffbf901767eb0220799a0451c72c284b1da128f0e4031125dbed9ac8b9de6ce5b0e4d35562ade877
+ 9.  | 4,         | registry           | uri = rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ */
+
+new
+  Either,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  uriOut,
+  rl(`rho:registry:lookup`),
+  ListOpsCh,
+  deployerId(`rho:rchain:deployerId`)
+in {
+  rl!(`rho:lang:listOps`, *ListOpsCh) |
+  for(@(_, ListOps) <- ListOpsCh) {
+    // Like fromNillable, except it takes `valueCh` and reads it to obtain the `value` parameter
+    contract Either(@"fromNillable <-", valueCh, @nilValue, return) = {
+      for (@value <- valueCh) {
+        Either!("fromNillable", value, nilValue, *return)
+      }
+    } |
+    // Lifts a value into Either, putting Nil-s into Left and using Right otherwise.
+    contract Either(@"fromNillable", @value, @nilValue, return) = {
+      match value {
+        Nil => return!((false, nilValue))
+        _   => return!((true, value))
+      }
+    } |
+    // Like fromBoolean, except it takes `successCh` and reads it to obtain the `success` parameter
+    contract Either(@"fromBoolean <-", successCh, @nilSuccess, return) = {
+      for (@success <- successCh) {
+        Either!("fromBoolean", success, nilSuccess, *return)
+      }
+    } |
+    // Lifts a Boolean into Either, making `false` into Left and using Right otherwise.
+    contract Either(@"fromBoolean", @success, @failureMessage, return) = {
+      match success {
+        false => return!((false, failureMessage))
+        true  => return!((true, Nil))
+      }
+    } |
+    // Like fromSingletonList, except it takes `listCh` and reads it to obtain the `list` parameter
+    contract Either(@"fromSingletonList <-", listCh, @failureMessage, return) = {
+      for (@list <- listCh) {
+        Either!("fromSingletonList", list, failureMessage, *return)
+      }
+    } |
+    // Converts a singleton list into Either, making the single element into Right
+    // and using Left if it's not a singleton list.
+    contract Either(@"fromSingletonList", @list, @failureMessage, return) = {
+      match list {
+        []      => return!((false, failureMessage))
+        [value] => return!((true, value))
+        _       => return!((false, "Invalid argument, expected a list of at most 1 element"))
+      }
+    } |
+    // Like fromNillableError, except it takes `errorCh` and reads it to obtain the `error` parameter
+    contract Either(@"fromNillableError <-", errorCh, return) = {
+      for (@error <- errorCh) {
+        Either!("fromNillableError", error, *return)
+      }
+    } |
+    // Lifts an error into Either, putting Nil-s into Right and using Left otherwise.
+    contract Either(@"fromNillableError", @error, return) = {
+      match error {
+        Nil => return!((true, Nil))
+        _   => return!((false, error))
+      }
+    } |
+    // Like productR, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
+    contract Either(@"productR <-", aCh, bCh, return) = {
+      for (@a <- aCh) {
+        for (@b <- bCh) {
+          Either!("productR", a, b, *return)
+        }
+      }
+    } |
+    // Combines two eithers, discarding the first Right value and keeping the second.  Propagates Lefts.
+    contract Either(@"productR", @a, @b, return) = {
+      match (a, b) {
+        ((false, _), _) => return!(a)
+        _ => return!(b)
+      }
+    } |
+    // Like map2, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
+    contract Either(@"map2 <-", aCh, bCh, @f, return) = {
+      for (@a <- aCh) {
+        for (@b <- bCh) {
+          Either!("map2", a, b, f, *return)
+        }
+      }
+    } |
+    // Like map2Clean, except it takes `aCh` and `bCh` and reads them to obtain the `a` and `b` parameters
+    contract Either(@"map2Clean <-", aCh, bCh, @f, @state, return) = {
+      for (@a <- aCh) {
+        for (@b <- bCh) {
+          Either!("map2Clean", a, b, f, state, *return)
+        }
+      }
+    } |
+    // Composes two eithers `a: A` and `b: B` using the function `f`. See cats.Apply.map2 for details.`
+    contract Either(@"map2", @a, @b, @f, return) = {
+      match (a, b) {
+        ((false, _), _)          => return!(a)
+        (_, (false, _))          => return!(b)
+        ((true, va), (true, vb)) => {
+          new ret in {
+            match f {
+              { for (x, y, r <- fName) { _ } } => {
+                f |
+                fName!(va, vb, *ret) |
+                for (@v <- ret) {
+                  return!((true, v))
+                }
+              }
+            }
+          }
+        }
+      }
+    } |
+    // Like map2, but allows passing state to f instead of making f close over it.
+    contract Either(@"map2Clean", @a, @b, @f, @state, return) = {
+      match (a, b) {
+        ((false, _), _)          => return!(a)
+        (_, (false, _))          => return!(b)
+        ((true, va), (true, vb)) => {
+          new ret in {
+            match f {
+              { for (@state, x, y, r <- fName) { _ } } => {
+                f |
+                fName!(state, va, vb, *ret) |
+                for (@v <- ret) {
+                  return!((true, v))
+                }
+              }
+            }
+          }
+        }
+      }
+    } |
+    // Like flatMap, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"flatMap <-", eitherCh, f, return) = {
+      for (@either <- eitherCh) {
+        Either!("flatMap", either, *f, *return)
+      }
+    } |
+    // Like flatMapClean, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"flatMapClean <-", eitherCh, f, @state, return) = {
+      for (@either <- eitherCh) {
+        Either!("flatMapClean", either, *f, state, *return)
+      }
+    } |
+    // Right-biased flatMap; f must also return an Either
+    contract Either(@"flatMap", @either, f, return) = {
+      match either {
+        (true, value) => { f!(value, *return) }
+        (false, _)    => { return!(either) }
+      }
+    } |
+    // Like flatMap, except it allows passing state to f instead of making f close over it.
+    contract Either(@"flatMapClean", @either, f, @state, return) = {
+      match either {
+        (true, value) => { f!(state, value, *return) }
+        (false, _)    => { return!(either) }
+      }
+    } |
+    // Like map, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"map <-", eitherCh, f, return) = {
+      for (@either <- eitherCh) {
+        Either!("map", either, *f, *return)
+      }
+    } |
+    // Like mapClean, except it takes `eitherCh` and reads it to obtain the `either` parameter
+    contract Either(@"mapClean <-", eitherCh, f, @state, return) = {
+      for (@either <- eitherCh) {
+        Either!("mapClean", either, *f, state, *return)
+      }
+    } |
+    // Right-biased map to transform an Either
+    contract Either(@"map", @either, f, return) = {
+      match either {
+        (true, value) => {
+          new mappedResultCh in {
+            f!(value, *mappedResultCh) |
+            for(@mappedResult <- mappedResultCh) {
+              return!((true, mappedResult))
+            }
+          }
+        }
+        (false, _) => return!(either)
+      }
+    } |
+    // Like map, except it allows passing state to f instead of making f close over it.
+    contract Either(@"mapClean", @either, f, @state, return) = {
+      match either {
+        (true, value) => {
+          new mappedResultCh in {
+            f!(state, value, *mappedResultCh) |
+            for(@mappedResult <- mappedResultCh) {
+              return!((true, mappedResult))
+            }
+          }
+        }
+        (false, _) => return!(either)
+      }
+    } |
+    new combinator in {
+      contract combinator(_, @head, @accumulatedValue, return) = {
+        Either!("flatMap", accumulatedValue, head, *return)
+      } |
+      // Composes a list of functions returning Either into a
+      // single result by using flatMap. Similar to following Scala code:
+      // for {
+      //   r0 <- Right(input)
+      //   r1 <- f1(r0)
+      //   r2 <- f2(r1)
+      //   ...
+      // } yield fn
+      contract Either(@"compose", @input, @functions, return) = {
+        @ListOps!("foldClean", functions, (true, input), *combinator, Nil, *return)
+      }
+    } |
+    new combinator in {
+      contract combinator(_, @(function, state), @accumulatedValue, return) = {
+        Either!("flatMapClean", accumulatedValue, function, state, *return)
+      } |
+
+      // Like compose, but allows passing state to each f in the list instead of making f close over it
+      contract Either(@"composeClean", @input, @functionStatePairs, return) = {
+        @ListOps!("foldClean", functionStatePairs, (true, input), *combinator, Nil, *return)
+      }
+    }
+  } |
+  // Insert the signed, write-only contract into the registry uri map
+  rs!(
+    (9223372036854775807, bundle+{*Either}),
+    *deployerId,
+    *uriOut
+  )
+}
+  
+  
